@@ -13,9 +13,9 @@ Run `pnpm build` for a production build and `pnpm lint` for static checks. `pnpm
 
 ## Private deployment protection
 
-The Vercel deployment uses server-side HTTP Basic Auth through `middleware.js`; the password is never bundled into the React app. In the Vercel project settings, add the environment variable `STAGEBENCH_PASSWORD` with the value you want to use (for the current private review, use `NORD`) in the Preview and Production environments. The browser's native login prompt uses username `stagebench` and that password.
+The Vercel deployment uses server-side authentication through `middleware.js`. The password is stored as the sensitive Vercel environment variable `STAGEBENCH_PASSWORD` for Preview and Production; it is never bundled into the React app or saved in browser storage. Successful login creates a signed, seven-day, HttpOnly, Secure cookie, so the browser remembers access without retaining the password.
 
-The middleware fails closed with a `503` response if the environment variable is missing. Keep the password in Vercel's environment settings and do not add it to `.env`, source control, or frontend `VITE_*` variables.
+The middleware fails closed with a `503` response if the environment variable is missing. Failed POST requests to `/__stagebench/auth` are protected by the project's Vercel Firewall rate-limit rule. Keep the password in Vercel's environment settings and do not add it to `.env`, source control, frontend `VITE_*` variables, or `localStorage`.
 
 ## Evaluate a run
 
