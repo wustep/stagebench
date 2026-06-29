@@ -11,51 +11,8 @@ import {
   parseViewerSearch,
 } from './run-utils'
 import type { PhaseNumber } from './run-utils'
+import type { BenchmarkRun, RunStatus, StageStatus } from './types'
 import './App.css'
-
-type StageStatus = 'queued' | 'running' | 'complete' | 'failed'
-type RunStatus = 'running' | 'complete' | 'partial' | 'failed'
-type EvaluationGrade = 'exceptional' | 'strong' | 'competent' | 'developing' | 'incomplete'
-
-type StageEvaluation = {
-  status: 'complete'
-  score: number
-  rawScore: number
-  grade: EvaluationGrade
-  evaluatedAt: string
-  rubricVersion: string
-  path: string
-  reportPath?: string
-  categoryScores: Record<string, number>
-}
-
-type BenchmarkRun = {
-  id: string
-  model: string
-  title?: string
-  variant?: string
-  target?: string
-  isTest?: boolean
-  status: RunStatus
-  startedAt: string
-  updatedAt: string
-  previewPath?: string
-  previewStage?: PhaseNumber
-  previews?: Partial<Record<`${PhaseNumber}`, string>>
-  evaluation?: {
-    rubricVersion: string
-    score: number
-    grade: EvaluationGrade
-    evaluatedStages: PhaseNumber[]
-    availableStageWeight: number
-    reportPath?: string
-  } | null
-  stages: Array<{
-    number: PhaseNumber
-    status: StageStatus
-    evaluation?: StageEvaluation
-  }>
-}
 
 const runs = runsData as BenchmarkRun[]
 const isLocalEnvironment = import.meta.env.DEV

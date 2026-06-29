@@ -63,6 +63,33 @@ test('four-phase runs expose Organ and Synth as the latest playable phase', () =
   assert.equal(getPreviewPath(run, 4), '/previews/four-phase-run/stage4/index.html')
 })
 
+test('every runs.json entry conforms to the BenchmarkRun shape', () => {
+  const runStatuses = new Set(['running', 'complete', 'partial', 'failed'])
+  const stageStatuses = new Set(['queued', 'running', 'complete', 'failed'])
+  for (const run of runs) {
+    assert.equal(typeof run.id, 'string', `${run.id}: id`)
+    assert.equal(typeof run.model, 'string', `${run.id}: model`)
+    assert.ok(runStatuses.has(run.status), `${run.id}: invalid status "${run.status}"`)
+    assert.equal(typeof run.startedAt, 'string', `${run.id}: startedAt`)
+    assert.equal(typeof run.updatedAt, 'string', `${run.id}: updatedAt`)
+    assert.ok(Array.isArray(run.stages) && run.stages.length > 0, `${run.id}: stages`)
+    for (const stage of run.stages) {
+      assert.ok([1, 2, 3, 4].includes(stage.number), `${run.id}: stage number ${stage.number}`)
+      assert.ok(stageStatuses.has(stage.status), `${run.id}: stage status "${stage.status}"`)
+    }
+    for (const optionalString of ['title', 'variant', 'target']) {
+      if (run[optionalString] !== undefined) {
+        assert.equal(typeof run[optionalString], 'string', `${run.id}: ${optionalString}`)
+      }
+    }
+    if (run.isTest !== undefined) assert.equal(typeof run.isTest, 'boolean', `${run.id}: isTest`)
+    if (run.evaluation != null) {
+      assert.equal(typeof run.evaluation.score, 'number', `${run.id}: evaluation.score`)
+      assert.ok(Array.isArray(run.evaluation.evaluatedStages), `${run.id}: evaluatedStages`)
+    }
+  }
+})
+
 test('viewer URLs deep-link to a run and phase with a latest-phase fallback', () => {
   const linked = createViewerUrl('http://127.0.0.1:5173/#runs', pianoOnly.id, 2)
   assert.equal(linked.href, 'http://127.0.0.1:5173/?run=gpt5-6-sol-high&phase=2')

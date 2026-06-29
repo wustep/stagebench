@@ -1,13 +1,9 @@
-export type PhaseNumber = 1 | 2 | 3 | 4
+import type { BenchmarkRun, PhaseNumber } from './types'
 
-export type PreviewRun = {
-  id: string
-  model: string
-  title?: string
-  previewPath?: string
-  previewStage?: PhaseNumber
-  previews?: Partial<Record<`${PhaseNumber}`, string>>
-}
+export type { PhaseNumber } from './types'
+
+// The subset of a run the preview/URL helpers actually need.
+export type PreviewRun = Pick<BenchmarkRun, 'id' | 'model' | 'title' | 'previewPath' | 'previewStage' | 'previews'>
 
 export function getRunTitle(run: PreviewRun) {
   return run.title ?? run.model
