@@ -12,25 +12,36 @@ import {
   parseViewerSearch,
 } from '../src/run-utils.ts'
 
+// Look runs up by id rather than array position: the gallery registry grows
+// and reorders as runs are added, so positional assertions are brittle.
+const byId = (id) => {
+  const run = runs.find((candidate) => candidate.id === id)
+  assert.ok(run, `expected a run with id "${id}" in runs.json`)
+  return run
+}
+const complete = byId('gpt-5-6-sol-high') // complete three-phase run
+const pianoOnly = byId('gpt5-6-sol-high') // partial test run, phases 1-2 only
+
 test('display scores floor decimal values without changing stored data', () => {
   assert.equal(floorScore(58.8), 58)
   assert.equal(floorScore(70), 70)
-  assert.equal(runs[0].evaluation.score, 58.8)
+  assert.equal(complete.evaluation.score, 58.8)
 })
 
 test('run metadata separates canonical model identity from display titles', () => {
-  assert.deepEqual(runs.map((run) => run.model), ['gpt-5.6-sol-high', 'gpt-5.6-sol-high'])
-  assert.deepEqual(runs.map(getRunTitle), ['GPT 5.6 Sol High', 'GPT 5.6 Sol High (Piano Only)'])
-  assert.equal(runs[0].isTest, false)
-  assert.equal(runs[1].isTest, true)
+  assert.equal(complete.model, 'gpt-5.6-sol-high')
+  assert.equal(getRunTitle(complete), 'GPT 5.6 Sol High')
+  assert.equal(complete.isTest, false)
+  assert.equal(getRunTitle(pianoOnly), 'GPT 5.6 Sol High (Piano Only)')
+  assert.equal(pianoOnly.isTest, true)
 })
 
 test('phase previews expose the latest playable build and preserve partial availability', () => {
-  assert.deepEqual(getAvailablePhases(runs[0]), [1, 2, 3])
-  assert.deepEqual(getAvailablePhases(runs[1]), [1, 2])
-  assert.equal(getLatestPhase(runs[0]), 3)
-  assert.equal(getLatestPhase(runs[1]), 2)
-  assert.equal(getPreviewPath(runs[1], 3), undefined)
+  assert.deepEqual(getAvailablePhases(complete), [1, 2, 3])
+  assert.deepEqual(getAvailablePhases(pianoOnly), [1, 2])
+  assert.equal(getLatestPhase(complete), 3)
+  assert.equal(getLatestPhase(pianoOnly), 2)
+  assert.equal(getPreviewPath(pianoOnly, 3), undefined)
 })
 
 test('four-phase runs expose Organ and Synth as the latest playable phase', () => {
@@ -53,9 +64,9 @@ test('four-phase runs expose Organ and Synth as the latest playable phase', () =
 })
 
 test('viewer URLs deep-link to a run and phase with a latest-phase fallback', () => {
-  const linked = createViewerUrl('http://127.0.0.1:5173/#runs', runs[1].id, 2)
+  const linked = createViewerUrl('http://127.0.0.1:5173/#runs', pianoOnly.id, 2)
   assert.equal(linked.href, 'http://127.0.0.1:5173/?run=gpt5-6-sol-high&phase=2')
-  assert.deepEqual(parseViewerSearch(linked.search, runs), { run: runs[1], phase: 2 })
-  assert.deepEqual(parseViewerSearch(`?run=${runs[1].id}&phase=3`, runs), { run: runs[1], phase: 2 })
+  assert.deepEqual(parseViewerSearch(linked.search, runs), { run: pianoOnly, phase: 2 })
+  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=3`, runs), { run: pianoOnly, phase: 2 })
   assert.equal(clearViewerUrl(linked.href).href, 'http://127.0.0.1:5173/')
 })
