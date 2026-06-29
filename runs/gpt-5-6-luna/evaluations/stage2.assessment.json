@@ -1,0 +1,160 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-5-6-luna",
+  "stage": 2,
+  "evaluator": "independent-read-only-evaluator",
+  "evaluatedAt": "2026-06-29",
+  "summary": "The Phase 2 artifact is a credible visual and interaction shell with bundled recorded piano assets, shared note routing, and a connected Web Audio graph. It passes the supplied verification checks, but its visual geometry is substantially too wide/short, the Piano behavior is only partially wired, audio-boundary tests are absent, and several claimed controls do not alter the audible graph. MIDI is truthfully shown as denied in the live browser.",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 2,
+          "evidence": [
+            "The live 1440x900 render preserves the broad Stage 4 88 concept: continuous red chassis, six ordered regions, dark inset control plates, two OLEDs only in Program and Synth, and 88 A-to-C keys.",
+            "Against the supplied reference, the instrument is visibly too wide and shallow; the candidate CSS fixes the instrument at aspect-ratio 3.71/1, while the reference product silhouette is approximately 3.1/1.",
+            "The render replaces much of the photographed control density/material detail with small repeated generic knobs/buttons and omits many exact section landmarks."
+          ]
+        },
+        {
+          "id": "responsiveChassis",
+          "rating": 3,
+          "evidence": [
+            "The live 390x844 render keeps the red chassis continuous, keeps all 88 keys inside the end cheeks, and uses a horizontally scrollable control deck rather than clipping the instrument itself.",
+            "Desktop content is fully visible without vertical scrolling, and the narrow render remains contained, but only the first few panels are visible at once and the compressed keybed/control typography is difficult to use at narrow width."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "rating": 3,
+          "evidence": [
+            "Live pointer interaction and computer-keyboard interaction were exercised successfully; pressed-key classes update and release through the shared App handlers.",
+            "Keyboard buttons use pointer events, which covers touch-style pointer input, and the source has an injectable MIDI parser/connection boundary.",
+            "The live browser reported MIDI DENIED, so physical MIDI input was not demonstrated; the computer-key map covers only a 16-note subset."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 2,
+          "evidence": [
+            "The Piano panel exposes layer levels, type buttons, model selection, touch curves, dynamic compression, timbre, soft release, string resonance, sustain, unison, and acoustic controls.",
+            "Type/model/touch and several toggles update canonical Piano state and the Program OLED, but layer levels are not applied to the audio layer gains; piano-timbre-control and piano-acoustics are decorative state; zones/octave shift, list modes, pedal-specific UI, and missing-model selection are not implemented.",
+            "The supplied feature matrix points audio requirements at src/audio.ts rather than dedicated audio tests, and no src/audio.test.ts, pianoEngine.test.ts, pianoState.test.ts, or midi.test.ts exists."
+          ]
+        },
+        {
+          "id": "displayAndStatus",
+          "rating": 3,
+          "evidence": [
+            "The live render shows the correct two primary OLED locations; the Program OLED changes for type/model and Live program selection, and the footer/status reports SAMPLED PIANO and MIDI DENIED.",
+            "The source includes a Piano not found display path and a labeled FALLBACK · SYNTH PIANO status, but the UI has no exercised missing-model path and the Synth OLED is static."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioQuality",
+      "criteria": [
+        {
+          "id": "soundSource",
+          "rating": 3,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json identifies seven bundled VSO2/Tone.js Instruments MP3 recordings under public/audio/piano, with source and CC BY 3.0 license, and the live browser reported SAMPLED PIANO.",
+            "The engine nearest-root rate-shifts only seven A-root samples and documents a single recorded velocity layer, so it is credible recorded material but not the broad root/velocity coverage described by the manual."
+          ]
+        },
+        {
+          "id": "noteLifecycle",
+          "rating": 3,
+          "evidence": [
+            "PianoAudioEngine implements noteOn, noteOff, repeated-note replacement, 32-voice limiting, deterministic oldest/released voice stealing, allNotesOff, release envelopes, and ended/timer cleanup.",
+            "The live pointer/computer key path reaches these handlers, but no real audio-output or OfflineAudioContext lifecycle test was present; when Web Audio context creation returns null, noteOn immediately returns null despite the fallback label."
+          ]
+        },
+        {
+          "id": "velocityAndControls",
+          "rating": 2,
+          "evidence": [
+            "Velocity reaches gain, touch curves alter velocity shaping, dynamic compression changes compressor parameters, timbre changes a high-shelf filter, soft pedal changes layer gain, and master volume/reverb are connected to the graph.",
+            "String resonance is carried in params but does not alter the graph; unison only changes playback rate by 0.2% per level rather than adding voices; layer level state, Piano timbre/acoustics knobs, and several panel controls do not reach audio."
+          ]
+        },
+        {
+          "id": "sustainAndPolyphony",
+          "rating": 2,
+          "evidence": [
+            "The engine supports sustain values, deferred release, a half-pedal numeric value, a global sostenuto flag, 32 concurrent voices, and deterministic stealing.",
+            "Sostenuto is implemented as a global boolean rather than capturing only notes held at pedal-down; MIDI sustain toggles the React sustain state regardless of whether the incoming CC value is pedal-up or pedal-down; soft-pedal/sostenuto UI and dedicated per-note tests are absent."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interactionQuality",
+      "criteria": [
+        {
+          "id": "playability",
+          "rating": 3,
+          "evidence": [
+            "Live pointer and mapped computer-keyboard playability worked, key depression/release is visibly reflected, and rapid lifecycle support exists in the engine.",
+            "Touch is only indirectly covered through pointer events, MIDI could not be exercised because the browser denied permission, and the mapped computer keyboard exposes only 16 notes."
+          ]
+        },
+        {
+          "id": "controlFeedback",
+          "rating": 3,
+          "evidence": [
+            "Live controls expose accessible names/roles, knob arrow-key changes update aria-valuenow and visual rotation, buttons illuminate pressed state, and the Program OLED changes on Live/type/model interactions.",
+            "Many Piano selection controls do not show selected state through their button LED/aria state, and wheel/pitch controls are focusable sliders without meaningful interaction behavior."
+          ]
+        },
+        {
+          "id": "failureHandling",
+          "rating": 2,
+          "evidence": [
+            "The live footer truthfully reports MIDI DENIED, and sample preparation catches load/decode failures and labels the mode FALLBACK · SYNTH PIANO.",
+            "The no-Web-Audio fallback is not actually playable because PianoAudioEngine.noteOn returns null when context is absent; the missing-model failure path exists only as state/display code and is not reachable from a model failure control."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 3,
+          "evidence": [
+            "audio.ts cleanly separates injectable context/sample-loader inputs, recorded sample loading, per-layer gains, shared piano bus, timbre filter, compressor, dry/wet reverb, master gain, and destination.",
+            "pianoState.ts and midi.ts are modular and the implementation manifest distinguishes recorded samples from generated impulse/fallback sources.",
+            "The architecture is incomplete relative to the claimed Piano state: several state values are not connected to the graph, and the required real audio-boundary tests are missing."
+          ]
+        },
+        {
+          "id": "performanceAndCleanup",
+          "rating": 3,
+          "evidence": [
+            "The supplied verification passed test, typecheck, lint, and build; the live desktop and narrow renders loaded without console errors/warnings, and the built artifact exists.",
+            "The engine caps voices, releases sources, clears timers, and calls allNotesOff on blur/unmount.",
+            "The voice map is keyed by MIDI note, which prevents independent same-note overlapping voices, and no direct OfflineAudioContext/performance/cleanup test proves the runtime graph behavior."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Visual silhouette is materially too wide/short versus the reference; CSS uses aspect-ratio 3.71/1.",
+    "Control deck is a sparse generic approximation and lacks much of the reference's exact material/control density.",
+    "Required Phase 2 audio-boundary tests are absent; the feature matrix references implementation files instead of dedicated tests for several audio features.",
+    "Several Piano controls are state/display-only or only partially connected to audio, including layer levels, string resonance, acoustics, and meaningful unison.",
+    "Sostenuto is global rather than per-note, and MIDI sustain handling toggles instead of honoring CC up/down values.",
+    "No-Web-Audio fallback reports a fallback label but noteOn is silent when context is unavailable."
+  ]
+}

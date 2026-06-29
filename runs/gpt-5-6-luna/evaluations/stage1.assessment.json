@@ -1,0 +1,116 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-5-6-luna",
+  "stage": 1,
+  "evaluator": "Codex independent evaluator",
+  "evaluatedAt": "2026-06-29T09:54:56Z",
+  "summary": "A technically clean and geometrically disciplined Stage 1 recreation for the assigned Stage 4 88 variant. The live render matches the measured 3.71:1 silhouette, 54/46 deck-keybed allocation, exact 88-key A-to-C keyboard, continuous red chassis, and two-OLED rule. The control deck remains a schematic approximation of the reference: panel groups are much sparser, many controls are compressed or visually hidden, fine legends are difficult to read, and several control surfaces are stand-ins rather than coupled hardware state. Required tests, build checks, narrow rendering, live interactions, and console checks passed.",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "silhouetteAndProportions",
+          "rating": 4,
+          "evidence": [
+            "Live 1440x900 measurement found instrument bounds x=57.60, y=276.85, width=1324.80, height=357.09, giving a 3.710:1 ratio and 91.99% viewport width; this matches the assigned 88-key silhouette target recorded in evidence/stage1-visual-audit.md.",
+            "The render has one connected red chassis with end cheeks, a 53.7% control-deck/top-rail allocation and 46.0% keybed/bottom-rail allocation, and the exact 52 white / 36 black key geometry required for Stage 4 88."
+          ]
+        },
+        {
+          "id": "panelLayoutAndDensity",
+          "rating": 2,
+          "evidence": [
+            "The six section widths are correctly normalized in the live render at 13%, 21%, 15%, 9%, 21%, and 21%, but the photographed control deck is materially denser and more irregular than the candidate.",
+            "The reference image and manual pp. 9-12 show many more physical switches, LED ladders, faders, knobs, labels, and subgroup landmarks; the candidate visibly collapses Organ, Piano, Synth, and Layer Effects into sparse schematic rows with substantial empty or clipped group content."
+          ]
+        },
+        {
+          "id": "controlMaterialsAndColor",
+          "rating": 3,
+          "evidence": [
+            "The desktop render uses the correct dominant red chassis and slate inset panels, with black indexed knobs, silver/light fader caps, red/green indicators, cyan OLED treatments, and shaded white/black keys.",
+            "Material hierarchy is only approximate: Organ drawbars, pitch/modulation hardware, switches, and many small controls are generic CSS stand-ins rather than the distinct photographed physical forms, and the low control density weakens the reference material read."
+          ]
+        },
+        {
+          "id": "typographyAndDisplays",
+          "rating": 2,
+          "evidence": [
+            "The candidate correctly renders exactly two primary OLEDs, in Program and Synth, plus Nord Stage 4 branding and section headings; no OLED appears in Performance, Organ, Piano, or Layer Effects.",
+            "At 1440x900 most legends are only a few pixels high and hard to read, and the display contents and typography are simplified relative to the reference/manual hierarchy."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "visibleHardwareInventory",
+          "rating": 3,
+          "evidence": [
+            "src/hardware.ts defines the assigned 88-key model, six section-specific inventories, nine Organ drawbars, LED ladder controls, Program/Synth displays, Piano selectors, Synth oscillator/filter/envelope groups, Layer Effects groups, branding, pitch stick, and modulation wheel; the live DOM exposes 52 white keys, 36 black keys, and 2 OLEDs.",
+            "The inventory is broad but approximate: the screenshot shows consolidated or hidden fine controls and does not reproduce the full photographed density and exact switch/LED/fader arrangement in the Organ, Piano, Synth, and Effects sections."
+          ]
+        },
+        {
+          "id": "visualStateCoverage",
+          "rating": 3,
+          "evidence": [
+            "The source and live exercise cover pressed/released keys, button and LED toggles, keyboard-adjustable knob rotation, fader ranges, hover/focus treatments, and illuminated OLED state; the Live program interaction changed aria-pressed from false to true and changed the Program display to Live 1 · Stage 4.",
+            "State coverage is not fully hardware-coupled: the pitch/modulation shapes and keypad are largely decorative, and most display/meter content remains fixed apart from the limited Program/Synth display updates."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interactionQuality",
+      "criteria": [
+        {
+          "id": "controlInteraction",
+          "rating": 3,
+          "evidence": [
+            "Live interaction exercised a unique Live program button, A1 white key, and Master level slider; Live program state and display feedback changed, the key pointer lifecycle completed, and Master level changed from 68 to 73 with ArrowUp.",
+            "App.tsx centralizes values and pressedKeys and HardwareControl provides reusable button, fader, and knob interaction, but several visible elements do not have meaningful behavior beyond decorative focus or local toggling."
+          ]
+        },
+        {
+          "id": "responsiveAccessibility",
+          "rating": 2,
+          "evidence": [
+            "At 390x844 the body remains exactly 390px wide with no body-level horizontal overflow; the instrument is 370x690 and the exact 88-key keybed remains visible, while the control deck is a 368px viewport over a 687px horizontally scrollable surface.",
+            "The narrow render keeps the chassis usable but exposes only the first panels initially, requires horizontal deck scrolling, and reduces legends and many controls to very small touch/read targets; the source does provide named buttons/sliders and focus-visible styles."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "componentStructure",
+          "rating": 4,
+          "evidence": [
+            "The implementation uses a normalized, stable-ID hardware model in src/hardware.ts, data-drives the six panels from App.tsx, and separates reusable HardwarePanel, HardwareControl, and Keyboard components.",
+            "The eight required Phase 1 feature IDs are represented in tests/feature-matrix.json, and the architecture centralizes control values and keyboard state rather than scattering unrelated panel state."
+          ]
+        },
+        {
+          "id": "runtimeQuality",
+          "rating": 4,
+          "evidence": [
+            "runs/gpt-5-6-luna/verifications/stage1.json reports passing pnpm test, typecheck, lint, and build checks, a built artifact, complete feature coverage, and the visual-only implementation manifest.",
+            "The live 1440x900 and 390x844 renders loaded stably, had no body clipping, and the browser console contained no error or warning entries after reload and interaction."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "The panel deck is substantially more schematic and less reference-faithful than the chassis and keybed, with sparse/consolidated control groups and visually clipped or hidden fine controls.",
+    "Typography and micro-labels are too small to read comfortably at desktop size, and the central OLED/control hierarchy is only an approximation of the photographed hardware.",
+    "At 390px the deck becomes horizontally scrollable and many labels/targets are very small, even though the body avoids overflow and the full keybed remains visible.",
+    "Several visible shapes such as pitch/modulation controls and the Program keypad are decorative or only minimally interactive, and display state coupling is limited beyond the exercised Live-program path."
+  ]
+}
