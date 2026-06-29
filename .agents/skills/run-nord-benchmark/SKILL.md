@@ -5,7 +5,7 @@ description: Run the repository's incremental Nord Stage 4 web recreation benchm
 
 # Run Nord Benchmark
 
-Execute one attributed four-phase benchmark run with isolated implementation agents, independent evaluators, a fixed repair loop, and honest gallery registration.
+Execute one attributed four-phase benchmark run with isolated implementation agents, independent read-only evaluators, mechanical verification, and honest gallery registration.
 
 ## Preconditions
 
@@ -16,6 +16,7 @@ Execute one attributed four-phase benchmark run with isolated implementation age
 - Use the exact user-requested model when selectable. If model selection is unavailable, explain the limitation and obtain approval before attributing another model's work to that label.
 - Use pnpm exclusively for the gallery and every candidate artifact.
 - Each `runs/<id>/run.json` is the source of truth; `src/data/runs.json` is a generated index. If the two drift, rebuild the index with `node <skill-directory>/scripts/manage-run.mjs reindex` (only when no run is mid-write).
+- Generation and evaluation are independent one-way processes. Implementation agents never receive evaluator assessments, issue lists, scores, or evaluator-authored repair instructions. Evaluators are read-only and never edit candidate files.
 
 ## 1. Resolve model and scope
 
@@ -75,7 +76,6 @@ Spawn a fresh agent with no inherited parent conversation. Give it only:
 - the selected variant id and its entry in `specs/nord-stage-4.variants.json` (key model and silhouette);
 - the fetched reference manual and the selected variant's reference image (see reference/, pnpm fetch:reference);
 - the phase's prompt path;
-- the preceding phase evaluation JSON/report path when one exists, solely to repair inherited shortcomings;
 - the exact model selection when supported;
 - instructions to work exclusively inside the assigned phase directory.
 
@@ -112,7 +112,7 @@ The verifier must enforce:
 - required desktop, narrow, and audit evidence;
 - assigned spec files and hard-gate acknowledgement in the implementation plan.
 
-If verification fails, return the exact failures to the same implementation agent. Allow at most two verifier-repair attempts. Never mark a phase complete while verification fails.
+If verification fails, return only the exact mechanical verifier failures to the same implementation agent. Allow at most two verifier-repair attempts. Never mark a phase complete while verification fails. Do not include evaluator findings in this loop.
 
 ### 2.4 Parent browser smoke test
 
@@ -124,7 +124,7 @@ Start the built artifact locally and inspect the rendered phase with the in-app 
 - confirm the candidate evidence depicts the current build;
 - confirm no claimed feature is obviously display-only or disconnected.
 
-Infrastructure problems may be fixed by the parent. Candidate product defects must go back to the implementation agent.
+Infrastructure or smoke-gate failures may be returned to the implementation agent before evaluation. This is still part of mechanical completion, not evaluator feedback; evaluators remain independent and read-only.
 
 ### 2.5 Mark complete and run the initial independent evaluation
 
@@ -132,6 +132,7 @@ After verifier and browser success:
 
 ```sh
 node <skill-directory>/scripts/manage-run.mjs mark --id "<id>" --phase <N> --status complete
+node <skill-directory>/scripts/manage-run.mjs preview --id "<id>"
 node <skill-directory>/scripts/evaluate-run.mjs template --id "<id>" --phase <N>
 ```
 
@@ -151,22 +152,9 @@ Score it:
 node <skill-directory>/scripts/evaluate-run.mjs score --id "<id>" --phase <N>
 ```
 
-### 2.6 Fixed evaluator-guided quality repair
+### 2.6 Finalize the independent evaluation
 
-Every completed phase receives one quality-repair opportunity so runs are comparable and the output benefits from evaluation.
-
-Send the same implementation agent only:
-
-- the scored phase evaluation;
-- up to the five highest-impact evaluator issues;
-- any violated hard gates from `specs/benchmark-phases.json`;
-- instructions to repair those issues without expanding phase scope or weakening tests.
-
-After repair, rerun the verifier and parent browser smoke test. If either fails, return failures to the implementation agent once. Do not preserve a broken repair merely because the initial build passed.
-
-Generate a fresh assessment template with `--force true`, spawn a fresh evaluator, and score again. The second score is final. Do not silently edit the candidate after final scoring.
-
-If a hard gate remains violated after the fixed repair pass, mark the phase failed and stop before preparing the next phase. A low rubric score without a hard-gate or technical failure remains an honest completed result.
+The evaluator's first scored assessment is final. Do not send its issues, ratings, or score back to the implementation agent, do not ask the evaluator to repair anything, and do not rescore after evaluator feedback. A low score without a hard-gate or technical failure remains an honest completed result.
 
 ## 3. Phase-specific emphasis
 
@@ -180,6 +168,14 @@ When the requested scope ends before Phase 4, leave later phases queued and publ
 ```sh
 node <skill-directory>/scripts/manage-run.mjs partial --id "<id>"
 ```
+
+After every phase is marked complete, publish the available previews immediately while leaving later phases queued/running:
+
+```sh
+node <skill-directory>/scripts/manage-run.mjs preview --id "<id>"
+```
+
+This makes the latest completed phase playable during a still-running four-phase run. `partial` is only for ending the run early; `preview` is safe to call between phases.
 
 ## 4. Reports and publication
 
@@ -198,7 +194,7 @@ Publish a complete run only after all four phases pass:
 node <skill-directory>/scripts/manage-run.mjs publish --id "<id>"
 ```
 
-This must publish every completed phase preview and use Phase 4 as the latest/root preview. Then run the root gallery tests, typecheck, lint, and build through pnpm. Open the gallery, switch through all available phases, open the report, and check the console.
+This must publish every completed phase preview and use Phase 4 as the latest/root preview. During an in-progress run, the preview command publishes every completed phase without waiting for the remaining phases. Then run the root gallery tests, typecheck, lint, and build through pnpm. Open the gallery, switch through all available phases, open the report, and check the console.
 
 ## 5. Final response
 
@@ -206,7 +202,7 @@ Report:
 
 - model attribution, run ID, requested phase scope, and final gallery state;
 - status and final evaluation for all four phases, including queued or failed phases;
-- implementation and evaluator-repair attempts;
+- implementation attempts and independent evaluator assessments;
 - verifier commands, browser checks, tests, feature coverage, and evidence paths;
 - libraries, audio architecture, bundled sound files, and sample provenance;
 - unresolved candidate limitations separately from benchmark-infrastructure limitations.

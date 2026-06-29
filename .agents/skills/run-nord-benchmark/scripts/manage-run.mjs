@@ -125,6 +125,26 @@ function markStage(root, id, stageNumber, status, now = new Date()) {
   if (status === 'failed') run.status = 'failed'
   else if (run.stages.every((entry) => entry.status === 'complete')) run.status = 'complete'
   else run.status = 'running'
+  if (status === 'complete' && run.stages.some((entry) => entry.status === 'complete')) {
+    const { latestPhase, previews } = publishPhasePreviews(root, run)
+    run.previewPath = previews[String(latestPhase)]
+    run.previewStage = latestPhase
+    run.previews = previews
+  }
+  saveRun(root, run)
+  return run
+}
+
+function publishAvailableRun(root, id, now = new Date()) {
+  const run = loadRun(root, id)
+  if (!run.stages.some((entry) => entry.status === 'complete')) {
+    throw new Error('At least one phase must be complete before publishing available previews')
+  }
+  const { latestPhase, previews } = publishPhasePreviews(root, run)
+  run.previewPath = previews[String(latestPhase)]
+  run.previewStage = latestPhase
+  run.previews = previews
+  run.updatedAt = now.toISOString()
   saveRun(root, run)
   return run
 }
@@ -207,6 +227,11 @@ function selfTest() {
     fs.mkdirSync(path.join(created.stageDir, 'dist'), { recursive: true })
     fs.writeFileSync(path.join(created.stageDir, 'dist', 'index.html'), '<h1>phase one</h1>')
     markStage(root, created.id, 1, 'complete')
+    const available = loadRun(root, created.id)
+    assert.equal(available.previewStage, 1)
+    assert.equal(available.status, 'running')
+    assert.equal(available.stages.find((entry) => entry.number === 2).status, 'queued')
+    assert.ok(fs.existsSync(path.join(root, 'public', 'previews', created.id, 'stage1', 'index.html')))
     prepareStage(root, created.id, 2)
     assert.equal(fs.readFileSync(path.join(root, 'runs', created.id, 'stage2', 'artifact.txt'), 'utf8'), 'stage one')
     fs.mkdirSync(path.join(root, 'runs', created.id, 'stage2', 'dist'), { recursive: true })
@@ -251,6 +276,7 @@ function printHelp() {
   manage-run.mjs mark --id <run-id> --phase <1|2|3|4> --status <queued|running|complete|failed>
   manage-run.mjs prepare --id <run-id> --phase <2|3|4>
   manage-run.mjs partial --id <run-id>
+  manage-run.mjs preview --id <run-id>
   manage-run.mjs publish --id <run-id>
   manage-run.mjs reindex
   manage-run.mjs self-test`)
@@ -264,6 +290,7 @@ try {
   else if (command === 'mark') result = markStage(root, options.id, options.phase ?? options.stage, options.status)
   else if (command === 'prepare') result = prepareStage(root, options.id, options.phase ?? options.stage)
   else if (command === 'partial') result = finishPartialRun(root, options.id)
+  else if (command === 'preview') result = publishAvailableRun(root, options.id)
   else if (command === 'publish') result = publishRun(root, options.id)
   else if (command === 'reindex') result = reindexRegistry(root)
   else if (command === 'self-test') result = selfTest()

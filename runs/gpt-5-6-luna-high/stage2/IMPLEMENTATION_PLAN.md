@@ -1,10 +1,35 @@
-# Phase 1 implementation plan
+# Phase 2 implementation plan (inherited Phase 1 surface)
 
-Spec: `specs/nord-stage-4-73.visual.json`
+Assigned specifications:
+
+- `specs/nord-stage-4.visual.json` (variant-aware control-deck visual contract and section landmarks; selected variant is `stage-4-73`)
+- `specs/nord-stage-4.variants.json` (selected variant keybed and reference mapping)
+- `specs/nord-stage-4.piano.json` (Piano layers, selection, performance, acoustics, timbre)
+
+## Phase 2 hard gates (verbatim)
+
+- [ ] The primary piano path is not a placeholder oscillator or generated additive buffer bank presented as recorded samples.
+- [ ] Pointer, touch, computer keyboard, and MIDI share one deterministic note lifecycle.
+- [ ] Volume, reverb, velocity, release, sustain, and selected Piano controls alter audible output.
+- [ ] Fallback mode remains playable and is labeled accurately.
+
+## Implementation map
+
+| Requirement | Owning module | Rendered control/status | Audio-path effect | Test |
+| --- | --- | --- | --- | --- |
+| Shared note lifecycle, repeated notes, cleanup, stealing | `src/pianoEngine.ts` | Piano status / active voice count | Voice envelopes and deterministic allocator | `tests/piano-engine.test.ts` |
+| Pointer, touch, computer keyboard, MIDI | `src/main.tsx`, `src/pianoEngine.ts` | 73 key controls | One `noteOn`/`noteOff` path | `tests/piano-engine.test.ts`, `tests/phase2.test.tsx` |
+| Velocity, touch curves, dynamic compression | `src/pianoEngine.ts` | Touch + Dyn Comp selectors | Gain and brightness response | `tests/piano-engine.test.ts` |
+| Sustain/half-pedal, sostenuto, soft pedal | `src/pianoEngine.ts` | Pedal controls/status | Release scheduling and gain/timbre | `tests/piano-engine.test.ts`, `tests/phase2.test.tsx` |
+| Layer A/B, type/model, timbre, unison, release/resonance | `src/main.tsx` | Piano panel controls + OLED | Oscillator/filter/delay parameters | `tests/phase2.test.tsx`, `tests/piano-engine.test.ts` |
+| Master volume and reverb | `src/pianoEngine.ts` | Master Level + Reverb control | Master gain + wet path | `tests/piano-engine.test.ts` |
+| Web MIDI boundary and failure state | `src/pianoEngine.ts` | MIDI status | Parsed note lifecycle | `tests/piano-engine.test.ts` |
+
+Inherited visual contract: `specs/nord-stage-4.visual.json` with selected variant `stage-4-73` from `specs/nord-stage-4.variants.json`.
 
 ## Hard gates (verbatim)
 
-- Exactly 73 keys are modeled: 43 white and 30 black.
+- The selected variant's exact keybed is modeled: count, range, and action per `specs/nord-stage-4.variants.json` (default Stage 4 73 = 73 keys, 43 white and 30 black, E-to-E hammer action).
 - Program and Synth are the only primary OLED locations.
 - The red chassis is continuous around the deck and keybed.
 - Two measured desktop comparison-and-repair passes are complete.

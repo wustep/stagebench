@@ -32,7 +32,7 @@ pnpm fetch:reference
 
 This downloads the Nord Stage 4 user manual and the official 88 / 73 / Compact 73 top-down photos from Nord's servers into `reference/` (gitignored). See [Reference material & attribution](#reference-material--attribution).
 
-Invoke `$run-nord-benchmark` in Codex. The project skill asks which model label to use, creates an isolated run under `runs/<model-id>/`, and executes four incremental, spec-backed prompts with fresh-context implementation and evaluation agents. It publishes only after Visual, Piano, Programs and Effects, and Organ and Synth all pass their tests, browser checks, repair loops, and evaluations.
+Invoke `$run-nord-benchmark` in Codex. The project skill asks which model label to use, creates an isolated run under `runs/<model-id>/`, and executes four incremental, spec-backed prompts with fresh-context implementation and read-only evaluation agents. Completed phases become playable immediately; complete publication waits for all four phases and their independent evaluations.
 
 The complete specification is in [BENCHMARK.md](./BENCHMARK.md). Future benchmark runs evaluate each completed phase before publishing it.
 

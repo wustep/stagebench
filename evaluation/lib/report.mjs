@@ -9,8 +9,8 @@ function escapeHtml(value) {
 
 function formatIssue(issue) {
   if (issue && typeof issue === 'object') {
-    const title = typeof issue.title === 'string' ? issue.title.trim() : ''
-    const detail = typeof issue.detail === 'string' ? issue.detail.trim() : ''
+    const title = typeof issue.title === 'string' ? issue.title.trim() : typeof issue.issue === 'string' ? issue.issue.trim() : ''
+    const detail = typeof issue.detail === 'string' ? issue.detail.trim() : typeof issue.evidence === 'string' ? issue.evidence.trim() : ''
     if (title && detail) return `${title}: ${detail}`
     if (title || detail) return title || detail
   }

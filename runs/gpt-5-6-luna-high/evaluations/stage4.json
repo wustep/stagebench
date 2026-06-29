@@ -1,0 +1,301 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-5-6-luna-high",
+  "stage": 4,
+  "stageName": "Organ and synth",
+  "status": "complete",
+  "evaluator": "Codex independent Phase 4 evaluator",
+  "evaluatedAt": "2026-06-29T05:13:51.000Z",
+  "summary": "Phase 4 adds real deterministic Organ and Synth renderers with six organ models, source-family/filter/envelope/LFO processing, and one shared EffectsGraph; all 33 tests and pnpm typecheck/lint/build pass. The implementation is materially stronger offline than in its browser path, but the hardware/UI surface is still a generic Phase 3-style control map, many required Phase 4 controls are absent or no-op, Program/scene/split/morph state is not applied back to engine controls, and Web Audio noteOn uses a single generic oscillator (and only the focused/first synth layer). This is a plausible modelled-audio prototype, not a substantially complete Stage 4 Organ/Synth integration.",
+  "score": 47.3,
+  "rawScore": 47.3,
+  "grade": "incomplete",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "label": "Visual fidelity retention",
+      "weight": 10,
+      "score": 62.5,
+      "contribution": 6.3,
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "label": "Reference fidelity retention",
+          "weight": 50,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "stage4-desktop.png preserves the continuous red chassis, 73-key E-to-E keybed, six section order and Program/Synth-only OLED placement from inherited evidence.",
+            "The capture remains structurally close to the reference, although the caption still says 'PIANO PHASE 02' and the Organ/Synth panels are simplified."
+          ]
+        },
+        {
+          "id": "hardwareStateFidelity",
+          "label": "Organ and Synth hardware state",
+          "weight": 50,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Organ has nine drawbars and a few model/percussion/rotary controls; Synth has one OLED and a compact generic oscillator/filter cluster.",
+            "Required three synth-layer indicators, register/preset/live LEDs, filter/envelope menus, voice/arp mode indicators and engine focus states are not visibly represented; displayed Synth OLED is static 'SYNTH / WAVE' or 'SYNTH / ARP'."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "label": "Engine feature completion",
+      "weight": 35,
+      "score": 46.3,
+      "contribution": 16.2,
+      "criteria": [
+        {
+          "id": "organEngine",
+          "label": "Organ engine",
+          "weight": 40,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "renderOrganNote contains six named harmonic models, nine drawbar values, Farf register gating, B3 percussion, key click, vibrato/chorus, rotary speed/drive/close-mic, octave, levels and two-layer summing; phase4 boundary tests verify model and representative-control differences.",
+            "WebAudio noteOn builds only simple sine/saw oscillators, does not implement model-specific percussion/click/vibrato/rotary behavior or rotary acceleration, and the UI only drives Organ A. Preset/live, sync, zones and morph behavior are state fields rather than complete workflows."
+          ]
+        },
+        {
+          "id": "synthEngine",
+          "label": "Synth engine",
+          "weight": 45,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "renderSynthNote includes Samples/Analog modes, Pure/Sync/Multi/Super/Misc/Wave/FM categories, all listed filter names, tracking/drive, three envelopes, LFO destinations, unison/vibrato and deterministic gate/arp gain pattern; tests exercise a subset.",
+            "Extern produces no sound, most source categories collapse to a small waveform mapping, Osc Ctrl is ignored for several categories, and range/inversion/hold/run/keyboard-sync/priority/glide/legato are not rendered as the manual describes. Browser noteOn is one generic oscillator and only uses layer A."
+          ]
+        },
+        {
+          "id": "fullIntegration",
+          "label": "Full-system integration",
+          "weight": 15,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "OrganEngine and SynthEngine can receive the inherited graph and ProgramState contains organ/synth metadata; a test verifies graph identity and metadata serialization.",
+            "Program load/store does not hydrate OrganEngine/SynthEngine controls; scene switching and morph application operate inherited Piano/effect destinations only; split/zone routing is not consulted by Organ/Synth noteOn; presets and UI focus remain Piano-oriented."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioQuality",
+      "label": "Audio implementation",
+      "weight": 30,
+      "score": 50,
+      "contribution": 15,
+      "criteria": [
+        {
+          "id": "engineBehavior",
+          "label": "Distinct engine behavior",
+          "weight": 40,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Offline renderers produce measurable spectral/time-domain differences for the six Organ models and representative Synth sources, filters, envelopes and LFO/arp settings (phase4 tests pass).",
+            "The audible browser path bypasses those renderers: Organ creates generic oscillators and Synth creates one generic oscillator with no filter/envelope/source-family graph, so model/source controls do not reliably alter live sound as claimed. No recording/sample provenance is claimed, which is truthful but less faithful to the Nord sample library."
+          ]
+        },
+        {
+          "id": "effectIntegration",
+          "label": "Inherited effect integration",
+          "weight": 30,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Both engines accept the same EffectsGraph instance; graph creates organ-A/B and synth-A/B/C buses, ordered chains, master limiter and one destination; null-context tests prove shared identity.",
+            "Organ noteOn routes all active layers to whichever layer is focused, and Synth noteOn routes only A (and routes C focus to synth-B); no per-layer effect targeting or zone-aware routing is exercised for live Organ/Synth voices."
+          ]
+        },
+        {
+          "id": "qualityLatencyAndLoad",
+          "label": "Quality, latency, and load",
+          "weight": 30,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Native voices use short gain ramps, stop/disconnect on noteOff and dispose/allNotesOff; deterministic fallback is available and all technical gates pass.",
+            "There is no Organ/Synth voice allocator/limit, sustain or proper per-note release lifecycle, browser stress/latency audit, or clipping/CPU evidence; synth/organ repeated release calls clear all voices rather than preserving independent notes."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "label": "System behavior",
+      "weight": 15,
+      "score": 32.5,
+      "contribution": 4.9,
+      "criteria": [
+        {
+          "id": "hardwareControlMapping",
+          "label": "Hardware control mapping",
+          "weight": 35,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "Main maps a handful of Organ A drawbars/model/percussion/rotary and Synth A level/wave/filter/envelope/LFO/arp buttons into engine setters.",
+            "Required B/C layer controls, Organ register/preset/sync/zone/octave/pitch-stick and most percussion/vibrato/rotary options, Synth mode/category/filter type/envelope/LFO destination/voice/arp menu controls are missing; many visible controls are generic toggles that only update local state/program metadata."
+          ]
+        },
+        {
+          "id": "programAndDisplayIntegration",
+          "label": "Program and display integration",
+          "weight": 30,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "ProgramState serializes organ and synth metadata and the Program OLED reports name/category/list/dirty state.",
+            "Loading a Program does not apply its organ/synth metadata to the engine instances; Synth OLED is hard-coded to SYNTH / WAVE or ARP and no contextual model/source/filter/arp values are displayed."
+          ]
+        },
+        {
+          "id": "stateAndRouting",
+          "label": "State and routing",
+          "weight": 20,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "Canonical Program state includes seven layer IDs, zones, scenes, morphs, master clock and effect chains.",
+            "Only Piano layer scene switching and Piano morph destinations are wired in main.tsx; Organ/Synth controls do not follow Program enabled/level/zone state, split note routing, scene transitions or morph input paths, and master clock is not propagated to engines from Program state."
+          ]
+        },
+        {
+          "id": "regressionResistance",
+          "label": "Regression resistance",
+          "weight": 15,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Inherited Phase 1-3 tests plus phase4.test.ts pass (33 tests); pnpm typecheck, lint and build pass.",
+            "The visual audit explicitly says no fresh browser interaction capture was possible, so console/runtime regression evidence for Organ/Synth gestures is limited."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 10,
+      "score": 50,
+      "contribution": 5,
+      "criteria": [
+        {
+          "id": "systemArchitecture",
+          "label": "System architecture",
+          "weight": 40,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Organ and Synth are separate typed modules with deterministic render boundaries and injectable AudioContext/EffectsGraph; graph ownership prevents additional destination contexts when composed by App.",
+            "Engine controls are duplicated from ProgramState and are not synchronized; browser and offline implementations diverge substantially, and focused-bus routing is hard-coded rather than layer/zone based."
+          ]
+        },
+        {
+          "id": "maintainabilityAndTests",
+          "label": "Maintainability and tests",
+          "weight": 30,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Code is readable and modular; feature matrix lists Phase 4 IDs and direct tests cover model/source spectra, representative DSP, graph identity and serialization.",
+            "Only four shallow Phase 4 test cases cover many dozens of required behaviors; tests do not assert browser bindings, layer B/C behavior, Program hydration, split/morph/scene integration, or true WebAudio model processing. Feature-matrix claims exceed what tests exercise."
+          ]
+        },
+        {
+          "id": "reliabilityAndPerformance",
+          "label": "Reliability and performance",
+          "weight": 30,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "pnpm test/typecheck/lint/build all pass; build is small (~241 kB JS) and deterministic null-context fallback avoids device dependence.",
+            "No fresh browser audit was captured; generic oscillator paths, unbounded Organ/Synth voice maps, and allNotesOff-on-any-key-release behavior leave layered rapid-play, cleanup, latency and console cleanliness unverified."
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "command": "pnpm run test",
+        "durationMs": 3206,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "command": "pnpm run typecheck",
+        "durationMs": 1465,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "command": "pnpm run lint",
+        "durationMs": 693,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "command": "pnpm run build",
+        "durationMs": 626,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "runs/gpt-5-6-luna-high/stage4/dist/index.html"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "priority": 1,
+      "title": "Live WebAudio path does not implement the tested Organ/Synth engines",
+      "evidence": "OrganEngine.noteOn creates generic sine/saw partial oscillators without percussion/click/vibrato/rotary; SynthEngine.noteOn creates one oscillator and ignores source/filter/envelope/LFO/arp controls. Browser users therefore do not hear most claimed controls."
+    },
+    {
+      "priority": 1,
+      "title": "Program, scenes, splits and morphs do not hydrate or route Organ/Synth state",
+      "evidence": "ProgramState stores metadata, but App only applies scene/morph changes to Piano; Organ/Synth noteOn never checks zones/splits and ProgramStore load has no engine synchronization."
+    },
+    {
+      "priority": 1,
+      "title": "Required hardware inventory is largely decorative/generic",
+      "evidence": "The UI exposes only Organ A and Synth A subsets. B3/Farf/pipe register/preset/sync, Synth B/C, filter type/tracking, three envelope pages, LFO destination/group, voice priority/glide, arp menu/range/hold/sync controls are absent or local toggles."
+    },
+    {
+      "priority": 2,
+      "title": "Layer routing is incorrect for active/focused layers",
+      "evidence": "Organ routes all active layers to the focused organ bus; Synth noteOn always uses layerA and maps focused C to synth-B, preventing independent per-layer effect chains."
+    },
+    {
+      "priority": 2,
+      "title": "Deterministic tests under-cover the required contract",
+      "evidence": "33 tests pass, but phase4.test.ts has four cases and does not exercise live AudioContext processing, browser controls, layer B/C, registration/preset workflows, split/morph/scene routing, priority/glide/hold/clock semantics or performance stress."
+    },
+    {
+      "priority": 3,
+      "title": "Visual evidence is inherited rather than a Phase 4 interaction audit",
+      "evidence": "stage4-visual-audit.md states no in-app browser was available; screenshot caption remains 'interactive surface / piano phase 02' and Synth display is static."
+    }
+  ]
+}

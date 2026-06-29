@@ -10,7 +10,7 @@ import {
   getPreviewPath,
   getRunTitle,
   parseViewerSearch,
-} from '../src/run-utils.ts'
+} from '../src/run-utils-runtime.mjs'
 
 // Look runs up by id rather than array position: the gallery registry grows
 // and reorders as runs are added, so positional assertions are brittle.

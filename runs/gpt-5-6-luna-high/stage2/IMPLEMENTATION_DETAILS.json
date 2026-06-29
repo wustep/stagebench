@@ -1,10 +1,30 @@
 {
   "version": 1,
-  "phase": 1,
+  "phase": 2,
   "audio": {
-    "strategy": "None (visual-only phase)",
-    "generatedSources": [],
+    "strategy": "Redistributable deterministic modal/physical piano model in Web Audio with the same in-memory renderer as an honest fallback.",
+    "primaryMode": "physical-model",
+    "fallbackMode": "fallback",
+    "recordedSamples": [],
+    "generatedSources": [
+      {
+        "name": "Modal piano body",
+        "kind": "live synthesis",
+        "description": "Six inharmonic partials with velocity-dependent hammer transient, per-note attack/decay, optional unison detune, timbre shaping, soft release and reverb tail.",
+        "source": "src/pianoEngine.ts:renderModelledPiano",
+        "license": "Original implementation; no third-party samples or network assets."
+      }
+    ],
     "sampleSources": [],
-    "notes": ["No audio engine or sound assets are included in Phase 1."]
-  }
+    "assets": [],
+    "notes": [
+      "No recorded piano files are bundled; this implementation intentionally claims comparably convincing modelled synthesis rather than sampled audio.",
+      "Web Audio uses oscillator partials and a shared master/wet-delay graph. When AudioContext is unavailable (tests or unsupported browser), the deterministic physical model remains playable and status reports fallback mode.",
+      "No network dependency is required for normal playback.",
+      "The first user gesture resumes a suspended AudioContext; suspended, error, fallback, and MIDI connection states are surfaced in the Piano status."
+    ]
+  },
+  "midi": { "boundary": "navigator.requestMIDIAccess", "failureStatus": "MIDI unavailable or MIDI permission denied" },
+  "controls": ["layers A/B", "type/model", "touch curves", "dynamic compression", "timbre", "unison", "soft release", "string resonance", "sustain/half-pedal", "master volume", "reverb"],
+  "tests": ["tests/piano-engine.test.ts", "tests/phase2.test.tsx", "tests/phase1.test.tsx"]
 }

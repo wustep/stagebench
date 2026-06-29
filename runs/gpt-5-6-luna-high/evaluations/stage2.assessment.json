@@ -1,0 +1,64 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-5-6-luna-high",
+  "stage": 2,
+  "evaluator": "codex-independent-post-repair",
+  "evaluatedAt": "2026-06-29T04:18:30.000Z",
+  "summary": "Post-repair source and artifact review confirms the project passes all required pnpm checks (19 tests, typecheck, lint, build), now resumes a suspended AudioContext from noteOn, exposes audio/MIDI status, wires substantially more Piano controls into the deterministic renderer, fixes released-voice preference and sostenuto capture, and disconnects stolen/released Web Audio nodes. The result is a credible small modal/physical model with an honest no-asset fallback, but it is still materially below the full Piano contract: the visual surface is a sparse approximation, the narrow capture is an 820px horizontally clipped canvas, layer focus/zones/transposition/routing and list/missing-model behavior are absent, the visible status omits the computed Piano summary/voice count, and most Web Audio controls beyond gain/reverb/model/unison/layers/soft-pedal are not applied to live voices. Real browser audio/MIDI interaction was not independently reproducible here, so resume and graph claims are verified by code and unit boundaries rather than a live-output pass.",
+  "score": 60,
+  "rawScore": 60,
+  "grade": "developing",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "label": "Visual fidelity retention",
+      "weight": 25,
+      "score": 50,
+      "contribution": 12.5,
+      "criteria": [
+        {"id":"referenceRetention","label":"Reference fidelity retention","weight":60,"rating":2,"score":50,"evidence":["evidence/stage2-desktop.png preserves the continuous red chassis, 54/46 deck/keybed split, six-section order, 73-key silhouette, and OLEDs only in Program and Synth.","Against reference/nord-stage-4-73.jpg, the Organ, Piano, Synth, and Effects areas remain much sparser: drawbar/LED banks, faders, legends, and dense hardware groupings are replaced by generic compact DOM controls."]},
+        {"id":"responsiveChassis","label":"Responsive chassis","weight":40,"rating":2,"score":50,"evidence":["The desktop evidence fits the full instrument in 1440x900 with no vertical scrolling and an approximately 3.095:1 silhouette.","evidence/stage2-narrow.png shows only the left portion of a min-width:820px instrument at 390px; styles.css intentionally uses horizontal overflow rather than responsive scaling, leaving most controls clipped from the initial view."]}
+      ]
+    },
+    {
+      "id":"featureCompletion","label":"Piano feature completion","weight":25,"score":58.8,"contribution":14.7,
+      "criteria":[
+        {"id":"inputCoverage","label":"Input coverage","weight":35,"rating":3,"score":75,"evidence":["main.tsx:35-40 routes pointer, touch pointerType, mapped computer-keyboard events, and key controls through PianoEngine.noteOn/noteOff; blur calls allNotesOff. pianoEngine.ts:214-218 parses MIDI note, velocity, sustain CC64, soft-pedal CC67, connection, denial, and disconnect states.","The tests cover MIDI parsing/failure and pointer/touch, but there is no live browser Web MIDI or multitouch exercise and no explicit test of computer-key mapping/blur behavior."]},
+        {"id":"pianoControls","label":"Piano controls","weight":40,"rating":2,"score":50,"evidence":["main.tsx:49-68 and pianoEngine.ts:38-76 wire layers/levels, type/model, touch, dynamic compression, timbre, unison, soft release, resonance, soft pedal, sustain, master volume, and reverb into canonical controls and the deterministic renderer; tests assert output differences for several of them.","The Piano spec acceptance still lacks layer focus, keyboard zones, transpose, independent routing, a real model/list (Num/Abc/Cat) UI, missing-model state, and contextual pedal/resonance behavior. Live Web Audio createVoice (pianoEngine.ts:198-203) applies only a subset of renderer controls, omitting timbre, dynamic compression, piano type, and string-resonance processing for active voices."]},
+        {"id":"displayAndStatus","label":"Display and status feedback","weight":25,"rating":2,"score":50,"evidence":["main.tsx:30-32 visibly renders AudioContext suspended/ready/error/fallback and MIDI unavailable/connected/disconnected/permission-denied status; the repair's status subscription updates the header asynchronously.","The computed pianoSummary (type/model, touch, dynamic compression, layer levels, voice count) is only a title attribute, not visible display text; there is no Piano list/missing-model display or per-pedal/parameter readout."]}
+      ]
+    },
+    {
+      "id":"audioQuality","label":"Audio implementation","weight":30,"score":62.5,"contribution":18.8,
+      "criteria":[
+        {"id":"soundSource","label":"Piano sound source","weight":25,"rating":2,"score":50,"evidence":["IMPLEMENTATION_DETAILS.json and pianoEngine.ts:37-79 are truthful that no recorded samples are bundled: the primary path is an original six-partial inharmonic modal oscillator model with hammer transient, envelopes, unison and a delay tail, and the fallback reuses the same model.","This is materially beyond a mislabeled sample-bank placeholder, but it has no velocity layers, pedal-down samples, sympathetic note interaction, broad model variation, or sampled-level nuance described by manual pages 23-26, so it is only a modest physical-model approximation."]},
+        {"id":"noteLifecycle","label":"Note lifecycle and cleanup","weight":25,"rating":3,"score":75,"evidence":["pianoEngine.ts:162-192 implements shared note ownership, repeated-note replacement, note-off, all-notes-off, 24-voice bounds, release envelopes, immediate panic cleanup, dispose, and the repaired first-gesture resume call.","pianoEngine.ts:194-209 now prefers released voices and synchronously stops/disconnects immediate steals; normal releases remain timer-retained and the real Web Audio path has no direct fake-context/OfflineAudioContext assertion in the suite."]},
+        {"id":"velocityAndControls","label":"Velocity and sonic controls","weight":25,"rating":2,"score":50,"evidence":["piano-engine.test.ts directly verifies velocity, touch curves, master volume, reverb, timbre, unison, layers, model, resonance, and soft-pedal changes alter deterministic rendered samples/RMS.","The live graph's createVoice path (pianoEngine.ts:198-203) does not apply renderer timbre, dynamic-compression, piano-type, or resonance effects to oscillator voices; no live-output or OfflineAudioContext render test proves the browser graph."]},
+        {"id":"sustainAndPolyphony","label":"Sustain and polyphony","weight":25,"rating":3,"score":75,"evidence":["pianoEngine.ts:174-191 supports full/half sustain values, release queueing, sostenuto capture of noteOwners at pedal engagement, soft-pedal gain, 24-voice allocation and cleanup; piano-engine.test.ts covers sustain, half pedal, sostenuto semantics and stealing.","The model approximates pedal behavior with release/gain/tail changes rather than pedal-down samples or true sympathetic resonance, and no hardware/browser pedal pass was possible."]}
+      ]
+    },
+    {
+      "id":"interactionQuality","label":"Playability and UX","weight":15,"score":67.5,"contribution":10.1,
+      "criteria":[
+        {"id":"playability","label":"Playability","weight":50,"rating":3,"score":75,"evidence":["Pointer/touch keys, mapped computer keys with repeat suppression, focus/blur cleanup, velocity inputs, 24-voice limits, and note ownership are implemented in main.tsx:35-40 and pianoEngine.ts:162-179.","noteOn now calls resumeAudio (pianoEngine.ts:162-164), addressing autoplay suspension in code; real browser latency/audibility and multitouch behavior were not independently exercised."]},
+        {"id":"controlFeedback","label":"Control feedback","weight":30,"rating":2,"score":50,"evidence":["Keys visibly depress, switches/knobs/faders update, and Piano status/MIDI lines update through React state and status subscriptions; deterministic tests verify control-linked output changes.","Most Piano values are not shown as contextual display state: type/touch/dynamic/model, layer focus/levels, resonance, pedal state, and active voice count are not visible (summary is only a title attribute), and there is no Piano OLED."]},
+        {"id":"failureHandling","label":"Failure handling","weight":20,"rating":3,"score":75,"evidence":["The no-AudioContext path remains deterministic and reports 'Fallback model ready (Web Audio unavailable)'; resume rejection reports an explicit audio error; MIDI unavailable, permission-denied, and disconnected states are represented and (for asynchronous paths) surfaced.","The unavailable navigator branch does not notify subscribers (the text is already the default), and a failed resume keeps the engine's physical-model mode while only saying fallback is available; neither case has a live browser assertion."]}
+      ]
+    },
+    {
+      "id":"engineeringQuality","label":"Engineering quality","weight":5,"score":75,"contribution":3.8,
+      "criteria":[
+        {"id":"audioArchitecture","label":"Audio architecture","weight":50,"rating":3,"score":75,"evidence":["pianoEngine.ts separates canonical controls, note ownership, Web Audio voice graph, MIDI boundary, deterministic renderer, status, and injectable AudioContext construction; one master/wet-delay graph feeds destination and dispose disconnects nodes.","The test suite exercises the deterministic renderer and a prototype resume fake, but not the actual AudioContext graph, per-voice routing, or OfflineAudioContext output."]},
+        {"id":"performanceAndCleanup","label":"Performance and cleanup","weight":50,"rating":3,"score":75,"evidence":["Voice maps are bounded at 24, released voices are preferred for stealing, immediate steals disconnect oscillator/gain nodes, timed releases remove voices, and allNotesOff/dispose paths are present (pianoEngine.ts:191-209).","Normal release timers are not tracked/cancelled, the engine does not close an owned AudioContext, and rapid browser playback/CPU/console behavior was not independently measured."]}
+      ]
+    }
+  ],
+  "technicalGate":{"passed":true,"scoreCap":null,"checks":[{"id":"test","label":"test","passed":true,"command":"pnpm test","durationMs":2750,"detail":"19 tests passed (3 files)."},{"id":"typecheck","label":"typecheck","passed":true,"command":"pnpm typecheck","durationMs":900,"detail":"Passed."},{"id":"lint","label":"lint","passed":true,"command":"pnpm lint","durationMs":700,"detail":"Passed."},{"id":"build","label":"build","passed":true,"command":"pnpm build","durationMs":260,"detail":"Vite production build passed."},{"id":"artifact","label":"Built phase artifact","passed":true,"detail":"runs/gpt-5-6-luna-high/stage2/dist/index.html"}]},
+  "issues":[
+    {"priority":1,"issue":"Complete the Piano contract beyond scalar controls: implement layer focus, zones/transposition/routing, real model/list modes and missing-model display, and make the computed Piano summary/voice/pedal state visibly readable.","evidence":"src/main.tsx:30-32,49-68; specs/nord-stage-4.piano.json acceptance/selection; reference manual pages 23-26"},
+    {"priority":1,"issue":"Apply all claimed Piano sonic controls to live Web Audio voices (or narrow the claim) and add a fake AudioContext/OfflineAudioContext render test; currently only deterministic in-memory rendering proves many control differences.","evidence":"src/pianoEngine.ts:38-79,153-158,198-203; tests/piano-engine.test.ts"},
+    {"priority":1,"issue":"Raise the visual recreation density to the assigned Stage 4 73 photograph and make the 390px view genuinely usable or explicitly provide a clear horizontal navigation affordance.","evidence":"evidence/stage2-desktop.png, evidence/stage2-narrow.png, src/styles.css media query"},
+    {"priority":2,"issue":"Add end-to-end browser interaction coverage for AudioContext resume, audible note output, MIDI permission/disconnect, rapid repeated notes, and touch/multitouch; current evidence is static plus jsdom/fallback tests.","evidence":"STAGE_NOTES.md Browser findings; tests/piano-engine.test.ts resume fake; no live-output harness"},
+    {"priority":2,"issue":"Track/cancel normal-release timers and define ownership/closure semantics for the AudioContext to make cleanup deterministic under rapid play and unmount.","evidence":"src/pianoEngine.ts:205-209"}
+  ]
+}

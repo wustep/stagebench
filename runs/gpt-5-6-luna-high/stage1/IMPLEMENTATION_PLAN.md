@@ -1,10 +1,12 @@
 # Phase 1 implementation plan
 
-Spec: `specs/nord-stage-4-73.visual.json`
+Variant: `stage-4-73` (default)
+
+Specs: `specs/nord-stage-4.visual.json`, `specs/nord-stage-4.variants.json`
 
 ## Hard gates (verbatim)
 
-- Exactly 73 keys are modeled: 43 white and 30 black.
+- The selected variant's exact keybed is modeled: count, range, and action per specs/nord-stage-4.variants.json (default Stage 4 73 = 73 keys, 43 white and 30 black, E-to-E hammer action).
 - Program and Synth are the only primary OLED locations.
 - The red chassis is continuous around the deck and keybed.
 - Two measured desktop comparison-and-repair passes are complete.

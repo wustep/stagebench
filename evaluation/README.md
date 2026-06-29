@@ -5,6 +5,8 @@ The evaluator turns evidence-backed rubric ratings into reproducible 0–100 sco
 1. An independent evaluator inspects the running artifact, source, primary image, and relevant manual behavior, then records 0–4 ratings with evidence.
 2. The scoring command validates the assessment, runs technical checks, applies the phase-specific weights, and registers the result with the run and gallery.
 
+Evaluators are read-only and independent from generation. Their first scored assessment is final; evaluator issues are diagnostic and are never sent back to implementation agents as repair instructions.
+
 ## Phase weights
 
 | Category | Phase 1 | Phase 2 | Phase 3 | Phase 4 |

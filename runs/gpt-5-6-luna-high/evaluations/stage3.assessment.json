@@ -1,0 +1,154 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-5-6-luna-high",
+  "stage": 3,
+  "evaluator": "Codex independent evaluator",
+  "evaluatedAt": "2026-06-29T04:48:00.000Z",
+  "summary": "The repaired Phase 3 artifact passes its full mechanical gate (28 tests, typecheck, lint, and build) and now has a typed canonical ProgramStore, dynamic Program/effect status displays, editable split/crossfade state, list/preset handlers, and a single EffectsGraph boundary with six buses, ordered units, limiter, click-safe native wet/dry gains, and deterministic offline DSP. It is still a partial Programs/effects recreation: rendered workflows remain shallow (no real Store destination/name flow or Live recall), morph sources and zone assignment are not fully input-wired, native units are generic filters/delays rather than documented effect models, per-layer/global/group/To Rotary routing is shared or incomplete, and Piano adds a parallel wet path that duplicates the graph master path. Desktop geometry is retained, but the narrow capture remains a horizontally clipped 820px canvas and the evidence image is stale (caption says Piano Phase 02).",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 3,
+          "evidence": [
+            "evidence/stage3-desktop.png at 1440x900 retains the Stage 4 73 continuous red chassis, 3.095:1 silhouette, 54/46 deck/keybed allocation, six section order, and 43 white + 30 black keys from the selected stage-4-73 variant.",
+            "The render remains materially simpler than the primary photograph (schematic controls, sparse legends, and stale caption text reading Piano Phase 02); stage3-narrow.png keeps an 820px minimum canvas and is clipped in a 390px viewport."
+          ]
+        },
+        {
+          "id": "hardwareStateFidelity",
+          "rating": 2,
+          "evidence": [
+            "main.tsx Panel reads canonical ProgramStore state for Program name/category/list/dirty, effect wet/dry status, and the bottom rail reports split points, active scene, and morph count.",
+            "The hardware remains generic SmallButton/Knob/Fader representations: no credible morph LED/fader indicators, zone LEDs, contextual four-view Program display, detailed effect parameter controls, or manual-accurate focus/routing states are rendered."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 2,
+          "evidence": [
+            "ProgramStore lines 34-69 implement serializable state, dirty tracking, Store/Store As, cancel, undo, program browsing, presets, and eight live-slot storage; the UI exposes Store, Store As, Undo, Cancel, Page, list-mode, and preset buttons.",
+            "Store As auto-generates names, preset loading is a single synthetic preset, and Live 1-8 only call setLive (there is no rendered Live Mode/recall path or complete naming/category/destination confirmation flow from manual pages 40-44)."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 2,
+          "evidence": [
+            "ProgramStore supports all eleven C2-C7 split positions, 0/6/12 crossfade values, four-zone arrays, Scene I/II, and Wheel/Aftertouch/Control Pedal assignments; main.tsx forwards edited split/crossfade values into PianoEngine routing.",
+            "No rendered zone-membership editor exists, morph assignment is fixed to layer.pianoA, Control Pedal has no input path, and morph indicators/interpolation destinations beyond the narrow store API are absent."
+          ]
+        },
+        {
+          "id": "displayAndEditing",
+          "rating": 2,
+          "evidence": [
+            "Rendered Program controls now expose Page browsing, Numeric/Alphabetic/Category list-mode buttons, preset loading, and dynamic name/category/list/dirty text; ProgramStore clamps four display modes.",
+            "The OLED does not actually render four contextual Program View layouts or parameter hints, Program Display is not an interactive control, Store As has no character/category editor, and copy/paste, organize, and monitor editing are not rendered (manual pp. 40-44)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioQuality",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 2,
+          "evidence": [
+            "EffectsGraph constructs one context boundary, six named layer buses, serial Mod1 → Mod2 → Delay → Amp/EQ → Compressor → Reverb → Rotary chains, master bus, limiter, and destination; native parallel dry/wet gains use short setTargetAtTime automation.",
+            "PianoEngine also connects each voice through a separate wetDelay/reverbGain path directly back into the graph master bus, duplicating/bypassing portions of the ordered chain; all layer buses share one effect state rather than independent per-layer chain settings."
+          ]
+        },
+        {
+          "id": "effectsCoverage",
+          "rating": 2,
+          "evidence": [
+            "EffectsGraph.process contains deterministic transformations for Mod 1, Mod 2, Delay, Amp/EQ, Compressor, Reverb, and Rotary, and programs-effects.test.ts asserts each changes samples and all-effects bypass restores the dry buffer.",
+            "The browser graph uses generic BiquadFilterNode/DelayNode placeholders for most units: documented modes, Delay feedback filters/effects, rotary modulation, amp models, and reverb types are not implemented, so coverage is class-level rather than Nord-like."
+          ]
+        },
+        {
+          "id": "effectRouting",
+          "rating": 2,
+          "evidence": [
+            "main.tsx updates both ProgramStore and EffectsGraph for unit on/amount/dry-wet, global, group, all-bypass, and coarse focus controls; EffectsGraph applies native bypass/wet-dry automation and exposes To Rotary state.",
+            "Focus A/B mapping is incorrect for Focus B, global/group are shared booleans across every bus, To Rotary enables the single rotary unit for all layers, and no per-layer targeting or Delay feedback-loop routing is demonstrated against the live graph (manual pp. 48-52)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "programBehavior",
+          "rating": 2,
+          "evidence": [
+            "ProgramStore is the canonical serialized owner for layers, Piano/effect state, routing, zones, morphs, scenes, history, and dirty metadata; tests cover round-trip, cancel, undo, scenes, splits, morphs, and Store/Live metadata.",
+            "The React local control map duplicates canonical state, Program load/recall does not synchronize PianoEngine controls or native graph settings, and scene/layer edits can leave scene definitions and engine routing out of sync."
+          ]
+        },
+        {
+          "id": "routingAndControls",
+          "rating": 2,
+          "evidence": [
+            "Split button handlers update PianoEngine low/mid/high boundaries and crossfade width; effect controls update canonical effect state and graph state; Piano level/type/reverb controls reach the engine.",
+            "Layer zone membership is never applied from ProgramStore, PianoEngine chooses piano-A except when B is the only enabled layer, and morph input paths/targets do not drive the full audible routing contract."
+          ]
+        },
+        {
+          "id": "regressionResistance",
+          "rating": 3,
+          "evidence": [
+            "Independent pnpm test passes 5 files/28 tests; pnpm typecheck, pnpm lint, and pnpm build all pass, matching the stage3 verification gates. Inherited Phase 1/2 tests and feature-matrix entries remain present.",
+            "The evidence capture is not a fresh exercised Phase 3 state (caption still says Piano Phase 02), and no real browser console/audio-output stress pass is included."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "systemArchitecture",
+          "rating": 2,
+          "evidence": [
+            "ProgramStore, EffectsGraph, and PianoEngine are separate typed modules with stable layer/effect IDs, serializable state, deterministic offline rendering, injectable AudioContext boundaries, and accurate no-recorded-sample provenance.",
+            "The native graph remains a coarse generic-node approximation, ProgramStore-to-engine synchronization is incomplete, all layers share effect settings, and Piano's parallel wet path undermines the claimed single ordered signal architecture."
+          ]
+        },
+        {
+          "id": "testQuality",
+          "rating": 2,
+          "evidence": [
+            "tests/feature-matrix.json maps all required Phase 3 IDs; 28 tests cover serialization, store/undo, list modes, split/morph state, graph topology, offline representative DSP, fake-context automation, and inherited Piano behavior.",
+            "Most audio assertions use EffectsGraph.process(Float32Array) rather than a rendered native graph; UI tests do not prove Live recall, native focus/group/global/To Rotary routing, zone assignment, or browser audible effects."
+          ]
+        },
+        {
+          "id": "reliabilityAndPerformance",
+          "rating": 2,
+          "evidence": [
+            "EffectsGraph.dispose disconnects buses/nodes, PianoEngine limits voices and cleans oscillators, and all four pnpm gates complete without errors; desktop evidence shows stable loading.",
+            "No fresh browser console/audible stress capture is provided, native units are intentionally generic, and duplicated wet/master routing plus incomplete per-layer targeting leave clipping and rapid layered-effect behavior unverified."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Complete rendered Program workflows: real program load/recall, Live Mode recall, Store/Store As destination and naming/category confirmation, and four contextual Program View/list displays.",
+    "Make morph sources (Wheel, Aftertouch, Control Pedal) and all documented destinations observable input paths with indicators; add a zone-membership editor and apply layer zones/crossfade to every audible layer.",
+    "Replace generic native Biquad/Delay placeholders with connected representative Mod, Delay feedback/filter, Amp/EQ, Compressor, Reverb, and Rotary processing, including per-layer focus/group/global/To Rotary targeting and click-safe bypass.",
+    "Remove PianoEngine's parallel wetDelay/reverb path so every voice traverses exactly one ordered EffectsGraph/master path; synchronize Program load/scene/layer state into PianoEngine and graph state.",
+    "Refresh Phase 3 desktop/narrow evidence after exercising Program/effect flows, correct the stale Piano Phase 02 caption, and address the 390px horizontal clipping or document it as an explicit limitation."
+  ]
+}
