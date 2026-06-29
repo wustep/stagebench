@@ -9,7 +9,7 @@ pnpm install
 pnpm dev
 ```
 
-Run `pnpm build` for a production build and `pnpm lint` for static checks.
+Run `pnpm build` for a production build and `pnpm lint` for static checks. `pnpm test` runs the full suite (gallery, evaluator, and verifier self-test).
 
 ## Evaluate a run
 
