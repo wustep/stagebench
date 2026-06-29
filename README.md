@@ -11,6 +11,12 @@ pnpm dev
 
 Run `pnpm build` for a production build and `pnpm lint` for static checks. `pnpm test` runs the full suite (gallery, evaluator, and verifier self-test).
 
+## Private deployment protection
+
+The Vercel deployment uses server-side HTTP Basic Auth through `middleware.js`; the password is never bundled into the React app. In the Vercel project settings, add the environment variable `STAGEBENCH_PASSWORD` with the value you want to use (for the current private review, use `NORD`) in the Preview and Production environments. The browser's native login prompt uses username `stagebench` and that password.
+
+The middleware fails closed with a `503` response if the environment variable is missing. Keep the password in Vercel's environment settings and do not add it to `.env`, source control, or frontend `VITE_*` variables.
+
 ## Evaluate a run
 
 The evaluator uses a versioned, evidence-backed rubric with different category values for each phase. Generate a Phase 1 assessment template and score it with:
