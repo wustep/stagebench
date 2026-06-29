@@ -41,6 +41,24 @@ test('phase manifest defines a complete four-phase incremental contract', () => 
   }
 })
 
+test('variant registry defines the three Nord Stage 4 modes with a valid default', () => {
+  assert.match(manifest.variants, /^specs\/nord-stage-4\.variants\.json$/)
+  const registry = readJson(manifest.variants)
+  const ids = registry.variants.map((variant) => variant.id)
+  assert.deepEqual(ids, ['stage-4-88', 'stage-4-73', 'stage-4-compact-73'])
+  assert.ok(ids.includes(registry.default), 'default must be one of the defined variants')
+  assert.equal(manifest.defaultVariant, registry.default)
+  for (const variant of registry.variants) {
+    assert.ok(variant.label && variant.fullName && variant.keyAction, `${variant.id} needs label/fullName/keyAction`)
+    assert.match(variant.referenceImage, /^reference\//, `${variant.id} referenceImage must be a fetched reference path`)
+    assert.equal(variant.keyboard.whiteKeys + variant.keyboard.blackKeys, variant.keyboard.totalKeys, `${variant.id} key counts must sum`)
+  }
+  // The shared visual spec points at the registry and a real default.
+  const visual = readJson('specs/nord-stage-4.visual.json')
+  assert.equal(visual.variantsSpec, manifest.variants)
+  assert.ok(ids.includes(visual.defaultVariant))
+})
+
 test('manual-derived domain specs have page citations and acceptance gates', () => {
   const domainSpecs = [
     ['specs/nord-stage-4.piano.json', [23, 24, 25, 26]],

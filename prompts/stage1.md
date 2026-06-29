@@ -5,10 +5,11 @@ Work only inside the assigned `stage1` directory. Read these sources before writ
 1. `BENCHMARK.md`
 2. `TESTING.md`
 3. `specs/benchmark-phases.json` Phase 1
-4. `specs/nord-stage-4-73.visual.json`
-5. `reference/nord-stage-4-73.jpg` at full resolution
+4. `specs/nord-stage-4.visual.json` (shared control deck)
+5. `specs/nord-stage-4.variants.json` and the entry for this run's selected variant
+6. the selected variant's reference image at full resolution (its `referenceImage`, e.g. `reference/nord-stage-4-73.jpg` for the Stage 4 73)
 
-The product image is the visual source of truth. This is the Nord Stage 4 73, not the Compact 73. Do not render the photograph inside the application.
+This run targets one specific Nord Stage 4 variant (88, 73, or Compact 73), supplied at run creation and recorded on the run. The control deck is identical across variants; the keybed and silhouette are variant-specific. Build the variant you were assigned — do not substitute another. The variant's reference image is the visual source of truth; do not render the photograph inside the application.
 
 ## Non-negotiable outcome
 
@@ -22,11 +23,11 @@ Use pnpm exclusively. Declare the current pnpm version in `packageManager`, reta
 
 Before implementation, create `IMPLEMENTATION_PLAN.md` and record:
 
-- the assigned spec filename and a verbatim `Hard gates` checklist from Phase 1 of `specs/benchmark-phases.json`;
-- measured 3.095:1 chassis bounds;
+- the assigned spec filename, the selected variant id, and a verbatim `Hard gates` checklist from Phase 1 of `specs/benchmark-phases.json`;
+- the selected variant's measured chassis bounds and aspect ratio (Stage 4 73 baseline: 3.095:1; measure the 88 and Compact 73 from their reference image);
 - 54/46 control-deck/keybed allocation;
 - all six section widths;
-- 43-white/30-black E-to-E key model;
+- the selected variant's key model (Stage 4 73: 43 white / 30 black, E-to-E hammer action; see `specs/nord-stage-4.variants.json`);
 - required and forbidden section landmarks from the visual spec;
 - per-section control groups, approximate density, and control-size hierarchy;
 - a component/data model that gives every control a stable ID.
@@ -41,7 +42,7 @@ Hard failures:
 
 - detached frame pieces or white gaps through the red chassis;
 - an uninterrupted charcoal slab replacing the red structure;
-- fewer or more than 73 keys;
+- a key count, range, or action that does not match the selected variant;
 - invented OLED displays in Organ, Piano, or Layer Effects;
 - a marketing hero or decorative stage above the instrument.
 

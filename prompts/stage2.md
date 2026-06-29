@@ -4,7 +4,7 @@ Work only inside the assigned `stage2` directory. It is a clean copy of the veri
 
 1. `BENCHMARK.md` and `TESTING.md`
 2. `specs/benchmark-phases.json` Phase 2
-3. `specs/nord-stage-4-73.visual.json`
+3. `specs/nord-stage-4.visual.json`
 4. `specs/nord-stage-4.piano.json`
 5. Manual pages 23-26
 6. inherited `IMPLEMENTATION_PLAN.md`, `STAGE_NOTES.md`, tests, and source

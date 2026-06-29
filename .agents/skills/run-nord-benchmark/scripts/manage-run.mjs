@@ -6,6 +6,13 @@ import os from 'node:os'
 import path from 'node:path'
 
 const VALID_STATUSES = new Set(['queued', 'running', 'complete', 'failed'])
+const DEFAULT_VARIANT = 'stage-4-73'
+// Fallback labels for environments without the spec file (e.g. the self-test temp root).
+const VARIANT_FALLBACK = {
+  'stage-4-88': 'Stage 4 88',
+  'stage-4-73': 'Stage 4 73',
+  'stage-4-compact-73': 'Stage 4 Compact 73',
+}
 
 function parseArgs(argv) {
   const [command, ...rest] = argv
@@ -74,9 +81,27 @@ function loadRun(root, id) {
   return readJson(runPath)
 }
 
+function resolveVariant(root, variantId) {
+  const id = (variantId || DEFAULT_VARIANT).trim()
+  const registryPath = root && path.join(root, 'specs', 'nord-stage-4.variants.json')
+  if (registryPath && fs.existsSync(registryPath)) {
+    const registry = readJson(registryPath)
+    const match = registry.variants?.find((variant) => variant.id === id)
+    if (!match) {
+      const valid = registry.variants?.map((variant) => variant.id).join(', ')
+      throw new Error(`Unknown variant "${id}". Valid variants: ${valid}`)
+    }
+    return { id: match.id, label: match.label }
+  }
+  const label = VARIANT_FALLBACK[id]
+  if (!label) throw new Error(`Unknown variant "${id}". Valid variants: ${Object.keys(VARIANT_FALLBACK).join(', ')}`)
+  return { id, label }
+}
+
 function createRun(root, model, now = new Date(), metadata = {}) {
   if (!model?.trim()) throw new Error('--model is required')
   const locations = pathsFor(root)
+  const variant = resolveVariant(root, metadata.variant)
   const base = slugify(model.trim())
   let id = base
   let suffix = 2
@@ -87,6 +112,8 @@ function createRun(root, model, now = new Date(), metadata = {}) {
     id,
     model: model.trim(),
     title: metadata.title?.trim() || model.trim(),
+    variant: variant.id,
+    target: variant.label,
     isTest: metadata.isTest === true,
     status: 'running',
     startedAt: timestamp,
@@ -96,7 +123,7 @@ function createRun(root, model, now = new Date(), metadata = {}) {
   const stageDir = path.join(locations.runs, id, 'stage1')
   fs.mkdirSync(stageDir, { recursive: true })
   saveRun(root, run)
-  return { id, model: run.model, title: run.title, isTest: run.isTest, runDir: path.join(locations.runs, id), stageDir }
+  return { id, model: run.model, title: run.title, variant: run.variant, target: run.target, isTest: run.isTest, runDir: path.join(locations.runs, id), stageDir }
 }
 
 function publishPhasePreviews(root, run, includeRootAlias = false) {
@@ -192,6 +219,8 @@ function selfTest() {
     writeJson(path.join(root, 'src', 'data', 'runs.json'), [])
     const created = createRun(root, 'Model / Test', new Date('2026-01-01T00:00:00.000Z'))
     assert.equal(created.id, 'model-test')
+    assert.equal(created.variant, 'stage-4-73')
+    assert.equal(created.target, 'Stage 4 73')
     fs.writeFileSync(path.join(created.stageDir, 'artifact.txt'), 'stage one')
     fs.mkdirSync(path.join(created.stageDir, 'dist'), { recursive: true })
     fs.writeFileSync(path.join(created.stageDir, 'dist', 'index.html'), '<h1>phase one</h1>')
@@ -222,7 +251,9 @@ function selfTest() {
     assert.equal(partialRun.status, 'partial')
     assert.equal(partialRun.previewStage, 1)
     assert.ok(fs.existsSync(path.join(root, 'public', 'previews', partial.id, 'stage1', 'index.html')))
-    return { ok: true, checks: 12 }
+    assert.equal(createRun(root, 'Compact Model', undefined, { variant: 'stage-4-compact-73' }).target, 'Stage 4 Compact 73')
+    assert.throws(() => createRun(root, 'Bad Variant', undefined, { variant: 'stage-4-99' }))
+    return { ok: true, checks: 16 }
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
@@ -230,7 +261,7 @@ function selfTest() {
 
 function printHelp() {
   console.log(`Usage:
-  manage-run.mjs create --model "model-id" [--title "Display title"] [--test true]
+  manage-run.mjs create --model "model-id" [--title "Display title"] [--variant <stage-4-88|stage-4-73|stage-4-compact-73>] [--test true]
   manage-run.mjs mark --id <run-id> --phase <1|2|3|4> --status <queued|running|complete|failed>
   manage-run.mjs prepare --id <run-id> --phase <2|3|4>
   manage-run.mjs partial --id <run-id>
@@ -242,7 +273,7 @@ try {
   const { command, options } = parseArgs(process.argv.slice(2))
   const root = command === 'self-test' ? undefined : findRepoRoot(options.root)
   let result
-  if (command === 'create') result = createRun(root, options.model, undefined, { title: options.title, isTest: options.test === 'true' })
+  if (command === 'create') result = createRun(root, options.model, undefined, { title: options.title, isTest: options.test === 'true', variant: options.variant })
   else if (command === 'mark') result = markStage(root, options.id, options.phase ?? options.stage, options.status)
   else if (command === 'prepare') result = prepareStage(root, options.id, options.phase ?? options.stage)
   else if (command === 'partial') result = finishPartialRun(root, options.id)

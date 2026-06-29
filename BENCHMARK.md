@@ -40,12 +40,12 @@ Each folder must be independently runnable.
 
 The `specs/` directory is part of the benchmark contract, not optional background reading. `specs/benchmark-phases.json` assigns the relevant domain specifications and hard gates to each phase. The phase prompts and run skill must pass those exact files to implementation and evaluation agents.
 
-- Phase 1: `nord-stage-4-73.visual.json`
+- Phase 1: `nord-stage-4.visual.json` (shared control deck) plus the run's variant from `nord-stage-4.variants.json`
 - Phase 2: visual plus `nord-stage-4.piano.json`
 - Phase 3: inherited specs plus `nord-stage-4.programs.json` and `nord-stage-4.effects.json`
 - Phase 4: all inherited specs plus `nord-stage-4.organ.json` and `nord-stage-4.synth.json`
 
-The checked-in manual remains authoritative when a summarized spec is ambiguous. Each domain spec cites its printed manual pages.
+The fetched manual remains authoritative when a summarized spec is ambiguous. Each domain spec cites its printed manual pages.
 
 ## Canonical references
 
@@ -61,19 +61,29 @@ pnpm fetch:reference
 
 This downloads the manual and the 88 / 73 / Compact 73 top-down photos for local evaluation only. Do not commit, re-host, or otherwise redistribute the contents of `reference/`.
 
+### Variants
+
+The Nord Stage 4 ships in three hardware variants. They share an identical control deck and differ only in the keybed and overall silhouette. Each benchmark run targets exactly one variant, chosen at run creation (the run skill prompts for it) and recorded on the run as `variant`/`target`.
+
+| Variant | id | Keybed | Reference image |
+| --- | --- | --- | --- |
+| Stage 4 88 | `stage-4-88` | 88 keys, A–C, hammer action | `reference/nord-stage-4.jpg` |
+| Stage 4 73 (default) | `stage-4-73` | 73 keys, E–E, hammer action | `reference/nord-stage-4-73.jpg` |
+| Stage 4 Compact 73 | `stage-4-compact-73` | 73 keys, E–E, semi-weighted waterfall | `reference/nord-stage-4-compact.jpg` |
+
+The canonical registry is [`specs/nord-stage-4.variants.json`](./specs/nord-stage-4.variants.json). The Stage 4 73 is fully measured there; measure the 88 and Compact 73 silhouettes from their reference images. Do not mix variants within a run, and do not substitute a different keybed than the one assigned.
+
 ### Product image
 
-The full-resolution primary visual reference is `reference/nord-stage-4-73.jpg`, fetched from Nord's official asset server (see [Reference material](#reference-material)). Measured reference values are stored in [`specs/nord-stage-4-73.visual.json`](./specs/nord-stage-4-73.visual.json).
+The full-resolution primary visual reference is the selected variant's `referenceImage` from `specs/nord-stage-4.variants.json` (default `reference/nord-stage-4-73.jpg`), fetched from Nord's official asset server (see [Reference material](#reference-material)). Shared control-deck reference values are in [`specs/nord-stage-4.visual.json`](./specs/nord-stage-4.visual.json); variant keybed and silhouette values are in the variants registry.
 
-It targets the Nord Stage 4 73 hardware shown in the official top-down photograph. The 88 (`reference/nord-stage-4.jpg`) and Compact 73 (`reference/nord-stage-4-compact.jpg`) are fetched for context only. Do not silently substitute the Compact 73 or label the recreation “Compact” when following this reference.
-
-Do not use a Compact-model image as a geometry or labeling reference. When another product image conflicts with the primary 73 image, the primary 73 image wins.
+Compare against the assigned variant's image only. Do not silently substitute another variant or label a recreation with the wrong model. When another product image conflicts with the assigned variant's image, the assigned variant's image wins.
 
 ### Visual fidelity contract
 
 The recreation must be compared directly against the primary image rather than merely borrowing a generic red-keyboard aesthetic.
 
-- Preserve the measured 3.095:1 instrument width-to-height silhouette within a 2.5% tolerance.
+- Preserve the selected variant's measured width-to-height silhouette within a 2.5% tolerance (Stage 4 73: 3.095:1; measure the 88 and Compact 73 from their reference image).
 - Render one continuous red chassis around the control surface and keybed. Top rail, bottom lip, and both end cheeks must connect without white gaps, detached rails, or unrelated outer frames.
 - The control deck including its top rail should occupy about 54% of the instrument height and the keybed including the bottom rail about 46%. The earlier 45/55 estimate was incorrect; use the measured specification.
 - Approximate horizontal section allocation from left to right: Performance 13%, Organ 21%, Piano 15%, Program/Morph 9%, Synth 21%, Layer Effects 21%.
@@ -81,9 +91,9 @@ The recreation must be compared directly against the primary image rather than m
 - Match the reference hierarchy of control sizes: primary encoders and layer faders, then secondary knobs, then compact rectangular switches and LEDs.
 - Reproduce the reference’s mixed hardware materials: black knobs with white index marks, dark and light fader caps, silver/gray switches, red illuminated states, green level LEDs, blue-green OLEDs, and white legends.
 - Match the visible control density and grouping. Large empty panels or evenly spaced placeholder controls are fidelity failures.
-- Match the section landmarks in `specs/nord-stage-4-73.visual.json` before adding micro-detail. Invented primary hardware is a structural failure: the Organ, Piano, and Effects sections must not gain OLED displays that are absent from the photograph. Only Program and Synth use primary OLEDs in this reference.
+- Match the section landmarks in `specs/nord-stage-4.visual.json` before adding micro-detail. Invented primary hardware is a structural failure: the Organ, Piano, and Effects sections must not gain OLED displays that are absent from the photograph. Only Program and Synth use primary OLEDs in this reference.
 - Prefer fewer correctly placed controls over a dense generic matrix. A repeated knob/button grid that ignores the photograph scores worse than a partially complete but correctly structured panel.
-- Model exactly 73 keys: 43 white and 30 black in the Stage 4 73 E-to-E pattern. Keep them inside the connected red end cheeks at every supported width. No key or chassis segment may overflow or be clipped.
+- Model the selected variant's exact keybed (Stage 4 73: 73 keys, 43 white and 30 black, E-to-E hammer action; see `specs/nord-stage-4.variants.json`). Keep keys inside the connected red end cheeks at every supported width. No key or chassis segment may overflow or be clipped.
 - Use a neutral light product-study background like the source photograph. The instrument—not a marketing headline—must be the first and dominant visual element, occupy 88–97% of a 1440px viewport's width, and remain fully visible without vertical scrolling at 1440×900.
 - Do not add a large hero, product slogan, decorative stage scene, or unrelated copy above the instrument. Small status/help text may sit below it.
 - Do not render the supplied reference photograph as a background, texture, overlay, or substitute for DOM/CSS controls. It is comparison evidence only.
@@ -92,7 +102,7 @@ The recreation must be compared directly against the primary image rather than m
 
 Visual fidelity is an implementation loop, not a final glance.
 
-1. Read the full-resolution image and `specs/nord-stage-4-73.visual.json` before creating components.
+1. Read the full-resolution image and `specs/nord-stage-4.visual.json` before creating components.
 2. Build the instrument from a normalized, data-driven hardware map with stable IDs for sections and controls.
 3. Capture a 1440×900 screenshot, crop both render and reference to the instrument bounds, then compare section landmarks, forbidden hardware, control placement, vertical allocation, section widths, key counts, and dominant colors in that order. Whole-page whitespace must not dominate the comparison.
 4. Record the measured differences and correct the three largest structural mismatches.

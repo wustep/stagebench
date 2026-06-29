@@ -79,4 +79,4 @@ The report always uses the same order: run overview, phase score, plain-language
 pnpm evaluate:report --id <run-id>
 ```
 
-Do not score visual fidelity from source inspection alone. Compare the rendered artifact directly with `reference/nord-stage-4-73.jpg` at desktop and narrow widths.
+Do not score visual fidelity from source inspection alone. Compare the rendered artifact directly with the run's selected-variant reference image (its `referenceImage` in `specs/nord-stage-4.variants.json`, e.g. `reference/nord-stage-4-73.jpg` for the Stage 4 73) at desktop and narrow widths.

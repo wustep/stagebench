@@ -11,7 +11,8 @@ These files convert the Nord Stage 4 reference photograph and the Nord Stage 4 U
 
 ## Files
 
-- `nord-stage-4-73.visual.json` - chassis, section, keyboard, and presentation geometry.
+- `nord-stage-4.visual.json` - shared control-deck chassis, section, and presentation geometry (variant-neutral).
+- `nord-stage-4.variants.json` - the three hardware variants (88, 73, Compact 73): per-variant keybed, reference image, and silhouette. Each run targets one.
 - `nord-stage-4.piano.json` - Piano layers, source selection, playing behavior, and piano controls.
 - `nord-stage-4.programs.json` - Programs, morphs, splits, scenes, presets, live mode, and editing workflows.
 - `nord-stage-4.effects.json` - effect instances, focus/group/global behavior, effect types, parameters, and signal order.

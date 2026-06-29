@@ -4,7 +4,7 @@ Work only inside the assigned `stage3` directory. It is a clean copy of the veri
 
 1. `BENCHMARK.md` and `TESTING.md`
 2. `specs/benchmark-phases.json` Phase 3
-3. `specs/nord-stage-4-73.visual.json`
+3. `specs/nord-stage-4.visual.json`
 4. `specs/nord-stage-4.piano.json`
 5. `specs/nord-stage-4.programs.json`
 6. `specs/nord-stage-4.effects.json`

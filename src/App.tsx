@@ -33,6 +33,7 @@ type BenchmarkRun = {
   id: string
   model: string
   title?: string
+  variant?: string
   target?: string
   isTest?: boolean
   status: RunStatus

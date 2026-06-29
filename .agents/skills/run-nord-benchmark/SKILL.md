@@ -20,16 +20,25 @@ Execute one attributed four-phase benchmark run with isolated implementation age
 
 Honor an explicit phase limit; otherwise run all four phases. Do not ask for a model when the user already supplied one unambiguously.
 
+Resolve the hardware variant. The Nord Stage 4 ships in three variants defined in `specs/nord-stage-4.variants.json`:
+
+- `stage-4-88` — Stage 4 88 (88 keys, hammer action)
+- `stage-4-73` — Stage 4 73 (73 keys, hammer action; default)
+- `stage-4-compact-73` — Stage 4 Compact 73 (73 keys, semi-weighted waterfall)
+
+Unless the user already named a variant unambiguously, ask which one to build before creating the run. All three share the same control deck; only the keybed and silhouette differ.
+
 Store:
 
-- `model`: stable canonical identifier shared by variants;
+- `model`: stable canonical identifier shared by model variants;
 - `title`: human-readable run title;
+- `variant`: the selected hardware variant id from `specs/nord-stage-4.variants.json`;
 - `isTest`: true only when the user requests an experimental/test classification.
 
-Create a new isolated run:
+Create a new isolated run (the run records `variant` and its display `target`):
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs create --model "<canonical-id>" --title "<display-title>"
+node <skill-directory>/scripts/manage-run.mjs create --model "<canonical-id>" --title "<display-title>" --variant "<variant-id>"
 ```
 
 Never reuse or overwrite an existing run directory.
@@ -62,7 +71,8 @@ Spawn a fresh agent with no inherited parent conversation. Give it only:
 - absolute `BENCHMARK.md` and `TESTING.md` paths;
 - absolute `specs/benchmark-phases.json` path;
 - only the domain spec files assigned to this phase by the phase manifest;
-- the fetched reference manual and primary image paths (see reference/, pnpm fetch:reference);
+- the selected variant id and its entry in `specs/nord-stage-4.variants.json` (key model and silhouette);
+- the fetched reference manual and the selected variant's reference image (see reference/, pnpm fetch:reference);
 - the phase's prompt path;
 - the preceding phase evaluation JSON/report path when one exists, solely to repair inherited shortcomings;
 - the exact model selection when supported;
@@ -127,7 +137,7 @@ node <skill-directory>/scripts/evaluate-run.mjs template --id "<id>" --phase <N>
 Spawn a new evaluator with no inherited context. The evaluator must not edit the candidate. Give it:
 
 - repository and candidate phase paths;
-- primary image and fetched manual;
+- the selected variant's reference image (per `specs/nord-stage-4.variants.json`) and the fetched manual;
 - benchmark, testing contract, phase prompt, phase manifest, and all assigned domain specs;
 - current rubric, verification JSON, assessment path, and local preview URL;
 - instructions to inspect source, candidate tests, rendered desktop/narrow UI, console, real interactions, and audible/system behavior.
@@ -159,7 +169,7 @@ If a hard gate remains violated after the fixed repair pass, mark the phase fail
 
 ## 3. Phase-specific emphasis
 
-- **Phase 1 - Visual recreation:** exact hardware structure first; two measured visual repair passes; no audio.
+- **Phase 1 - Visual recreation:** exact hardware structure for the selected variant first (correct keybed count/range/action and silhouette); two measured visual repair passes; no audio.
 - **Phase 2 - Piano instrument:** credible primary Piano source, one deterministic input lifecycle, real audio-boundary tests, truthful fallback.
 - **Phase 3 - Programs and effects:** canonical Program state, editable splits/scenes/morphs, one shared audio graph, connected representative effects; no Organ/Synth audio yet.
 - **Phase 4 - Organ and synth:** distinct Organ/Synth engines integrated into inherited Programs, routing, effects, splits, morphs, scenes, and presets.

@@ -60,9 +60,19 @@ export function collectImplementationDetails(root, run) {
 
     const packageJson = readJson(packagePath)
     const manifestPath = path.join(phaseDir, 'IMPLEMENTATION_DETAILS.json')
-    const declared = fs.existsSync(manifestPath)
-      ? validateImplementationManifest(readJson(manifestPath), phase)
-      : {
+    let declared
+    if (fs.existsSync(manifestPath)) {
+      try {
+        declared = validateImplementationManifest(readJson(manifestPath), phase)
+      } catch (error) {
+        // prepare copies the previous phase before the next agent updates its
+        // manifest. Queued/running phases are not reportable yet, so omit the
+        // stale copy; a completed phase must still fail loudly.
+        if (phaseState.status === 'complete') throw error
+        return []
+      }
+    } else {
+      declared = {
           version: 1,
           phase,
           audio: {
@@ -71,6 +81,7 @@ export function collectImplementationDetails(root, run) {
             notes: ['This phase predates the implementation-details contract.'],
           },
         }
+    }
 
     return [{
       phase,
