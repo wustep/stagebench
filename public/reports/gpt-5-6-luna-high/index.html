@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>GPT 5.6 Luna High · Stagebench evaluation</title>
+  <style>
+    :root { color-scheme: light; --red:#a51f24; --red-dark:#70191e; --ink:#211c1d; --muted:#665d5f; --line:#d6cdcf; --surface:#f5f3f3; --panel:#fff; --green:#2c7a45; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.55 Inter, ui-sans-serif, system-ui, sans-serif; }
+    a { color:var(--red-dark); }
+    .report-header { padding:42px max(24px,calc((100% - 1080px)/2)); background:var(--red); color:#fff; }
+    .report-header small { display:block; margin-bottom:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .report-header h1 { max-width:760px; margin:0; font-size:clamp(34px,6vw,62px); line-height:1; letter-spacing:-.03em; text-wrap:balance; }
+    .report-header p { max-width:70ch; margin:18px 0 0; color:#ffecec; }
+    .aggregate { display:flex; align-items:baseline; gap:9px; margin-top:28px; }
+    .aggregate strong { font-size:48px; line-height:1; }
+    .aggregate span { font-weight:800; text-transform:uppercase; }
+    main { width:min(1080px,calc(100% - 32px)); margin:0 auto; padding:42px 0 72px; }
+    .overview, .stage-report { margin-bottom:34px; padding:26px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+    h2,h3,h4 { text-wrap:balance; } h2 { margin:0; font-size:28px; } h3 { margin:0 0 12px; font-size:15px; } h4 { margin:0 0 10px; color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { color:var(--muted); font-size:11px; text-align:left; text-transform:uppercase; }
+    th,td { padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    .grade { font-weight:800; text-transform:capitalize; } .grade-exceptional,.grade-strong,.grade-competent { color:var(--green); } .grade-developing { color:#9a5c00; } .grade-incomplete { color:var(--red); }
+    .section-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; } .section-intro span,.implementation-phase header span { color:var(--red); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; } .section-intro a { font-size:12px; font-weight:800; }
+    .implementation-details > p { max-width:76ch; color:var(--muted); }
+    .implementation-phase { padding:22px 0; border-top:1px solid var(--line); } .implementation-phase:last-child { padding-bottom:0; } .implementation-phase h3 { margin:2px 0 14px; font-size:18px; }
+    .implementation-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.05fr) minmax(0,1.4fr); gap:24px; }
+    .library-list { margin:0; padding:0; list-style:none; } .library-list li { display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #eee8e9; } .library-list span { color:var(--muted); font-size:11px; }
+    .audio-details { margin:0; } .audio-details > div { display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; padding:5px 0; border-bottom:1px solid #eee8e9; } .audio-details dt { color:var(--muted); font-size:11px; font-weight:800; } .audio-details dd { margin:0; } .audio-details ul { margin:0; padding-left:17px; } .audio-details span { color:var(--muted); font-size:12px; } .empty-detail { color:var(--muted); }
+    .stage-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+    .stage-heading > div:first-child span { color:var(--red); font-size:11px; font-weight:800; text-transform:uppercase; }
+    .stage-score { display:flex; align-items:baseline; gap:5px; color:var(--red-dark); } .stage-score strong { font-size:34px; line-height:1; } .stage-score span { font-size:11px; font-weight:800; text-transform:uppercase; }
+    .summary { max-width:78ch; margin:20px 0 26px; color:#3f383a; }
+    .report-columns { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:28px; }
+    .findings { margin:0; padding:0; list-style:none; } .findings li { padding:0 0 12px; } .findings strong,.findings span { display:block; } .findings span { margin-top:3px; color:var(--muted); font-size:12px; }
+    .issues { margin:28px 0; padding:20px; background:#f8eded; border-radius:8px; } .issues ol { margin:0; padding-left:20px; } .issues li + li { margin-top:8px; }
+    .gate { display:inline-block; margin:0 0 12px; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; } .gate-pass { background:#e3f2e7; color:#225d34; } .gate-fail { background:#f5dfe0; color:#821b20; }
+    details { margin-top:26px; border-top:1px solid var(--line); } summary { padding:18px 0; font-weight:800; cursor:pointer; } .criteria-group + .criteria-group { margin-top:24px; } .criteria-table ul { margin:0; padding-left:18px; } .criteria-table li + li { margin-top:6px; }
+    footer { padding:24px; background:var(--ink); color:#cfc7c9; font-size:11px; text-align:center; }
+    @media (max-width:800px) { .implementation-grid { grid-template-columns:1fr; } }
+    @media (max-width:720px) { .report-columns { grid-template-columns:1fr; } .overview,.stage-report { padding:18px; } .stage-heading { align-items:flex-start; flex-direction:column; } .section-intro { align-items:flex-start; flex-direction:column; } .audio-details > div { grid-template-columns:1fr; gap:2px; } table { display:block; overflow-x:auto; } }
+    @media print { .report-header { background:#fff; color:#000; padding-top:0; } .report-header p { color:#333; } body { background:#fff; } .overview,.stage-report { break-inside:avoid; border-color:#999; } details > * { display:block; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <small>Stagebench evaluation · rubric 2.0.0</small>
+    <h1>GPT 5.6 Luna High</h1>
+    <p>Evidence-backed evaluation of visual fidelity, feature completion, interaction, audio behavior, and engineering quality. Scores use phase-specific weights and automated technical gates.</p>
+    <div class="aggregate"><strong>60</strong><span>/100 · developing</span></div>
+  </header>
+  <main>
+    <section class="overview">
+      <h2>Run overview</h2>
+      <p>Run <code>gpt-5-6-luna-high</code> · running · 1/4 phases evaluated · generated Jun 29, 2026, 3:40 AM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th><th>Grade</th></tr></thead><tbody><tr><td>Phase 1</td><td>Visual recreation</td><td><strong>60</strong>/100</td><td><span class="grade grade-developing">developing</span></td></tr><tr><td>Phase 2</td><td>queued</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 3</td><td>queued</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 4</td><td>queued</td><td>—</td><td>Not evaluated</td></tr></tbody></table>
+    </section>
+    <section class="overview implementation-details" id="implementation-details">
+      <div class="section-intro">
+        <div><span>Generated inventory</span><h2>Implementation details</h2></div>
+        <a href="implementation-details.json">View JSON</a>
+      </div>
+      <p>Libraries come from each phase's package manifest. Audio files are detected from the artifact, while sound-generation and sample provenance are explicitly declared by the benchmark implementation.</p>
+      <section class="implementation-phase">
+        <header><span>Phase 1</span><h3>Visual recreation</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>@vitejs/plugin-react</code><span>latest</span></li><li><code>react</code><span>latest</span></li><li><code>react-dom</code><span>latest</span></li><li><code>typescript</code><span>latest</span></li><li><code>vite</code><span>latest</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@eslint/js</code><span>latest</span></li><li><code>@testing-library/jest-dom</code><span>latest</span></li><li><code>@testing-library/react</code><span>latest</span></li><li><code>@testing-library/user-event</code><span>latest</span></li><li><code>@types/react</code><span>latest</span></li><li><code>@types/react-dom</code><span>latest</span></li><li><code>eslint</code><span>latest</span></li><li><code>eslint-plugin-react-hooks</code><span>latest</span></li><li><code>eslint-plugin-react-refresh</code><span>latest</span></li><li><code>globals</code><span>latest</span></li><li><code>jsdom</code><span>latest</span></li><li><code>typescript-eslint</code><span>latest</span></li><li><code>vitest</code><span>latest</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>None (visual-only phase)</dd></div><div><dt>Generated sound sources</dt><dd>None declared</dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>No audio engine or sound assets are included in Phase 1.</li></ul></dd></div></dl></div>
+        </div>
+      </section>
+    </section>
+    
+  <section class="stage-report" id="stage-1">
+    <header class="stage-heading">
+      <div><span>Phase 1</span><h2>Visual recreation</h2></div>
+      <div class="stage-score"><strong>60</strong><span>/100 · developing</span></div>
+    </header>
+
+    <p class="summary">The repaired Phase 1 artifact now has a strong measured chassis and keybed silhouette: the 3.0951 aspect ratio, 94% desktop width, 54/46 deck-to-keybed allocation, continuous red rails, six ordered sections, exactly 43 white plus 30 black keys, and only Program/Synth OLEDs are all visible in the refreshed evidence. The data model and interaction pass are materially better, with section-specific drawbars, faders, knobs, toggles, keyboard focus/press states, OLED coupling, and explicit focus outlines. It remains a stylized product-study rather than a close recreation of the reference: most photographed micro-hardware and printed legends are absent or clipped by panel overflow, performance controls are generic sliders rather than a pitch stick/mod wheel, and the narrow capture is a horizontally scrolling 820px canvas. Independent test, typecheck, lint, and build checks all pass.</p>
+
+    <div class="report-columns">
+      <section>
+        <h3>Category scores</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+          <tbody><tr><td>Visual fidelity</td><td>55%</td><td><strong>56</strong></td><td>31</td></tr><tr><td>Feature completion</td><td>20%</td><td><strong>60</strong></td><td>12</td></tr><tr><td>Interaction and UX</td><td>15%</td><td><strong>66</strong></td><td>9</td></tr><tr><td>Engineering quality</td><td>10%</td><td><strong>75</strong></td><td>7</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h3>What worked</h3>
+        <ul class="findings"><li><strong>Silhouette and proportions</strong><span>evidence/stage1-desktop.png shows a continuous red chassis, end cheeks, top rail, bottom rail, and complete keybed fully inside the 1440x900 viewport at approximately 94% width.</span></li><li><strong>Visual state coverage</strong><span>White and black keys depress on pointer and keyboard events; buttons expose aria-pressed and illuminated LED classes; knobs respond to arrow keys/clicks; range controls provide drawbar/fader/wheel movement.</span></li><li><strong>Control interaction</strong><span>main.tsx routes pointer press/release, keyboard press/release, range input changes, knob keyboard/click adjustment, and aria-pressed button toggles through one state record.</span></li><li><strong>Component and data structure</strong><span>main.tsx uses stable section.control IDs, a data-driven sectionDefs model, reusable Panel/Knob/SmallButton primitives, and one normalized state map.</span></li></ul>
+      </section>
+    </div>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <ol><li>[object Object]</li><li>[object Object]</li><li>[object Object]</li><li>[object Object]</li><li>[object Object]</li></ol>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-pass">Passed</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>runs/gpt-5-6-luna-high/stage1/dist/index.html</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Visual fidelity</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Silhouette and proportions</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>evidence/stage1-desktop.png shows a continuous red chassis, end cheeks, top rail, bottom rail, and complete keybed fully inside the 1440x900 viewport at approximately 94% width.</li><li>IMPLEMENTATION_PLAN.md and styles.css encode the measured 3.0951 aspect ratio and 54/46 control-deck/keybed allocation; the 43-white/30-black E-to-E keyboard is visibly complete.</li><li>Compared with the reference crop, the control deck is still more vertically open and the rails/cheeks are simplified, so this is strong but not exceptional fidelity.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Panel layout and density</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>The desktop render has the correct six-section order and 13/21/15/9/21/21 grid, with clear Performance, Organ, Piano, Program/Morph, Synth, and Layer Effects boundaries.</li><li>sectionDefs contains section-specific drawbars, piano selectors, program navigation/live controls, synth oscillator/filter/envelope/LFO/arp controls, and effect controls.</li><li>Most of those controls are hidden by .panel-content overflow in the short deck (for example Organ/Piano/Program), and the visible density remains far below the reference photograph&#039;s tightly packed hardware.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Control materials and color</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>styles.css provides red chassis, slate inset panels, metallic gradients for knobs/faders/drawbars, key shading, and teal OLED treatment close to the reference palette.</li><li>The render lacks the reference&#039;s many discrete LED ladders, silver toggle hardware, varied drawbar caps, real pitch stick/mod wheel geometry, and dense material micro-detail; performance pitch/mod are vertical range sliders.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Typography and displays</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Only Program and Synth render OLED elements, and the Synth display changes from SYNTH / WAVE to SYNTH / ARP when Arpeggiator is toggled; no forbidden Organ/Piano/Effects OLED is present.</li><li>Section headings use a condensed display face and the required Nord Stage 4 caption/branding is present, but the photograph&#039;s tiny legends, display framing, program metadata, and typography hierarchy are largely omitted.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Feature completion</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Visible hardware inventory</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>The model declares exactly 43 white keys and 30 black offsets, nine Organ drawbars, two OLEDs, and named controls for Piano, Program, Synth, and Effects groups.</li><li>In evidence/stage1-desktop.png the 73-key inventory and drawbar bank are visible, but most required section-specific hardware is either represented by small generic switches or clipped below the panel viewport; the performance stick/wheel are not true Nord hardware.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Visual state coverage</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>White and black keys depress on pointer and keyboard events; buttons expose aria-pressed and illuminated LED classes; knobs respond to arrow keys/clicks; range controls provide drawbar/fader/wheel movement.</li><li>Program and Synth OLED copy is coupled to canonical button state, and explicit button/input/[role=button] focus-visible outlines are implemented in styles.css.</li><li>Coverage is still shallow for hover, contextual displays, and section-specific LED/state coupling beyond the representative toggles.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Interaction and UX</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Control interaction</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>main.tsx routes pointer press/release, keyboard press/release, range input changes, knob keyboard/click adjustment, and aria-pressed button toggles through one state record.</li><li>The eight passing Vitest cases exercise white and black key transitions, button LED state, OLED coupling, named controls, and keyboard focus paths.</li><li>Many controls only alter their own local value and do not drive broader hardware feedback; knobs are tested for visibility rather than asserting a changed value.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Responsive accessibility</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Desktop evidence is fully visible without vertical clipping, controls have aria-labels, black keys are focusable role=button elements, and explicit focus-visible styling is present.</li><li>The 390x844 evidence intentionally presents an 820px instrument canvas with a horizontal scrollbar, so most of the instrument is off-screen until scrolled and narrow operation is not a compact responsive layout.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Engineering quality</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Component and data structure</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>main.tsx uses stable section.control IDs, a data-driven sectionDefs model, reusable Panel/Knob/SmallButton primitives, and one normalized state map.</li><li>The implementation is understandable and avoids invented OLED locations, but almost all rendering remains concentrated in one file and the data model does not encode measured per-control placement or visibility constraints.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Runtime quality</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Independent pnpm run test (8 tests), pnpm run typecheck, pnpm run lint, and pnpm run build all pass; dist/index.html is generated.</li><li>The audit reports a browser smoke capture with no app console errors and the desktop render has no clipping; runtime risk remains because the narrow canvas relies on overflow and there is no automated browser console/layout assertion.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  </main>
+  <footer>Academic UI/audio reconstruction benchmark · Not affiliated with Nord Keyboards.</footer>
+</body>
+</html>

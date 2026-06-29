@@ -1,0 +1,83 @@
+{
+  "version": "1.0.0",
+  "domain": "effects",
+  "source": {
+    "manual": "reference/manual.pdf",
+    "pages": [47, 48, 49, 50, 51, 52]
+  },
+  "routing": {
+    "effectChainInstancesPerProgram": 6,
+    "organLayersShareOneChain": true,
+    "pianoLayersHaveIndependentChains": true,
+    "synthLayersHaveIndependentChains": true,
+    "rotaryInstancesPerProgram": 1,
+    "rotaryIsLastInSignalPath": true,
+    "allEffectsBypass": true,
+    "focusFollowsLayerFocus": true,
+    "manualFocusSections": ["Organ", "Piano", "Synth"],
+    "groupModeSections": ["Piano", "Synth"],
+    "globalCapableUnits": ["Delay", "Compressor", "Reverb"]
+  },
+  "units": [
+    {
+      "id": "mod1",
+      "types": ["A-Pan", "Tremolo", "Ring Mod", "Auto-Wah", "Wah", "Pump"],
+      "parameters": ["Rate/Sensitivity", "Amount", "Variation/Pedal", "Master Clock where supported"],
+      "morphable": ["Rate", "Amount"]
+    },
+    {
+      "id": "mod2",
+      "types": ["Phaser", "Flanger", "Vibe", "Chorus", "Ensemble", "Spin"],
+      "parameters": ["Rate", "Amount", "Variation"],
+      "morphable": ["Amount"]
+    },
+    {
+      "id": "delay",
+      "types": ["Clean delay"],
+      "feedbackEffects": ["Chorus", "Vibe", "Ensemble", "Flam", "Space"],
+      "feedbackFilters": ["Off", "Low Pass", "High Pass", "Band Pass"],
+      "parameters": ["Tempo", "Feedback", "Dry/Wet", "Ping Pong", "Tap Tempo", "Analog", "Master Clock", "Variation"],
+      "morphable": ["Tempo", "Feedback", "Dry/Wet"]
+    },
+    {
+      "id": "ampEq",
+      "types": ["Neutral EQ", "Twin", "JC", "Small", "LP24 Filter", "HP24 Filter", "To Rotary"],
+      "parameters": ["Drive", "Bass Gain", "Mid Gain", "Mid Frequency", "Treble Gain", "Filter Frequency", "Filter Resonance", "Variation"],
+      "fixedFrequenciesHz": { "bass": 100, "treble": 4000 },
+      "midFrequencyRangeHz": [200, 8000],
+      "gainRangeDb": [-15, 15],
+      "morphable": ["Drive", "Mid/Filter Frequency"]
+    },
+    {
+      "id": "compressor",
+      "types": ["Compressor"],
+      "parameters": ["Amount", "Fast", "Global", "On"]
+    },
+    {
+      "id": "reverb",
+      "types": ["Spring", "Booth", "Room", "Stage", "Hall", "Cathedral"],
+      "parameters": ["Dry/Wet", "Variation/Chorale", "Bright", "Dark", "Global", "On"],
+      "morphable": ["Dry/Wet"]
+    },
+    {
+      "id": "rotary",
+      "types": ["Rotary Speaker"],
+      "parameters": ["Slow", "Fast", "Stop", "Stop Angle", "Close Mic", "Drive", "Morph Speed"],
+      "routingSources": ["Organ", "Piano via To Rotary", "Synth via To Rotary"]
+    }
+  ],
+  "signalContract": {
+    "requiredOrder": ["Layer source", "Mod 1", "Mod 2", "Delay", "Amp/EQ or Filter", "Compressor", "Reverb", "Rotary when routed", "Master bus", "Destination"],
+    "oneAudioContext": true,
+    "bypassMustBeClickFree": true,
+    "parameterAutomationRequired": true,
+    "masterLimiterRequired": true
+  },
+  "acceptance": [
+    "Each required representative effect changes benchmark-rendered audio in a way consistent with its class.",
+    "Bypass, focus, group, global, and per-layer targeting alter the actual signal path.",
+    "Delay feedback effects and filters process repeats rather than the dry signal.",
+    "Reverb precedes Rotary for routed layers.",
+    "No unit counts as implemented when represented only by metadata, disconnected nodes, or display state."
+  ]
+}

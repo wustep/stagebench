@@ -1,0 +1,195 @@
+{
+  "version": "2.0.0",
+  "title": "Stagebench Nord Stage 4 four-phase evaluation rubric",
+  "ratingScale": {
+    "minimum": 0,
+    "maximum": 4,
+    "anchors": {
+      "0": "Missing, broken, disconnected, or no credible exercised evidence.",
+      "1": "Present only as a minimal, placeholder, display-only, or substantially incorrect implementation.",
+      "2": "Partially complete with important fidelity, integration, or behavior gaps.",
+      "3": "Strong and substantially complete against the assigned specs, with limited gaps.",
+      "4": "Exceptional fidelity, integration, and completeness against the image, manual, and assigned specs."
+    }
+  },
+  "aggregateStageWeights": { "1": 20, "2": 25, "3": 25, "4": 30 },
+  "technicalGate": {
+    "requiredChecks": ["test", "typecheck", "lint", "build"],
+    "failureScoreCap": 59,
+    "missingArtifactScoreCap": 49
+  },
+  "stages": {
+    "1": {
+      "name": "Visual recreation",
+      "description": "Scores reference fidelity, exact visible inventory, interaction state, and implementation quality.",
+      "categories": [
+        {
+          "id": "visualFidelity", "label": "Visual fidelity", "weight": 55,
+          "criteria": [
+            { "id": "silhouetteAndProportions", "label": "Silhouette and proportions", "weight": 25, "guidance": "Compare continuous chassis, deck/keybed ratio, end cheeks, keyboard, and overall bounds with the primary image and visual spec." },
+            { "id": "panelLayoutAndDensity", "label": "Panel layout and density", "weight": 30, "guidance": "Compare section landmarks, widths, grouping, density, and placement. Invented primary hardware prevents a rating above 1." },
+            { "id": "controlMaterialsAndColor", "label": "Control materials and color", "weight": 25, "guidance": "Assess reference-specific knobs, switches, drawbars, faders, LEDs, OLEDs, red metal, and slate panels." },
+            { "id": "typographyAndDisplays", "label": "Typography and displays", "weight": 20, "guidance": "Assess legends, branding, hierarchy, exact display locations, and small-label legibility." }
+          ]
+        },
+        {
+          "id": "featureCompletion", "label": "Feature completion", "weight": 20,
+          "criteria": [
+            { "id": "visibleHardwareInventory", "label": "Visible hardware inventory", "weight": 60, "guidance": "Check exact keyboard and required section-specific hardware. Penalize generic matrices and wrong-section controls." },
+            { "id": "visualStateCoverage", "label": "Visual state coverage", "weight": 40, "guidance": "Exercise illuminated, pressed, rotated, toggled, hover, and focus states through canonical hardware state." }
+          ]
+        },
+        {
+          "id": "interactionQuality", "label": "Interaction and UX", "weight": 15,
+          "criteria": [
+            { "id": "controlInteraction", "label": "Control interaction", "weight": 65, "guidance": "Exercise keys, buttons, knobs, LEDs, and displays; reward coherent coupled feedback rather than decorative local state." },
+            { "id": "responsiveAccessibility", "label": "Responsive accessibility", "weight": 35, "guidance": "Check clipping, focus, labels, keyboard control, narrow behavior, and practical interaction targets." }
+          ]
+        },
+        {
+          "id": "engineeringQuality", "label": "Engineering quality", "weight": 10,
+          "criteria": [
+            { "id": "componentStructure", "label": "Component and data structure", "weight": 50, "guidance": "Assess stable IDs, normalized section-specific data, understandable React/CSS, and reusable primitives." },
+            { "id": "runtimeQuality", "label": "Runtime quality", "weight": 50, "guidance": "Assess tests, console cleanliness, stability, loading, and avoidable rendering/layout problems." }
+          ]
+        }
+      ]
+    },
+    "2": {
+      "name": "Piano instrument",
+      "description": "Scores visual retention, Piano spec coverage, real audio behavior, playability, and architecture.",
+      "categories": [
+        {
+          "id": "visualFidelity", "label": "Visual fidelity retention", "weight": 25,
+          "criteria": [
+            { "id": "referenceRetention", "label": "Reference fidelity retention", "weight": 60, "guidance": "Confirm Phase 1 geometry, inventory, materials, and display fidelity remain intact." },
+            { "id": "responsiveChassis", "label": "Responsive chassis", "weight": 40, "guidance": "Check complete keyboard/chassis, scaling, clipping, and narrow behavior after audio/status integration." }
+          ]
+        },
+        {
+          "id": "featureCompletion", "label": "Piano feature completion", "weight": 25,
+          "criteria": [
+            { "id": "inputCoverage", "label": "Input coverage", "weight": 35, "guidance": "Verify pointer, multitouch, computer keyboard, and MIDI all drive one note lifecycle including failure states." },
+            { "id": "pianoControls", "label": "Piano controls", "weight": 40, "guidance": "Verify Piano spec controls update canonical state and audible behavior where claimed." },
+            { "id": "displayAndStatus", "label": "Display and status feedback", "weight": 25, "guidance": "Verify selection, parameters, voices, MIDI/audio readiness, fallback, and errors are truthful." }
+          ]
+        },
+        {
+          "id": "audioQuality", "label": "Audio implementation", "weight": 30,
+          "criteria": [
+            { "id": "soundSource", "label": "Piano sound source", "weight": 25, "guidance": "Require credible bundled recordings or comparably convincing modeling. Short additive buffers presented as samples rate at most 1." },
+            { "id": "noteLifecycle", "label": "Note lifecycle and cleanup", "weight": 25, "guidance": "Exercise attack, release, repeated/overlapping notes, stuck-note prevention, Panic, voice limits, and node cleanup." },
+            { "id": "velocityAndControls", "label": "Velocity and sonic controls", "weight": 25, "guidance": "Verify velocity and supported Piano controls measurably alter rendered audio." },
+            { "id": "sustainAndPolyphony", "label": "Sustain and polyphony", "weight": 25, "guidance": "Exercise sustain transitions, half-pedal approximation, useful polyphony, stealing, and cleanup." }
+          ]
+        },
+        {
+          "id": "interactionQuality", "label": "Playability and UX", "weight": 15,
+          "criteria": [
+            { "id": "playability", "label": "Playability", "weight": 50, "guidance": "Assess latency, reliable triggering, repeated play, key mapping, multi-touch, and sustained performance." },
+            { "id": "controlFeedback", "label": "Control feedback", "weight": 30, "guidance": "Check immediate visual and audible feedback for played notes and parameters." },
+            { "id": "failureHandling", "label": "Failure handling", "weight": 20, "guidance": "Check denied MIDI, unavailable audio, asset failures, focus loss, cleanup, and truthful fallback status." }
+          ]
+        },
+        {
+          "id": "engineeringQuality", "label": "Engineering quality", "weight": 5,
+          "criteria": [
+            { "id": "audioArchitecture", "label": "Audio architecture", "weight": 50, "guidance": "Assess UI/state/input/voice/audio separation and direct tests of the real backend." },
+            { "id": "performanceAndCleanup", "label": "Performance and cleanup", "weight": 50, "guidance": "Assess reuse, cleanup, voice disposal, rapid-play stability, and console state." }
+          ]
+        }
+      ]
+    },
+    "3": {
+      "name": "Programs and effects",
+      "description": "Scores canonical Program behavior, performance systems, connected effects, routing, and inherited fidelity.",
+      "categories": [
+        {
+          "id": "visualFidelity", "label": "Visual fidelity retention", "weight": 15,
+          "criteria": [
+            { "id": "referenceRetention", "label": "Reference fidelity retention", "weight": 50, "guidance": "Compare the Phase 3 render with the primary image and inherited evidence." },
+            { "id": "hardwareStateFidelity", "label": "Hardware state fidelity", "weight": 50, "guidance": "Check Programs, layers, splits, morphs, scenes, focus, and effects are represented through credible hardware states." }
+          ]
+        },
+        {
+          "id": "featureCompletion", "label": "Program feature completion", "weight": 30,
+          "criteria": [
+            { "id": "programWorkflows", "label": "Program and preset workflows", "weight": 35, "guidance": "Exercise canonical round-trip, dirty state, store/store-as, lists, categories, undo/cancel, Live Mode, and rendered navigation." },
+            { "id": "performanceSystems", "label": "Splits, scenes, and morphs", "weight": 40, "guidance": "Exercise editable split points/crossfades/zones, two scenes, morph input paths/interpolation/indicators, and master performance state." },
+            { "id": "displayAndEditing", "label": "Display and editing behavior", "weight": 25, "guidance": "Verify contextual displays, parameter editing, focus, list modes, copy/paste, and Program controls." }
+          ]
+        },
+        {
+          "id": "audioQuality", "label": "Effects and signal architecture", "weight": 30,
+          "criteria": [
+            { "id": "sharedGraph", "label": "Shared audio graph", "weight": 25, "guidance": "Verify one AudioContext, per-layer buses, ordered chains, master bus/limiter, and cleanup." },
+            { "id": "effectsCoverage", "label": "Audible effect coverage", "weight": 40, "guidance": "Exercise representative Mod 1/2, Delay, Amp/EQ/filter, Compressor, Reverb, and Rotary audio. Metadata-only units rate 0." },
+            { "id": "effectRouting", "label": "Effect routing and control", "weight": 35, "guidance": "Verify focus, group/global, per-layer targeting, bypass, dry/wet, ordering, automation, Delay feedback path, and To Rotary." }
+          ]
+        },
+        {
+          "id": "systemBehavior", "label": "System behavior", "weight": 15,
+          "criteria": [
+            { "id": "programBehavior", "label": "Program behavior", "weight": 40, "guidance": "Exercise Program state transitions as one coherent system rather than isolated models." },
+            { "id": "routingAndControls", "label": "Routing and control mapping", "weight": 35, "guidance": "Check visible Program/effect controls target canonical state and audible routing with correct focus." },
+            { "id": "regressionResistance", "label": "Regression resistance", "weight": 25, "guidance": "Confirm inherited visual interaction and Piano audio remain functional through Programs and effects." }
+          ]
+        },
+        {
+          "id": "engineeringQuality", "label": "Engineering quality", "weight": 10,
+          "criteria": [
+            { "id": "systemArchitecture", "label": "System architecture", "weight": 45, "guidance": "Assess canonical state, serialization, bus/effect composition, engine boundaries, and Phase 4 extensibility." },
+            { "id": "testQuality", "label": "Test quality", "weight": 30, "guidance": "Inspect direct real-boundary audio tests, inherited coverage, and meaningful behavioral assertions." },
+            { "id": "reliabilityAndPerformance", "label": "Reliability and performance", "weight": 25, "guidance": "Assess console state, clicks/clipping, cleanup, rapid interaction, CPU behavior, and render stability." }
+          ]
+        }
+      ]
+    },
+    "4": {
+      "name": "Organ and synth",
+      "description": "Scores distinct Organ/Synth engines, complete hardware behavior, full-system integration, and final reliability.",
+      "categories": [
+        {
+          "id": "visualFidelity", "label": "Visual fidelity retention", "weight": 10,
+          "criteria": [
+            { "id": "referenceRetention", "label": "Reference fidelity retention", "weight": 50, "guidance": "Compare the final instrument with the primary image and inherited evidence." },
+            { "id": "hardwareStateFidelity", "label": "Organ and Synth hardware state", "weight": 50, "guidance": "Assess model/source, drawbar/register, filter/envelope, voice, arp, focus, morph, split, and effect indicators." }
+          ]
+        },
+        {
+          "id": "featureCompletion", "label": "Engine feature completion", "weight": 35,
+          "criteria": [
+            { "id": "organEngine", "label": "Organ engine", "weight": 40, "guidance": "Exercise two layers, six distinct models, drawbars/registers, percussion, key click, vibrato/chorus, presets/live state, and rotary." },
+            { "id": "synthEngine", "label": "Synth engine", "weight": 45, "guidance": "Exercise three layers, source families, Osc Ctrl, filters, envelopes, LFO, voice modes, vibrato, and arpeggiator/gate." },
+            { "id": "fullIntegration", "label": "Full-system integration", "weight": 15, "guidance": "Verify new engines work with inherited Programs, presets, scenes, zones, splits, morphs, focus, clock, and effects." }
+          ]
+        },
+        {
+          "id": "audioQuality", "label": "Audio implementation", "weight": 30,
+          "criteria": [
+            { "id": "engineBehavior", "label": "Distinct engine behavior", "weight": 40, "guidance": "Assess musical usefulness and exercised spectral/time-domain differences. Renaming one oscillator rates at most 1." },
+            { "id": "effectIntegration", "label": "Inherited effect integration", "weight": 30, "guidance": "Verify Organ/Synth layers use Phase 3 buses, effects, Rotary, targeting, and gain staging without separate destinations." },
+            { "id": "qualityLatencyAndLoad", "label": "Quality, latency, and load", "weight": 30, "guidance": "Exercise clicks, clipping, voice limits, latency, cleanup, layered stress, and CPU stability." }
+          ]
+        },
+        {
+          "id": "systemBehavior", "label": "System behavior", "weight": 15,
+          "criteria": [
+            { "id": "hardwareControlMapping", "label": "Hardware control mapping", "weight": 35, "guidance": "Audit every required Phase 4 control for meaningful canonical and audible behavior; generic no-op fallback rates 0." },
+            { "id": "programAndDisplayIntegration", "label": "Program and display integration", "weight": 30, "guidance": "Verify engine state round-trips through Programs/presets and drives contextual displays/editing." },
+            { "id": "stateAndRouting", "label": "State and routing", "weight": 20, "guidance": "Exercise layers, zones, scenes, morphs, focus, clocks, engine/effect assignments, and transitions together." },
+            { "id": "regressionResistance", "label": "Regression resistance", "weight": 15, "guidance": "Confirm all inherited visual, Piano, Program, split, morph, scene, preset, and effect behavior remains functional." }
+          ]
+        },
+        {
+          "id": "engineeringQuality", "label": "Engineering quality", "weight": 10,
+          "criteria": [
+            { "id": "systemArchitecture", "label": "System architecture", "weight": 40, "guidance": "Assess engine boundaries, one-context graph, state ownership, routing abstractions, and extensibility." },
+            { "id": "maintainabilityAndTests", "label": "Maintainability and tests", "weight": 30, "guidance": "Assess naming, modularity, duplication, documentation, inherited tests, and real-boundary engine tests." },
+            { "id": "reliabilityAndPerformance", "label": "Reliability and performance", "weight": 30, "guidance": "Assess console cleanliness, cleanup, render stability, audio performance, and rapid layered interaction." }
+          ]
+        }
+      ]
+    }
+  }
+}

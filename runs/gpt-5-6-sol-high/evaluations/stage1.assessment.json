@@ -1,0 +1,116 @@
+{
+  "rubricVersion": "1.0.0",
+  "runId": "gpt-5-6-sol-high",
+  "stage": 1,
+  "evaluator": "Codex independent evaluator",
+  "evaluatedAt": "2026-06-28T22:13:33.000Z",
+  "summary": "A geometrically disciplined and technically clean Stage 1 recreation with an exact 73-key model, connected chassis, measured desktop proportions, and broad interactive control coverage. Direct comparison with the primary photograph and the manual's panel overview shows that the control deck remains a schematic approximation: several displays are oversized or invented, physical control placement and density differ materially, tiny legends are difficult to read, and the narrow layout preserves the whole instrument by shrinking controls below practical touch sizes. Core key, button/LED, and knob behavior is exercised by passing tests, but display and meter content is static and the controls do not form the coupled hardware state described by the manual.",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "silhouetteAndProportions",
+          "rating": 4,
+          "evidence": [
+            "Direct comparison of evidence/stage1-desktop.png with prompts/NS4_HA73_TopDown-01_241008.jpg shows one connected red chassis and end cheeks around the full keybed, with the same low, wide product silhouette.",
+            "evidence/stage1-visual-audit.md records a 1353.1 x 437.2 px chassis at 1440 x 900 (3.095:1), 94% viewport width, a 54/46 deck-keybed contract, and no overflow; evidence/stage1-narrow.png also keeps the complete chassis visible."
+          ]
+        },
+        {
+          "id": "panelLayoutAndDensity",
+          "rating": 2,
+          "evidence": [
+            "The direct desktop/reference comparison preserves the six measured section widths, but the rendered panels are much more schematic: Organ, Piano, Synth, and Effects use large horizontal OLED/header regions and simplified grids that do not match the reference's actual clusters.",
+            "The manual page 9 panel overview and the primary photograph show substantially denser, more irregular placement, especially in Program, Synth, and Layer Effects; evidence/stage1-desktop.png has visibly larger empty/group-box areas and fewer fine controls."
+          ]
+        },
+        {
+          "id": "controlMaterialsAndColor",
+          "rating": 3,
+          "evidence": [
+            "evidence/stage1-desktop.png directly shows the correct red metal/slate-panel palette, dimensional black knobs, silver switches, red LEDs, green/yellow meters, cyan OLEDs, light/dark faders, and shaded white/black keys.",
+            "Against the primary photograph, the Organ drawbar caps render as rounded range-slider forms rather than the reference's rectangular physical caps, and the gold modulation wheel/silver pitch stick are reduced to generic vertical slider treatments."
+          ]
+        },
+        {
+          "id": "typographyAndDisplays",
+          "rating": 2,
+          "evidence": [
+            "evidence/stage1-desktop.png contains Nord Stage 4 branding, section headings, fine legends, and illuminated display text, but most labels are only a few pixels high and are difficult to read even at 1440 x 900.",
+            "Direct comparison with the reference and the manual overview shows materially different display hierarchy: the recreation adds long cyan OLED bars to sections where the hardware uses smaller displays/LED indications, while the central Program and Synth display relationships are only approximate."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "visibleHardwareInventory",
+          "rating": 3,
+          "evidence": [
+            "src/model/hardware.ts defines 73 keys and section-specific inventories for buttons, knobs, encoders, faders, displays, meters, pitch stick, and modulation wheel; the saved desktop render visibly includes all of those hardware classes plus branding and dividers.",
+            "The inventory is broad but approximate: direct comparison with the photograph/manual panel overview shows missing or consolidated fine switches, LEDs, and legends, and the pitch/mod controls do not reproduce their distinct physical forms."
+          ]
+        },
+        {
+          "id": "visualStateCoverage",
+          "rating": 3,
+          "evidence": [
+            "The rerun 10-test suite exercises key pressed/released states, button/LED toggles, and knob rotation/clamping; src/styles.css also defines hover, active, pressed, lit, and focus-visible treatments for the hardware surface.",
+            "src/components/Controls.tsx renders OLED and meter content as fixed values, so display/meter state does not change when adjacent controls move; fader and wheel state exists through range inputs but is not covered by the Stage 1 tests."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interactionQuality",
+      "criteria": [
+        {
+          "id": "controlInteraction",
+          "rating": 3,
+          "evidence": [
+            "The rerun tests directly exercise pointer and Space/Enter key press/release, button clicks with matching LED/aria-pressed feedback, and knob pointer/Arrow/Home/End behavior with clamping; all 10 tests passed.",
+            "Faders and wheels are functional range inputs in src/components/Controls.tsx, but the Program/Synth/Piano displays and meters remain static and button toggles are isolated local states rather than coherent updates to the related display state described on manual pages 11-12."
+          ]
+        },
+        {
+          "id": "responsiveAccessibility",
+          "rating": 2,
+          "evidence": [
+            "evidence/stage1-narrow.png at 390 x 844 shows the complete 73-key chassis without horizontal clipping, and the source provides accessible names, button/slider semantics, focus-visible outlines, blur cleanup for keys, and reduced-motion-safe animation.",
+            "The narrow screenshot also shows the cost of whole-instrument scaling: panel legends and controls become microscopic and individual white keys are roughly single-digit pixels wide, well below practical touch-target sizes despite remaining technically focusable."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "componentStructure",
+          "rating": 3,
+          "evidence": [
+            "src/model/hardware.ts supplies normalized sections and stable IDs; App.tsx data-drives the six panels; Controls.tsx and Keyboard.tsx provide reusable typed primitives; tests/feature-matrix.json maps all 8 required IDs exactly once to existing tests.",
+            "The structure is understandable and compact, but every control owns isolated local state and most stable IDs are not propagated to rendered controls, which limits cross-control/display behavior and makes later stage integration less cohesive."
+          ]
+        },
+        {
+          "id": "runtimeQuality",
+          "rating": 3,
+          "evidence": [
+            "Independent reruns completed 4 test files/10 tests, typecheck, ESLint with zero warnings, and the Vite production build successfully; dist/index.html and relative built assets were produced.",
+            "runs/gpt-5-6-sol-high/verifications/stage1.json and evidence/stage1-visual-audit.md report clean desktop/narrow console checks and stable loading. The evaluator could not repeat a live console pass because no in-app browser backend was available in this session."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "The panel layout is visibly more schematic and less reference-faithful than the chassis and keybed, with oversized/invented OLED bars, consolidated controls, and reduced density in several sections.",
+    "Displays and meters are static; control changes do not update related display content or form the coupled state relationships documented in the Nord manual.",
+    "At 390 px width the full instrument avoids clipping, but labels and interaction targets shrink below practical reading and touch sizes.",
+    "Live browser verification could not be repeated because the in-app browser was unavailable; visual ratings use the required saved desktop/narrow evidence and interactions use the exercised test suite plus source inspection."
+  ]
+}

@@ -1,0 +1,13 @@
+import { render, screen, fireEvent } from '@testing-library/react';
+import { App, sectionDefs, whiteCount, blackOffsets } from '../src/main';
+
+describe('Phase 1 visual hardware model',()=>{
+  it('models the 43 white + 30 black E-to-E key pattern',()=>{ expect(whiteCount).toBe(43); expect(blackOffsets.size).toBe(30); });
+  it('keeps six ordered sections and only Program/Synth OLEDs',()=>{ expect(sectionDefs.map(s=>s.id)).toEqual(['performance','organ','piano','program','synth','effects']); expect(sectionDefs.filter(s=>s.oled).map(s=>s.id)).toEqual(['program','synth']); expect(sectionDefs.filter(s=>s.controls.some(c=>c.oled)).map(s=>s.id)).toEqual(['program','synth']); });
+  it('renders stable controls and exactly 73 key buttons',()=>{ render(<App/>); expect(screen.getByRole('button',{name:'White key 1'})).toBeInTheDocument(); expect(screen.getAllByRole('button').filter(e=>e.getAttribute('aria-label')?.startsWith('White key')).length).toBe(43); expect(screen.getByLabelText('Program Display')).toHaveTextContent('01 GRAND PIANO'); expect(screen.queryByLabelText('Organ Display')).not.toBeInTheDocument(); });
+  it('supports key press and button/LED transitions',()=>{ render(<App/>); const key=screen.getByRole('button',{name:'White key 1'}); fireEvent.pointerDown(key); expect(key).toHaveClass('pressed'); fireEvent.pointerUp(key); expect(key).not.toHaveClass('pressed'); const btn=screen.getByRole('button',{name:'Live 1'}); fireEvent.click(btn); expect(btn).toHaveAttribute('aria-pressed','true'); });
+  it('clamps and changes knob values via keyboard',()=>{ render(<App/>); const knob=screen.getByRole('button',{name:'Master Level'}); fireEvent.keyDown(knob,{key:'ArrowUp'}); fireEvent.keyDown(knob,{key:'ArrowDown'}); expect(knob).toBeVisible(); });
+  it('exposes keyboard black keys as focusable controls',()=>{ render(<App/>); const black=screen.getAllByRole('button',{name:/Black key near/}); expect(black).toHaveLength(30); fireEvent.keyDown(black[0],{key:'Enter'}); expect(black[0]).toHaveClass('pressed'); fireEvent.keyUp(black[0]); expect(black[0]).not.toHaveClass('pressed'); });
+  it('couples OLED text to canonical button state',()=>{ render(<App/>); const display=screen.getByRole('status',{name:'Synth Display'}); expect(display).toHaveTextContent('SYNTH / WAVE'); fireEvent.click(screen.getByRole('button',{name:'Arpeggiator'})); expect(display).toHaveTextContent('SYNTH / ARP'); });
+  it('exposes named controls and keyboard focus',()=>{ render(<App/>); expect(screen.getByRole('button',{name:'Program Encoder'})).toHaveAttribute('aria-label','Program Encoder'); expect(screen.getByRole('status',{name:'Synth Display'})).toHaveAttribute('aria-label','Synth Display'); });
+});

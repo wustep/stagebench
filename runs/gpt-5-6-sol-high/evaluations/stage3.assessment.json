@@ -1,0 +1,174 @@
+{
+  "rubricVersion": "1.0.0",
+  "runId": "gpt-5-6-sol-high",
+  "stage": 3,
+  "evaluator": "Codex independent evaluator",
+  "evaluatedAt": "2026-06-28T22:38:25Z",
+  "summary": "Stage 3 preserves the measured connected chassis and complete 73-key presentation, adds real but simplified Web Audio Organ and Synth voices, and supplies coherent typed models for seven layers, splits/zones, morph interpolation, presets, and menu state. All 41 tests and the verifier's test/typecheck/lint/build gates pass, and the saved desktop/narrow renders show no structural visual regression. The completion claim is nevertheless substantially overstated: the 17-type EffectsRack is only an in-memory list and is never connected to any audio graph, many visible hardware controls still fall through to decorative local state, aftertouch/control-pedal morphs have no input path, the UI exposes only a fixed C4 split, menu parameter editing is not wired, and several engine parameters do not affect synthesis. The preview answered HTTP 200, but this evaluator could not repeat live browser or audible checks because no in-app browser target was available; behavior ratings therefore rely on independently rerun tests, source/manual inspection, and saved evidence, with low ratings where real audio behavior is unsupported.",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 3,
+          "evidence": [
+            "Direct comparison of evidence/stage3-desktop.png with prompts/NS4_HA73_TopDown-01_241008.jpg shows the retained low 3.095:1 silhouette, continuous red chassis/end cheeks, six ordered inset sections, 73-key bed, slate/red palette, and hardware material hierarchy; identify confirms the required 1440x900 evidence dimensions.",
+            "evidence/stage3-visual-audit.md records a 1353.4 x 437.3 px chassis at about 94% viewport width and the required 54/46 deck-keybed allocation. Against the photograph, the deck remains visibly schematic with oversized OLED bars, simplified/regularized groups, reduced fine control density, and very small legends, so retention is strong but not exceptional."
+          ]
+        },
+        {
+          "id": "hardwareStateFidelity",
+          "rating": 2,
+          "evidence": [
+            "The fresh desktop evidence visibly shows lit LEDs, meters, drawbar/fader positions, engine/program/effect display content, and the status row. The passing App integration test exercises Synth enable, C4 split, Synth C focus, waveform/display editing, menu pages, Store, effect focus, and effect-type display updates.",
+            "Manual pages 37-38 require morph LEDs/drawbar indications, assignable zones, split-point/xFade states, and coupled parameter feedback. App.tsx lines 267-341 binds only a subset of controls and returns an empty binding by default; static meters and decorative controls such as Layer Scene, zone setup, arpeggiator, most amp/delay controls, and morph-destination indicators prevent credible full-hardware state fidelity."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "instrumentEngines",
+          "rating": 2,
+          "evidence": [
+            "The independently rerun 41-test suite exercises Piano lifecycle/sustain/polyphony, six Organ model identities with nine drawbars/percussion/rotary state, and Synth oscillator/filter/envelope/modulation state plus layer-aware note lifecycle. WebAudioBackend.ts, OrganEngine.ts, and SynthEngine.ts each contain a real browser audio implementation rather than state-only stubs.",
+            "The implementations remain important approximations: the Piano bank is six generated four-partial buffers and type/model/timbre controls do not change audio; Organ B3 Bass/Pipe variants collapse to the same sine behavior while rotary is a static pan target and drive is output gain; Synth shape, filter drive, LP12 versus LP24 slope, several modulation destinations, sample selection, arpeggiator, unison, and glide do not affect audio."
+          ]
+        },
+        {
+          "id": "effectsCoverage",
+          "rating": 1,
+          "evidence": [
+            "Effects.test.ts confirms all 17 required names and exercises list-level type, mix, bypass, ordering, and target state; the App integration test changes an effect type and sees FLAM-DELAY on the Effects display.",
+            "Effects.ts is only 20 lines of in-memory EffectSlot array operations and has no audio backend, AudioNode creation, or connection to Piano, Organ, or Synth outputs. The manual's effects pages 47-52 describe audible modulation, delay, amp/EQ, compressor, reverb, rotary, per-layer/group behavior, and routing; apart from the inherited Piano reverb and basic Organ pan/gain approximations, selecting the required rack effects cannot alter sound."
+          ]
+        },
+        {
+          "id": "layersSplitsAndMorphs",
+          "rating": 2,
+          "evidence": [
+            "LayerSystem.test.ts exercises seven layers, enable/focus/level/engine/effect fields, three normalized split points, four zones, and note routing immediately below and at boundaries; Morph.test.ts exercises multi-target bounded interpolation, replacement, removal, and clearing. App.test.tsx exercises section enable, C4 split, and Synth C focus through rendered controls.",
+            "The rendered UI only toggles one hard-coded C4 split and fixed zones in App.tsx lines 250-257, with no UI for the manual's Low/Mid/High split selection or xFade. Wheel morph reaches Synth filter, but aftertouch and control-pedal assignments are merely stored and have no controller input/application path; effect-chain assignment is not connected to audio and Layer Scene II is decorative."
+          ]
+        },
+        {
+          "id": "presetsAndEditing",
+          "rating": 2,
+          "evidence": [
+            "Presets.test.ts exercises deep save/load restoration for layer, split, Organ, Synth, effects, and morph state and factory/user browsing; App.test.tsx exercises Store and program display feedback. App.tsx loadPreset restores all modeled systems after Panic.",
+            "The three factory programs created in App.tsx lines 108-114 are identical state snapshots with different names, the Program dial only changes selection without loading, and persistence is memory-only. MenuController editing is tested in isolation, but the rendered UI never calls beginEdit or confirm, so menu parameter editing/restoration is not actually exposed as required by the prompt and manual pages 37, 39-40."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioQuality",
+      "criteria": [
+        {
+          "id": "engineBehavior",
+          "rating": 2,
+          "evidence": [
+            "Passing fake-boundary tests exercise distinct Piano, Organ, and Synth note lifecycles and parameter updates; source inspection confirms sampled-buffer playback for Piano, nine oscillator partials/percussion for Organ, and oscillator-filter-ADR-LFO nodes for Synth.",
+            "No audible/browser audio pass or Web Audio backend test was available. Important controls do not alter sound: Piano model/timbre/dynamics are display state, most Organ model variants share the same oscillator behavior, and Synth shape/drive/filter slope/sample/arp/unison/glide are ignored, limiting the engines to musically useful but partial approximations."
+          ]
+        },
+        {
+          "id": "effectRouting",
+          "rating": 1,
+          "evidence": [
+            "Effects.test.ts exercises serial array ordering, clamped dry/wet values, bypass flags, per-layer keys, and the shared Organ state chain, matching part of the manual's per-layer/group model at the data level.",
+            "There is no audio routing implementation: EffectsRack stores metadata only, while WebAudioPianoBackend, WebAudioOrganBackend, and WebAudioSynthBackend each connect independently to context.destination. Effect target, order, mix, bypass, gain staging, and interactions therefore have no effect on audio, despite display and state changes."
+          ]
+        },
+        {
+          "id": "qualityAndLatency",
+          "rating": 1,
+          "evidence": [
+            "The lifecycle suites exercise deterministic Piano voice stealing/cleanup and Organ/Synth retrigger/all-notes-off behavior, and each Web Audio context requests latencyHint 'interactive' with short attack/release smoothing in source.",
+            "There is no exercised evidence for audible noise, clipping, clicks, CPU stability, or layered latency. The three engines create separate AudioContexts and connect directly to their destinations, Organ/Synth have no polyphony limits or layered stress tests, effects do not process audio, and no master bus controls combined gain; these are substantial reliability and gain-staging risks."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "hardwareControlMapping",
+          "rating": 2,
+          "evidence": [
+            "App.tsx lines 267-340 meaningfully bind core engine enable/focus, drawbars, Organ model/percussion/rotary/drive, Piano model display, Synth oscillator/filter/envelope/LFO, levels, program navigation/store/split/morph toggles, effect focus/type/mix/bypass, master, and reverb controls; the App integration test exercises representative mappings end to end in React.",
+            "The Stage 3 prompt requires every visible hardware control to be meaningful, but getBinding falls through to an empty object. Examples left as isolated decorative local state include Panel A/B, External Sync, Organ vibrato/key-click/bass/preset/live, Piano unison/pedal-noise/string-resonance/Clav EQ, Live memories/Layer Scene, Synth sample/arp/unison/glide, and most Amp/EQ/Delay/Compressor/Reverb/Rotary parameters."
+          ]
+        },
+        {
+          "id": "menusAndDisplays",
+          "rating": 2,
+          "evidence": [
+            "MenuController.test.ts exercises page navigation, draft editing, confirm, cancel, close, and return-focus state; App.test.tsx exercises opening the contextual menu, advancing from Preset Library to Keyboard Split, closing it, and display updates for Synth, programs, split, and effects.",
+            "In the rendered integration, menu editing is incomplete: App.tsx never calls MenuController.beginEdit or confirm, the Program dial's setDraft call is inert while editing is false, Shift closes/cancels without applying a parameter, and the pages display labels rather than editable routing/split/effect/MIDI settings."
+          ]
+        },
+        {
+          "id": "stateAndRouting",
+          "rating": 2,
+          "evidence": [
+            "Passing LayerSystem, Morph, Presets, Effects, Organ, Synth, and App tests exercise state transitions across layer focus/enable/levels, zone routing, preset restoration, morph math, effect targeting state, and note dispatch to engine boundaries.",
+            "The coherent state model stops short of a coherent signal system: layer effectChain values are not consulted during note/audio routing, Piano layers collapse into one PianoEngine voice per MIDI note, sustain is Piano-only, preset effect restoration changes no audio, and UI split/morph/menu paths expose only a subset of the modeled state."
+          ]
+        },
+        {
+          "id": "regressionResistance",
+          "rating": 3,
+          "evidence": [
+            "The independently rerun suite passed all 14 files and 41 tests, including the inherited Stage 1 hardware/key/control/chassis tests and Stage 2 Piano, computer-keyboard, MIDI, sustain, velocity, polyphony, volume/reverb, and fallback tests. tests/feature-matrix.json retains all 26 required IDs mapped to existing tests.",
+            "The verifier also records passing test, typecheck, lint, and build gates and the Stage 3 saved renders retain the Stage 2 geometry. A live in-app browser regression pass could not be repeated, and inherited limitations such as decorative Piano model controls and impractical narrow touch sizing remain."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "systemArchitecture",
+          "rating": 2,
+          "evidence": [
+            "Typed Piano/Organ/Synth boundaries, LayerSystem, MorphMatrix, EffectsRack, PresetLibrary, MenuController, normalized hardware data, and injectable fake audio interfaces provide understandable modular seams and deterministic tests.",
+            "The critical signal architecture is incomplete: EffectsRack is disconnected, each engine owns a separate direct-to-destination AudioContext graph, App.tsx centralizes nearly all state and a large ID switch, Piano layers share one note-keyed engine, and effectChain/engine reassignment fields are not honored by a modular audio bus."
+          ]
+        },
+        {
+          "id": "maintainability",
+          "rating": 2,
+          "evidence": [
+            "The project is strictly typed, uses stable control IDs and focused modules, documents the intended architecture in STAGE_NOTES.md, and has direct unit coverage for each Stage 3 feature-matrix entry.",
+            "Complex behavior is compressed into dense one-line methods and a 396-line App component with a long control-ID switch, manual revision counters for mutable models, and numerous default decorative states. Tests often assert state shape rather than production Web Audio behavior, allowing the central effects disconnect and inert controls to pass."
+          ]
+        },
+        {
+          "id": "reliabilityAndPerformance",
+          "rating": 2,
+          "evidence": [
+            "runs/gpt-5-6-sol-high/verifications/stage3.json records passing test, typecheck, lint, and build checks with all 26 features covered; the evaluator reran all 41 tests successfully, the preview returned HTTP 200, and the required evidence files are present at correct dimensions.",
+            "Actual browser audio backends, console state, rapid layered interaction, and CPU/load behavior were not independently exercised. Separate AudioContexts, no Organ/Synth voice caps, no effect graph, no combined master limiter, and limited backend cleanup/stress tests leave important reliability and performance risks below the strong anchor."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "EffectsRack enumerates all 17 required effects but is state-only and never processes or routes audio; effect type, order, mix, bypass, and targeting changes are inaudible.",
+    "Many visible hardware controls remain decorative because App.getBinding returns an empty binding for unhandled IDs, contrary to the Stage 3 requirement that every control have meaningful functionality.",
+    "Engine fidelity is partial: Piano selections do not change sound, most Organ model/rotary/drive behavior is simplified, and several Synth parameters and performance features are ignored by the audio backend.",
+    "The UI exposes only a fixed C4 split with fixed zones; split-point editing, xFade, broad zone assignment, and Layer Scene II are absent or decorative relative to manual pages 37-38 and 42.",
+    "Aftertouch and control-pedal morph assignments are stored but cannot be driven; there are no corresponding input paths or destination indicators.",
+    "Menu parameter editing is not connected in the rendered App: beginEdit/confirm are never invoked, so menu pages are primarily labels/navigation.",
+    "Piano, Organ, and Synth use separate direct-to-destination AudioContexts with no shared master/effect bus, limiting coherent layer gain staging and creating untested clipping/CPU risks.",
+    "Narrow evidence preserves the full chassis without clipping but shrinks legends, keys, and controls below practical reading and touch sizes.",
+    "Live browser, console, and audible verification could not be independently repeated because the in-app browser exposed no target; the local preview did answer HTTP 200, and ratings use saved evidence, source/manual comparison, verifier output, and independently rerun deterministic tests."
+  ]
+}
