@@ -15,7 +15,7 @@ Run `pnpm build` for a production build and `pnpm lint` for static checks. `pnpm
 
 The Vercel deployment uses server-side authentication through `middleware.js`. The password is stored as the sensitive Vercel environment variable `STAGEBENCH_PASSWORD` for Preview and Production; it is never bundled into the React app or saved in browser storage. Successful login creates a signed, seven-day, HttpOnly, Secure cookie, so the browser remembers access without retaining the password.
 
-The middleware fails closed with a `503` response if the environment variable is missing. Failed POST requests to `/__stagebench/auth` are protected by the project's Vercel Firewall rate-limit rule. Keep the password in Vercel's environment settings and do not add it to `.env`, source control, frontend `VITE_*` variables, or `localStorage`.
+The middleware fails closed with a `503` response if the environment variable is missing. Failed POST requests to `/__stagebench/auth` use the `stagebench-login` Vercel Firewall SDK limit: 10 attempts per source IP per hour. A throttled request returns the regular login screen with an inline error and HTTP `429`. Keep the password in Vercel's environment settings and do not add it to `.env`, source control, frontend `VITE_*` variables, or `localStorage`.
 
 ## Evaluate a run
 

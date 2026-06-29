@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import middleware from '../middleware.js'
+import middleware, { handleRequest } from '../middleware.js'
 
 const request = (path = '/', options = {}) => new Request(`https://stagebench.example${path}`, options)
 
@@ -11,27 +11,42 @@ test('middleware fails closed when the deployment secret is missing', async () =
 })
 
 test('middleware renders the private login without exposing the password', async () => {
-  process.env.STAGEBENCH_PASSWORD = 'NORD'
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
   const response = await middleware(request('/?run=example&phase=1'))
   assert.equal(response.status, 401)
   const html = await response.text()
   assert.match(html, /Enter access password/)
   assert.match(html, /value="\/\?run=example&amp;phase=1"/)
-  assert.doesNotMatch(html, /NORD/)
+  assert.doesNotMatch(html, /test-password/)
 })
 
 test('middleware rejects a wrong password', async () => {
-  process.env.STAGEBENCH_PASSWORD = 'NORD'
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
   const body = new URLSearchParams({ password: 'wrong', returnTo: '/' })
-  const response = await middleware(request('/__stagebench/auth', { method: 'POST', body }))
+  const response = await handleRequest(request('/__stagebench/auth', { method: 'POST', body }), {
+    checkRateLimit: async () => ({ rateLimited: false }),
+  })
   assert.equal(response.status, 401)
   assert.equal(response.headers.get('set-cookie'), null)
 })
 
+test('middleware renders a readable rate-limit error', async () => {
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
+  const body = new URLSearchParams({ password: 'wrong', returnTo: '/' })
+  const response = await handleRequest(request('/__stagebench/auth', { method: 'POST', body }), {
+    checkRateLimit: async () => ({ rateLimited: true }),
+  })
+  assert.equal(response.status, 429)
+  assert.equal(response.headers.get('retry-after'), '3600')
+  assert.match(await response.text(), /Too many attempts\. Try again in up to one hour\./)
+})
+
 test('middleware creates an HttpOnly session and accepts it on later requests', async () => {
-  process.env.STAGEBENCH_PASSWORD = 'NORD'
-  const body = new URLSearchParams({ password: 'NORD', returnTo: '/?run=example&phase=2' })
-  const login = await middleware(request('/__stagebench/auth', { method: 'POST', body }))
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
+  const body = new URLSearchParams({ password: 'test-password', returnTo: '/?run=example&phase=2' })
+  const login = await handleRequest(request('/__stagebench/auth', { method: 'POST', body }), {
+    checkRateLimit: async () => ({ rateLimited: false }),
+  })
   assert.equal(login.status, 303)
   assert.equal(login.headers.get('location'), '/?run=example&phase=2')
 
@@ -39,7 +54,7 @@ test('middleware creates an HttpOnly session and accepts it on later requests', 
   assert.match(cookie, /stagebench_session=/)
   assert.match(cookie, /HttpOnly/)
   assert.match(cookie, /Secure/)
-  assert.doesNotMatch(cookie, /NORD/)
+  assert.doesNotMatch(cookie, /test-password/)
 
   const response = await middleware(request('/', { headers: { cookie } }))
   assert.equal(response.status, 200)
@@ -47,7 +62,7 @@ test('middleware creates an HttpOnly session and accepts it on later requests', 
 })
 
 test('middleware rejects a tampered session cookie', async () => {
-  process.env.STAGEBENCH_PASSWORD = 'NORD'
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
   const response = await middleware(request('/', {
     headers: { cookie: 'stagebench_session=9999999999999.invalid' },
   }))

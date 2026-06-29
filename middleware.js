@@ -1,7 +1,9 @@
 import { next } from '@vercel/functions'
+import { checkRateLimit } from '@vercel/firewall'
 
 const AUTH_PATH = '/__stagebench/auth'
 const COOKIE_NAME = 'stagebench_session'
+const LOGIN_RATE_LIMIT_ID = 'stagebench-login'
 const SESSION_SECONDS = 60 * 60 * 24 * 7
 const encoder = new TextEncoder()
 
@@ -118,14 +120,14 @@ function loginPage(returnTo, error = '') {
 </html>`
 }
 
-function htmlResponse(html, status = 401) {
+function htmlResponse(html, status = 401, headers = {}) {
   return new Response(html, {
     status,
-    headers: { ...securityHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+    headers: { ...securityHeaders, ...headers, 'Content-Type': 'text/html; charset=utf-8' },
   })
 }
 
-export default async function middleware(request) {
+export async function handleRequest(request, options = {}) {
   const password = process.env.STAGEBENCH_PASSWORD
   if (!password) {
     return new Response('Stagebench protection is not configured.', {
@@ -142,6 +144,26 @@ export default async function middleware(request) {
 
     const form = await request.formData()
     const returnTo = safeReturnTo(String(form.get('returnTo') ?? '/'))
+    const rateLimit = options.checkRateLimit ?? checkRateLimit
+
+    try {
+      const { rateLimited, error } = await rateLimit(LOGIN_RATE_LIMIT_ID, { request })
+      if (rateLimited) {
+        return htmlResponse(
+          loginPage(returnTo, 'Too many attempts. Try again in up to one hour.'),
+          429,
+          { 'Retry-After': '3600' },
+        )
+      }
+      if (error === 'not-found') throw new Error(`Missing firewall rate limit: ${LOGIN_RATE_LIMIT_ID}`)
+    } catch (error) {
+      console.error('Stagebench login rate limit failed', error)
+      return htmlResponse(
+        loginPage(returnTo, 'Authentication is temporarily unavailable. Please try again later.'),
+        503,
+      )
+    }
+
     if (String(form.get('password') ?? '') !== password) {
       return htmlResponse(loginPage(returnTo, 'Incorrect password. Please wait before trying repeatedly.'))
     }
@@ -169,6 +191,10 @@ export default async function middleware(request) {
       'X-Frame-Options': 'SAMEORIGIN',
     },
   })
+}
+
+export default function middleware(request) {
+  return handleRequest(request)
 }
 
 export const config = {
