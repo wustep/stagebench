@@ -13,42 +13,7 @@ import {
 } from '../../../../evaluation/lib/scoring.mjs'
 import { collectImplementationDetails } from '../../../../evaluation/lib/implementation-details.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from '../../../../evaluation/lib/report.mjs'
-
-function parseArgs(argv) {
-  const [command, ...rest] = argv
-  const options = {}
-  for (let index = 0; index < rest.length; index += 1) {
-    const token = rest[index]
-    if (!token.startsWith('--')) throw new Error(`Unexpected argument: ${token}`)
-    const key = token.slice(2)
-    const value = rest[index + 1]
-    if (!value || value.startsWith('--')) throw new Error(`Missing value for --${key}`)
-    options[key] = value
-    index += 1
-  }
-  return { command, options }
-}
-
-function findRepoRoot(start = process.cwd()) {
-  let current = path.resolve(start)
-  while (true) {
-    if (fs.existsSync(path.join(current, 'BENCHMARK.md')) && fs.existsSync(path.join(current, 'evaluation', 'rubrics', 'v2.json'))) return current
-    const parent = path.dirname(current)
-    if (parent === current) throw new Error('Could not find the Stagebench repository')
-    current = parent
-  }
-}
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'))
-}
-
-function writeJson(filePath, value) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  const temporaryPath = `${filePath}.tmp`
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`)
-  fs.renameSync(temporaryPath, filePath)
-}
+import { findRepoRoot, parseArgs, readJson, writeJson } from '../lib/cli.mjs'
 
 function resolveFromRoot(root, value, fallback) {
   const candidate = value || fallback

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { findRepoRoot, parseArgs, readJson, writeJson } from '../lib/cli.mjs'
 
 const VALID_STATUSES = new Set(['queued', 'running', 'complete', 'failed'])
 const DEFAULT_VARIANT = 'stage-4-73'
@@ -12,43 +13,6 @@ const VARIANT_FALLBACK = {
   'stage-4-88': 'Stage 4 88',
   'stage-4-73': 'Stage 4 73',
   'stage-4-compact-73': 'Stage 4 Compact 73',
-}
-
-function parseArgs(argv) {
-  const [command, ...rest] = argv
-  const options = {}
-  for (let index = 0; index < rest.length; index += 1) {
-    const token = rest[index]
-    if (!token.startsWith('--')) throw new Error(`Unexpected argument: ${token}`)
-    const key = token.slice(2)
-    const value = rest[index + 1]
-    if (!value || value.startsWith('--')) throw new Error(`Missing value for --${key}`)
-    options[key] = value
-    index += 1
-  }
-  return { command, options }
-}
-
-function findRepoRoot(start = process.cwd()) {
-  let current = path.resolve(start)
-  while (true) {
-    if (fs.existsSync(path.join(current, 'BENCHMARK.md')) && fs.existsSync(path.join(current, 'package.json'))) return current
-    const parent = path.dirname(current)
-    if (parent === current) throw new Error('Could not find a repository containing BENCHMARK.md and package.json')
-    current = parent
-  }
-}
-
-function readJson(filePath, fallback) {
-  if (!fs.existsSync(filePath)) return fallback
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'))
-}
-
-function writeJson(filePath, value) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  const temporaryPath = `${filePath}.tmp`
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`)
-  fs.renameSync(temporaryPath, filePath)
 }
 
 function slugify(value) {
@@ -66,7 +30,7 @@ function pathsFor(root) {
 
 function saveRun(root, run) {
   const locations = pathsFor(root)
-  const registry = readJson(locations.registry, [])
+  const registry = fs.existsSync(locations.registry) ? readJson(locations.registry) : []
   const next = registry.some((entry) => entry.id === run.id)
     ? registry.map((entry) => entry.id === run.id ? run : entry)
     : [run, ...registry]
