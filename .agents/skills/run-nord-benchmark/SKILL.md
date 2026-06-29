@@ -15,6 +15,7 @@ Execute one attributed four-phase benchmark run with isolated implementation age
 - Require fresh-context subagents. If unavailable, stop because isolation cannot be guaranteed.
 - Use the exact user-requested model when selectable. If model selection is unavailable, explain the limitation and obtain approval before attributing another model's work to that label.
 - Use pnpm exclusively for the gallery and every candidate artifact.
+- Each `runs/<id>/run.json` is the source of truth; `src/data/runs.json` is a generated index. If the two drift, rebuild the index with `node <skill-directory>/scripts/manage-run.mjs reindex` (only when no run is mid-write).
 
 ## 1. Resolve model and scope
 

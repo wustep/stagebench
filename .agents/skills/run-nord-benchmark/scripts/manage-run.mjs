@@ -174,6 +174,24 @@ function finishPartialRun(root, id, now = new Date()) {
   return run
 }
 
+// Rebuild src/data/runs.json from the authoritative per-run run.json files,
+// newest first. run.json is the source of truth; the gallery registry is a
+// generated index. Run this only when no run is mid-write.
+function reindexRegistry(root) {
+  const locations = pathsFor(root)
+  const runDirs = fs.existsSync(locations.runs)
+    ? fs.readdirSync(locations.runs, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+    : []
+  const runs = []
+  for (const id of runDirs) {
+    const runJson = path.join(locations.runs, id, 'run.json')
+    if (fs.existsSync(runJson)) runs.push(readJson(runJson))
+  }
+  runs.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0))
+  writeJson(locations.registry, runs)
+  return { count: runs.length, ids: runs.map((run) => run.id) }
+}
+
 function selfTest() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-run-manager-'))
   try {
@@ -217,7 +235,11 @@ function selfTest() {
     assert.ok(fs.existsSync(path.join(root, 'public', 'previews', partial.id, 'stage1', 'index.html')))
     assert.equal(createRun(root, 'Compact Model', undefined, { variant: 'stage-4-compact-73' }).target, 'Stage 4 Compact 73')
     assert.throws(() => createRun(root, 'Bad Variant', undefined, { variant: 'stage-4-99' }))
-    return { ok: true, checks: 16 }
+    const reindexed = reindexRegistry(root)
+    assert.equal(reindexed.count, 3)
+    assert.deepEqual(new Set(reindexed.ids), new Set(['model-test', 'partial-model', 'compact-model']))
+    assert.equal(reindexed.ids.at(-1), 'model-test', 'oldest run (fixed 2026 timestamp) sorts last')
+    return { ok: true, checks: 19 }
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
@@ -230,6 +252,7 @@ function printHelp() {
   manage-run.mjs prepare --id <run-id> --phase <2|3|4>
   manage-run.mjs partial --id <run-id>
   manage-run.mjs publish --id <run-id>
+  manage-run.mjs reindex
   manage-run.mjs self-test`)
 }
 
@@ -242,6 +265,7 @@ try {
   else if (command === 'prepare') result = prepareStage(root, options.id, options.phase ?? options.stage)
   else if (command === 'partial') result = finishPartialRun(root, options.id)
   else if (command === 'publish') result = publishRun(root, options.id)
+  else if (command === 'reindex') result = reindexRegistry(root)
   else if (command === 'self-test') result = selfTest()
   else { printHelp(); process.exitCode = command ? 1 : 0 }
   if (result) console.log(JSON.stringify(result, null, 2))
