@@ -547,8 +547,15 @@ function App() {
       {selectedReport?.evaluation?.reportPath && (
         <div className="preview-overlay report-overlay" role="dialog" aria-modal="true" aria-label={`${getRunTitle(selectedReport)} evaluation report`}>
           <div className="preview-header">
-            <div><StatusLight status={selectedReport.status} /><strong>{getRunTitle(selectedReport)}</strong><span>EVALUATION REPORT · {floorScore(selectedReport.evaluation.score)}/100</span></div>
-            <button type="button" onClick={() => setSelectedReport(null)}>Close</button>
+            <div className="preview-identity report-identity">
+              <StatusLight status={selectedReport.status} />
+              <strong>{getRunTitle(selectedReport)}</strong>
+              <span className="report-kind">Evaluation report</span>
+              <span className="report-score">{floorScore(selectedReport.evaluation.score)}/100</span>
+            </div>
+            <div className="preview-tools">
+              <button type="button" onClick={() => setSelectedReport(null)}>Close</button>
+            </div>
           </div>
           <iframe className="report-frame" src={selectedReport.evaluation.reportPath} title={`${getRunTitle(selectedReport)} evaluation report`} />
         </div>
