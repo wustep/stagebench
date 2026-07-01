@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>Haiku 4.5 · Stagebench evaluation</title>
+  <style>
+    :root { color-scheme: light; --red:#a51f24; --red-dark:#70191e; --ink:#211c1d; --muted:#665d5f; --line:#d6cdcf; --surface:#f5f3f3; --panel:#fff; --green:#2c7a45; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.55 Inter, ui-sans-serif, system-ui, sans-serif; }
+    a { color:var(--red-dark); }
+    .report-header { padding:42px max(24px,calc((100% - 1080px)/2)); background:var(--red); color:#fff; }
+    .report-header small { display:block; margin-bottom:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .report-header h1 { max-width:760px; margin:0; font-size:clamp(34px,6vw,62px); line-height:1; letter-spacing:-.03em; text-wrap:balance; }
+    .report-header p { max-width:70ch; margin:18px 0 0; color:#ffecec; }
+    .aggregate { display:flex; align-items:baseline; gap:9px; margin-top:28px; }
+    .aggregate strong { font-size:48px; line-height:1; }
+    .aggregate span { font-weight:800; text-transform:uppercase; }
+    main { width:min(1080px,calc(100% - 32px)); margin:0 auto; padding:42px 0 72px; }
+    .overview, .stage-report { margin-bottom:34px; padding:26px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+    h2,h3,h4 { text-wrap:balance; } h2 { margin:0; font-size:28px; } h3 { margin:0 0 12px; font-size:15px; } h4 { margin:0 0 10px; color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { color:var(--muted); font-size:11px; text-align:left; text-transform:uppercase; }
+    th,td { padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    .grade { font-weight:800; text-transform:capitalize; } .grade-exceptional,.grade-strong,.grade-competent { color:var(--green); } .grade-developing { color:#9a5c00; } .grade-incomplete { color:var(--red); }
+    .section-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; } .section-intro span,.implementation-phase header span { color:var(--red); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; } .section-intro a { font-size:12px; font-weight:800; }
+    .implementation-details > p { max-width:76ch; color:var(--muted); }
+    .implementation-phase { padding:22px 0; border-top:1px solid var(--line); } .implementation-phase:last-child { padding-bottom:0; } .implementation-phase h3 { margin:2px 0 14px; font-size:18px; }
+    .implementation-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.05fr) minmax(0,1.4fr); gap:24px; }
+    .library-list { margin:0; padding:0; list-style:none; } .library-list li { display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #eee8e9; } .library-list span { color:var(--muted); font-size:11px; }
+    .audio-details { margin:0; } .audio-details > div { display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; padding:5px 0; border-bottom:1px solid #eee8e9; } .audio-details dt { color:var(--muted); font-size:11px; font-weight:800; } .audio-details dd { margin:0; } .audio-details ul { margin:0; padding-left:17px; } .audio-details span { color:var(--muted); font-size:12px; } .empty-detail { color:var(--muted); }
+    .stage-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+    .stage-heading > div:first-child span { color:var(--red); font-size:11px; font-weight:800; text-transform:uppercase; }
+    .stage-score { display:flex; align-items:baseline; gap:5px; color:var(--red-dark); } .stage-score strong { font-size:34px; line-height:1; } .stage-score span { font-size:11px; font-weight:800; text-transform:uppercase; }
+    .summary { max-width:78ch; margin:20px 0 26px; color:#3f383a; }
+    .report-columns { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:28px; }
+    .findings { margin:0; padding:0; list-style:none; } .findings li { padding:0 0 12px; } .findings strong,.findings span { display:block; } .findings span { margin-top:3px; color:var(--muted); font-size:12px; }
+    .issues { margin:28px 0; padding:20px; background:#f8eded; border-radius:8px; } .issues ol { margin:0; padding-left:20px; } .issues li + li { margin-top:8px; }
+    .gate { display:inline-block; margin:0 0 12px; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; } .gate-pass { background:#e3f2e7; color:#225d34; } .gate-fail { background:#f5dfe0; color:#821b20; }
+    details { margin-top:26px; border-top:1px solid var(--line); } summary { padding:18px 0; font-weight:800; cursor:pointer; } .criteria-group + .criteria-group { margin-top:24px; } .criteria-table ul { margin:0; padding-left:18px; } .criteria-table li + li { margin-top:6px; }
+    footer { padding:24px; background:var(--ink); color:#cfc7c9; font-size:11px; text-align:center; }
+    @media (max-width:800px) { .implementation-grid { grid-template-columns:1fr; } }
+    @media (max-width:720px) { .report-columns { grid-template-columns:1fr; } .overview,.stage-report { padding:18px; } .stage-heading { align-items:flex-start; flex-direction:column; } .section-intro { align-items:flex-start; flex-direction:column; } .audio-details > div { grid-template-columns:1fr; gap:2px; } table { display:block; overflow-x:auto; } }
+    @media print { .report-header { background:#fff; color:#000; padding-top:0; } .report-header p { color:#333; } body { background:#fff; } .overview,.stage-report { break-inside:avoid; border-color:#999; } details > * { display:block; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <small>Stagebench evaluation · rubric 2.0.0</small>
+    <h1>Haiku 4.5</h1>
+    <p>Evidence-backed evaluation of visual fidelity, feature completion, interaction, audio behavior, and engineering quality. Scores use phase-specific weights and automated technical gates.</p>
+    <div class="aggregate"><strong>23</strong><span>/100 · incomplete</span></div>
+  </header>
+  <main>
+    <section class="overview">
+      <h2>Run overview</h2>
+      <p>Run <code>claude-haiku-4-5-20251001-2</code> · running · 1/4 phases evaluated · generated Jul 1, 2026, 8:50 AM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th><th>Grade</th></tr></thead><tbody><tr><td>Phase 1</td><td>running</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 2</td><td>Piano instrument</td><td><strong>23</strong>/100</td><td><span class="grade grade-incomplete">incomplete</span></td></tr><tr><td>Phase 3</td><td>queued</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 4</td><td>queued</td><td>—</td><td>Not evaluated</td></tr></tbody></table>
+    </section>
+    <section class="overview implementation-details" id="implementation-details">
+      <div class="section-intro">
+        <div><span>Generated inventory</span><h2>Implementation details</h2></div>
+        <a href="implementation-details.json">View JSON</a>
+      </div>
+      <p>Libraries come from each phase's package manifest. Audio files are detected from the artifact, while sound-generation and sample provenance are explicitly declared by the benchmark implementation.</p>
+      <section class="implementation-phase">
+        <header><span>Phase 1</span><h3>Visual recreation</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@types/node</code><span>^18.0.0</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>@vitejs/plugin-react</code><span>^4.0.0</span></li><li><code>typescript</code><span>~5.3.0</span></li><li><code>vite</code><span>^5.0.0</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>None (visual-only phase)</dd></div><div><dt>Generated sound sources</dt><dd>None declared</dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Phase 1 is a visual recreation only. No audio implementation is required.</li></ul></dd></div></dl></div>
+        </div>
+      </section><section class="implementation-phase">
+        <header><span>Phase 2</span><h3>Piano instrument</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>tone</code><span>^14.8.56</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@types/node</code><span>^18.0.0</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>@vitejs/plugin-react</code><span>^4.0.0</span></li><li><code>typescript</code><span>~5.3.0</span></li><li><code>vite</code><span>^5.0.0</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>FM Synthesis via Tone.js PolySynth</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>FM Synthesis Piano Model</strong></li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Web Audio API with Tone.js library provides credible piano-like synthesis without recorded samples</li><li>No network dependencies; all synthesis occurs in browser using Web Audio API</li><li>Fallback mode displays &#039;fallback&#039; label when Web Audio unavailable, visual feedback only (no audio)</li><li>MIDI input supported via Web MIDI API with graceful degradation if unavailable</li><li>All input sources (pointer, touch, keyboard, MIDI) funnel through unified NoteLifecycleService</li><li>Touch curves (heavy/medium/light) adjust velocity response; dynamic compression (0-3) smooths dynamics</li></ul></dd></div></dl></div>
+        </div>
+      </section>
+    </section>
+    
+  <section class="stage-report" id="stage-2">
+    <header class="stage-heading">
+      <div><span>Phase 2</span><h2>Piano instrument</h2></div>
+      <div class="stage-score"><strong>23</strong><span>/100 · incomplete</span></div>
+    </header>
+
+    <p class="summary">Phase 2 implementation has critical compilation errors preventing build. While architecture is sound and FM synthesis source is credible, the codebase fails TypeScript compilation, all audio tests are mock-based (not real Web Audio), visual regression evidence is missing, and browser testing is impossible. Hard gates architecturally present but not demonstrated to work. Phase 2 status: INCOMPLETE with major blockers.</p>
+
+    <div class="report-columns">
+      <section>
+        <h3>Category scores</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+          <tbody><tr><td>Visual fidelity retention</td><td>25%</td><td><strong>50</strong></td><td>12</td></tr><tr><td>Piano feature completion</td><td>25%</td><td><strong>25</strong></td><td>6</td></tr><tr><td>Audio implementation</td><td>30%</td><td><strong>12</strong></td><td>3</td></tr><tr><td>Playability and UX</td><td>15%</td><td><strong>0</strong></td><td>0</td></tr><tr><td>Engineering quality</td><td>5%</td><td><strong>12</strong></td><td>0</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h3>What worked</h3>
+        <p>No criterion reached the strong anchor.</p>
+      </section>
+    </div>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <ol><li>TypeScript compilation fails</li><li>No real Web Audio tests</li><li>Phase 2 visual regression unchecked</li><li>InputHandler not connected to Keyboard</li><li>MIDI types incorrect</li><li>Inaccurate completion claims</li><li>Mock-based tests create false positive</li></ol>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-fail">Failed · score capped at 59</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Fail</td><td>sh: oxlint: command not found</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>runs/claude-haiku-4-5-20251001-2/stage2/dist/index.html</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Visual fidelity retention</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Reference fidelity retention</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>src/hardware.ts preserved from Phase 1 (no visible changes)</li><li>src/App.tsx layout structure unchanged</li><li>evidence/stage2-desktop.png: MISSING</li><li>evidence/stage2-visual-audit.md: MISSING</li><li>Cannot award 3+ without regression screenshot evidence</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Responsive chassis</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>CSS unchanged from Phase 1 (App.css)</li><li>Keyboard component receives inputHandler prop (attempted wiring)</li><li>No clipping or layout shift visible in source</li><li>Visual evidence needed for narrow (390×844) test</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Piano feature completion</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Input coverage</strong></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>InputHandler.ts: Pointer, touch, keyboard, MIDI routing designed</li><li>BLOCKER: InputHandler created but not passed to Keyboard component</li><li>App.tsx:143 attempts to pass inputHandler to Keyboard, but Keyboard component does not accept it</li><li>Pointer/touch/keyboard cannot trigger audio due to wiring gap</li><li>No browser testing performed</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Piano controls</strong></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Master volume: setMasterVolume() wired (pianoEngine.ts:198-202)</li><li>Reverb: setReverb() wired (pianoEngine.ts:205-209)</li><li>Sustain: setSustain() present but 500ms hardcoded</li><li>Touch curve, compression defined but not wired to UI</li><li>BLOCKER: No UI controls exist in source; all stored in pianoEngine state without React integration</li><li>App does not build, so wiring untestable</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Display and status feedback</strong></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>No OLED displays for Piano section in App.tsx</li><li>No voice count display</li><li>No MIDI status indicator</li><li>No fallback mode label</li><li>App.tsx shows only control labels, no state feedback</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Audio implementation</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Piano sound source</strong></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>FM Synthesis via Tone.js PolySynth is credible (not placeholder)</li><li>IMPLEMENTATION_DETAILS.json correctly identifies source</li><li>pianoEngine.ts: Triangle oscillator with velocity-responsive ADSR</li><li>BUT: No actual synthesis output verified; cannot play notes (app doesn&#039;t build)</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Note lifecycle and cleanup</strong></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>NoteLifecycleService: Single entry point with noteOn/noteOff</li><li>VoiceManager: Deterministic FIFO/LRU allocation with 32 voice limit</li><li>All-notes-off logic present</li><li>BUT: Code does not compile; runtime behavior unverifiable</li><li>8 lifecycle tests pass but are mock-based (no real voice scheduling)</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Velocity and sonic controls</strong></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>Master volume: Gain node routing present</li><li>Reverb: Reverb node routing present</li><li>CRITICAL: No browser audio tests measure actual output changes</li><li>audio-integration.test.mjs: &#039;In actual browser tests, we would validate Tone.js PolySynth output&#039;</li><li>This explicitly states CURRENT tests do NOT validate real output</li><li>No OfflineAudioContext rendering, no RMS analysis, no proof controls work</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Sustain and polyphony</strong></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>Sustain: 500ms release extension hardcoded (not configurable)</li><li>Voice stealing: FIFO logic present in VoiceManager</li><li>BUT: No test demonstrates sustain extends audible duration</li><li>No test demonstrates 32-voice limit and stealing behavior audibly</li><li>Mock tests check state transitions, not audio rendering</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Playability and UX</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Playability</strong></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>InputHandler designed to handle pointer, touch, keyboard, MIDI</li><li>BLOCKER: InputHandler not passed to Keyboard component</li><li>BLOCKER: App does not build; cannot test</li><li>No latency measurement provided</li><li>No evidence of reliable note triggering</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Control feedback</strong></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>No visual feedback for played notes (key highlight, etc.)</li><li>No voice count display</li><li>No control change feedback</li><li>App does not build; no browser testing possible</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Failure handling</strong></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>MIDI failure handled with try/catch and console warning</li><li>No graceful degradation tested</li><li>No MIDI unavailable status displayed</li><li>App does not build; cannot verify error paths</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Engineering quality</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Audio architecture</strong></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>VoiceManager: Clean voice allocation abstraction</li><li>NoteLifecycleService: Single entry point with listener pattern</li><li>PianoEngine: Proper signal graph composition</li><li>BLOCKER: TypeScript compilation fails; architecture unexecutable</li><li>Code organization is good but not verified at runtime</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Performance and cleanup</strong></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>Dispose methods present in PianoEngine</li><li>Cleanup functions planned in App component</li><li>BLOCKER: App does not compile; cleanup untestable</li><li>No voice disposal tested</li><li>No rapid-play stability verified</li><li>pnpm build FAIL (exit code 1)</li><li>pnpm typecheck FAIL (7 errors)</li><li>Errors in: App.tsx (InputHandler import), inputHandler.ts (WebMidi types, MIDIInputMap.values())</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  </main>
+  <footer>Academic UI/audio reconstruction benchmark · Not affiliated with Nord Keyboards.</footer>
+</body>
+</html>

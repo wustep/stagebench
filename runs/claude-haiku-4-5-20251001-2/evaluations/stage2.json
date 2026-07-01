@@ -1,0 +1,364 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-haiku-4-5-20251001-2",
+  "stage": 2,
+  "stageName": "Piano instrument",
+  "status": "complete",
+  "evaluator": "Independent Phase 2 Evaluator",
+  "evaluatedAt": "2026-07-01T00:00:00.000Z",
+  "summary": "Phase 2 implementation has critical compilation errors preventing build. While architecture is sound and FM synthesis source is credible, the codebase fails TypeScript compilation, all audio tests are mock-based (not real Web Audio), visual regression evidence is missing, and browser testing is impossible. Hard gates architecturally present but not demonstrated to work. Phase 2 status: INCOMPLETE with major blockers.",
+  "score": 23.1,
+  "rawScore": 23.1,
+  "grade": "incomplete",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "label": "Visual fidelity retention",
+      "weight": 25,
+      "score": 50,
+      "contribution": 12.5,
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "label": "Reference fidelity retention",
+          "weight": 60,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "src/hardware.ts preserved from Phase 1 (no visible changes)",
+            "src/App.tsx layout structure unchanged",
+            "evidence/stage2-desktop.png: MISSING",
+            "evidence/stage2-visual-audit.md: MISSING",
+            "Cannot award 3+ without regression screenshot evidence"
+          ]
+        },
+        {
+          "id": "responsiveChassis",
+          "label": "Responsive chassis",
+          "weight": 40,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "CSS unchanged from Phase 1 (App.css)",
+            "Keyboard component receives inputHandler prop (attempted wiring)",
+            "No clipping or layout shift visible in source",
+            "Visual evidence needed for narrow (390×844) test"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "label": "Piano feature completion",
+      "weight": 25,
+      "score": 25,
+      "contribution": 6.3,
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "label": "Input coverage",
+          "weight": 35,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "InputHandler.ts: Pointer, touch, keyboard, MIDI routing designed",
+            "BLOCKER: InputHandler created but not passed to Keyboard component",
+            "App.tsx:143 attempts to pass inputHandler to Keyboard, but Keyboard component does not accept it",
+            "Pointer/touch/keyboard cannot trigger audio due to wiring gap",
+            "No browser testing performed"
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "label": "Piano controls",
+          "weight": 40,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "Master volume: setMasterVolume() wired (pianoEngine.ts:198-202)",
+            "Reverb: setReverb() wired (pianoEngine.ts:205-209)",
+            "Sustain: setSustain() present but 500ms hardcoded",
+            "Touch curve, compression defined but not wired to UI",
+            "BLOCKER: No UI controls exist in source; all stored in pianoEngine state without React integration",
+            "App does not build, so wiring untestable"
+          ]
+        },
+        {
+          "id": "displayAndStatus",
+          "label": "Display and status feedback",
+          "weight": 25,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "No OLED displays for Piano section in App.tsx",
+            "No voice count display",
+            "No MIDI status indicator",
+            "No fallback mode label",
+            "App.tsx shows only control labels, no state feedback"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioQuality",
+      "label": "Audio implementation",
+      "weight": 30,
+      "score": 12.5,
+      "contribution": 3.8,
+      "criteria": [
+        {
+          "id": "soundSource",
+          "label": "Piano sound source",
+          "weight": 25,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "FM Synthesis via Tone.js PolySynth is credible (not placeholder)",
+            "IMPLEMENTATION_DETAILS.json correctly identifies source",
+            "pianoEngine.ts: Triangle oscillator with velocity-responsive ADSR",
+            "BUT: No actual synthesis output verified; cannot play notes (app doesn't build)"
+          ]
+        },
+        {
+          "id": "noteLifecycle",
+          "label": "Note lifecycle and cleanup",
+          "weight": 25,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "NoteLifecycleService: Single entry point with noteOn/noteOff",
+            "VoiceManager: Deterministic FIFO/LRU allocation with 32 voice limit",
+            "All-notes-off logic present",
+            "BUT: Code does not compile; runtime behavior unverifiable",
+            "8 lifecycle tests pass but are mock-based (no real voice scheduling)"
+          ]
+        },
+        {
+          "id": "velocityAndControls",
+          "label": "Velocity and sonic controls",
+          "weight": 25,
+          "rating": 0,
+          "score": 0,
+          "evidence": [
+            "Master volume: Gain node routing present",
+            "Reverb: Reverb node routing present",
+            "CRITICAL: No browser audio tests measure actual output changes",
+            "audio-integration.test.mjs: 'In actual browser tests, we would validate Tone.js PolySynth output'",
+            "This explicitly states CURRENT tests do NOT validate real output",
+            "No OfflineAudioContext rendering, no RMS analysis, no proof controls work"
+          ]
+        },
+        {
+          "id": "sustainAndPolyphony",
+          "label": "Sustain and polyphony",
+          "weight": 25,
+          "rating": 0,
+          "score": 0,
+          "evidence": [
+            "Sustain: 500ms release extension hardcoded (not configurable)",
+            "Voice stealing: FIFO logic present in VoiceManager",
+            "BUT: No test demonstrates sustain extends audible duration",
+            "No test demonstrates 32-voice limit and stealing behavior audibly",
+            "Mock tests check state transitions, not audio rendering"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interactionQuality",
+      "label": "Playability and UX",
+      "weight": 15,
+      "score": 0,
+      "contribution": 0,
+      "criteria": [
+        {
+          "id": "playability",
+          "label": "Playability",
+          "weight": 50,
+          "rating": 0,
+          "score": 0,
+          "evidence": [
+            "InputHandler designed to handle pointer, touch, keyboard, MIDI",
+            "BLOCKER: InputHandler not passed to Keyboard component",
+            "BLOCKER: App does not build; cannot test",
+            "No latency measurement provided",
+            "No evidence of reliable note triggering"
+          ]
+        },
+        {
+          "id": "controlFeedback",
+          "label": "Control feedback",
+          "weight": 30,
+          "rating": 0,
+          "score": 0,
+          "evidence": [
+            "No visual feedback for played notes (key highlight, etc.)",
+            "No voice count display",
+            "No control change feedback",
+            "App does not build; no browser testing possible"
+          ]
+        },
+        {
+          "id": "failureHandling",
+          "label": "Failure handling",
+          "weight": 20,
+          "rating": 0,
+          "score": 0,
+          "evidence": [
+            "MIDI failure handled with try/catch and console warning",
+            "No graceful degradation tested",
+            "No MIDI unavailable status displayed",
+            "App does not build; cannot verify error paths"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 5,
+      "score": 12.5,
+      "contribution": 0.6,
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "label": "Audio architecture",
+          "weight": 50,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "VoiceManager: Clean voice allocation abstraction",
+            "NoteLifecycleService: Single entry point with listener pattern",
+            "PianoEngine: Proper signal graph composition",
+            "BLOCKER: TypeScript compilation fails; architecture unexecutable",
+            "Code organization is good but not verified at runtime"
+          ]
+        },
+        {
+          "id": "performanceAndCleanup",
+          "label": "Performance and cleanup",
+          "weight": 50,
+          "rating": 0,
+          "score": 0,
+          "evidence": [
+            "Dispose methods present in PianoEngine",
+            "Cleanup functions planned in App component",
+            "BLOCKER: App does not compile; cleanup untestable",
+            "No voice disposal tested",
+            "No rapid-play stability verified",
+            "pnpm build FAIL (exit code 1)",
+            "pnpm typecheck FAIL (7 errors)",
+            "Errors in: App.tsx (InputHandler import), inputHandler.ts (WebMidi types, MIDIInputMap.values())"
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalGate": {
+    "passed": false,
+    "scoreCap": 59,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "command": "pnpm run test",
+        "durationMs": 394,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "command": "pnpm run typecheck",
+        "durationMs": 924,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": false,
+        "command": "pnpm run lint",
+        "durationMs": 375,
+        "detail": "sh: oxlint: command not found"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "command": "pnpm run build",
+        "durationMs": 2564,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "runs/claude-haiku-4-5-20251001-2/stage2/dist/index.html"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "CRITICAL",
+      "category": "Build Failure",
+      "title": "TypeScript compilation fails",
+      "description": "pnpm build exits with code 1 due to 7 TypeScript errors in App.tsx and inputHandler.ts. App cannot be built or tested.",
+      "fileLocations": [
+        "src/App.tsx:12,19 - Cannot find name 'InputHandler'",
+        "src/audio/inputHandler.ts:236,43 - Cannot find namespace 'WebMidi'",
+        "src/audio/inputHandler.ts:264,45 - Property 'values' does not exist on type 'MIDIInputMap'"
+      ],
+      "impact": "Application is not deployable. No browser testing possible. Hard gates 2-3 unverifiable."
+    },
+    {
+      "severity": "CRITICAL",
+      "category": "Audio Verification",
+      "title": "No real Web Audio tests",
+      "description": "All 28 phase 2 audio tests are mock-based unit tests of business logic. None cross the Web Audio boundary per TESTING.md requirement. audio-integration.test.mjs explicitly states 'In actual browser tests, we would validate Tone.js PolySynth output' — implying current tests do NOT.",
+      "impact": "Hard Gate 3 (controls alter audible output) is undemonstrated. Cannot verify FM synthesis produces sound or that controls affect output."
+    },
+    {
+      "severity": "CRITICAL",
+      "category": "Visual Evidence",
+      "title": "Phase 2 visual regression unchecked",
+      "description": "Missing required screenshots: evidence/stage2-desktop.png, evidence/stage2-narrow.png, evidence/stage2-visual-audit.md. Cannot confirm Phase 1 → Phase 2 regression status.",
+      "impact": "Visual regression dimension scores 2/4. Cannot award higher score without comparison evidence."
+    },
+    {
+      "severity": "HIGH",
+      "category": "Feature Wiring",
+      "title": "InputHandler not connected to Keyboard",
+      "description": "InputHandler is created in App.tsx but not passed to Keyboard component. Keyboard.tsx does not accept inputHandler prop. Pointer/touch/keyboard inputs cannot trigger audio.",
+      "fileLocations": [
+        "src/App.tsx:143 - attempts to pass inputHandler to Keyboard",
+        "src/components/Keyboard.tsx:5 - interface KeyboardProps does not include inputHandler"
+      ],
+      "impact": "Interactive input features are non-functional even if app builds."
+    },
+    {
+      "severity": "HIGH",
+      "category": "Type Safety",
+      "title": "MIDI types incorrect",
+      "description": "MIDIInputMap does not have .values() method in DOM typings. WebMidi namespace not properly declared. Code assumes iteration methods not available on actual type.",
+      "fileLocations": [
+        "src/audio/inputHandler.ts:264,266,282 - MIDIInputMap.values()"
+      ],
+      "impact": "Cannot iterate MIDI inputs. Runtime error would occur if code executed."
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "Self-Assessment",
+      "title": "Inaccurate completion claims",
+      "description": "PHASE2_COMPLETION.md claims 'pnpm build ... Success' and 'All hard gates met'. Contradicted by build failure and unverified gates 2-3.",
+      "impact": "Evaluator cannot trust self-authored assessment documents."
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "Testing",
+      "title": "Mock-based tests create false positive",
+      "description": "38 tests pass, but 28 are shallow mocks that test business logic without Web Audio. Tests do not prove audio functionality.",
+      "impact": "Cannot trust test suite as evidence of audio implementation."
+    }
+  ]
+}
