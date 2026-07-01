@@ -18,6 +18,8 @@ These files convert the Nord Stage 4 reference photograph and the Nord Stage 4 U
 - `nord-stage-4.effects.json` - effect instances, focus/group/global behavior, effect types, parameters, and signal order.
 - `nord-stage-4.organ.json` - Organ layers, models, drawbars/registers, percussion, vibrato, and rotary behavior.
 - `nord-stage-4.synth.json` - Synth layers, sources, oscillators, filters, envelopes, LFO, voice modes, and arpeggiator/gate.
-- `benchmark-phases.json` - four-phase ownership, completion gates, and required evidence.
+- `benchmark-phases.json` - active three-phase cumulative target selection, exact included/excluded scope, completion gates, and evidence.
+
+The archived protocol-v2 phase manifest remains under `specs/protocols/v2/` so in-progress and historical four-phase artifacts can still be verified without applying v3 scope retroactively.
 
 All normalized values use `0..1` unless a unit is explicitly stated. Manual page numbers refer to the printed page number, which matches the PDF page number for the referenced chapters.

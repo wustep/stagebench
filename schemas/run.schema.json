@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stagebench.local/schemas/run.schema.json",
+  "title": "Stagebench run manifest",
+  "type": "object",
+  "required": ["id", "model", "status", "startedAt", "updatedAt", "stages"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "benchmarkVersion": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "model": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "variant": { "type": "string" },
+    "target": { "type": "string" },
+    "targetPhase": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "selectedPhases": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "type": "integer", "minimum": 1, "maximum": 3 } },
+    "classification": { "$ref": "#/$defs/classification" },
+    "validity": { "enum": ["pending", "valid", "valid-with-warnings", "invalid-technical", "incomplete", "budget-exceeded", "infrastructure-failure", "legacy-unverified"] },
+    "isTest": { "type": "boolean" },
+    "status": { "enum": ["created", "running", "complete", "partial", "failed", "invalid", "budget-exceeded", "infrastructure-failure"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "protocol": { "$ref": "#/$defs/protocol" },
+    "agent": { "$ref": "#/$defs/agent" },
+    "environment": { "$ref": "#/$defs/environment" },
+    "budget": { "$ref": "#/$defs/budget" },
+    "source": { "$ref": "#/$defs/source" },
+    "telemetry": { "$ref": "telemetry.schema.json" },
+    "previewPath": { "type": "string" },
+    "previewStage": { "type": "integer", "minimum": 1, "maximum": 4 },
+    "previews": { "type": "object", "additionalProperties": { "type": "string" } },
+    "evaluation": { "type": ["object", "null"] },
+    "stages": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/stage" } }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "classification": {
+      "type": "object",
+      "required": ["kind", "comparable"],
+      "properties": {
+        "kind": { "enum": ["official", "exploratory", "legacy"] },
+        "comparable": { "type": "boolean" },
+        "comparisonGroup": { "type": ["string", "null"] },
+        "reason": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "protocol": {
+      "type": "object",
+      "required": ["version", "manifest", "digest"],
+      "properties": {
+        "version": { "type": "string" },
+        "manifest": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "rubricVersion": { "type": "string" },
+        "selectionMode": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "agent": {
+      "type": "object",
+      "required": ["provider", "model", "modelSnapshot", "reasoning", "agentVersion", "toolBundle", "orchestrationPolicy", "contextPolicy", "responseModelIds"],
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string", "minLength": 1 },
+        "modelSnapshot": { "type": "string" },
+        "reasoning": { "type": "string" },
+        "agentVersion": { "type": "string" },
+        "toolBundle": { "type": "string" },
+        "orchestrationPolicy": { "type": "string" },
+        "contextPolicy": { "type": "string" },
+        "responseModelIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": ["platform", "release", "arch", "node", "pnpm", "timezone", "networkPolicy"],
+      "properties": {
+        "platform": { "type": "string" },
+        "release": { "type": "string" },
+        "arch": { "type": "string" },
+        "node": { "type": "string" },
+        "pnpm": { "type": "string" },
+        "browser": { "type": "string" },
+        "timezone": { "type": "string" },
+        "networkPolicy": { "enum": ["none", "registry-only", "unrestricted", "unknown"] }
+      },
+      "additionalProperties": false
+    },
+    "budget": {
+      "type": "object",
+      "required": ["track", "limits"],
+      "properties": {
+        "track": { "enum": ["exploratory", "fixed-time", "fixed-cost", "fixed-tokens", "custom"] },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "wallTimeSeconds": { "type": ["integer", "null"], "minimum": 1 },
+            "inputTokens": { "type": ["integer", "null"], "minimum": 0 },
+            "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
+            "costUsd": { "type": ["number", "null"], "minimum": 0 },
+            "implementationAttemptsPerPhase": { "type": "integer", "minimum": 1 },
+            "verifierRepairsPerPhase": { "type": "integer", "minimum": 0 },
+            "subagents": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["gitCommit", "branch", "dirty", "patchDigest"],
+      "properties": {
+        "gitCommit": { "type": "string" },
+        "branch": { "type": "string" },
+        "dirty": { "type": "boolean" },
+        "patchDigest": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "stage": {
+      "type": "object",
+      "required": ["number", "status"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "status": { "enum": ["queued", "prepared", "running", "verifying", "verified", "complete", "failed", "invalid", "budget-exceeded"] },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "startedAt": { "type": ["string", "null"], "format": "date-time" },
+        "completedAt": { "type": ["string", "null"], "format": "date-time" },
+        "verificationPath": { "type": "string" },
+        "artifactDigest": { "type": "string" },
+        "evaluation": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

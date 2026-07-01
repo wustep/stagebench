@@ -1,0 +1,71 @@
+{
+  "version": "2.0.0",
+  "phaseCount": 4,
+  "variants": "specs/nord-stage-4.variants.json",
+  "defaultVariant": "stage-4-73",
+  "manual": { "path": "reference/manual.pdf", "edition": "N", "osVersion": "1.6x" },
+  "sharedCompletionGates": [
+    "All benchmark-owned and candidate-authored tests pass.",
+    "The browser console contains no errors during the required interaction pass.",
+    "Every claimed audio feature is connected to the audible signal graph.",
+    "No required control is implemented only as decorative local state.",
+    "The latest phase preserves all inherited tests, visual evidence, and behavior.",
+    "IMPLEMENTATION_DETAILS.json accurately distinguishes recorded samples, generated buffers, and live synthesis."
+  ],
+  "phases": [
+    {
+      "number": 1,
+      "title": "Visual recreation",
+      "directory": "stage1",
+      "prompt": "prompts/stage1.md",
+      "specs": ["specs/nord-stage-4.visual.json"],
+      "hardGates": [
+        "The selected variant's exact keybed is modeled: count, range, and action per specs/nord-stage-4.variants.json (default Stage 4 73 = 73 keys, 43 white and 30 black, E-to-E hammer action).",
+        "Program and Synth are the only primary OLED locations.",
+        "The red chassis is continuous around the deck and keybed.",
+        "Two measured desktop comparison-and-repair passes are complete."
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Piano instrument",
+      "directory": "stage2",
+      "prompt": "prompts/stage2.md",
+      "specs": ["specs/nord-stage-4.visual.json", "specs/nord-stage-4.piano.json"],
+      "hardGates": [
+        "The primary piano path is not a placeholder oscillator or generated additive buffer bank presented as recorded samples.",
+        "Pointer, touch, computer keyboard, and MIDI share one deterministic note lifecycle.",
+        "Volume, reverb, velocity, release, sustain, and selected Piano controls alter audible output.",
+        "Fallback mode remains playable and is labeled accurately."
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Programs and effects",
+      "directory": "stage3",
+      "prompt": "prompts/stage3.md",
+      "specs": ["specs/nord-stage-4.visual.json", "specs/nord-stage-4.piano.json", "specs/nord-stage-4.programs.json", "specs/nord-stage-4.effects.json"],
+      "hardGates": [
+        "A single AudioContext feeds per-layer buses, effect chains, a master bus, and destination.",
+        "Program save/load restores the canonical supported state rather than a display-only copy.",
+        "Split positions, zones, crossfades, layer scenes, and morph assignments are editable and observable.",
+        "Every required representative effect changes rendered audio and supports bypass.",
+        "An effect represented only by metadata or disconnected nodes does not count as implemented."
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Organ and synth",
+      "directory": "stage4",
+      "prompt": "prompts/stage4.md",
+      "specs": ["specs/nord-stage-4.visual.json", "specs/nord-stage-4.piano.json", "specs/nord-stage-4.programs.json", "specs/nord-stage-4.effects.json", "specs/nord-stage-4.organ.json", "specs/nord-stage-4.synth.json"],
+      "hardGates": [
+        "Organ and Synth have distinct, audible engines rather than shared placeholder oscillators.",
+        "Organ models, drawbars/registers, percussion, vibrato, and rotary controls alter audible output.",
+        "Synth source, oscillator control, filter, envelopes, LFO, voice mode, and arpeggiator/gate alter audible output.",
+        "Organ and Synth layers route through the Phase 3 buses and effects without creating separate destination AudioContexts.",
+        "All required Phase 4 hardware bindings are meaningful and no generic unbound-control fallback remains."
+      ]
+    }
+  ]
+}

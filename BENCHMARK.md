@@ -1,375 +1,246 @@
-# Nord Stage 4 Web Recreation Benchmark
+# Nord Stage 4 web recreation benchmark — protocol 3
 
 ## Overview
 
-This benchmark evaluates the ability of an LLM coding agent to incrementally recreate the Nord Stage 4 as a fully interactive web application.
+Stagebench evaluates a coding-agent configuration’s ability to incrementally recreate the Nord Stage 4 as an interactive browser instrument. It combines reference-driven UI reconstruction, accessibility, browser input, real-time audio, state architecture, technical-document interpretation, testing, and regression-sensitive product development.
 
-Unlike traditional coding benchmarks, this benchmark measures long-horizon product development, UI fidelity, incremental architecture, browser APIs, audio programming, and the ability to extend an existing codebase without regressions.
+The unit under test is the recorded agent configuration—not a base-model name by itself. See [`METHODOLOGY.md`](./METHODOLOGY.md) for claims, non-claims, comparison rules, validity classes, and threats to validity.
 
-The benchmark is intentionally split into four phases. Each phase builds on the previous one while remaining independently runnable.
+## Three cumulative completion targets
 
-## Repository structure
+A run chooses target Phase 1, 2, or 3 at creation. Selection is cumulative:
 
-```text
-/
-├── prompts/
-│   ├── stage1.md
-│   ├── stage2.md
-│   ├── stage3.md
-│   └── stage4.md
-├── runs/
-│   └── <model-id>/
-│       ├── run.json
-│       ├── stage1/
-│       ├── stage2/
-│       ├── stage3/
-│       └── stage4/
-├── reference/        # fetched, gitignored — manual + product photos (pnpm fetch:reference)
-└── tests/
+| Target | Created/evaluated phases | Final outcome |
+| ---: | --- | --- |
+| 1 | Phase 1 | Complete surface plus one basic playable Piano voice |
+| 2 | Phases 1–2 | Complete surface plus multi-Piano library and working effects |
+| 3 | Phases 1–3 | Complete Stage 4 Programs/performance/Organ/Synth system |
+
+Target 2 does not skip Phase 1. Target 3 does not skip Phases 1–2. Each later phase begins from the preceding sealed artifact and must preserve its behavior.
+
+Create a run with the public CLI:
+
+```sh
+pnpm stagebench create \
+  --model <canonical-model-id> \
+  --provider <provider> \
+  --model-snapshot <exact-snapshot> \
+  --reasoning <setting> \
+  --target-phase <1|2|3> \
+  --variant <stage-4-88|stage-4-73|stage-4-compact-73>
 ```
 
-The benchmark infrastructure copies compatibility-named folders between phases:
+New runs default to `exploratory`. `--official true` is reserved for runs using an approved comparison group, environment, resource track, and complete provenance.
 
-```text
-stage1 → copy → stage2 → copy → stage3 → copy → stage4
-```
+## Source-of-truth files
 
-Each folder must be independently runnable.
+- `specs/benchmark-phases.json` — active phase selection, scope, exact included/excluded behavior, and hard gates.
+- `prompts/stage1.md`, `stage2.md`, `stage3.md` — implementation instructions.
+- `TESTING.md` — exact feature IDs, candidate tests, canonical evidence, and sealing contract.
+- `specs/nord-stage-4.*.json` — visual, Piano, effects, Programs, Organ, Synth, and variant requirements.
+- `evaluation/rubrics/v3.json` — active three-phase evaluation weights and guidance.
+- `schemas/` — persisted protocol, run, telemetry, assessment, evaluation, verification, feature, provenance, and registry contracts.
+- each `runs/<id>/run.json` — authoritative run state. `src/data/runs.json` is generated and never an independent source of truth.
 
-## Machine-readable specifications
+The fetched manual is authoritative where a summarized domain spec is ambiguous.
 
-The `specs/` directory is part of the benchmark contract, not optional background reading. `specs/benchmark-phases.json` assigns the relevant domain specifications and hard gates to each phase. The phase prompts and run skill must pass those exact files to implementation and evaluation agents.
+## Reference material
 
-- Phase 1: `nord-stage-4.visual.json` (shared control deck) plus the run's variant from `nord-stage-4.variants.json`
-- Phase 2: visual plus `nord-stage-4.piano.json`
-- Phase 3: inherited specs plus `nord-stage-4.programs.json` and `nord-stage-4.effects.json`
-- Phase 4: all inherited specs plus `nord-stage-4.organ.json` and `nord-stage-4.synth.json`
-
-The fetched manual remains authoritative when a summarized spec is ambiguous. Each domain spec cites its printed manual pages.
-
-## Canonical references
-
-Treat these as the source of truth.
-
-### Reference material
-
-The Nord Stage 4 user manual and official product photos are third-party works owned by Clavia DMI AB. They are **not** redistributed in this repository. Fetch them from Nord's official servers into `reference/` (gitignored) before running the benchmark:
+Nord/Clavia’s manual and product photography are third-party copyrighted works and are not redistributed by Stagebench. Fetch the current official assets locally:
 
 ```sh
 pnpm fetch:reference
 ```
 
-This downloads the manual and the 88 / 73 / Compact 73 top-down photos for local evaluation only. Do not commit, re-host, or otherwise redistribute the contents of `reference/`.
+Each run targets exactly one variant:
 
-### Variants
+| Variant | ID | Keybed |
+| --- | --- | --- |
+| Stage 4 88 | `stage-4-88` | 88 keys, A–C, hammer action |
+| Stage 4 73 | `stage-4-73` | 73 keys, E–E, hammer action |
+| Stage 4 Compact 73 | `stage-4-compact-73` | 73 keys, E–E, semi-weighted waterfall |
 
-The Nord Stage 4 ships in three hardware variants. They share an identical control deck and differ only in the keybed and overall silhouette. Each benchmark run targets exactly one variant, chosen at run creation (the run skill prompts for it) and recorded on the run as `variant`/`target`.
+The selected variant’s registry entry and reference image win over generic assumptions. Do not mix variants within one run.
 
-| Variant | id | Keybed | Reference image |
-| --- | --- | --- | --- |
-| Stage 4 88 | `stage-4-88` | 88 keys, A–C, hammer action | `reference/nord-stage-4.jpg` |
-| Stage 4 73 (default) | `stage-4-73` | 73 keys, E–E, hammer action | `reference/nord-stage-4-73.jpg` |
-| Stage 4 Compact 73 | `stage-4-compact-73` | 73 keys, E–E, semi-weighted waterfall | `reference/nord-stage-4-compact.jpg` |
+## Isolation and one-way inheritance
 
-The canonical registry is [`specs/nord-stage-4.variants.json`](./specs/nord-stage-4.variants.json). The Stage 4 73 is fully measured there; measure the 88 and Compact 73 silhouettes from their reference images. Do not mix variants within a run, and do not substitute a different keybed than the one assigned.
-
-### Product image
-
-The full-resolution primary visual reference is the selected variant's `referenceImage` from `specs/nord-stage-4.variants.json` (default `reference/nord-stage-4-73.jpg`), fetched from Nord's official asset server (see [Reference material](#reference-material)). Shared control-deck reference values are in [`specs/nord-stage-4.visual.json`](./specs/nord-stage-4.visual.json); variant keybed and silhouette values are in the variants registry.
-
-Compare against the assigned variant's image only. Do not silently substitute another variant or label a recreation with the wrong model. When another product image conflicts with the assigned variant's image, the assigned variant's image wins.
-
-### Visual fidelity contract
-
-The recreation must be compared directly against the primary image rather than merely borrowing a generic red-keyboard aesthetic.
-
-- Preserve the selected variant's measured width-to-height silhouette within a 2.5% tolerance (Stage 4 73: 3.095:1; measure the 88 and Compact 73 from their reference image).
-- Render one continuous red chassis around the control surface and keybed. Top rail, bottom lip, and both end cheeks must connect without white gaps, detached rails, or unrelated outer frames.
-- The control deck including its top rail should occupy about 54% of the instrument height and the keybed including the bottom rail about 46%. The earlier 45/55 estimate was incorrect; use the measured specification.
-- Approximate horizontal section allocation from left to right: Performance 13%, Organ 21%, Piano 15%, Program/Morph 9%, Synth 21%, Layer Effects 21%.
-- Keep the red surface visible between dark inset control plates. Do not turn the entire upper chassis into one uninterrupted charcoal slab.
-- Match the reference hierarchy of control sizes: primary encoders and layer faders, then secondary knobs, then compact rectangular switches and LEDs.
-- Reproduce the reference’s mixed hardware materials: black knobs with white index marks, dark and light fader caps, silver/gray switches, red illuminated states, green level LEDs, blue-green OLEDs, and white legends.
-- Match the visible control density and grouping. Large empty panels or evenly spaced placeholder controls are fidelity failures.
-- Match the section landmarks in `specs/nord-stage-4.visual.json` before adding micro-detail. Invented primary hardware is a structural failure: the Organ, Piano, and Effects sections must not gain OLED displays that are absent from the photograph. Only Program and Synth use primary OLEDs in this reference.
-- Prefer fewer correctly placed controls over a dense generic matrix. A repeated knob/button grid that ignores the photograph scores worse than a partially complete but correctly structured panel.
-- Model the selected variant's exact keybed (Stage 4 73: 73 keys, 43 white and 30 black, E-to-E hammer action; see `specs/nord-stage-4.variants.json`). Keep keys inside the connected red end cheeks at every supported width. No key or chassis segment may overflow or be clipped.
-- Use a neutral light product-study background like the source photograph. The instrument—not a marketing headline—must be the first and dominant visual element, occupy 88–97% of a 1440px viewport's width, and remain fully visible without vertical scrolling at 1440×900.
-- Do not add a large hero, product slogan, decorative stage scene, or unrelated copy above the instrument. Small status/help text may sit below it.
-- Do not render the supplied reference photograph as a background, texture, overlay, or substitute for DOM/CSS controls. It is comparison evidence only.
-
-### Required visual comparison loop
-
-Visual fidelity is an implementation loop, not a final glance.
-
-1. Read the full-resolution image and `specs/nord-stage-4.visual.json` before creating components.
-2. Build the instrument from a normalized, data-driven hardware map with stable IDs for sections and controls.
-3. Capture a 1440×900 screenshot, crop both render and reference to the instrument bounds, then compare section landmarks, forbidden hardware, control placement, vertical allocation, section widths, key counts, and dominant colors in that order. Whole-page whitespace must not dominate the comparison.
-4. Record the measured differences and correct the three largest structural mismatches.
-5. Capture a second desktop pass plus a 390×844 narrow screenshot. Save the required evidence described in `TESTING.md`.
-
-Phase 1 cannot be complete after only one screenshot pass. Later phases must compare their evidence with the preceding phase to prevent visual drift.
-
-### User manual
-
-The behavioral reference is the [Nord Stage 4 User Manual v1.6X](https://www.nordkeyboards.com/wt/documents/951/Nord%20Stage%204%20User%20Manual%20v1.6X-Edition-N.pdf), fetched to `reference/manual.pdf` (see [Reference material](#reference-material)).
-
-Treat the manual as the behavioral specification. Use it to reproduce control behavior, button interactions, menus, parameter ranges, layer behavior, keyboard splits, morph assignments, effects, routing, synthesizer behavior, piano behavior, organ behavior, and display states.
-
-The goal is not simply to build “a keyboard.” The goal is to recreate the Nord Stage 4 as faithfully as practical within the browser.
-
-## General requirements
-
-Throughout all phases:
-
-- pnpm exclusively for dependency installation and every package script; commit `pnpm-lock.yaml`, declare `packageManager` in `package.json`, and do not create npm or Yarn lockfiles
-- TypeScript
-- React
-- Modern browser APIs
-- Responsive layout
-- Runs locally with one command
-- No TypeScript errors
-- No runtime console errors
-- Clean architecture
-- Preserve all previous functionality
-- Do not regress previous phases
-- Follow [`TESTING.md`](./TESTING.md), maintain `tests/feature-matrix.json`, and write tests alongside each implemented behavior
-- Maintain `IMPLEMENTATION_DETAILS.json` with the phase's audio strategy, generated sound sources, and complete sample provenance; never describe generated buffers as recorded samples
-- Provide `test`, `typecheck`, `lint`, and `build` package scripts that run non-interactively
-
-The application should feel like a polished product, not a prototype.
-
-The phase verifier must pass before completion:
+Candidate generation must not run from the repository containing prior solutions. Create an allowlisted bundle:
 
 ```sh
-node .agents/skills/run-nord-benchmark/scripts/verify-stage.mjs verify --id <run-id> --phase <1|2|3|4>
+pnpm stagebench bundle --id <run-id> --phase <N>
 ```
 
-## Phase 1 — Visual recreation
+The bundle contains:
 
-### Goal
+- a writable `candidate/` directory containing the starter or inherited candidate artifact;
+- read-only-intended `inputs/` containing only benchmark/testing docs, the current phase prompt, current and inherited assigned specs, selected variant registry, and fetched selected references;
+- no other `runs/`, gallery registry, reports, evaluator output, future prompts, or unrelated solutions;
+- `bundle-manifest.json` with input hashes and isolation assertions.
 
-Recreate the Nord Stage 4 interface with high visual fidelity. No sound is required. Focus entirely on appearance and interaction.
+Official execution uses the container command so the inputs are read-only and the host repository is not mounted:
 
-### Requirements
+```sh
+pnpm stagebench exec --id <run-id> --phase <N> --command "pnpm test"
+```
 
-Implement:
+Network is disabled unless the run’s declared policy explicitly selects the registry-only track. The same isolation boundary applies to implementation-agent processes; merely giving an agent a bundle path while leaving host filesystem access available is not sufficient for an official run.
 
-- Keyboard with all white and black keys
-- OLED displays
-- Buttons
-- Knobs
-- Rotary encoders
-- LEDs
-- Drawbars, if applicable to the chosen model
-- Pitch stick
-- Modulation wheel
-- Branding
-- Labels
-- Section dividers
-- Realistic spacing
-- Shadows
-- Gradients
-- Responsive scaling
+Phase N receives only its own prompt/spec bundle and the sealed candidate output from Phase N−1. It does not receive future prompts or prior models’ conclusions.
 
-Interactions:
+## Shared implementation requirements
 
-- Keys depress visually
-- Buttons animate
-- Knobs rotate
-- LEDs toggle
-- Displays illuminate
-- Hover states
-- Focus states
+Every phase uses:
 
-Everything visible on the hardware should exist. It does not need to perform its real function yet.
+- TypeScript and React;
+- pnpm with a committed `pnpm-lock.yaml` and declared `packageManager`;
+- Vite `base: './'` for portable previews;
+- a normalized, typed hardware/state model with stable control IDs;
+- responsive, keyboard-accessible controls and clear focus states;
+- injectable browser/audio/MIDI/timing/storage boundaries;
+- deterministic tests that do not require network, devices, or audio output;
+- `test`, `typecheck`, `lint`, and `build` scripts;
+- truthful `IMPLEMENTATION_DETAILS.json` source/sample provenance;
+- canonical parent-captured evidence and a candidate visual/flow audit;
+- no TypeScript, console, or runtime errors in required flows.
 
-Write the Phase 1 model and interaction tests listed in `TESTING.md` before or alongside the corresponding controls. Preserve them in every later phase.
+## Phase 1 — Complete surface and basic Piano
 
-## Phase 2 — Piano instrument
+### Product outcome
 
-Continue from Phase 1. Do not remove or regress any existing functionality.
+Build the entire visible Stage 4 for the assigned variant and make the exact keybed playable with one dependable basic Piano voice. All other visible controls move/press accessibly but are explicitly decorative.
 
-### Goal
+### Visual requirements
 
-Implement a realistic playable piano. Only the Piano engine is required.
+- Exact variant silhouette, key count/range/action, and continuous red chassis.
+- Roughly 54% control deck and 46% keybed height.
+- Performance 13%, Organ 21%, Piano 15%, Program/Morph 9%, Synth 21%, Effects 21% section widths.
+- Reference-specific control density and landmarks across all six sections.
+- Program and Synth are the only primary OLED locations.
+- Mixed reference materials: red metal, dark inset panels, black indexed knobs, switches, fader caps, LEDs, drawbars, blue-green OLEDs, and white legends.
+- No generic dark slab, invented primary hardware, large marketing hero, reference-image overlay, detached frame, missing keys, or clipped chassis.
 
-### Required features
+### Functional requirements
 
-Keyboard:
+- Pointer, independent touch, computer keyboard, and MIDI feed one note lifecycle.
+- One Piano-like source with velocity, release, sustain input, polyphony/stealing, cleanup, and truthful loading/error/fallback state.
+- Every visible physical control has a stable accessible name and moves or presses.
+- Every visible panel knob/button/wheel/fader/drawbar/encoder is decorative and must not change audio or fake canonical system behavior. Only keybed note/sustain input affects sound.
 
-- Mouse input
-- Touch input
-- Computer keyboard input
-- MIDI input
+### Deferred
 
-Audio:
+Multiple Piano instruments, detailed Piano modeling controls, audible effects, Programs/presets, splits/scenes/morphs, Organ audio, and Synth audio.
 
-- Sampled piano
-- Velocity sensitivity
-- Sustain pedal
-- Polyphony
-- Note release
-- Low latency
+## Phase 2 — Piano library and working effects
 
-Effects:
+### Product outcome
 
-- Master volume
-- Reverb
+Preserve Phase 1 and add a credible multi-Piano instrument plus a connected, controllable effects architecture.
 
-UI:
+### Piano requirements
 
-- Piano controls become functional
-- Piano section updates display
-- Parameter editing
+- At least three audibly distinct bundled recorded sample sets covering acoustic grand, acoustic upright, and electric/electromechanical character.
+- Redistributable licenses, offline playback, complete file/root/velocity provenance, and a separately labeled synthesized/modelled fallback.
+- Two Piano layers with enable/focus/level/selection/octave and correct voice ownership.
+- Velocity/touch response, detailed release, supported resonance, timbre, dynamic compression, unison, sustain, and supported soft/sostenuto behavior.
+- Every claimed Piano control updates canonical state, hardware feedback, and audible output.
+- Master Volume and Panic become functional panel controls in this phase; other Phase 3-only controls remain decorative.
 
-Ignore Organ and Synth sections.
+### Audio/effect requirements
 
-Add deterministic tests for note lifecycle, sustain, polyphony, velocity, keyboard mapping, MIDI parsing and failure states, volume/reverb routing, and the offline fallback. Fake the audio and MIDI boundaries; do not require physical devices or a real output channel.
+- One AudioContext, per-layer buses, ordered effects, master gain/limiter, and one destination.
+- Real Mod 1, Mod 2, Delay, Amp/EQ or filter, Compressor, Reverb, and Rotary processing.
+- On/bypass, all-bypass, wet/dry, focus/targeting, Piano group/layer and global-unit behavior.
+- Delay feedback processing affects repeats; Reverb precedes Rotary; parameter changes avoid clicks.
+- Real/offline tests show measurable effect and Piano-control changes.
 
-## Phase 3 — Programs and effects
+### Deferred
 
-Continue from Phase 2. Preserve all previous functionality. Read and implement the Programs and Effects specs before beginning Organ or Synth audio work.
+Full Programs/Live/presets, editable splits/scenes/morph assignment, Organ engines, Synth engines, and complete binding of Phase 3-only controls.
 
-### Programs and performance system
+## Phase 3 — Complete Stage 4 system
 
-- Canonical serializable Program state
-- Program browsing, Store, Store As, categories, dirty state, cancel, undo, Live Mode, and Program buttons
-- Preset browsing and storage for supported sections/layers
-- Layer focus, levels, zones, splits, crossfades, and Layer Scenes
-- Wheel, Aftertouch, and Control Pedal morph assignments
-- Master Clock, Transpose, and Panic behavior
-- Contextual displays and parameter editing
+### Product outcome
 
-### Signal architecture and effects
+Complete the instrument as one canonical serializable system. Add Programs/performance workflows, two Organ layers, three Synth layers, and meaningful bindings across the required hardware, all routed through Phase 2’s graph.
 
-Refactor the Piano engine into one shared `AudioContext` with per-layer buses, ordered effects, a master bus/limiter, and one destination. Implement the effect routing and unit families defined by `specs/nord-stage-4.effects.json`:
+### Programs and performance
 
-- Mod 1 and Mod 2
-- Delay and its feedback effects/filters
-- Amp Simulator/EQ and resonant filters
-- Compressor
-- Reverb
-- Rotary Speaker
-- Focus, group, global, targeting, bypass, wet/dry, and documented ordering
-
-An effect represented only by state, metadata, a display label, or disconnected nodes is incomplete. A fixed split or a stored morph with no controllable input path is incomplete.
-
-Add the Phase 3 tests specified in `TESTING.md`. Organ and Synth controls remain visually present but their sound engines are not implemented until Phase 4.
-
-## Phase 4 — Organ and synth
-
-Continue from the verified Phase 3 artifact and preserve its Piano, Program, routing, split, morph, scene, preset, and effect behavior.
+- Program browse/list modes, Store/Store As, naming/categories, dirty/cancel/undo, Program buttons, presets, and eight Live slots.
+- Round-trip all supported Piano/Organ/Synth/effect/routing/split/scene/morph/focus/display state.
+- Engine/layer enable/focus/levels/octaves and source/effect/master routing.
+- Up to four zones with editable documented Low/Mid/High split points and Off/±6/±12 crossfades.
+- Layer Scenes I/II and Wheel/Aftertouch/Control Pedal morph assignment, interpolation, indicators, copy, and clear.
+- Master Clock, Transpose, and Panic.
 
 ### Organ
 
-- Two layers sharing the documented Organ effects chain
-- B3, B3 Bass, Vox, Farf, Pipe 1, and Pipe 2 models
-- Drawbars/registers and stored/morphed LED state
-- B3 percussion and key click
-- Vibrato/chorus, presets/live drawbars, sync, zones, and focus
-- Rotary speed, stop, acceleration, drive, close-mic, and morph behavior
+- Two layers and audibly distinct B3, B3 Bass, Vox, Farf, Pipe 1, and Pipe 2 models.
+- Drawbars/registers/LED state, percussion, key click, vibrato/chorus, presets/live drawbars, sync, focus/zones, and morph destinations.
+- Rotary routing, slow/fast/stop, acceleration, drive, close mic, and morph behavior.
 
 ### Synth
 
-- Three independent layers
-- Samples, Analog, and Extern state
-- Pure, Sync, Multi, Super, Misc, Wave, and FM source behavior
-- LP24, LP12, LP M, LP+HP, HP, and BP filters
-- Oscillator, Filter, and Amplifier envelopes
-- LFO destinations, grouping, and clock sync
-- Poly, Mono, Legato, priority, glide, unison, and vibrato behavior
-- Arpeggiator/Gate timing, patterns, range, inversion, hold, and sync
+- Three layers with Samples, Analog, and Extern state.
+- Distinct Pure, Sync, Multi, Super, Misc, Wave, and FM behavior.
+- Osc Ctrl, required filters/tracking/resonance/drive, oscillator/filter/amplifier envelopes, LFO, poly/mono/legato/priority, glide, unison, and vibrato.
+- Deterministic Arpeggiator/Gate rate, master-clock sync, range, inversion, patterns, hold, keyboard sync, run, and gate behavior.
 
-Organ and Synth must join the inherited Phase 3 buses and effects without creating separate destination AudioContexts. Model or source selections that only rename one generic oscillator are incomplete.
+### Integration and bindings
 
-### Hardware controls
+All engines use inherited Programs, presets, scenes, zones/splits/crossfades, morphs, focus, clocks, effects, one AudioContext, and one master destination. Every required control has a meaningful canonical binding and an audible result where sonically appropriate. Generic no-op fallbacks do not count.
 
-Every required Organ and Synth hardware control must have meaningful functionality. Remove generic unbound-control fallbacks for the Phase 4 inventory and integrate engine state with inherited Programs, splits, morphs, scenes, presets, displays, and effects.
+## Durable phase workflow
 
-Add the focused Phase 4 tests and all inherited regressions specified in `TESTING.md`.
+For each selected phase:
 
-## Evaluation
+1. `prepare` requires the preceding selected phase to be complete.
+2. `bundle` creates the solution-free phase workspace.
+3. `mark --status running` starts an implementation attempt and telemetry clock.
+4. The candidate implements/tests only inside the bundle candidate directory; `pnpm stagebench import --id <id> --phase <N>` imports only that output to the authoritative stage directory.
+5. Parent canonical capture records desktop/narrow evidence and console output.
+6. `verify` runs technical/contract/evidence checks and seals an artifact digest.
+7. `mark --status complete` requires that passing sealed verification.
+8. A blind evaluator bundle uses an opaque trial ID and excludes model/provider identity.
+9. The assessment is scored and recorded against the private trial-to-run mapping.
+10. Preview publication may expose completed phases; official final publication requires all selected phases complete and evaluated.
 
-The benchmark evaluates both objective functionality and implementation quality. Every new four-phase run is scored independently with the versioned rubric in [`evaluation/rubrics/v2.json`](./evaluation/rubrics/v2.json). Legacy three-phase evaluations retain their original rubric version. See [`evaluation/README.md`](./evaluation/README.md) for the evaluator workflow and score format.
+The executable state machine, not prose alone, rejects skipped prerequisites and completion without verification.
 
-An independent, read-only evaluator assigns evidence-backed 0–4 criterion ratings. The scoring pipeline normalizes those ratings to 0–100, runs the phase artifact's typecheck, lint, and build commands, applies technical gates, and stores an auditable result with the run. Evaluator findings are diagnostic only and are never sent back to the generation agent as repair instructions. Do not infer visual scores from source code alone; inspect the rendered artifact against the primary image.
+## Provenance, telemetry, and run identity
 
-Each scored run must publish a consistent readable report at `/reports/<run-id>/index.html` and store its Markdown counterpart at `runs/<run-id>/evaluations/report.md`. Reports present the run summary, generated implementation details, category scores, strengths, priority issues, technical results, and expandable criterion evidence in that order. The evaluator inventories declared application/development libraries from each `package.json`, detects bundled audio assets, and combines them with the authored audio provenance in `IMPLEMENTATION_DETAILS.json`. The resulting machine-readable inventory is stored at `runs/<run-id>/evaluations/implementation-details.json` and published beside the HTML report.
+Protocol-v3 `run.json` records:
 
-The inventory can also be regenerated independently of scoring with `node .agents/skills/run-nord-benchmark/scripts/evaluate-run.mjs details --id <run-id>`, including for partial or not-yet-evaluated runs.
+- provider, canonical model, exact snapshot, reasoning setting, agent/tool/orchestration/context policy, and response model IDs when available;
+- protocol/rubric version and manifest digest;
+- selected target/phases and hardware variant;
+- official/exploratory classification, comparison group, and validity;
+- git commit/branch/dirty state;
+- OS/architecture, Node/pnpm/browser/timezone, and network policy;
+- resource track and limits;
+- measured/estimated/unavailable per-phase and total wall time, tokens, reasoning tokens, cost, tool calls, subagents, attempts, and verifier repairs.
 
-Category values intentionally change as the benchmark advances:
+Record telemetry with:
 
-| Category | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
-| --- | ---: | ---: | ---: | ---: |
-| Visual fidelity | 55% | 25% | 15% | 10% |
-| Feature completion | 20% | 25% | 30% | 35% |
-| Audio implementation | — | 30% | 30% | 30% |
-| Interaction or system behavior | 15% | 15% | 15% | 15% |
-| Engineering quality | 10% | 5% | 10% | 10% |
+```sh
+pnpm stagebench telemetry --id <run-id> --phase <N> --wall-time-seconds <n> --input-tokens <n> --kind measured
+```
 
-The run aggregate values Phase 1 at 20%, Phase 2 at 25%, Phase 3 at 25%, and Phase 4 at 30%. Partial aggregates are normalized over evaluated phases and must report their available phase coverage.
+Unavailable values are recorded as unavailable, never silently as zero.
 
-### Visual
+## Evaluation and result interpretation
 
-- Layout accuracy
-- Proportions
-- Spacing
-- Responsiveness
-- Typography
-- Control placement
-- Continuous chassis silhouette
-- Section-width accuracy
-- Control density and material accuracy
-- Direct screenshot comparison with the primary reference
-- Correct section-specific hardware landmarks, including the reference's exact display count and locations
-- Absence of invented OLEDs, generic control matrices, and controls borrowed from the wrong section
+Protocol-v3 uses `evaluation/rubrics/v3.json`. Phase aggregate weights are 25%, 30%, and 45%. Category weights change by phase because the delivered product changes.
 
-### Interaction
+An evaluator receives `.stagebench/blind/trial-…`, not a model-named run path. The public bundle contains the sealed artifact, relevant protocol/spec/rubric inputs, and opaque ID; the private map resolves the result only during scoring. Identity-leak scanning fails bundle creation unless explicitly overridden for a non-official diagnostic run.
 
-- Keyboard animation
-- Knob behavior
-- Button behavior
-- LED behavior
-- Display updates
+Technical failures still retain diagnostic raw rubric values, but run validity/classification is shown separately. Only complete, valid, compatible official trials may be ranked together. Partial, invalid, exploratory, and legacy runs remain inspectable in separate classes.
 
-### Audio
+## Registry and publication
 
-- Latency
-- Polyphony
-- Sustain
-- Velocity
-- Effect routing
-- Audio quality
+`runs/<id>/run.json` is the only mutable run record. Normal run/evaluation updates never write `src/data/runs.json`. Regenerate the deterministic gallery index with:
 
-### Architecture
+```sh
+pnpm stagebench reindex
+```
 
-- Maintainability
-- Modularity
-- Incremental development
-- Code organization
-
-### Quality
-
-- No console errors
-- No runtime crashes
-- TypeScript passes
-- Lint passes
-- Acceptable performance
-
-Technical checks do not replace product evaluation. A failed test suite, typecheck, lint, or build caps the recorded phase score at 59. A missing built artifact caps it at 49. The uncapped rubric score remains available as `rawScore` for diagnosis.
-
-## Benchmark philosophy
-
-Rather than isolated algorithmic problems, this benchmark evaluates whether an agent can:
-
-- Build a polished software product
-- Work from visual references
-- Interpret documentation
-- Preserve previous work
-- Extend an existing architecture
-- Integrate UI, state management, rendering, and Web Audio
-- Execute long-horizon implementation plans
-
-Success is measured by how closely the resulting application resembles using an actual Nord Stage 4 in both appearance and behavior.
+`predev` and `prebuild` regenerate it automatically. Legacy records receive a generated legacy/non-comparable classification in the index without rewriting their authoritative historical manifests.

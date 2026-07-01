@@ -6,7 +6,7 @@ import test from 'node:test'
 const root = path.resolve(import.meta.dirname, '..')
 
 test('root and every implemented benchmark phase use pnpm exclusively', () => {
-  const projectDirs = [root]
+  const projectDirs = [root, path.join(root, 'benchmark', 'starter')]
   const runsDir = path.join(root, 'runs')
   for (const runEntry of fs.readdirSync(runsDir, { withFileTypes: true })) {
     if (!runEntry.isDirectory()) continue

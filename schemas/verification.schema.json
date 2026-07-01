@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stagebench.local/schemas/verification.schema.json",
+  "title": "Stagebench verification record",
+  "type": "object",
+  "required": ["version", "runId", "stage", "verifiedAt", "passed", "checks", "evidence"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "runId": { "type": "string" },
+    "stage": { "type": "integer", "minimum": 1, "maximum": 4 },
+    "verifiedAt": { "type": "string", "format": "date-time" },
+    "passed": { "type": "boolean" },
+    "artifactDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "phaseContract": { "type": "object" },
+    "featureMatrix": { "type": "object" },
+    "implementationDetails": { "type": "object" },
+    "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/check" } }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "check": {
+      "type": "object",
+      "required": ["id", "passed", "detail"],
+      "properties": {
+        "id": { "type": "string" },
+        "passed": { "type": "boolean" },
+        "detail": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

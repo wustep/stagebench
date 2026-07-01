@@ -1,210 +1,190 @@
 ---
 name: run-nord-benchmark
-description: Run the repository's incremental Nord Stage 4 web recreation benchmark with fresh, isolated subagents and register the attributed result in the Stagebench gallery. Use when the user asks to run, start, execute, benchmark, or compare a model on BENCHMARK.md, asks to add a model output to the gallery, or requests only selected benchmark phases.
+description: Run the repository's isolated three-phase Nord Stage 4 web recreation benchmark, with a selectable cumulative completion target, provenance/telemetry, sealed verification, blinded independent evaluation, and classified gallery publication.
 ---
 
-# Run Nord Benchmark
+# Run Nord Benchmark — protocol v3
 
-Execute one attributed four-phase benchmark run with isolated implementation agents, independent read-only evaluators, mechanical verification, and honest gallery registration.
+Execute one attributed, isolated benchmark run. Use the public `pnpm stagebench` CLI as the state authority; do not reproduce state transitions by editing JSON.
 
 ## Preconditions
 
-- Work from the repository containing `BENCHMARK.md`, `TESTING.md`, `prompts/`, `specs/benchmark-phases.json`, `runs/`, and `src/data/runs.json`.
-- Read `specs/benchmark-phases.json` before creating a run. Treat its phase count, spec assignments, and hard gates as authoritative.
-- Preserve unrelated user changes and never modify the reference image, manual, domain specs, rubric, or benchmark-owned scripts from inside a candidate phase.
-- Require fresh-context subagents. If unavailable, stop because isolation cannot be guaranteed.
-- Use the exact user-requested model when selectable. If model selection is unavailable, explain the limitation and obtain approval before attributing another model's work to that label.
-- Use pnpm exclusively for the gallery and every candidate artifact.
-- Each `runs/<id>/run.json` is the source of truth; `src/data/runs.json` is a generated index. If the two drift, rebuild the index with `node <skill-directory>/scripts/manage-run.mjs reindex` (only when no run is mid-write).
-- Generation and evaluation are independent one-way processes. Implementation agents never receive evaluator assessments, issue lists, scores, or evaluator-authored repair instructions. Evaluators are read-only and never edit candidate files.
+1. Work from the repository containing `METHODOLOGY.md`, `BENCHMARK.md`, `TESTING.md`, `specs/benchmark-phases.json`, `schemas/`, and `scripts/stagebench.mjs`.
+2. Read the methodology and active phase manifest completely.
+3. Run `pnpm stagebench doctor`. Official runs stop if protocol, pnpm/git, references, isolation runtime, or required provenance is unavailable.
+4. Preserve unrelated user changes. Never let a candidate modify benchmark prompts/specs/rubrics/verifier/runner/reference files.
+5. Require fresh-context implementation agents and fresh independent evaluators. If unavailable, mark the run exploratory or stop; do not claim official isolation.
+6. Use the exact selectable model/snapshot/settings. Do not attribute another model’s work to the requested label.
 
-## 1. Resolve model and scope
+## 1. Resolve run identity and cumulative target
 
-Honor an explicit phase limit; otherwise run all four phases. Do not ask for a model when the user already supplied one unambiguously.
+Obtain or infer these fields before creation:
 
-Resolve the hardware variant. The Nord Stage 4 ships in three variants defined in `specs/nord-stage-4.variants.json`:
+- canonical model ID, provider, exact snapshot/response model ID, reasoning setting, agent/tool version;
+- hardware variant: `stage-4-88`, `stage-4-73`, or `stage-4-compact-73`;
+- completion target:
+  - **1 — Complete surface + basic Piano:** creates Phase 1;
+  - **2 — Piano library + working effects:** creates Phases 1 and 2;
+  - **3 — Complete Stage 4 system:** creates Phases 1, 2, and 3;
+- resource/network track and limits;
+- official versus exploratory classification.
 
-- `stage-4-88` — Stage 4 88 (88 keys, hammer action)
-- `stage-4-73` — Stage 4 73 (73 keys, hammer action; default)
-- `stage-4-compact-73` — Stage 4 Compact 73 (73 keys, semi-weighted waterfall)
+If the user did not name a target or variant, ask. A target is cumulative; do not interpret target 3 as “run only Phase 3.”
 
-Unless the user already named a variant unambiguously, ask which one to build before creating the run. All three share the same control deck; only the keybed and silhouette differ.
-
-Store:
-
-- `model`: stable canonical identifier shared by model variants;
-- `title`: human-readable run title;
-- `variant`: the selected hardware variant id from `specs/nord-stage-4.variants.json`;
-- `isTest`: true only when the user requests an experimental/test classification.
-
-Create a new isolated run (the run records `variant` and its display `target`):
+Create the run:
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs create --model "<canonical-id>" --title "<display-title>" --variant "<variant-id>"
+pnpm stagebench create \
+  --model <canonical-id> \
+  --title <display-title> \
+  --provider <provider> \
+  --model-snapshot <snapshot> \
+  --reasoning <setting> \
+  --agent-version <version> \
+  --tool-bundle <version> \
+  --browser <version> \
+  --target-phase <1|2|3> \
+  --variant <variant-id> \
+  --network-policy <none|registry-only|unrestricted> \
+  --budget-track <track> \
+  --official <true|false>
 ```
 
-Never reuse or overwrite an existing run directory.
+The returned `run.json` is authoritative. Do not write `src/data/runs.json`; it is generated later.
 
-## 2. Execute each requested phase
+## 2. Execute each selected phase sequentially
 
-Run this procedure sequentially for Phase 1 through the requested limit. The phase manifest supplies each phase's prompt and exact spec files.
+For each phase in `selectedPhases`:
 
-### 2.1 Prepare and mark running
-
-For Phase 1, use the directory returned by `create`. For later phases:
+### 2.1 Prepare and isolate
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs prepare --id "<id>" --phase <N>
+pnpm stagebench prepare --id <id> --phase <N>
+pnpm stagebench bundle --id <id> --phase <N>
+pnpm stagebench mark --id <id> --phase <N> --status running
 ```
 
-Then:
+The bundle lives under `.stagebench/workspaces/<id>/phaseN/`:
+
+- `candidate/` is the only writable candidate directory;
+- `inputs/` contains only current allowlisted docs/prompt/specs/selected references;
+- no other runs, gallery data, reports, evaluator output, future prompts, or solutions are present.
+
+Official model execution must use an equivalent container/sandbox boundary with only these mounts. Giving a subagent the path while leaving host-repository access available is exploratory, not official.
+
+### 2.2 Spawn one fresh implementation agent
+
+Give it only the candidate/input paths, selected phase/variant, model selection, and resource policy. Require it to:
+
+1. read the current prompt and allowlisted inputs fully;
+2. write/update `IMPLEMENTATION_PLAN.md` with exact hard gates/specs before feature work;
+3. work exclusively in `candidate/`;
+4. use pnpm and preserve the starter package contract/Vite base;
+5. implement in prompt order with red-green-refactor and inherited tests;
+6. keep `tests/feature-matrix.json` and `IMPLEMENTATION_DETAILS.json` truthful;
+7. test real browser/audio boundaries where required;
+8. perform the required browser/visual repair loops;
+9. return test results, architecture, provenance, exercised flows, resource usage, and known limitations.
+
+Do not provide later-phase prompts, evaluator findings, another solution, parent-conversation conclusions, or model identity claims the runtime cannot verify.
+
+Import the finished candidate bundle into the authoritative phase directory. This copies only `candidate/`, excludes caches, and never imports the input mount:
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs mark --id "<id>" --phase <N> --status running
+pnpm stagebench import --id <id> --phase <N>
 ```
 
-`prepare` must copy the previous source, tests, plans, notes, and pnpm lock while excluding caches and build output.
+### 2.3 Parent canonical capture and smoke test
 
-### 2.2 Spawn one isolated implementation agent
-
-Spawn a fresh agent with no inherited parent conversation. Give it only:
-
-- absolute repository and assigned phase-directory paths;
-- absolute `BENCHMARK.md` and `TESTING.md` paths;
-- absolute `specs/benchmark-phases.json` path;
-- only the domain spec files assigned to this phase by the phase manifest;
-- the selected variant id and its entry in `specs/nord-stage-4.variants.json` (key model and silhouette);
-- the fetched reference manual and the selected variant's reference image (see reference/, pnpm fetch:reference);
-- the phase's prompt path;
-- the exact model selection when supported;
-- instructions to work exclusively inside the assigned phase directory.
-
-Require it to:
-
-1. read the prompt and assigned specs completely;
-2. write or update `IMPLEMENTATION_PLAN.md` before feature work;
-3. use pnpm, declare `packageManager`, retain `pnpm-lock.yaml`, and keep Vite `base: './'`;
-4. implement in the prompt's required milestone order;
-5. use a red-green-refactor loop and maintain inherited tests plus `tests/feature-matrix.json`;
-6. test real browser/audio boundaries in addition to fakes where required;
-7. keep `IMPLEMENTATION_DETAILS.json` truthful and complete;
-8. perform the required browser interaction and screenshot repair loops;
-9. save desktop, narrow, and visual-audit evidence;
-10. return test counts, coverage, evidence paths, architecture, provenance, browser results, and known limitations.
-
-Do not give the implementation agent later-phase prompts, the parent conversation, expected code, or another model's implementation conclusions.
-
-### 2.3 Verify and repair mechanical failures
-
-Run:
+Start the sealed candidate build locally and run:
 
 ```sh
-node <skill-directory>/scripts/verify-stage.mjs verify --id "<id>" --phase <N>
+pnpm stagebench capture --id <id> --phase <N> --url <local-url>
 ```
 
-The verifier must enforce:
+At minimum, independently exercise:
 
-- pnpm-only metadata and lockfiles;
-- complete inherited and phase-specific feature IDs;
-- implementation-details schema and phase number;
-- `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build`;
-- `dist/index.html`;
-- required desktop, narrow, and audit evidence;
-- assigned spec files and hard-gate acknowledgement in the implementation plan.
+- Phase 1: exact surface/keybed, pointer/touch-style ownership, computer keys, sustain input, velocity, blur/disconnect cleanup, decorative panel-control honesty, narrow layout;
+- Phase 2: all Piano choices/layers, pedals/fallback, every effect family, focus/target/bypass/wet-dry, rapid play and cleanup;
+- Phase 3: Programs/store/live, presets, splits/scenes/morphs, representative Organ/Synth modes, inherited effects/routing, full binding audit, stress cleanup.
 
-If verification fails, return only the exact mechanical verifier failures to the same implementation agent. Allow at most two verifier-repair attempts. Never mark a phase complete while verification fails. Do not include evaluator findings in this loop.
+Check console/page errors after interaction. Infrastructure/smoke failures may return to the implementation agent before independent evaluation; evaluator feedback never does.
 
-### 2.4 Parent browser smoke test
-
-Start the built artifact locally and inspect the rendered phase with the in-app browser. At minimum:
-
-- open desktop and narrow layouts;
-- exercise the phase's primary flows from its prompt;
-- check the console after interaction;
-- confirm the candidate evidence depicts the current build;
-- confirm no claimed feature is obviously display-only or disconnected.
-
-Infrastructure or smoke-gate failures may be returned to the implementation agent before evaluation. This is still part of mechanical completion, not evaluator feedback; evaluators remain independent and read-only.
-
-### 2.5 Mark complete and run the initial independent evaluation
-
-After verifier and browser success:
+### 2.4 Verify, repair mechanical failures, and seal
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs mark --id "<id>" --phase <N> --status complete
-node <skill-directory>/scripts/manage-run.mjs preview --id "<id>"
-node <skill-directory>/scripts/evaluate-run.mjs template --id "<id>" --phase <N>
+pnpm stagebench verify --id <id> --phase <N>
 ```
 
-Spawn a new evaluator with no inherited context. The evaluator must not edit the candidate. Give it:
+Verification enforces the current/legacy phase contract, candidate package checks, required feature mappings, implementation provenance, valid canonical evidence, and creates an artifact digest. Return only exact mechanical failures to the same implementation agent, within the run’s verifier-repair budget. Re-capture/re-verify after changes.
 
-- repository and candidate phase paths;
-- the selected variant's reference image (per `specs/nord-stage-4.variants.json`) and the fetched manual;
-- benchmark, testing contract, phase prompt, phase manifest, and all assigned domain specs;
-- current rubric, verification JSON, assessment path, and local preview URL;
-- instructions to inspect source, candidate tests, rendered desktop/narrow UI, console, real interactions, and audible/system behavior.
-
-Require integer 0-4 ratings with concrete evidence. Source presence is not proof of audible or interactive behavior. Candidate-authored fake tests are not proof that the real browser/audio backend works. The candidate may not evaluate itself.
-
-Score it:
+Completion requires a passing sealed verification:
 
 ```sh
-node <skill-directory>/scripts/evaluate-run.mjs score --id "<id>" --phase <N>
+pnpm stagebench mark --id <id> --phase <N> --status complete
+pnpm stagebench preview --id <id>
 ```
 
-### 2.6 Finalize the independent evaluation
+The executable state machine rejects skipped prerequisites and unverified completion.
 
-The evaluator's first scored assessment is final. Do not send its issues, ratings, or score back to the implementation agent, do not ask the evaluator to repair anything, and do not rescore after evaluator feedback. A low score without a hard-gate or technical failure remains an honest completed result.
+### 2.5 Record telemetry
 
-## 3. Phase-specific emphasis
-
-- **Phase 1 - Visual recreation:** exact hardware structure for the selected variant first (correct keybed count/range/action and silhouette); two measured visual repair passes; no audio.
-- **Phase 2 - Piano instrument:** credible primary Piano source, one deterministic input lifecycle, real audio-boundary tests, truthful fallback.
-- **Phase 3 - Programs and effects:** canonical Program state, editable splits/scenes/morphs, one shared audio graph, connected representative effects; no Organ/Synth audio yet.
-- **Phase 4 - Organ and synth:** distinct Organ/Synth engines integrated into inherited Programs, routing, effects, splits, morphs, scenes, and presets.
-
-When the requested scope ends before Phase 4, leave later phases queued and publish a partial run:
+Record measured values when available, estimates only when labeled, and unavailable otherwise:
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs partial --id "<id>"
+pnpm stagebench telemetry --id <id> --phase <N> \
+  --wall-time-seconds <n> \
+  --input-tokens <n> \
+  --output-tokens <n> \
+  --reasoning-tokens <n> \
+  --cost-usd <n> \
+  --tool-calls <n> \
+  --subagents <n> \
+  --implementation-attempts <n> \
+  --verifier-repairs <n> \
+  --kind <measured|estimated|unavailable>
 ```
 
-After every phase is marked complete, publish the available previews immediately while leaving later phases queued/running:
+### 2.6 Create a blinded evaluation
+
+After completion:
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs preview --id "<id>"
+pnpm evaluate:template --id <id> --phase <N>
 ```
 
-This makes the latest completed phase playable during a still-running four-phase run. `partial` is only for ending the run early; `preview` is safe to call between phases.
+For v3 this creates `.stagebench/blind/trial-…` plus a private mapping. Spawn a new evaluator with no inherited context and give it only the printed opaque bundle/assessment path and local preview. Do not reveal run ID, model, provider, title, other solutions, or generation transcript.
 
-## 4. Reports and publication
+Require direct rendered/interactive/audio inspection and integer 0–4 ratings with concrete evidence. Source presence and candidate-authored tests are not proof of audible/interactive behavior. Evaluators are read-only and never repair the candidate.
 
-Each score command must regenerate:
-
-- `runs/<id>/evaluations/report.md`;
-- `runs/<id>/evaluations/implementation-details.json`;
-- `public/reports/<id>/index.html`;
-- `public/reports/<id>/implementation-details.json`.
-
-Verify the report includes whole-number displayed scores, phase-specific evidence, libraries, audio architecture, samples, and provenance.
-
-Publish a complete run only after all four phases pass:
+Score using the printed assessment path:
 
 ```sh
-node <skill-directory>/scripts/manage-run.mjs publish --id "<id>"
+pnpm evaluate:score --id <id> --phase <N> --assessment <opaque-assessment-path>
 ```
 
-This must publish every completed phase preview and use Phase 4 as the latest/root preview. During an in-progress run, the preview command publishes every completed phase without waiting for the remaining phases. Then run the root gallery tests, typecheck, lint, and build through pnpm. Open the gallery, switch through all available phases, open the report, and check the console.
+Do not send evaluator issues/scores back to implementation or rescore after candidate repair. Assessment correction for evaluator/infrastructure error is a separate audited workflow.
 
-## 5. Final response
+## 3. Finish and publish
 
-Report:
+When every selected phase is complete and evaluated:
 
-- model attribution, run ID, requested phase scope, and final gallery state;
-- status and final evaluation for all four phases, including queued or failed phases;
-- implementation attempts and independent evaluator assessments;
-- verifier commands, browser checks, tests, feature coverage, and evidence paths;
-- libraries, audio architecture, bundled sound files, and sample provenance;
-- unresolved candidate limitations separately from benchmark-infrastructure limitations.
+```sh
+pnpm stagebench publish --id <id>
+pnpm stagebench reindex
+pnpm stagebench validate
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm build
+```
 
-Never claim success for a failed hard gate or technical check. Keep failed and partial runs registered so benchmark history remains honest.
+If work ends before the selected target, use `partial`; it marks the result incomplete and non-comparable. Never relabel it as a lower target after seeing performance.
+
+Open the gallery, verify selected phase switching/report links, and confirm classification/validity. Official, exploratory, legacy, partial, and invalid results must remain visibly distinct.
+
+## 4. Final response
+
+Report model/agent identity, run ID, variant, target/selected phases, protocol digest, resource track/limits, status/validity/classification, phase evaluations, implementation/verifier attempts, telemetry, evidence paths, architecture/provenance, browser checks, and unresolved candidate versus infrastructure limitations.
+
+Never claim success for a failed gate, unsealed artifact, identity leak, budget violation, missing telemetry as zero, or an exploratory/legacy result as official.

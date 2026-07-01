@@ -208,7 +208,7 @@ export function renderRunReportHtml(run, evaluations, implementationDetails) {
   <main>
     <section class="overview">
       <h2>Run overview</h2>
-      <p>Run <code>${escapeHtml(run.id)}</code> · ${escapeHtml(run.status)} · ${aggregate?.evaluatedStages?.length ?? 0}/${run.stages.length} phases evaluated · generated ${escapeHtml(formatDate(generatedAt))} UTC</p>
+      <p>Run <code>${escapeHtml(run.id)}</code> · ${escapeHtml(run.status)} · ${escapeHtml(run.classification?.kind ?? 'legacy')} · validity ${escapeHtml(run.validity ?? 'legacy-unverified')} · ${aggregate?.evaluatedStages?.length ?? 0}/${run.stages.length} selected phases evaluated · generated ${escapeHtml(formatDate(generatedAt))} UTC</p>
       <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th><th>Grade</th></tr></thead><tbody>${run.stages.map((stage) => stageSummaryRow(stage, evaluations.find((evaluation) => evaluation.stage === stage.number))).join('')}</tbody></table>
     </section>
     ${implementationSection(implementationDetails)}
@@ -227,6 +227,8 @@ export function renderRunReportMarkdown(run, evaluations, implementationDetails)
     '',
     `- Run: \`${run.id}\``,
     `- Status: ${run.status}`,
+    `- Classification: ${run.classification?.kind ?? 'legacy'}`,
+    `- Validity: ${run.validity ?? 'legacy-unverified'}`,
     `- Aggregate: ${aggregate ? `**${floorScore(aggregate.score)}/100 · ${aggregate.grade}**` : 'Pending'}`,
     `- Coverage: ${aggregate?.evaluatedStages?.length ?? 0}/${run.stages.length} phases`,
     '',

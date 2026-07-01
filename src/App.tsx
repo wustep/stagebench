@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import runsData from './data/runs.json'
 import {
@@ -17,7 +17,8 @@ import './App.css'
 const runs = runsData as BenchmarkRun[]
 const isLocalEnvironment = import.meta.env.DEV
 const locallyAvailableRuns = runs.filter((run) => isLocalEnvironment || !run.isTest)
-const phaseNames = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
+const phaseNames = ['Surface + Piano', 'Pianos + FX', 'Complete System']
+const v2PhaseNames = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
 const legacyPhaseNames = ['Visual', 'Piano', 'Complete']
 const noteOffsets = [0, 2, 4, 5, 7, 9, 11]
 const noteNames = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
@@ -77,8 +78,18 @@ function formatDate(value: string) {
 }
 
 function getPhaseName(run: BenchmarkRun, phase: PhaseNumber) {
-  if (run.stages.length === 3 && phase <= 3) return legacyPhaseNames[phase - 1]
-  return phaseNames[phase - 1]
+  if (String(run.protocol?.version ?? run.benchmarkVersion ?? '').startsWith('3.')) return phaseNames[phase - 1]
+  if (run.stages.length === 4) return v2PhaseNames[phase - 1]
+  return legacyPhaseNames[phase - 1]
+}
+
+function getResultClass(run: BenchmarkRun) {
+  if (['partial', 'failed', 'invalid', 'budget-exceeded', 'infrastructure-failure'].includes(run.status) || ['invalid-technical', 'incomplete', 'budget-exceeded', 'infrastructure-failure'].includes(run.validity ?? '')) {
+    return { id: 'diagnostic', label: 'Incomplete / invalid', rank: 2, description: 'Diagnostic records that are not eligible for comparison.' }
+  }
+  if (run.classification?.kind === 'official' && run.classification.comparable && run.validity === 'valid') return { id: 'official', label: 'Official', rank: 0, description: 'Valid, complete runs from the current compatible comparison series.' }
+  if (run.classification?.kind === 'exploratory') return { id: 'exploratory', label: 'Exploratory', rank: 1, description: 'Development runs recorded outside an official comparison series.' }
+  return { id: 'legacy', label: 'Legacy', rank: 3, description: 'Historical runs retained under their original protocol and rubric.' }
 }
 
 function StatusLight({ status }: { status: StageStatus | RunStatus }) {
@@ -165,7 +176,9 @@ function App() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode }>())
   const pressedKeysRef = useRef(new Set<string>())
-  const visibleRuns = locallyAvailableRuns.filter((run) => showTestRuns || !run.isTest)
+  const visibleRuns = [...locallyAvailableRuns]
+    .filter((run) => showTestRuns || !run.isTest)
+    .sort((left, right) => getResultClass(left).rank - getResultClass(right).rank || right.startedAt.localeCompare(left.startedAt))
   const testRunCount = locallyAvailableRuns.filter((run) => run.isTest).length
   const activeCount = visibleRuns.filter((run) => run.status === 'running').length
   const selectedPreviewPath = selectedRun && selectedPhase
@@ -355,13 +368,14 @@ function App() {
           <a className="wordmark" href="#runs" aria-label="Stagebench runs">
             <span>STAGEBENCH</span>
           </a>
-          <a href="/BENCHMARK.md">BENCHMARK.md</a>
+          <a href="https://github.com/wustep/stagebench/blob/main/METHODOLOGY.md">METHODOLOGY.md</a>
+          <a href="https://github.com/wustep/stagebench/blob/main/BENCHMARK.md">BENCHMARK.md</a>
         </nav>
 
         <div className="header-intro">
           <div>
             <h1>Nord Stage 4 benchmark</h1>
-            <p>Compare model-built recreations across visual fidelity, Piano, Programs and effects, then Organ and Synth.</p>
+            <p>Compare agent-built recreations across the complete surface and basic Piano, multi-Piano effects, then the full Stage 4 system.</p>
           </div>
         </div>
 
@@ -430,19 +444,31 @@ function App() {
 
         {visibleRuns.length > 0 ? (
           <div className="run-list">
-            {visibleRuns.map((run) => (
-              <article className="run-row" key={run.id}>
+            {visibleRuns.map((run, index) => {
+              const resultClass = getResultClass(run)
+              const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
+              return (
+              <Fragment key={run.id}>
+              {resultClass.id !== previousClass && (
+                <header className={`result-group-heading result-group-${resultClass.id}`}>
+                  <span>{resultClass.label}</span>
+                  <p>{resultClass.description}</p>
+                </header>
+              )}
+              <article className={`run-row result-${resultClass.id}`}>
                 <div className="run-model">
                   <div className="run-status-line">
                     <span className="run-status"><StatusLight status={run.status} />{run.status}</span>
                     <span className="model-target">{run.target ?? 'Stage 4 73'}</span>
+                    <span className={`result-class-badge result-class-${getResultClass(run).id}`}>{getResultClass(run).label}</span>
+                    {run.validity && <span className="validity-badge">{run.validity}</span>}
                     {run.isTest && <span className="test-run-badge">Test run</span>}
                   </div>
                   <h3>{getRunTitle(run)}</h3>
                   {run.evaluation && (
                     <div className="run-score" aria-label={`Aggregate evaluation ${floorScore(run.evaluation.score)} out of 100, ${run.evaluation.grade}`}>
                       <strong>{floorScore(run.evaluation.score)}</strong>
-                      <span>/100 · {run.evaluation.grade}<small>{run.evaluation.evaluatedStages.length}/{run.stages.length} phases evaluated</small></span>
+                      <span>/100 · {run.evaluation.grade}<small>{run.evaluation.evaluatedStages.length}/{run.stages.length} selected phases evaluated{getResultClass(run).id !== 'official' ? ' · diagnostic, not ranked' : ''}</small></span>
                     </div>
                   )}
                   {!run.evaluation && run.stages.some((stage) => stage.status === 'complete') && (
@@ -476,7 +502,9 @@ function App() {
                   )}
                 </div>
               </article>
-            ))}
+              </Fragment>
+              )
+            })}
           </div>
         ) : (
           <div className="empty-state">
@@ -486,12 +514,11 @@ function App() {
         )}
 
         <section className="benchmark-details" aria-labelledby="stage-tests-heading">
-          <h3 id="stage-tests-heading">What the four phases test</h3>
+          <h3 id="stage-tests-heading">What the three cumulative phases test</h3>
           <ol>
-            <li><span>01</span><div><strong>Visual recreation</strong><p>Hardware layout, controls, displays, LEDs, and responsive interaction.</p></div></li>
-            <li><span>02</span><div><strong>Piano instrument</strong><p>Playable piano, MIDI, velocity, sustain, polyphony, volume, and reverb.</p></div></li>
-            <li><span>03</span><div><strong>Programs and effects</strong><p>Programs, presets, layers, splits, morphs, scenes, routing, and audible effects.</p></div></li>
-            <li><span>04</span><div><strong>Organ and synth</strong><p>Distinct Organ and Synth engines integrated with the complete inherited system.</p></div></li>
+            <li><span>01</span><div><strong>Complete surface + basic Piano</strong><p>Exact visual hardware and keybed, one playable Piano voice, and honestly decorative panel controls.</p></div></li>
+            <li><span>02</span><div><strong>Piano library + working effects</strong><p>Multiple distinct Pianos, two layers, detailed controls, shared audio graph, and connected effect families.</p></div></li>
+            <li><span>03</span><div><strong>Complete Stage 4 system</strong><p>Programs, presets, performance systems, Organ, Synth, full routing, and meaningful hardware bindings.</p></div></li>
           </ol>
         </section>
       </section>
@@ -520,7 +547,7 @@ function App() {
                   onChange={(event) => changePreviewPhase(Number(event.currentTarget.value) as PhaseNumber)}
                   value={selectedPhase}
                 >
-                  {([1, 2, 3, 4] as const).map((phase) => (
+                  {selectedRun.stages.map(({ number: phase }) => (
                     <option disabled={!getPreviewPath(selectedRun, phase)} key={phase} value={phase}>
                       {phase} · {getPhaseName(selectedRun, phase)}{getPreviewPath(selectedRun, phase) ? '' : ' · unavailable'}
                     </option>

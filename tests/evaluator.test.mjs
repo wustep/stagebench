@@ -11,7 +11,7 @@ import {
 } from '../evaluation/lib/scoring.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const rubric = validateRubric(JSON.parse(fs.readFileSync(path.join(root, 'evaluation', 'rubrics', 'v2.json'), 'utf8')))
+const rubric = validateRubric(JSON.parse(fs.readFileSync(path.join(root, 'evaluation', 'rubrics', 'v3.json'), 'utf8')))
 
 function completedAssessment(stage, rating) {
   const assessment = createAssessmentTemplate(rubric, 'test-run', stage)
@@ -30,19 +30,15 @@ function completedAssessment(stage, rating) {
 test('rubric has distinct category values for every phase', () => {
   assert.deepEqual(
     rubric.stages['1'].categories.map(({ id, weight }) => [id, weight]),
-    [['visualFidelity', 55], ['featureCompletion', 20], ['interactionQuality', 15], ['engineeringQuality', 10]],
+    [['visualFidelity', 45], ['basicPiano', 25], ['interaction', 15], ['engineeringQuality', 15]],
   )
   assert.deepEqual(
     rubric.stages['2'].categories.map(({ id, weight }) => [id, weight]),
-    [['visualFidelity', 25], ['featureCompletion', 25], ['audioQuality', 30], ['interactionQuality', 15], ['engineeringQuality', 5]],
+    [['visualRetention', 10], ['pianoLibrary', 35], ['effectsAudio', 30], ['systemBehavior', 10], ['engineeringQuality', 15]],
   )
   assert.deepEqual(
     rubric.stages['3'].categories.map(({ id, weight }) => [id, weight]),
-    [['visualFidelity', 15], ['featureCompletion', 30], ['audioQuality', 30], ['systemBehavior', 15], ['engineeringQuality', 10]],
-  )
-  assert.deepEqual(
-    rubric.stages['4'].categories.map(({ id, weight }) => [id, weight]),
-    [['visualFidelity', 10], ['featureCompletion', 35], ['audioQuality', 30], ['systemBehavior', 15], ['engineeringQuality', 10]],
+    [['visualRetention', 5], ['featureCompletion', 35], ['audioIntegration', 30], ['systemBehavior', 20], ['engineeringQuality', 10]],
   )
 })
 
@@ -56,7 +52,7 @@ test('uniform ratings normalize to a stable 0–100 score', () => {
   assert.equal(result.score, 75)
   assert.equal(result.rawScore, 75)
   assert.equal(result.grade, 'competent')
-  assert.equal(result.categories.find(({ id }) => id === 'audioQuality').score, 75)
+  assert.equal(result.categories.find(({ id }) => id === 'effectsAudio').score, 75)
 })
 
 test('technical failures cap but do not erase the raw score', () => {
@@ -73,7 +69,7 @@ test('aggregate score uses the configured phase values', () => {
     { stage: 1, status: 'complete', score: 80 },
     { stage: 2, status: 'complete', score: 90 },
   ])
-  assert.equal(aggregate.score, 85.6)
-  assert.equal(aggregate.availableStageWeight, 45)
+  assert.equal(aggregate.score, 85.5)
+  assert.equal(aggregate.availableStageWeight, 55)
   assert.deepEqual(aggregate.evaluatedStages, [1, 2])
 })

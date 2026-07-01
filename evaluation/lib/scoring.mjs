@@ -31,12 +31,12 @@ export function validateRubric(rubric) {
   return rubric
 }
 
-export function createAssessmentTemplate(rubric, runId, stageNumber) {
+export function createAssessmentTemplate(rubric, runId, stageNumber, options = {}) {
   const stage = rubric.stages[String(stageNumber)]
   assert.ok(stage, `Unknown stage: ${stageNumber}`)
   return {
     rubricVersion: rubric.version,
-    runId,
+    ...(options.blindId ? { blindId: options.blindId } : { runId }),
     stage: Number(stageNumber),
     evaluator: '',
     evaluatedAt: '',
@@ -67,8 +67,11 @@ export function validateAssessment(rubric, assessment) {
   const stage = rubric.stages[String(assessment.stage)]
   assert.ok(stage, `Unknown assessment stage: ${assessment.stage}`)
   assert.equal(assessment.rubricVersion, rubric.version, 'Assessment rubric version does not match')
-  assert.equal(typeof assessment.runId, 'string', 'Assessment runId is required')
-  assert.ok(assessment.runId.length > 0, 'Assessment runId is required')
+  assert.ok(
+    (typeof assessment.runId === 'string' && assessment.runId.length > 0) ||
+    (typeof assessment.blindId === 'string' && assessment.blindId.length > 0),
+    'Assessment runId or blindId is required',
+  )
   assert.equal(typeof assessment.evaluator, 'string', 'Evaluator is required')
   assert.ok(assessment.evaluator.trim().length > 0, 'Evaluator is required')
   assert.equal(typeof assessment.evaluatedAt, 'string', 'evaluatedAt is required')
@@ -146,6 +149,7 @@ export function scoreAssessment(rubric, assessment, technicalChecks = []) {
   return {
     rubricVersion: rubric.version,
     runId: assessment.runId,
+    ...(assessment.blindId ? { blindId: assessment.blindId } : {}),
     stage: assessment.stage,
     stageName: stage.name,
     status: 'complete',

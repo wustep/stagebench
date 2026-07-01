@@ -1,9 +1,11 @@
-# Phase 4 - Organ and Synth
+# Legacy protocol-v2 Phase 4 — Organ and Synth
+
+> Historical compatibility only. Protocol v3 has three phases and includes this scope in Phase 3. New runs must not use this prompt.
 
 Work only inside the assigned `stage4` directory. It is a clean copy of the verified Phase 3 artifact. Read:
 
 1. `BENCHMARK.md` and `TESTING.md`
-2. `specs/benchmark-phases.json` Phase 4
+2. `specs/protocols/v2/benchmark-phases.json` Phase 4
 3. `specs/nord-stage-4.visual.json`
 4. `specs/nord-stage-4.piano.json`
 5. `specs/nord-stage-4.programs.json`

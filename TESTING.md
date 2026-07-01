@@ -1,126 +1,135 @@
-# Benchmark testing contract
+# Stagebench v3 testing contract
 
-Tests are part of the implementation, not a final cleanup task. Every benchmark phase must use a red-green-refactor loop: add or update a failing test for the behavior being implemented, implement the smallest coherent behavior, and keep the entire inherited suite green before moving to the next feature.
+Tests are part of implementation. Each phase uses red-green-refactor, preserves inherited tests, and must pass candidate-authored checks plus benchmark-owned verification before its artifact is sealed.
 
-## Required project scripts
+## Required package contract
 
-All installation and script execution must use pnpm. Every phase must contain `pnpm-lock.yaml` and a `packageManager: "pnpm@..."` declaration. `package-lock.json` and `yarn.lock` are prohibited. The verifier enforces this before running checks.
+Use pnpm exclusively. Every phase contains `pnpm-lock.yaml`, declares `packageManager: "pnpm@..."`, and exposes non-interactive scripts:
 
-Every phase artifact must expose these package scripts:
+- `test` — deterministic unit/component/integration tests that run once;
+- `typecheck` — TypeScript validation without output;
+- `lint` — static checks;
+- `build` — production build producing `dist/index.html`.
 
-- `test` — deterministic unit and component tests that run once and exit;
-- `typecheck` — TypeScript validation without emitting;
-- `lint` — static analysis;
-- `build` — production build.
-
-Run them as `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build`.
-
-The test suite must run without network access, microphone access, MIDI hardware, or a real audio output device. Wrap browser and audio APIs behind injectable boundaries so they can be tested with fakes.
-
-## Implementation and audio provenance manifest
-
-Every phase must keep an `IMPLEMENTATION_DETAILS.json` file at its artifact root. Package dependencies are inventoried automatically, but the implementation agent must explicitly describe how sound is produced and where every recorded or remote sample came from:
-
-```json
-{
-  "version": 1,
-  "phase": 2,
-  "audio": {
-    "strategy": "Generated AudioBuffer samples",
-    "generatedSources": [
-      {
-        "name": "Piano root buffers",
-        "method": "Generated at startup with additive synthesis"
-      }
-    ],
-    "sampleSources": [],
-    "notes": ["No recorded or external audio samples are used."]
-  }
-}
-```
-
-For recorded, downloaded, or remote samples, each `sampleSources` entry must include non-empty `name`, `source`, and `license` fields, plus `files` and `notes` when useful. A visual-only phase must use an explicit strategy such as `None (visual-only phase)`. Update the manifest when a later phase changes the audio graph or adds sound assets. The phase verifier rejects missing or malformed manifests, and the evaluator publishes the combined inventory in both JSON and the readable report.
+Tests run without a network, physical MIDI device, microphone, or real audio output. Browser, MIDI, audio, timing, storage, and asset boundaries must be injectable. Fake-backed state tests do not replace real or offline audio-boundary tests when behavior is claimed audible.
 
 ## Feature matrix
 
-Each phase owns `tests/feature-matrix.json` (the `stage` field is retained as a compatibility identifier):
+Each phase maintains `tests/feature-matrix.json` against `schemas/feature-matrix.schema.json`. Every required ID appears once and maps to one or more real, non-empty test files. Later phases keep inherited IDs and tests. Do not delete a regression test to pass a later phase.
 
 ```json
 {
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
   "version": 1,
   "stage": 1,
   "features": [
     {
-      "id": "visual.key-count",
-      "tests": ["src/components/Keyboard.test.tsx"],
-      "notes": "Verifies the 43 white and 30 black key model."
+      "id": "piano.basic-note-lifecycle",
+      "tests": ["src/audio/note-lifecycle.test.ts"],
+      "notes": "Covers repeated, overlapping, release, cleanup, and all-notes-off behavior."
     }
   ]
 }
 ```
 
-Every required feature ID must appear exactly once and point to at least one existing non-empty test file. When a later phase changes inherited behavior, update its inherited test before or alongside the implementation; never delete a regression test merely to make the suite pass.
+## Phase 1 required feature IDs
 
-## Phase 1 required coverage
+### Complete surface
 
-- `visual.key-count` — 73-key data model, 43 white and 30 black keys, correct black-key pattern;
-- `visual.section-layout` — six ordered hardware sections and normalized section values;
-- `visual.control-inventory` — representative control counts, stable identifiers, and section-specific landmark assertions; explicitly assert that only Program and Synth own primary OLED displays and that Organ, Piano, and Effects do not;
-- `interaction.keys` — pointer and keyboard key pressed/released state;
-- `interaction.buttons-leds` — buttons toggle the intended LED and display state;
-- `interaction.knobs` — pointer and keyboard changes are clamped and reflected visually;
-- `accessibility.controls` — controls have names, roles, focus behavior, and usable keyboard input;
-- `regression.chassis` — continuous chassis structure and no accidental extra marketing region above the instrument.
+- `visual.key-count` — exact assigned variant key count, range, white/black pattern, and geometry.
+- `visual.section-layout` — six ordered sections, normalized widths, 54/46 deck/keybed split, and continuous chassis.
+- `visual.control-inventory` — stable IDs, representative counts/landmarks/density, correct section ownership, and only Program/Synth primary OLEDs.
+- `interaction.keys` — pointer/touch/keyboard visual key press and release/cancel/blur behavior.
+- `interaction.decorative-controls` — every visible knob/encoder/fader/drawbar/wheel/button moves or presses accessibly without falsely changing unimplemented audio/system state.
+- `accessibility.controls` — accessible names, roles, values/states, keyboard operation, focus visibility, and usable targets.
+- `regression.chassis` — no marketing hero, detached rails, white gaps, wrong keybed, overflow, or clipped chassis at required viewports.
 
-## Phase 2 additional coverage
+### Basic Piano
 
-- `piano.note-lifecycle` — note-on, note-off, repeated notes, and all-notes-off;
-- `piano.sustain` — held, sustained, released, and pedal-up transitions;
-- `piano.polyphony` — concurrent voices, deterministic voice stealing, and cleanup;
-- `piano.velocity` — meaningful velocity-to-gain response with boundary cases;
-- `piano.keyboard-map` — mapped computer keys, repeat suppression, blur cleanup;
-- `piano.midi` — note, velocity, sustain CC, disconnected, and permission-denied paths;
-- `piano.volume-reverb` — parameter changes reach the audio graph and remain clamped;
-- `piano.fallback` — offline/network failure still yields a playable engine;
-- `regression.stage1` — the inherited Phase 1 suite remains present and green.
+- `piano.basic-note-lifecycle` — note-on/off, repeated/overlapping notes, release, all-notes-off, and node cleanup.
+- `piano.basic-inputs` — pointer, independent multi-touch, mapped computer keyboard/repeat suppression/blur, MIDI note/velocity/sustain, disconnect, and denied permission.
+- `piano.basic-sustain-polyphony` — sustain transitions, concurrent voices, deterministic stealing, cleanup, and useful velocity response.
+- `piano.basic-status-cleanup` — blur/disconnect/unmount cleanup stops every owned voice and ready/loading/error/fallback status is truthful without activating a visible panel button.
 
-## Phase 3 additional coverage
+## Phase 2 additional feature IDs
 
-- `programs.roundtrip` — Program save/load restores canonical supported state, including layers, Piano, effects, routing, splits, scenes, and morphs;
-- `programs.store-live` — Store, Store As, naming, categories, Program buttons, banks/pages, and eight Live slots;
-- `programs.undo-cancel` — dirty state, cancel, undo, and previous-state restoration;
-- `programs.navigation` — Program display modes, numeric/alphabetic/category lists, preset browsing, and contextual editing;
-- `layers.routing` — enable, focus, levels, source bus, effect assignment, and master-bus routing;
-- `splits.zones` — editable Low/Mid/High points, documented positions, zone membership, note routing, and crossfade gains;
-- `morph.assignments` — Wheel/Aftertouch/Control Pedal assignment, interpolation, indicators, limits, copying, and removal;
-- `scenes.switching` — Layer Scene I/II changes enable states without duplicating sound parameters;
-- `effects.graph` — one AudioContext, per-layer chains, ordered shared master path, limiter, and cleanup;
-- `effects.routing` — focus, group/global, bypass, dry/wet, ordering, targeting, and To Rotary;
-- `effects.processing` — representative Mod 1, Mod 2, Delay, Amp/EQ or filter, Compressor, Reverb, and Rotary controls measurably alter rendered audio;
-- `regression.stage2` — all inherited visual and Piano tests remain present and green.
+- `piano.instrument-library` — at least three bundled recorded sample sets (grand, upright, electric/electromechanical) are selectable, audibly distinct, offline-capable, redistributable, and truthfully sourced by file/root/velocity layer.
+- `piano.layers` — two layer enable/focus/selection/level/octave paths with correct voice ownership and cleanup.
+- `piano.velocity-controls` — velocity/touch, timbre, dynamic compression, unison, release, resonance, master volume, and Panic claims measurably alter rendered audio/state.
+- `piano.pedals` — sustain plus supported soft/sostenuto behavior or explicitly tested truthful approximation.
+- `piano.fallback` — asset failure enters a labeled playable fallback without reporting the primary library ready.
+- `effects.graph` — one AudioContext, per-layer buses, ordered effects, master gain/limiter, one destination, automation, and cleanup.
+- `effects.routing` — focus/targeting, Piano group/layer behavior, global units, on/bypass, all-bypass, dry/wet, documented order, Delay feedback path, and To Rotary.
+- `effects.processing` — Mod 1, Mod 2, Delay, Amp/EQ or filter, Compressor, Reverb, and Rotary measurably change real/offline rendered audio.
+- `regression.phase1` — all Phase 1 visual, interaction, input, basic Piano, and cleanup tests remain present and green.
 
-## Phase 4 additional coverage
+## Phase 3 additional feature IDs
 
-- `organ.engine` — two-layer note lifecycle, levels, focus, zones, effects, and cleanup;
-- `organ.models` — B3, B3 Bass, Vox, Farf, Pipe 1, and Pipe 2 produce distinct behavior;
-- `organ.drawbars` — drawbars/registers, LEDs, presets/live state, sync, percussion, key click, and vibrato/chorus;
-- `organ.rotary` — routing, slow/fast/stop, acceleration, drive, close mic, and morph speed;
-- `synth.sources` — Samples/Analog/Extern state and distinct Pure, Sync, Multi, Super, Misc, Wave, and FM behavior;
-- `synth.filter-envelopes` — filter types/tracking/drive plus oscillator, filter, and amplifier envelope behavior;
-- `synth.voice-modes` — poly/mono/legato/priority, glide, unison, vibrato, LFO destinations, and note lifecycle;
-- `synth.arp-gate` — deterministic rate, clock sync, range, inversion, pattern, hold, run, and gate behavior;
-- `system.integration` — Organ and Synth use inherited Programs, scenes, splits, morphs, presets, effects, and one master graph;
-- `hardware.bindings` — every required Phase 4 control has a meaningful canonical binding with no generic no-op fallback;
-- `regression.stage3` — all inherited Program, routing, effect, Piano, interaction, and visual tests remain green.
+### Programs and performance
 
-## Browser evidence
+- `programs.roundtrip` — save/load restores all supported Piano, Organ, Synth, effects, routing, splits, scenes, morphs, presets, focus, and display state.
+- `programs.store-live` — Store/Store As, naming, categories, Program buttons/banks/pages, presets, and eight Live slots.
+- `programs.undo-cancel` — dirty state, cancel, undo, and previous-state restoration.
+- `programs.navigation` — numeric/alphabetic/category browsing, contextual displays/editing, and preset navigation.
+- `layers.routing` — enable/focus/level/octave/source bus/effect target/master routing for every supported layer.
+- `splits.zones` — editable Low/Mid/High documented positions, up to four zones, membership, note routing, and Off/±6/±12 crossfade gains.
+- `morph.assignments` — Wheel/Aftertouch/Control Pedal assignment, input path, start/end, interpolation, limits, indicators, copy, and clear.
+- `scenes.switching` — Scene I/II changes layer enable state without duplicating sound parameters.
 
-Automated tests do not replace rendered verification. Every phase must also save:
+### Organ
 
-- `evidence/stageN-desktop.png` at 1440×900;
-- `evidence/stageN-narrow.png` at 390×844;
-- `evidence/stageN-visual-audit.md` with measured bounds, section ratios, key counts, console state, and the three most visible remaining deviations.
+- `organ.engine` — two-layer note lifecycle, levels, focus, zones, inherited effects, Programs, and cleanup.
+- `organ.models-drawbars` — B3/B3 Bass/Vox/Farf/Pipe 1/Pipe 2 distinctions, drawbars/registers/LEDs, percussion, key click, vibrato/chorus, presets/live, and sync.
+- `organ.rotary` — routing, slow/fast/stop, acceleration, drive, close mic, bypass, and morph speed.
 
-Phase 1 requires at least two screenshot-and-correction passes. Later phases must compare their screenshot with the previous phase to catch visual regressions.
+### Synth
 
-Phase 3 evidence must also record the exercised Program/effect flows and confirm one audible graph. Phase 4 evidence must record representative Organ/Synth engine exercises and the required-control binding audit.
+- `synth.sources` — three layers, Samples/Analog/Extern state, and distinct Pure/Sync/Multi/Super/Misc/Wave/FM behavior.
+- `synth.filter-envelopes` — required filters/tracking/resonance/drive plus oscillator/filter/amplifier envelope time behavior.
+- `synth.voice-modes` — poly/mono/legato/priority/glide/unison/vibrato/LFO and note lifecycle.
+- `synth.arp-gate` — deterministic rate/clock sync/range/inversion/pattern/hold/keyboard sync/run/gate behavior.
+
+### Complete integration
+
+- `system.integration` — all engines use inherited Programs, presets, scenes, splits/crossfades, morphs, focus, clocks, effects, one AudioContext, one master path, and Panic.
+- `hardware.bindings` — every required Phase 3 control has meaningful canonical behavior and audible effect where appropriate; no generic required-control fallback.
+- `regression.phase2` — all Phase 1/2 visual, input, Piano-library, effect, routing, failure, and cleanup tests remain green.
+
+## Audio test requirements
+
+Use deterministic signals/events and tolerant relationships instead of exact cross-browser waveforms. Tests must prove claimed distinctions with appropriate level, duration, time-domain, or spectral measures. At minimum:
+
+- a non-silent output is distinguishable from silence;
+- velocity/volume changes move output in the expected direction;
+- sustain/release changes duration/order;
+- Piano choices and Organ/Synth models required to be distinct do not render identically;
+- effect on/bypass/wet-dry and primary parameters change the rendered signal;
+- no engine bypasses the shared master path;
+- voice/node/timer/listener counts return to a stable state after cleanup.
+
+## Canonical browser evidence
+
+Candidate screenshots are not sufficient. The parent runs:
+
+```sh
+pnpm stagebench capture --id <run-id> --phase <1|2|3> --url <sealed-build-url>
+```
+
+This produces:
+
+- `evidence/stageN-desktop.png` at exactly 1440x900, device scale 1;
+- `evidence/stageN-narrow.png` at exactly 390x844, device scale 1;
+- `evidence/stageN-capture.json` with URL, time, browser profile, console messages/errors, and file metadata;
+- candidate-authored `evidence/stageN-visual-audit.md` describing measurements, exercised flows, corrections, console status, and known deviations.
+
+Capture uses light color mode, UTC, `en-US`, reduced motion, loaded fonts, disabled animations/transitions, and a fixed viewport screenshot. The verifier decodes the PNG header and rejects missing/wrong dimensions.
+
+Phase 1 requires two implementation comparison-and-repair passes before the canonical capture. Later phases compare canonical evidence with the preceding phase for visual regressions. Phase 2’s audit records Piano/effect flows. Phase 3’s audit records Programs/performance/Organ/Synth integration and the required-control binding audit.
+
+## Implementation and audio provenance
+
+Every phase validates `IMPLEMENTATION_DETAILS.json` against `schemas/implementation-details.schema.json`. Declare the actual audio strategy, generated sources, and every recorded/remote sample’s name, source, license, and relevant files. Never describe generated buffers as recorded samples. Phase 1 now has real basic Piano audio and may not use the old `None (visual-only)` strategy.
+
+## Sealing
+
+Verification runs all four package checks, validates the phase contract/feature matrix/manifest/evidence, and hashes the retained phase tree. The artifact digest is stored in `runs/<id>/verifications/stageN.json`. Phase completion and blinded evaluation require that passing sealed record; modifying the artifact requires a new verification attempt.

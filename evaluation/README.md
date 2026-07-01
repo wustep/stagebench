@@ -7,19 +7,23 @@ The evaluator turns evidence-backed rubric ratings into reproducible 0–100 sco
 
 Evaluators are read-only and independent from generation. Their first scored assessment is final; evaluator issues are diagnostic and are never sent back to implementation agents as repair instructions.
 
-## Phase weights
+## Active protocol-v3 phase weights
 
-| Category | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
-| --- | ---: | ---: | ---: | ---: |
-| Visual fidelity | 55% | 25% | 15% | 10% |
-| Feature completion | 20% | 25% | 30% | 35% |
-| Audio implementation | — | 30% | 30% | 30% |
-| Interaction or system behavior | 15% | 15% | 15% | 15% |
-| Engineering quality | 10% | 5% | 10% | 10% |
+| Category | Phase 1 | Phase 2 | Phase 3 |
+| --- | ---: | ---: | ---: |
+| Visual fidelity/retention | 45% | 10% | 5% |
+| Basic Piano or feature completion | 25% | 35% | 35% |
+| Effects/audio integration | — | 30% | 30% |
+| Interaction or system behavior | 15% | 10% | 20% |
+| Engineering quality | 15% | 15% | 10% |
 
-Phases 1–4 contribute 20%, 25%, 25%, and 30% respectively to a run's aggregate score. Until all phases are evaluated, the aggregate is normalized over only the available phase weights and reports that coverage explicitly.
+Phases 1–3 contribute 25%, 30%, and 45% respectively. A run only contains the cumulative phases selected by its target. Incomplete/partial aggregates are diagnostic and are not ranked with complete valid runs.
 
-The active versioned rubric lives in [`rubrics/v2.json`](./rubrics/v2.json). The prior three-phase rubric remains in `v1.json` only to interpret historical runs. Every category also contains weighted criteria and evaluation guidance.
+The active rubric lives in [`rubrics/v3.json`](./rubrics/v3.json). `v1.json` and `v2.json` remain only to interpret historical runs.
+
+## Blinded evaluator bundle
+
+For protocol-v3 runs, template creation first creates `.stagebench/blind/trial-…`. The evaluator sees the opaque ID, sealed artifact, current phase inputs, and rubric—not the run ID, model, provider, title, gallery, or other solutions. A private mapping is used only when scoring. Identity-leak scanning rejects model/provider strings in the public evaluator bundle unless explicitly overridden for a non-official diagnostic run.
 
 ## Rating anchors
 
@@ -39,7 +43,7 @@ Generate an assessment template:
 pnpm evaluate:template --id <run-id> --phase 1
 ```
 
-This writes `runs/<run-id>/evaluations/stage1.assessment.json`. An evaluator fills its metadata, ratings, evidence, summary, and issues without changing the benchmark artifact.
+For protocol-v3 this writes the assessment inside the opaque evaluator bundle and prints its path. Pass that path to `evaluate:score --assessment <path>`. Historical protocols retain the run-local assessment path.
 
 Validate, score, and register the assessment:
 

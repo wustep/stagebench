@@ -1,6 +1,13 @@
 {
-  "version": "2.0.0",
-  "phaseCount": 4,
+  "$schema": "../schemas/protocol.schema.json",
+  "version": "3.0.0",
+  "phaseCount": 3,
+  "selectionMode": "cumulative-target",
+  "selection": {
+    "1": [1],
+    "2": [1, 2],
+    "3": [1, 2, 3]
+  },
   "variants": "specs/nord-stage-4.variants.json",
   "defaultVariant": "stage-4-73",
   "manual": {
@@ -12,82 +19,111 @@
     "All benchmark-owned and candidate-authored tests pass.",
     "The browser console contains no errors during the required interaction pass.",
     "Every claimed audio feature is connected to the audible signal graph.",
-    "No required control is implemented only as decorative local state.",
     "The latest phase preserves all inherited tests, visual evidence, and behavior.",
-    "IMPLEMENTATION_DETAILS.json accurately distinguishes recorded samples, generated buffers, and live synthesis."
+    "IMPLEMENTATION_DETAILS.json accurately distinguishes recorded samples, generated buffers, and live synthesis.",
+    "The evaluated source, build, and evidence match the sealed verification digest."
   ],
   "phases": [
     {
       "number": 1,
-      "title": "Visual recreation",
+      "title": "Complete surface and basic piano",
+      "shortTitle": "Surface + Piano",
       "directory": "stage1",
       "prompt": "prompts/stage1.md",
-      "specs": ["specs/nord-stage-4.visual.json"],
-      "outcome": "A reference-faithful, interactive visual hardware surface with no audio requirement.",
-      "hardGates": [
-        "The selected variant's exact keybed is modeled: count, range, and action per specs/nord-stage-4.variants.json (default Stage 4 73 = 73 keys, 43 white and 30 black, E-to-E hammer action).",
-        "Program and Synth are the only primary OLED locations.",
-        "The red chassis is continuous around the deck and keybed.",
-        "Two measured desktop comparison-and-repair passes are complete."
-      ]
-    },
-    {
-      "number": 2,
-      "title": "Piano instrument",
-      "directory": "stage2",
-      "prompt": "prompts/stage2.md",
       "specs": [
         "specs/nord-stage-4.visual.json",
         "specs/nord-stage-4.piano.json"
       ],
-      "outcome": "A playable, credible Piano engine integrated with the Phase 1 surface.",
+      "outcome": "A visually complete, reference-faithful Nord Stage 4 surface with an exact playable keybed and one dependable basic piano voice. Every visible panel control moves or presses, but panel knobs, buttons, wheels, faders, encoders, and drawbars are explicitly decorative and have no sonic or system effect.",
+      "included": [
+        "The selected variant's complete chassis, keybed, six hardware sections, visible controls, labels, LEDs, drawbars, faders, wheels, and the two correct OLED locations.",
+        "Pointer, touch, computer-keyboard, and Web MIDI input through one note lifecycle.",
+        "One bundled or generated basic piano voice with velocity, note release, sustain input, polyphony, cleanup, and honest loading/error state.",
+        "Visual movement and accessible input for every visible knob, encoder, fader, drawbar, wheel, and button. Only keybed note input and its sustain input path affect audio; visible panel controls change presentation state only."
+      ],
+      "excluded": [
+        "Multiple selectable Piano models or sample sets.",
+        "Piano timbre, resonance, unison, dynamic-compression, or detailed pedal modeling.",
+        "Audible modulation, delay, amp/EQ, compressor, reverb, or rotary effects other than an optional fixed room ambience baked into the basic voice.",
+        "Programs, presets, Live Mode, splits, zones, scenes, morphs, Organ audio, and Synth audio.",
+        "Any claim that decorative panel controls affect sound or canonical instrument state."
+      ],
       "hardGates": [
-        "The primary piano path is not a placeholder oscillator or generated additive buffer bank presented as recorded samples.",
-        "Pointer, touch, computer keyboard, and MIDI share one deterministic note lifecycle.",
-        "Volume, reverb, velocity, release, sustain, and selected Piano controls alter audible output.",
-        "Fallback mode remains playable and is labeled accurately."
+        "The selected variant's exact keybed count and range are modeled and playable.",
+        "The complete visible control surface is present; Program and Synth are the only primary OLED locations.",
+        "The red chassis is continuous and the measured section geometry matches the assigned reference.",
+        "One basic Piano voice supports pointer, touch, computer keyboard, MIDI, velocity, release, sustain input, polyphony, and cleanup.",
+        "All visible panel knobs, buttons, wheels, faders, encoders, and drawbars move or press but are truthfully non-functional and do not alter audio.",
+        "Two measured desktop comparison-and-repair passes and one narrow capture are complete."
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Piano library and working effects",
+      "shortTitle": "Pianos + FX",
+      "directory": "stage2",
+      "prompt": "prompts/stage2.md",
+      "specs": [
+        "specs/nord-stage-4.visual.json",
+        "specs/nord-stage-4.piano.json",
+        "specs/nord-stage-4.effects.json"
+      ],
+      "outcome": "The Phase 1 instrument becomes a credible sampled multi-piano instrument: multiple audibly distinct bundled Piano sample sets, complete Piano performance behavior, and a connected, controllable effect chain operate through the existing hardware surface.",
+      "included": [
+        "At least three audibly distinct, selectable, bundled recorded Piano sample sets covering acoustic grand, upright, and electric/electromechanical character, with redistributable licenses and offline playback.",
+        "Two Piano layers with focus, enable, level, octave, selection, velocity response, sustain, soft/sostenuto behavior where supported, release, resonance, timbre, unison, dynamic compression, and truthful fallback.",
+        "One shared AudioContext with per-layer buses, master gain, limiter, deterministic cleanup, and one destination.",
+        "Connected Mod 1, Mod 2, Delay, Amp Simulator/EQ or filter, Compressor, Reverb, and Rotary effect families with bypass, wet/dry, focus/targeting, and parameter feedback.",
+        "Piano, master-volume, Panic, and effect panel controls update canonical state, displays, and audible output rather than presentation-only local state."
+      ],
+      "excluded": [
+        "Full Program storage/navigation, Live Mode, preset libraries, layer scenes, editable splits/crossfades, and morph assignment workflows.",
+        "Organ and Synth sound engines.",
+        "Claims that every non-Piano hardware control is functional; unsupported Phase 3 controls remain explicitly decorative."
+      ],
+      "hardGates": [
+        "At least three selectable bundled recorded Piano sample sets are audibly distinct, work offline, and have complete redistributable source/license/file provenance.",
+        "All input paths share one deterministic note lifecycle with sustain, velocity, polyphony, release, cleanup, and failure handling.",
+        "Piano controls that claim sonic behavior measurably change rendered audio.",
+        "Every required representative effect processes real audio, supports bypass, and changes the rendered signal.",
+        "One AudioContext feeds layer buses, ordered effects, master gain/limiter, and one destination.",
+        "The Phase 1 surface, exact keybed, and basic interaction remain regression-free."
       ]
     },
     {
       "number": 3,
-      "title": "Programs and effects",
+      "title": "Complete Stage 4 system",
+      "shortTitle": "Complete System",
       "directory": "stage3",
       "prompt": "prompts/stage3.md",
       "specs": [
         "specs/nord-stage-4.visual.json",
         "specs/nord-stage-4.piano.json",
-        "specs/nord-stage-4.programs.json",
-        "specs/nord-stage-4.effects.json"
-      ],
-      "outcome": "Program workflows, layers/splits/morphs, and a connected effect architecture operate on the Piano system and are ready for additional engines.",
-      "hardGates": [
-        "A single AudioContext feeds per-layer buses, effect chains, a master bus, and destination.",
-        "Program save/load restores the canonical supported state rather than a display-only copy.",
-        "Split positions, zones, crossfades, layer scenes, and morph assignments are editable and observable.",
-        "Every required representative effect changes rendered audio and supports bypass.",
-        "An effect represented only by metadata or disconnected nodes does not count as implemented."
-      ]
-    },
-    {
-      "number": 4,
-      "title": "Organ and synth",
-      "directory": "stage4",
-      "prompt": "prompts/stage4.md",
-      "specs": [
-        "specs/nord-stage-4.visual.json",
-        "specs/nord-stage-4.piano.json",
-        "specs/nord-stage-4.programs.json",
         "specs/nord-stage-4.effects.json",
+        "specs/nord-stage-4.programs.json",
         "specs/nord-stage-4.organ.json",
         "specs/nord-stage-4.synth.json"
       ],
-      "outcome": "Organ and Synth engines complete the instrument and integrate with inherited Programs, routing, morphs, splits, presets, and effects.",
+      "outcome": "A complete browser recreation: Programs and performance systems, two Organ layers, three Synth layers, the inherited multi-Piano library, effects, routing, displays, and all required hardware controls operate as one serializable instrument.",
+      "included": [
+        "Canonical serializable Program and preset state with browsing, Store, Store As, categories, dirty/cancel/undo behavior, Program buttons, and eight Live slots.",
+        "Layer focus/levels, up to four zones, editable Low/Mid/High splits and crossfades, two Layer Scenes, Wheel/Aftertouch/Control Pedal morphs, Master Clock, Transpose, and Panic.",
+        "Two Organ layers with B3, B3 Bass, Vox, Farf, Pipe 1, and Pipe 2 behavior; drawbars/registers, percussion, key click, vibrato/chorus, presets/live state, and rotary integration.",
+        "Three Synth layers with Samples, Analog, and Extern state; Pure, Sync, Multi, Super, Misc, Wave, and FM behavior; filters, envelopes, LFO, voice modes, glide, unison, vibrato, arpeggiator, and gate.",
+        "All engines use the inherited shared buses, ordered effects, Programs, scenes, zones, splits, morphs, presets, focus, clocks, displays, and one master output path.",
+        "Every required hardware control has a meaningful canonical binding; unsupported optional controls are explicitly identified instead of silently doing nothing."
+      ],
+      "excluded": [
+        "Undocumented hardware behavior not present in the supplied manual/specs.",
+        "Cloud accounts, collaboration, DAW hosting, native plugin formats, or external services unrelated to the Stage 4 recreation."
+      ],
       "hardGates": [
-        "Organ and Synth have distinct, audible engines rather than shared placeholder oscillators.",
-        "Organ models, drawbars/registers, percussion, vibrato, and rotary controls alter audible output.",
-        "Synth source, oscillator control, filter, envelopes, LFO, voice mode, and arpeggiator/gate alter audible output.",
-        "Organ and Synth layers route through the Phase 3 buses and effects without creating separate destination AudioContexts.",
-        "All required Phase 4 hardware bindings are meaningful and no generic unbound-control fallback remains."
+        "Program save/load round-trips all supported Piano, Organ, Synth, effect, routing, split, scene, morph, preset, and display state.",
+        "Splits, crossfades, scenes, morph inputs, focus, and layer routing are editable and observable rather than fixed demonstrations.",
+        "Organ models and Synth source families are audibly distinct, not labels over one generic oscillator.",
+        "Organ and Synth route through the Phase 2 buses and effects without separate destination AudioContexts.",
+        "All required Phase 3 hardware bindings are meaningful; no generic unbound-control fallback remains.",
+        "All inherited visual, Piano-library, effect, input, and cleanup behavior remains regression-free."
       ]
     }
   ]

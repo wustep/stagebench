@@ -64,8 +64,8 @@ test('four-phase runs expose Organ and Synth as the latest playable phase', () =
 })
 
 test('every runs.json entry conforms to the BenchmarkRun shape', () => {
-  const runStatuses = new Set(['running', 'complete', 'partial', 'failed'])
-  const stageStatuses = new Set(['queued', 'running', 'complete', 'failed'])
+  const runStatuses = new Set(['created', 'running', 'complete', 'partial', 'failed', 'invalid', 'budget-exceeded', 'infrastructure-failure'])
+  const stageStatuses = new Set(['queued', 'prepared', 'running', 'verifying', 'verified', 'complete', 'failed', 'invalid', 'budget-exceeded'])
   for (const run of runs) {
     assert.equal(typeof run.id, 'string', `${run.id}: id`)
     assert.equal(typeof run.model, 'string', `${run.id}: model`)
@@ -83,6 +83,10 @@ test('every runs.json entry conforms to the BenchmarkRun shape', () => {
       }
     }
     if (run.isTest !== undefined) assert.equal(typeof run.isTest, 'boolean', `${run.id}: isTest`)
+    if (run.classification !== undefined) {
+      assert.ok(['official', 'exploratory', 'legacy'].includes(run.classification.kind), `${run.id}: classification.kind`)
+      assert.equal(typeof run.classification.comparable, 'boolean', `${run.id}: classification.comparable`)
+    }
     if (run.evaluation != null) {
       assert.equal(typeof run.evaluation.score, 'number', `${run.id}: evaluation.score`)
       assert.ok(Array.isArray(run.evaluation.evaluatedStages), `${run.id}: evaluatedStages`)

@@ -7,15 +7,16 @@ const root = path.resolve(import.meta.dirname, '..')
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'))
 const manifest = readJson('specs/benchmark-phases.json')
 
-test('phase manifest defines a complete four-phase incremental contract', () => {
-  assert.equal(manifest.version, '2.0.0')
-  assert.equal(manifest.phaseCount, 4)
-  assert.deepEqual(manifest.phases.map((phase) => phase.number), [1, 2, 3, 4])
+test('phase manifest defines a complete three-phase cumulative target contract', () => {
+  assert.equal(manifest.version, '3.0.0')
+  assert.equal(manifest.phaseCount, 3)
+  assert.equal(manifest.selectionMode, 'cumulative-target')
+  assert.deepEqual(manifest.selection, { '1': [1], '2': [1, 2], '3': [1, 2, 3] })
+  assert.deepEqual(manifest.phases.map((phase) => phase.number), [1, 2, 3])
   assert.deepEqual(manifest.phases.map((phase) => phase.title), [
-    'Visual recreation',
-    'Piano instrument',
-    'Programs and effects',
-    'Organ and synth',
+    'Complete surface and basic piano',
+    'Piano library and working effects',
+    'Complete Stage 4 system',
   ])
   // The manual is fetched on demand into ./reference (gitignored, not redistributed),
   // so assert the contract path rather than the binary's presence.
@@ -27,6 +28,8 @@ test('phase manifest defines a complete four-phase incremental contract', () => 
     assert.equal(phase.directory, `stage${phase.number}`)
     assert.equal(phase.prompt, `prompts/stage${phase.number}.md`)
     assert.ok(phase.hardGates.length >= 4, `Phase ${phase.number} needs explicit hard gates`)
+    assert.ok(phase.included.length >= 4, `Phase ${phase.number} needs explicit included scope`)
+    assert.ok(phase.excluded.length >= 2, `Phase ${phase.number} needs explicit excluded scope`)
     assert.ok(fs.existsSync(path.join(root, phase.prompt)), `missing ${phase.prompt}`)
     assert.ok(inheritedSpecs.every((spec) => phase.specs.includes(spec)), `Phase ${phase.number} must inherit prior specs`)
 
@@ -78,7 +81,7 @@ test('manual-derived domain specs have page citations and acceptance gates', () 
 })
 
 test('active rubric and phase manifest stay aligned', () => {
-  const rubric = readJson('evaluation/rubrics/v2.json')
+  const rubric = readJson('evaluation/rubrics/v3.json')
   assert.equal(rubric.version, manifest.version)
   assert.deepEqual(Object.keys(rubric.stages), manifest.phases.map(({ number }) => String(number)))
   assert.equal(Object.values(rubric.aggregateStageWeights).reduce((sum, weight) => sum + weight, 0), 100)

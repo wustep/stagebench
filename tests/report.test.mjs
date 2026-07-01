@@ -63,7 +63,7 @@ const implementationDetails = {
 test('HTML report presents summary, scores, issues, checks, and escaped evidence', () => {
   const html = renderRunReportHtml(run, [evaluation], implementationDetails)
   assert.match(html, /Run overview/)
-  assert.match(html, /1\/4 phases evaluated/)
+  assert.match(html, /1\/4 selected phases evaluated/)
   assert.match(html, /Implementation details/)
   assert.match(html, /Application libraries/)
   assert.match(html, /Generated AudioBuffer samples/)

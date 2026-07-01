@@ -13,21 +13,26 @@ import {
 } from '../../../../evaluation/lib/scoring.mjs'
 import { collectImplementationDetails } from '../../../../evaluation/lib/implementation-details.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from '../../../../evaluation/lib/report.mjs'
+import { createBlindEvaluationBundle } from '../lib/blind-evaluation.mjs'
 import { findRepoRoot, parseArgs, readJson, writeJson } from '../lib/cli.mjs'
+import { hashTree } from '../lib/protocol.mjs'
+import { saveRun as saveRunManifest } from '../lib/run-store.mjs'
 
 function resolveFromRoot(root, value, fallback) {
   const candidate = value || fallback
   return path.isAbsolute(candidate) ? candidate : path.join(root, candidate)
 }
 
-function getStage(options) {
+function getStage(options, maximum = 4) {
   const stage = Number(options.phase ?? options.stage)
-  if (![1, 2, 3, 4].includes(stage)) throw new Error('--phase must be 1, 2, 3, or 4')
+  if (!Number.isInteger(stage) || stage < 1 || stage > maximum) throw new Error(`--phase must be between 1 and ${maximum}`)
   return stage
 }
 
-function loadRubric(root) {
-  return validateRubric(readJson(path.join(root, 'evaluation', 'rubrics', 'v2.json')))
+function loadRubric(root, run) {
+  const version = run?.protocol?.rubricVersion ?? (String(run?.benchmarkVersion ?? '').startsWith('3.') ? '3.0.0' : null)
+  const file = version === '3.0.0' || !run ? 'v3.json' : run?.stages?.length === 3 && !run?.benchmarkVersion ? 'v1.json' : 'v2.json'
+  return validateRubric(readJson(path.join(root, 'evaluation', 'rubrics', file)))
 }
 
 function loadRun(root, id) {
@@ -35,17 +40,6 @@ function loadRun(root, id) {
   const filePath = path.join(root, 'runs', id, 'run.json')
   if (!fs.existsSync(filePath)) throw new Error(`Unknown run: ${id}`)
   return readJson(filePath)
-}
-
-function saveRun(root, run) {
-  const runPath = path.join(root, 'runs', run.id, 'run.json')
-  const registryPath = path.join(root, 'src', 'data', 'runs.json')
-  const registry = readJson(registryPath)
-  const nextRegistry = registry.some((entry) => entry.id === run.id)
-    ? registry.map((entry) => entry.id === run.id ? run : entry)
-    : [run, ...registry]
-  writeJson(runPath, run)
-  writeJson(registryPath, nextRegistry)
 }
 
 function commandForPackageManager(stageDir, script) {
@@ -128,8 +122,8 @@ function writeImplementationDetails(root, run) {
 }
 
 function writeReadableReport(root, run) {
-  const evaluations = [1, 2, 3, 4]
-    .map((stage) => evaluationPathFor(root, run.id, stage))
+  const evaluations = run.stages
+    .map((entry) => evaluationPathFor(root, run.id, entry.number))
     .filter((filePath) => fs.existsSync(filePath))
     .map(readJson)
   if (evaluations.length === 0) throw new Error(`Run ${run.id} has no scored evaluations`)
@@ -155,32 +149,53 @@ function writeReadableReport(root, run) {
 }
 
 function createTemplate(root, options) {
-  const stage = getStage(options)
   const run = loadRun(root, options.id)
-  const rubric = loadRubric(root)
-  const output = resolveFromRoot(root, options.output, assessmentPathFor(root, run.id, stage))
+  const rubric = loadRubric(root, run)
+  const stage = getStage(options, Math.max(...Object.keys(rubric.stages).map(Number)))
+  let blind = null
+  if (run.schemaVersion === 3 && options['no-blind'] !== 'true') {
+    blind = createBlindEvaluationBundle(root, run.id, stage, { allowIdentityLeaks: options['allow-identity-leaks'] === 'true' })
+  }
+  const output = resolveFromRoot(root, options.output, blind ? path.join(blind.bundle, 'assessment.json') : assessmentPathFor(root, run.id, stage))
   if (fs.existsSync(output) && options.force !== 'true') throw new Error(`Assessment already exists: ${output}. Use --force true to replace it.`)
-  const template = createAssessmentTemplate(rubric, run.id, stage)
+  const template = createAssessmentTemplate(rubric, run.id, stage, blind ? { blindId: blind.blindId } : {})
+  template.$schema = blind
+    ? 'protocol/schemas/assessment.schema.json'
+    : path.relative(path.dirname(output), path.join(root, 'schemas', 'assessment.schema.json')).split(path.sep).join('/')
   writeJson(output, template)
-  return { runId: run.id, stage, rubricVersion: rubric.version, assessmentPath: output }
+  return { runId: run.id, blindId: blind?.blindId, identityBlinded: blind?.identityBlinded ?? false, stage, rubricVersion: rubric.version, assessmentPath: output, evaluatorBundle: blind?.bundle }
 }
 
 function scoreRun(root, options) {
-  const stage = getStage(options)
   const run = loadRun(root, options.id)
+  const rubric = loadRubric(root, run)
+  const stage = getStage(options, Math.max(...Object.keys(rubric.stages).map(Number)))
   const stageState = run.stages.find((entry) => entry.number === stage)
   if (stageState?.status !== 'complete') throw new Error(`Phase ${stage} must be complete before it can be scored`)
-  const rubric = loadRubric(root)
+  if (stageState.artifactDigest) {
+    const currentDigest = hashTree(path.join(root, 'runs', run.id, `stage${stage}`)).digest
+    assert.equal(currentDigest, stageState.artifactDigest, `Phase ${stage} changed after verification; re-verify before scoring`)
+  }
   const assessmentPath = resolveFromRoot(root, options.assessment, assessmentPathFor(root, run.id, stage))
   if (!fs.existsSync(assessmentPath)) throw new Error(`Missing assessment: ${assessmentPath}`)
   const assessment = readJson(assessmentPath)
-  assert.equal(assessment.runId, run.id, 'Assessment runId does not match the selected run')
+  if (assessment.blindId) {
+    const mapPath = path.join(root, '.stagebench', 'private', 'blind-map', `${assessment.blindId}.json`)
+    if (!fs.existsSync(mapPath)) throw new Error(`Missing private blind mapping: ${assessment.blindId}`)
+    const mapping = readJson(mapPath)
+    assert.equal(mapping.runId, run.id, 'Blinded assessment does not map to the selected run')
+    assert.equal(mapping.phase, stage, 'Blinded assessment phase does not match --phase')
+    assert.equal(mapping.artifactDigest, stageState.artifactDigest, 'Blinded assessment artifact does not match the sealed phase')
+  } else {
+    assert.equal(assessment.runId, run.id, 'Assessment runId does not match the selected run')
+  }
   assert.equal(assessment.stage, stage, 'Assessment phase does not match --phase')
+  const identifiedAssessment = { ...assessment, runId: run.id }
 
   const technicalChecks = options['skip-checks'] === 'true'
     ? skippedTechnicalChecks(root, run.id, stage, rubric)
     : runTechnicalChecks(root, run.id, stage, rubric)
-  const evaluation = scoreAssessment(rubric, assessment, technicalChecks)
+  const evaluation = scoreAssessment(rubric, identifiedAssessment, technicalChecks)
   const outputPath = resolveFromRoot(root, options.output, evaluationPathFor(root, run.id, stage))
   writeJson(outputPath, evaluation)
 
@@ -201,7 +216,7 @@ function scoreRun(root, options) {
   run.evaluation = aggregateStageEvaluations(rubric, availableEvaluations)
   run.updatedAt = new Date().toISOString()
   const report = writeReadableReport(root, run)
-  saveRun(root, run)
+  saveRunManifest(root, run)
   return { evaluationPath: outputPath, evaluation, aggregate: run.evaluation, report }
 }
 
@@ -209,7 +224,7 @@ function rebuildReport(root, options) {
   const run = loadRun(root, options.id)
   const report = writeReadableReport(root, run)
   run.updatedAt = new Date().toISOString()
-  saveRun(root, run)
+  saveRunManifest(root, run)
   return { runId: run.id, aggregate: run.evaluation, report }
 }
 
@@ -225,9 +240,10 @@ function rebuildImplementationDetails(root, options) {
 }
 
 function rubricSummary(root, options) {
-  const rubric = loadRubric(root)
+  const run = options.id ? loadRun(root, options.id) : null
+  const rubric = loadRubric(root, run)
   if (options.stage) {
-    const stage = getStage(options)
+    const stage = getStage(options, Math.max(...Object.keys(rubric.stages).map(Number)))
     return { version: rubric.version, stage, ...rubric.stages[String(stage)] }
   }
   return {
@@ -266,7 +282,7 @@ function selfTest(root) {
   const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-evaluator-'))
   try {
     fs.mkdirSync(path.join(testRoot, 'evaluation', 'rubrics'), { recursive: true })
-    fs.copyFileSync(path.join(root, 'evaluation', 'rubrics', 'v2.json'), path.join(testRoot, 'evaluation', 'rubrics', 'v2.json'))
+    fs.copyFileSync(path.join(root, 'evaluation', 'rubrics', 'v3.json'), path.join(testRoot, 'evaluation', 'rubrics', 'v3.json'))
     fs.mkdirSync(path.join(testRoot, 'src', 'data'), { recursive: true })
     fs.mkdirSync(path.join(testRoot, 'runs', 'pipeline-test', 'stage1', 'dist'), { recursive: true })
     fs.writeFileSync(path.join(testRoot, 'BENCHMARK.md'), '# Test\n')
@@ -279,6 +295,9 @@ function selfTest(root) {
     })
     fs.writeFileSync(path.join(testRoot, 'runs', 'pipeline-test', 'stage1', 'dist', 'index.html'), '<h1>test</h1>')
     const testRun = {
+      schemaVersion: 3,
+      benchmarkVersion: '3.0.0',
+      protocol: { version: '3.0.0', rubricVersion: '3.0.0' },
       id: 'pipeline-test',
       model: 'Pipeline Test',
       status: 'partial',
@@ -288,7 +307,7 @@ function selfTest(root) {
     }
     writeJson(path.join(testRoot, 'runs', testRun.id, 'run.json'), testRun)
     writeJson(path.join(testRoot, 'src', 'data', 'runs.json'), [testRun])
-    createTemplate(testRoot, { id: testRun.id, stage: '1' })
+    createTemplate(testRoot, { id: testRun.id, stage: '1', 'no-blind': 'true' })
     const testAssessmentPath = assessmentPathFor(testRoot, testRun.id, 1)
     const testAssessment = readJson(testAssessmentPath)
     testAssessment.evaluator = stageOne.evaluator

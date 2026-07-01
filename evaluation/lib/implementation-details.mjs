@@ -3,11 +3,16 @@ import path from 'node:path'
 
 const AUDIO_EXTENSIONS = new Set(['.aac', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav', '.webm'])
 const IGNORED_DIRECTORIES = new Set(['.git', '.vite', 'dist', 'evidence', 'node_modules'])
-const PHASE_NAMES = {
+const LEGACY_PHASE_NAMES = {
   1: 'Visual recreation',
   2: 'Piano instrument',
   3: 'Programs and effects',
   4: 'Organ and synth',
+}
+const V3_PHASE_NAMES = {
+  1: 'Complete surface and basic piano',
+  2: 'Piano library and working effects',
+  3: 'Complete Stage 4 system',
 }
 
 function readJson(filePath) {
@@ -52,6 +57,7 @@ export function validateImplementationManifest(manifest, expectedPhase) {
 }
 
 export function collectImplementationDetails(root, run) {
+  const phaseNames = String(run.protocol?.version ?? run.benchmarkVersion ?? '').startsWith('3.') ? V3_PHASE_NAMES : LEGACY_PHASE_NAMES
   const phases = run.stages.flatMap((phaseState) => {
     const phase = phaseState.number
     const phaseDir = path.join(root, 'runs', run.id, `stage${phase}`)
@@ -85,7 +91,7 @@ export function collectImplementationDetails(root, run) {
 
     return [{
       phase,
-      phaseName: PHASE_NAMES[phase] ?? `Phase ${phase}`,
+      phaseName: phaseNames[phase] ?? `Phase ${phase}`,
       status: phaseState.status,
       artifactPath: path.relative(root, phaseDir).split(path.sep).join('/'),
       libraries: {

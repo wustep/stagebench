@@ -28,7 +28,7 @@ Precise, utilitarian, unmistakably Nord. The interface should feel like a well-l
 1. Put runs first: current model and phase status are the primary content.
 2. Resemble the instrument through structure and color, not decorative imitation.
 3. Say each thing once in plain language.
-4. Keep benchmark history honest: partial and failed runs stay visible and clearly labeled.
+4. Keep benchmark history honest: official, exploratory, legacy, partial, and invalid runs stay visible in distinct groups.
 5. Make every interaction familiar, keyboard-accessible, and quick.
 
 ## Accessibility & Inclusion

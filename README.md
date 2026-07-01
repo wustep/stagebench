@@ -1,6 +1,6 @@
 # Stagebench
 
-A React + Vite gallery and repeatable four-phase benchmark for comparing coding-model recreations of the Nord Stage 4.
+A React + Vite gallery and repeatable three-phase benchmark for comparing coding-agent recreations of the Nord Stage 4.
 
 ## Gallery
 
@@ -19,7 +19,7 @@ The middleware fails closed with a `503` response if the environment variable is
 
 ## Evaluate a run
 
-The evaluator uses a versioned, evidence-backed rubric with different category values for each phase. Generate a Phase 1 assessment template and score it with:
+The evaluator uses a versioned, evidence-backed rubric with different category values for each phase. Protocol-v3 evaluator bundles use opaque trial IDs so the evaluator does not see model/provider identity. Generate and score a Phase 1 assessment with:
 
 ```sh
 pnpm evaluate:template --id <run-id> --phase 1
@@ -38,7 +38,16 @@ pnpm fetch:reference
 
 This downloads the Nord Stage 4 user manual and the official 88 / 73 / Compact 73 top-down photos from Nord's servers into `reference/` (gitignored). See [Reference material & attribution](#reference-material--attribution).
 
-Invoke `$run-nord-benchmark` in Codex. The project skill asks which model label to use, creates an isolated run under `runs/<model-id>/`, and executes four incremental, spec-backed prompts with fresh-context implementation and read-only evaluation agents. Completed phases become playable immediately; complete publication waits for all four phases and their independent evaluations.
+Start with the public CLI:
+
+```sh
+pnpm stagebench doctor
+pnpm stagebench create --model <id> --provider <provider> --model-snapshot <snapshot> --target-phase <1|2|3>
+```
+
+Target selection is cumulative: target 1 builds the complete surface and basic Piano; target 2 also builds the multi-Piano library and effects; target 3 also builds the complete Programs/Organ/Synth system. `$run-nord-benchmark` drives the same CLI with fresh-context implementation and blinded read-only evaluation agents.
+
+Each run’s `run.json` is authoritative. `src/data/runs.json` is generated with `pnpm stagebench reindex` (also run before dev/build). See [METHODOLOGY.md](./METHODOLOGY.md) before comparing scores.
 
 The complete specification is in [BENCHMARK.md](./BENCHMARK.md). Future benchmark runs evaluate each completed phase before publishing it.
 
