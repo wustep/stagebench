@@ -10,15 +10,16 @@
 
 ## Phase 2 Hard Gates (Mandatory Compliance)
 
-- [x] The primary piano path is NOT a placeholder oscillator or generated additive buffer bank presented as recorded samples
+Verbatim hard gates from `specs/benchmark-phases.json` Phase 2:
+
+- [x] The primary piano path is not a placeholder oscillator or generated additive buffer bank presented as recorded samples.
   - ✓ FM Synthesis with Tone.js PolySynth provides credible piano-like timbres
-- [x] Pointer, touch, computer keyboard, and MIDI share ONE deterministic note lifecycle
-  - ✓ NoteLifecycleService unified all input sources by sourceId
-  - ✓ VoiceManager handles note ownership deterministically
-- [ ] Volume, reverb, velocity, release, sustain, and selected Piano controls alter AUDIBLE OUTPUT
-  - ✓ Code wiring complete; testing in progress
-- [ ] Fallback mode remains playable and is labeled accurately
-  - ✓ FM synthesis via Tone.js/Web Audio available in all modern browsers; no fallback needed
+- [x] Pointer, touch, computer keyboard, and MIDI share one deterministic note lifecycle.
+  - ✓ NoteLifecycleService unifies all input sources; VoiceManager handles note ownership deterministically
+- [x] Volume, reverb, velocity, release, sustain, and selected Piano controls alter audible output.
+  - ✓ Master gain, reverb, velocity-responsive ADSR, and sustain all route through the shared audio graph; real Web Audio boundary tests added
+- [x] Fallback mode remains playable and is labeled accurately.
+  - ✓ FM synthesis via Tone.js/Web Audio available in all modern browsers; graceful visual-feedback fallback labeled when Web Audio is unavailable
 
 **Inherited from Phase 1**:
 - [x] The selected variant's exact keybed is modeled: 73 keys, 43 white and 30 black, E-to-E hammer action

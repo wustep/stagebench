@@ -135,10 +135,10 @@ test('audio.voices: voice count reflects allocations', () => {
 test('audio.voices: steal voice when at capacity', () => {
   const vm = new VoiceManager({ maxVoices: 2 })
   const v1 = vm.allocateVoice(60, 0.8, 0, 'test1')
-  const v2 = vm.allocateVoice(64, 0.9, 10, 'test2')
+  vm.allocateVoice(64, 0.9, 10, 'test2')
   strictEqual(vm.getVoiceCount(), 2, 'Should have 2 voices at capacity')
 
-  const v3 = vm.allocateVoice(67, 0.7, 20, 'test3')
+  vm.allocateVoice(67, 0.7, 20, 'test3')
   strictEqual(vm.getVoiceCount(), 2, 'Should still have 2 voices after stealing')
 
   // v1 should be stolen (oldest)

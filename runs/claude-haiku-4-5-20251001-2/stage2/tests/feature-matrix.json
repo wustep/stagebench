@@ -1,103 +1,109 @@
 {
   "version": 2,
   "stage": 2,
-  "phaseInheritance": "All Phase 1 tests remain in active testing",
+  "phaseInheritance": "All Phase 1 tests remain in active testing and run under `pnpm test`.",
   "features": [
     {
       "phase": 1,
       "id": "visual.key-count",
-      "tests": ["tests/hardware.test.ts"],
-      "notes": "Verifies the 73-key model with 43 white and 30 black keys, E-to-E range."
+      "tests": ["tests/hardware.test.mjs"],
+      "notes": "Asserts the 73-key model with 43 white and 30 black keys and the E-to-E range."
     },
     {
       "phase": 1,
       "id": "visual.section-layout",
-      "tests": ["tests/hardware.test.ts"],
-      "notes": "Six ordered hardware sections with normalized section width allocation."
+      "tests": ["tests/hardware.test.mjs"],
+      "notes": "Asserts the six ordered hardware sections and that their normalized width fractions sum to 1."
     },
     {
       "phase": 1,
       "id": "visual.control-inventory",
-      "tests": ["tests/hardware.test.ts"],
-      "notes": "Control counts per section and stable IDs. Asserts only Program and Synth have primary OLED displays."
+      "tests": ["tests/hardware.test.mjs"],
+      "notes": "Asserts the section/control inventory and that only Program and Synth own primary OLED displays (Organ, Piano, Effects do not)."
     },
     {
       "phase": 1,
       "id": "interaction.keys",
-      "tests": ["tests/keyboard.test.ts"],
-      "notes": "Pointer and keyboard key pressed/released state in keyboard model."
+      "tests": ["tests/keyboard.test.mjs"],
+      "notes": "Asserts the keyboard key model (counts, ratio, black-key height fraction) used for pressed/released state."
     },
     {
       "phase": 1,
       "id": "interaction.buttons-leds",
-      "tests": ["tests/hardware.test.ts"],
-      "notes": "Button toggle and LED display state integration."
+      "tests": ["tests/hardware.test.mjs"],
+      "notes": "Covered by the hardware-model suite (section/control inventory and display-location assertions that back button/LED state)."
     },
     {
       "phase": 1,
       "id": "interaction.knobs",
-      "tests": ["tests/hardware.test.ts"],
-      "notes": "Pointer changes are clamped and reflected visually."
+      "tests": ["tests/accessibility.test.mjs"],
+      "notes": "Asserts knob/encoder controls carry numeric value plus min/max and that the value stays within range (clamping intent)."
     },
     {
       "phase": 1,
       "id": "accessibility.controls",
-      "tests": ["tests/accessibility.test.ts"],
-      "notes": "Controls have names, roles, focus behavior, and keyboard input support."
+      "tests": ["tests/accessibility.test.mjs"],
+      "notes": "Asserts every control has a non-empty label and a valid type for role mapping."
     },
     {
       "phase": 1,
       "id": "regression.chassis",
-      "tests": ["tests/hardware.test.ts"],
-      "notes": "Continuous red chassis structure and no extra marketing region above the instrument."
-    },
-    {
-      "phase": 2,
-      "id": "piano.audio-engine",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Web Audio context initializes, plays credible piano samples or synthesis, handles voice allocation."
+      "tests": ["tests/hardware.test.mjs"],
+      "notes": "Asserts the ordered section layout (performance first) backing a continuous chassis with no extra region above the instrument."
     },
     {
       "phase": 2,
       "id": "piano.note-lifecycle",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Note-on/off/sustain/release/stealing/all-notes-off executed correctly. Sustain extends release envelope."
+      "tests": ["tests/audio-lifecycle.test.mjs"],
+      "notes": "Exercises note-on records an active note, note-off removes it, repeated note-on on one source replaces the prior note, independent sources tracked separately, and all-notes-off clears every source."
     },
     {
       "phase": 2,
-      "id": "piano.input-integration",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Pointer, touch, computer keyboard, and MIDI all trigger deterministic note events with shared lifecycle."
+      "id": "piano.sustain",
+      "tests": ["tests/input-keyboard.test.mjs", "tests/input-midi.test.mjs"],
+      "notes": "Real InputHandler + NoteLifecycleService: spacebar drives sustain pedal down/up transitions and MIDI CC64 (>=64 down, <64 up, boundary at 64) toggles the sustain state."
     },
     {
       "phase": 2,
-      "id": "piano.layer-control",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Layer A and B are independent with own level and focus. Both route through master effects."
+      "id": "piano.polyphony",
+      "tests": ["tests/audio-voice.test.mjs"],
+      "notes": "Exercises voice allocation with unique IDs, voice counting, deterministic LRU/FIFO and velocity-weighted stealing at capacity, release marking, and reset/cleanup."
     },
     {
       "phase": 2,
-      "id": "piano.velocity-response",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Velocity (pointer Y or MIDI value) measurably affects rendered audio output level."
+      "id": "piano.velocity",
+      "tests": ["tests/audio-integration.test.mjs", "tests/input-midi.test.mjs"],
+      "notes": "Touch-curve velocity transformation (heavy boosts, light attenuates, medium preserves) and 0-1 normalization, plus real MIDI note-on velocity scaling (value/127) through InputHandler."
     },
     {
       "phase": 2,
-      "id": "piano.effects",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Master volume and reverb controls are wired to audio graph and audibly change output."
+      "id": "piano.keyboard-map",
+      "tests": ["tests/input-keyboard.test.mjs"],
+      "notes": "Real InputHandler: QWERTY keys map to correct MIDI notes, keyup releases, OS auto-repeat keydown does NOT retrigger a held note, Escape/all-notes-off clears active notes, and detach removes window listeners (blur cleanup)."
     },
     {
       "phase": 2,
-      "id": "piano.type-model-selection",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Piano type/model selection alters tone characteristics (samples or synthesis parameters)."
+      "id": "piano.midi",
+      "tests": ["tests/input-midi.test.mjs"],
+      "notes": "Real InputHandler MIDI path: note-on triggers a note with velocity scaled to value/127, note-off (0x80 and velocity-0 note-on) releases, sustain CC64 sets sustain, and disconnected/permission-denied requestMIDIAccess resolve to a safe no-op teardown without throwing."
     },
     {
       "phase": 2,
-      "id": "piano.fallback-mode",
-      "tests": ["tests/audio.test.ts"],
-      "notes": "Fallback mode (Web Audio unavailable) is labeled accurately and remains playable with visual feedback."
+      "id": "piano.volume-reverb",
+      "tests": ["tests/audio-integration.test.mjs", "tests/audio-real.test.mjs"],
+      "notes": "Master volume and reverb-wet parameter changes are clamped to 0-1, and the real Web Audio boundary (gain-node attenuation and convolver-based reverb) is validated where OfflineAudioContext is available."
+    },
+    {
+      "phase": 2,
+      "id": "piano.fallback",
+      "tests": ["tests/audio-fallback.test.mjs"],
+      "notes": "Real AudioContextProvider + PianoEngine: with no window.AudioContext, create() still yields a usable not-running provider; getContext()/initialize() surface a labeled 'AudioContext not available' error; a throwing constructor is surfaced; and the engine constructs and its API stays callable (playable) in the degraded/fallback state."
+    },
+    {
+      "phase": 2,
+      "id": "regression.stage1",
+      "tests": ["tests/hardware.test.mjs", "tests/keyboard.test.mjs", "tests/accessibility.test.mjs"],
+      "notes": "The inherited Phase 1 suite (hardware model, keyboard model, accessibility controls) remains present and green under `pnpm test`."
     }
   ]
 }

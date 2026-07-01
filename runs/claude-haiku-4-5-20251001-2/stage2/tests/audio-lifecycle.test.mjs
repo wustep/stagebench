@@ -1,5 +1,5 @@
 import { test } from 'node:test'
-import { strictEqual, ok, deepStrictEqual } from 'node:assert'
+import { strictEqual, ok } from 'node:assert'
 
 // Simplified test-compatible implementation
 class NoteLifecycleService {
@@ -51,7 +51,6 @@ class NoteLifecycleService {
   }
 
   allNotesOff() {
-    const sources = Array.from(this.activeNotes.keys())
     this.activeNotes.clear()
     for (const listener of this.listeners) {
       listener.onAllNotesOff()

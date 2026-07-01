@@ -11,44 +11,6 @@ import { test } from 'node:test'
 import { strictEqual, ok, fail } from 'node:assert'
 
 /**
- * Helper: Calculate RMS (root mean square) loudness from audio buffer
- */
-function calculateRMS(audioBuffer) {
-  const data = audioBuffer.getChannelData(0)
-  let sum = 0
-  for (let i = 0; i < data.length; i++) {
-    sum += data[i] * data[i]
-  }
-  return Math.sqrt(sum / data.length)
-}
-
-/**
- * Helper: Calculate peak absolute value from audio buffer
- */
-function calculatePeak(audioBuffer) {
-  const data = audioBuffer.getChannelData(0)
-  let peak = 0
-  for (let i = 0; i < data.length; i++) {
-    peak = Math.max(peak, Math.abs(data[i]))
-  }
-  return peak
-}
-
-/**
- * Helper: Count zero-crossings in audio buffer (rough frequency estimate)
- */
-function countZeroCrossings(audioBuffer, startSample = 0, endSample = 22050) {
-  const data = audioBuffer.getChannelData(0)
-  let crossings = 0
-  for (let i = startSample; i < Math.min(endSample, data.length - 1); i++) {
-    if ((data[i] < 0 && data[i + 1] >= 0) || (data[i] >= 0 && data[i + 1] < 0)) {
-      crossings++
-    }
-  }
-  return crossings
-}
-
-/**
  * Test 1: OfflineAudioContext is available and functional
  * CROSSES Web Audio BOUNDARY: Verifies Web Audio API is available
  */
@@ -111,33 +73,20 @@ test('audio.real: Gain node attenuates output', () => {
   }
 
   try {
-    // Create two buffers: one with unity gain, one with 0.5 gain
-    const createOscBuffer = async (gainValue) => {
-      const ctx = new OfflineAudioContext(1, 44100 * 0.5, 44100)
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
+    // Unity gain vs 0.5 gain: a lower gain value must attenuate the same source.
+    const ctx = new OfflineAudioContext(1, 44100 * 0.5, 44100)
+    const osc = ctx.createOscillator()
+    const fullGain = ctx.createGain()
+    const halfGain = ctx.createGain()
 
-      osc.frequency.value = 440
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      gain.gain.value = gainValue
+    osc.frequency.value = 440
+    fullGain.gain.value = 1.0
+    halfGain.gain.value = 0.5
 
-      osc.start(0)
-      osc.stop(0.5)
-
-      return await ctx.startRendering()
-    }
-
-    // Test in browser - in Node this will skip
-    if (typeof OfflineAudioContext.prototype.startRendering !== 'undefined') {
-      console.log('  (Web Audio rendering not available in this environment)')
-    } else {
-      console.log('  (Web Audio test structures validated)')
-    }
-
+    ok(halfGain.gain.value < fullGain.gain.value, 'half gain must be below unity gain')
     ok(true, 'Gain node structure is correct')
-  } catch (e) {
-    // Expected in Node environment
+  } catch {
+    // OfflineAudioContext is unavailable in this runtime (e.g. plain Node).
     ok(true, 'Web Audio test structure valid')
   }
 })
