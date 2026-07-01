@@ -52,13 +52,13 @@
     <small>Stagebench evaluation · rubric 2.0.0</small>
     <h1>Haiku 4.5</h1>
     <p>Evidence-backed evaluation of visual fidelity, feature completion, interaction, audio behavior, and engineering quality. Scores use phase-specific weights and automated technical gates.</p>
-    <div class="aggregate"><strong>23</strong><span>/100 · incomplete</span></div>
+    <div class="aggregate"><strong>24</strong><span>/100 · incomplete</span></div>
   </header>
   <main>
     <section class="overview">
       <h2>Run overview</h2>
-      <p>Run <code>claude-haiku-4-5-20251001-2</code> · running · 1/4 phases evaluated · generated Jul 1, 2026, 8:50 AM UTC</p>
-      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th><th>Grade</th></tr></thead><tbody><tr><td>Phase 1</td><td>running</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 2</td><td>Piano instrument</td><td><strong>23</strong>/100</td><td><span class="grade grade-incomplete">incomplete</span></td></tr><tr><td>Phase 3</td><td>queued</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 4</td><td>queued</td><td>—</td><td>Not evaluated</td></tr></tbody></table>
+      <p>Run <code>claude-haiku-4-5-20251001-2</code> · running · 1/4 phases evaluated · generated Jul 1, 2026, 6:29 PM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th><th>Grade</th></tr></thead><tbody><tr><td>Phase 1</td><td>complete</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 2</td><td>Piano instrument</td><td><strong>24</strong>/100</td><td><span class="grade grade-incomplete">incomplete</span></td></tr><tr><td>Phase 3</td><td>queued</td><td>—</td><td>Not evaluated</td></tr><tr><td>Phase 4</td><td>queued</td><td>—</td><td>Not evaluated</td></tr></tbody></table>
     </section>
     <section class="overview implementation-details" id="implementation-details">
       <div class="section-intro">
@@ -77,7 +77,7 @@
         <header><span>Phase 2</span><h3>Piano instrument</h3></header>
         <div class="implementation-grid">
           <div><h4>Application libraries</h4><ul class="library-list"><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>tone</code><span>^14.8.56</span></li></ul></div>
-          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@types/node</code><span>^18.0.0</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>@vitejs/plugin-react</code><span>^4.0.0</span></li><li><code>typescript</code><span>~5.3.0</span></li><li><code>vite</code><span>^5.0.0</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@types/node</code><span>^18.0.0</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>@vitejs/plugin-react</code><span>^4.0.0</span></li><li><code>oxlint</code><span>~1.16.0</span></li><li><code>tsx</code><span>^4.19.4</span></li><li><code>typescript</code><span>~5.3.0</span></li><li><code>vite</code><span>^5.0.0</span></li></ul></div>
           <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>FM Synthesis via Tone.js PolySynth</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>FM Synthesis Piano Model</strong></li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Web Audio API with Tone.js library provides credible piano-like synthesis without recorded samples</li><li>No network dependencies; all synthesis occurs in browser using Web Audio API</li><li>Fallback mode displays &#039;fallback&#039; label when Web Audio unavailable, visual feedback only (no audio)</li><li>MIDI input supported via Web MIDI API with graceful degradation if unavailable</li><li>All input sources (pointer, touch, keyboard, MIDI) funnel through unified NoteLifecycleService</li><li>Touch curves (heavy/medium/light) adjust velocity response; dynamic compression (0-3) smooths dynamics</li></ul></dd></div></dl></div>
         </div>
       </section>
@@ -86,17 +86,17 @@
   <section class="stage-report" id="stage-2">
     <header class="stage-heading">
       <div><span>Phase 2</span><h2>Piano instrument</h2></div>
-      <div class="stage-score"><strong>23</strong><span>/100 · incomplete</span></div>
+      <div class="stage-score"><strong>24</strong><span>/100 · incomplete</span></div>
     </header>
 
-    <p class="summary">Phase 2 implementation has critical compilation errors preventing build. While architecture is sound and FM synthesis source is credible, the codebase fails TypeScript compilation, all audio tests are mock-based (not real Web Audio), visual regression evidence is missing, and browser testing is impossible. Hard gates architecturally present but not demonstrated to work. Phase 2 status: INCOMPLETE with major blockers.</p>
+    <p class="summary">This is barely a Phase 1 surface with an unwired audio module bolted on. Mechanical gates are green (67 tests, typecheck, lint, build all pass), but the tests validate hardcoded data literals and Web Audio primitives, not the rendered artifact. In the live app the 73-key keyboard does NOT render: only ~8 white and ~6 black keys appear because Keyboard.tsx uses a fixed 14-character pattern string. Every section &#039;control&#039; is a plain text &lt;span&gt; label, so there are zero knobs, drawbars, faders, buttons, LEDs, or OLED displays; none of the piano controls (type/model/touch/compression/timbre/unison/volume/reverb/sustain) are rendered or wired to audio. The sound source is a placeholder Tone.PolySynth triangle oscillator (self-described as &#039;FM Synthesis&#039;), not credible piano material, failing hard gate 1. Pointer input is dead in the running app because the InputHandler prop is undefined on the only render pass. Only the computer-keyboard path can produce sound. The biggest gaps: the keyboard render is broken (~14 keys, empty keybed), controls are text-only with no hardware widgets and no audio wiring, and the primary path is a placeholder synth.</p>
 
     <div class="report-columns">
       <section>
         <h3>Category scores</h3>
         <table>
           <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
-          <tbody><tr><td>Visual fidelity retention</td><td>25%</td><td><strong>50</strong></td><td>12</td></tr><tr><td>Piano feature completion</td><td>25%</td><td><strong>25</strong></td><td>6</td></tr><tr><td>Audio implementation</td><td>30%</td><td><strong>12</strong></td><td>3</td></tr><tr><td>Playability and UX</td><td>15%</td><td><strong>0</strong></td><td>0</td></tr><tr><td>Engineering quality</td><td>5%</td><td><strong>12</strong></td><td>0</td></tr></tbody>
+          <tbody><tr><td>Visual fidelity retention</td><td>25%</td><td><strong>25</strong></td><td>6</td></tr><tr><td>Piano feature completion</td><td>25%</td><td><strong>8</strong></td><td>2</td></tr><tr><td>Audio implementation</td><td>30%</td><td><strong>31</strong></td><td>9</td></tr><tr><td>Playability and UX</td><td>15%</td><td><strong>30</strong></td><td>4</td></tr><tr><td>Engineering quality</td><td>5%</td><td><strong>50</strong></td><td>2</td></tr></tbody>
         </table>
       </section>
       <section>
@@ -107,15 +107,15 @@
 
     <section class="issues">
       <h3>Priority issues</h3>
-      <ol><li>TypeScript compilation fails</li><li>No real Web Audio tests</li><li>Phase 2 visual regression unchecked</li><li>InputHandler not connected to Keyboard</li><li>MIDI types incorrect</li><li>Inaccurate completion claims</li><li>Mock-based tests create false positive</li></ol>
+      <ol><li>The 73-key keyboard does not render: Keyboard.tsx uses a fixed 14-character pattern string, so only ~8 white and ~6 black keys appear; the keybed is effectively empty.</li><li>All section controls render as plain text labels with zero hardware widgets (no knobs/drawbars/faders/buttons/LEDs/OLEDs); no piano control (type/model/touch/compression/timbre/unison/volume/reverb/sustain) is rendered or wired to audio.</li><li>Primary sound source is a placeholder Tone.PolySynth triangle oscillator (mislabeled &#039;FM Synthesis&#039;), not credible/sampled piano — fails Phase 2 hard gate 1.</li><li>Pointer/touch input is dead in the running app because inputHandler is undefined on the only render pass (App.tsx:138); only computer-keyboard input produces sound, and it uses fixed velocity 0.7 with no visual feedback and a wrong white-key pitch mapping.</li><li>Sustain pedal has no audible effect (PianoEngine.config.sustain is never updated from the lifecycle) and the fallback mode, though implemented, is never labeled in the UI — fails hard gates 3 and 4.</li><li>Narrow 390px layout overflows the viewport (Synth column clipped); EffectsGraph is dead duplicate code; passing tests assert hardcoded data literals rather than the rendered artifact.</li></ol>
     </section>
 
     <section>
       <h3>Technical gate</h3>
-      <p class="gate gate-fail">Failed · score capped at 59</p>
+      <p class="gate gate-pass">Passed</p>
       <table>
         <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
-        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Fail</td><td>sh: oxlint: command not found</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>runs/claude-haiku-4-5-20251001-2/stage2/dist/index.html</td></tr></tbody>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>runs/claude-haiku-4-5-20251001-2/stage2/dist/index.html</td></tr></tbody>
       </table>
     </section>
 
@@ -129,15 +129,15 @@
             <tbody>
     <tr>
       <td><strong>Reference fidelity retention</strong></td>
-      <td>2/4</td>
-      <td>50</td>
-      <td><ul><li>src/hardware.ts preserved from Phase 1 (no visible changes)</li><li>src/App.tsx layout structure unchanged</li><li>evidence/stage2-desktop.png: MISSING</li><li>evidence/stage2-visual-audit.md: MISSING</li><li>Cannot award 3+ without regression screenshot evidence</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Live desktop render (/tmp/eval-desktop.png, 1440x900, byte-identical to candidate evidence/stage2-desktop.png) shows one uninterrupted charcoal-red slab of six columns of white text labels with NO hardware widgets: no knobs, drawbars, faders, buttons, LEDs, or OLEDs. The Nord&#039;s dark inset plates, exposed-red gaps, and control-size hierarchy are entirely absent.</li><li>Rendered DOM (/tmp/eval-dom.html) confirms every control is only &lt;div class=&quot;control&quot;&gt;&lt;span class=&quot;control-label&quot;&gt;Label&lt;/span&gt;&lt;/div&gt; (App.tsx:127-131); grep for knob/fader/drawbar/oled/led/display classes returns zero matches; 31 control-label spans, 0 widget elements.</li><li>Section labels/order are present (Performance/Organ/Piano/Program/Synth/Effects) and width fractions match spec (0.13/0.21/0.15/0.09/0.21/0.21), but the visual contract forbids treating a large flat panel of placeholder text as fidelity; this bears little resemblance to reference/nord-stage-4-73.jpg.</li><li>No section-specific hardware landmarks are drawn (no nine physical drawbars, no pitch stick/mod wheel widgets, no program encoder/OLED). Only a single stray gray+black key sliver appears where the keybed should be.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Responsive chassis</strong></td>
-      <td>2/4</td>
-      <td>50</td>
-      <td><ul><li>CSS unchanged from Phase 1 (App.css)</li><li>Keyboard component receives inputHandler prop (attempted wiring)</li><li>No clipping or layout shift visible in source</li><li>Visual evidence needed for narrow (390×844) test</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Narrow 390x844 render (/tmp/eval-narrow.png, byte-identical to candidate evidence/stage2-narrow.png) shows the instrument OVERFLOWING the right edge: the Synth column (&#039;SYN.../Osc...&#039;) is clipped off-screen. No responsive reflow or scaling.</li><li>App.css:10-19 sets .instrument width:90% with a fixed aspect-ratio:3.095/1 and no min-width/scaling logic, so at 390px the 3.095:1 box is forced wider than the viewport and clips. Violates BENCHMARK.md &#039;no key or chassis segment may overflow&#039; and the narrow-viewport requirement.</li><li>Desktop: the chassis IS continuous (single .instrument div, red top/bottom, App.css) and the 3.095:1 ratio is set, but it floats in the vertical center with enormous empty space above and below and does not use the reference&#039;s neutral study framing well; keybed is empty red.</li><li>Root cause of empty keybed is also a chassis-fill failure: only ~14 keys render (see inputCoverage/playability) instead of 73, leaving most of the keybed as bare red.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -150,19 +150,19 @@
       <td><strong>Input coverage</strong></td>
       <td>1/4</td>
       <td>25</td>
-      <td><ul><li>InputHandler.ts: Pointer, touch, keyboard, MIDI routing designed</li><li>BLOCKER: InputHandler created but not passed to Keyboard component</li><li>App.tsx:143 attempts to pass inputHandler to Keyboard, but Keyboard component does not accept it</li><li>Pointer/touch/keyboard cannot trigger audio due to wiring gap</li><li>No browser testing performed</li></ul></td>
+      <td><ul><li>Code has handlers for pointer (Keyboard.tsx:39-69), touch, computer keyboard, and MIDI (inputHandler.ts) all targeting one NoteLifecycleService — a unified lifecycle exists in source.</li><li>BUT pointer input is dead in the running app: App.tsx:138 passes inputHandler={engineRef.current?.inputHandler}; engineRef is populated inside an async useEffect and App has no state, so it never re-renders — Keyboard always receives inputHandler=undefined and its handler no-ops at Keyboard.tsx:42 (if (inputHandler &amp;&amp; event)).</li><li>Only the computer-keyboard path is actually wired at runtime: App.tsx:47 handler.attachKeyboard() attaches window listeners to a real InputHandler bound to the engine&#039;s lifecycle. QWERTY keys can therefore trigger notes.</li><li>MIDI attach is called (App.tsx:50) and degrades gracefully if unavailable, but touch relies on the same undefined-prop path in the component and elementFromPoint; not verifiably functional in-app.</li><li>Because the keybed renders only ~8 white/~6 black keys (DOM dump), even a working pointer path would only reach a handful of keys.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Piano controls</strong></td>
-      <td>1/4</td>
-      <td>25</td>
-      <td><ul><li>Master volume: setMasterVolume() wired (pianoEngine.ts:198-202)</li><li>Reverb: setReverb() wired (pianoEngine.ts:205-209)</li><li>Sustain: setSustain() present but 500ms hardcoded</li><li>Touch curve, compression defined but not wired to UI</li><li>BLOCKER: No UI controls exist in source; all stored in pianoEngine state without React integration</li><li>App does not build, so wiring untestable</li></ul></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>NONE of the piano controls are rendered as interactive UI. App.tsx renders only text spans; the only &#039;Piano&#039; section items are the labels &#039;Piano Type&#039;, &#039;Piano Model&#039;, &#039;Piano Level&#039; with no selectors, knobs, or values (hardware.ts:70-74, DOM dump).</li><li>There is no touch-curve, dynamic-compression, timbre, unison, volume, reverb, or sustain control in the UI at all.</li><li>PianoEngine exposes setMasterVolume/setReverb/setSustain/setTouchCurve/setDynamicCompression/setTimbre/setUnison (pianoEngine.ts:198-234) but grep confirms ZERO callers in any .tsx/component — they are unreachable dead API from the user&#039;s perspective.</li><li>The piano spec (nord-stage-4.piano.json) requires Grand/Upright/Electric/Clav/Digital/Misc types, touch curves, compression 0-3, timbre sets, unison 0-3 to be reflected in state/displays; none of this exists in the model beyond generic &#039;Piano Type&#039; switch stubs.</li><li>Consequently Phase 2 hard gate 3 (controls alter audible output) is unmet via the UI: the only sustain wiring, noteLifecycle.setSustain, is never read by PianoEngine.handleNoteOff (which checks this.config.sustain, never updated from input) — pianoEngine.ts:171.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Display and status feedback</strong></td>
-      <td>1/4</td>
-      <td>25</td>
-      <td><ul><li>No OLED displays for Piano section in App.tsx</li><li>No voice count display</li><li>No MIDI status indicator</li><li>No fallback mode label</li><li>App.tsx shows only control labels, no state feedback</li></ul></td>
+      <td>0/4</td>
+      <td>0</td>
+      <td><ul><li>No OLED/status display is rendered anywhere. hardware.ts:111-114 declares displayLocations for Program and Synth, but nothing in App.tsx/Keyboard.tsx renders them (grep for oled/display/voiceCount/fallback in components = 0 matches).</li><li>No piano state readout (selected type/model, touch curve, etc.), no polyphony/voice count indicator, and no fallback-mode label are shown to the user in the running app.</li><li>The DOM dump contains no display element; the Program/Synth columns are just text labels like the rest.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -175,25 +175,25 @@
       <td><strong>Piano sound source</strong></td>
       <td>1/4</td>
       <td>25</td>
-      <td><ul><li>FM Synthesis via Tone.js PolySynth is credible (not placeholder)</li><li>IMPLEMENTATION_DETAILS.json correctly identifies source</li><li>pianoEngine.ts: Triangle oscillator with velocity-responsive ADSR</li><li>BUT: No actual synthesis output verified; cannot play notes (app doesn&#039;t build)</li></ul></td>
+      <td><ul><li>Primary path is a placeholder Tone.PolySynth(Tone.Synth) with a triangle oscillator and a generic ADSR (pianoEngine.ts:84-92) — a subtractive/basic synth, NOT sampled or convincingly piano-like.</li><li>IMPLEMENTATION_DETAILS.json labels it &#039;FM Synthesis via Tone.js PolySynth&#039; with sampleSources:[] and recordedSamples:[]; the code is not even FM (it is a triangle Synth), and knownLimitations admits &#039;FM synthesis tone is stylized, not acoustic piano sample matching&#039;.</li><li>This directly fails Phase 2 hard gate 1 (&#039;primary piano path is not a placeholder oscillator or generated additive buffer bank&#039;) and piano spec acceptance 4 (&#039;generated placeholder buffers do not satisfy this requirement&#039;).</li><li>Credit for 1 rather than 0: a real Tone.js audio graph exists and can make sound, so it is not literally silent/absent.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Note lifecycle and cleanup</strong></td>
-      <td>1/4</td>
-      <td>25</td>
-      <td><ul><li>NoteLifecycleService: Single entry point with noteOn/noteOff</li><li>VoiceManager: Deterministic FIFO/LRU allocation with 32 voice limit</li><li>All-notes-off logic present</li><li>BUT: Code does not compile; runtime behavior unverifiable</li><li>8 lifecycle tests pass but are mock-based (no real voice scheduling)</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>NoteLifecycleService (noteLifecycle.ts) implements note-on/off keyed by sourceId, repeated-note replacement, and allNotesOff with per-source synthetic note-offs; unit-tested in audio-lifecycle.test.mjs.</li><li>PianoEngine.handleNoteOn/handleNoteOff/handleAllNotesOff (pianoEngine.ts:133-196) trigger Tone attack/release and release+reset voices; dispose() tears down nodes.</li><li>Weaknesses: note-off releases by frequency via synth.triggerRelease(frequency) but note-on ignores the allocated voiceId and calls triggerAttack directly, so voice tracking and the audio nodes are only loosely coupled; sustain branch uses setTimeout(500ms) rather than pedal-driven release (pianoEngine.ts:173-178).</li><li>All-notes-off in-app only reachable via Escape key; overall the lifecycle logic is coherent in isolation but its coupling to actual audio is thin and only exercisable via the keyboard path.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Velocity and sonic controls</strong></td>
-      <td>0/4</td>
-      <td>0</td>
-      <td><ul><li>Master volume: Gain node routing present</li><li>Reverb: Reverb node routing present</li><li>CRITICAL: No browser audio tests measure actual output changes</li><li>audio-integration.test.mjs: &#039;In actual browser tests, we would validate Tone.js PolySynth output&#039;</li><li>This explicitly states CURRENT tests do NOT validate real output</li><li>No OfflineAudioContext rendering, no RMS analysis, no proof controls work</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Velocity math exists: pointerYToVelocity clamps 0.3-1 (Keyboard.tsx:112-119), touch force fallback, MIDI value/127; touch-curve pow() transform (pianoEngine.ts:264-277); these are unit-tested (audio-integration.test.mjs).</li><li>BUT in the running app there is no UI to change volume, reverb, or touch curve, so &#039;controls measurably change rendered audio&#039; cannot be exercised by a user. setMasterVolume/setReverb are never called outside tests.</li><li>Keyboard-triggered notes use a fixed velocity of 0.7 (inputHandler.ts:191), so the only usable input path has no velocity variation; pointer velocity is unreachable due to the undefined inputHandler prop.</li><li>audio-real.test.mjs mostly checks typeof OfflineAudioContext and raw node .value assignments (e.g. osc.frequency.value===440) and does not validate PianoEngine output changing with controls.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Sustain and polyphony</strong></td>
-      <td>0/4</td>
-      <td>0</td>
-      <td><ul><li>Sustain: 500ms release extension hardcoded (not configurable)</li><li>Voice stealing: FIFO logic present in VoiceManager</li><li>BUT: No test demonstrates sustain extends audible duration</li><li>No test demonstrates 32-voice limit and stealing behavior audibly</li><li>Mock tests check state transitions, not audio rendering</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>VoiceManager (voiceManager.ts) implements 32-voice allocation and deterministic stealing (fifo/lru/velocity-weighted); unit-tested in audio-voice.test.mjs. Polyphony logic is solid in isolation.</li><li>However voices are allocated/stolen in the manager but the audio synth (Tone.PolySynth) is triggered independently by frequency and is not informed of stealing, so the manager&#039;s stealing does not actually cut audible voices — the two are decoupled (pianoEngine.ts:139-153).</li><li>Sustain is effectively non-functional audibly: input sets noteLifecycle.setSustain (inputHandler.ts:170), but PianoEngine.handleNoteOff reads this.config.sustain (pianoEngine.ts:171), which is only set via setSustain() that is never called from input. So the pedal does not extend note duration in the running app.</li><li>Fails Phase 2 hard gate 3 for sustain; polyphony exists as bookkeeping but not as an audible, engine-coupled behavior.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -204,21 +204,21 @@
             <tbody>
     <tr>
       <td><strong>Playability</strong></td>
-      <td>0/4</td>
-      <td>0</td>
-      <td><ul><li>InputHandler designed to handle pointer, touch, keyboard, MIDI</li><li>BLOCKER: InputHandler not passed to Keyboard component</li><li>BLOCKER: App does not build; cannot test</li><li>No latency measurement provided</li><li>No evidence of reliable note triggering</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Live keybed is essentially unplayable by pointer: only ~8 white + ~6 black keys render (DOM: White key 0-7, Black key 0/1/3/4/5/7) instead of 73, because getKeyPattern returns a fixed 14-char string &#039;WBWBWWBWBWBWWB&#039; and the loop iterates only those 14 chars (Keyboard.tsx:13-37).</li><li>Even those keys do not sound on click: inputHandler prop is undefined at render (App.tsx:138 with engineRef.current null; App never re-renders), so Keyboard.tsx:42 guard skips noteLifecycle.noteOn.</li><li>Computer keyboard DOES work: attachKeyboard binds window keydown/keyup to the engine lifecycle (App.tsx:47, inputHandler.ts:153-221), so pressing Q/W/E... can produce (placeholder-synth) sound after the click-to-resume gesture (App.tsx:68).</li><li>Pitch mapping is wrong: keyIndexToMidi uses [0,2,4,5,7,9,11] for consecutive white keys (Keyboard.tsx:105, inputHandler.ts:305), which is E F# G# A# B C# D#, not the correct E F G A B C D white-key scale.</li><li>Net: a knowledgeable user can coax notes only via QWERTY; the primary visual instrument (the keys) is broken.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Control feedback</strong></td>
-      <td>0/4</td>
-      <td>0</td>
-      <td><ul><li>No visual feedback for played notes (key highlight, etc.)</li><li>No voice count display</li><li>No control change feedback</li><li>App does not build; no browser testing possible</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Keys have pressed-state CSS (Keyboard.css:37-41,60-64) and pressedKeys state updates on pointer down/up (Keyboard.tsx:39-69), so the ~14 rendered keys do depress visually on click.</li><li>But QWERTY key presses (the only working audio input) provide NO visual feedback — the computer-keyboard handler never updates pressedKeys, so keys that actually sound do not light up.</li><li>No control widgets exist, so there is no knob rotation, LED toggling, or display illumination feedback for any parameter change.</li><li>Hover states exist for keys only.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Failure handling</strong></td>
-      <td>0/4</td>
-      <td>0</td>
-      <td><ul><li>MIDI failure handled with try/catch and console warning</li><li>No graceful degradation tested</li><li>No MIDI unavailable status displayed</li><li>App does not build; cannot verify error paths</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>MIDI: attachMIDI returns a no-op teardown when navigator.requestMIDIAccess is absent and catches permission/denied errors without throwing (inputHandler.ts:227-292); unit-tested in input-midi.test.mjs. This is graceful.</li><li>AudioContext fallback: AudioContextProvider.create() returns a non-running provider when window.AudioContext is missing and getContext throws a labeled &#039;AudioContext not available&#039; error (audioContext.ts:26-49); audio-fallback.test.mjs covers this and PianoEngine staying constructible.</li><li>BUT the fallback is NOT surfaced to the user: there is no visible &#039;fallback&#039;/degraded label in the UI (grep = none), and IMPLEMENTATION_DETAILS claims a &#039;visual-feedback-only&#039; fallback that isn&#039;t rendered. Fails the labeled-fallback half of Phase 2 hard gate 4.</li><li>App.tsx swallows init errors to console.error only (App.tsx:73-75), so a user sees a blank instrument on failure with no indication.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -229,15 +229,15 @@
             <tbody>
     <tr>
       <td><strong>Audio architecture</strong></td>
-      <td>1/4</td>
-      <td>25</td>
-      <td><ul><li>VoiceManager: Clean voice allocation abstraction</li><li>NoteLifecycleService: Single entry point with listener pattern</li><li>PianoEngine: Proper signal graph composition</li><li>BLOCKER: TypeScript compilation fails; architecture unexecutable</li><li>Code organization is good but not verified at runtime</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Reasonable separation of concerns in source: audioContext (injectable provider), noteLifecycle (event hub), voiceManager (allocation), pianoEngine (graph), inputHandler (routing), effectsGraph. Boundaries are testable with fakes/OfflineAudioContext, which is a plus.</li><li>Single audio graph in PianoEngine: Synth -&gt; masterGain -&gt; reverb -&gt; compressor -&gt; Tone.getDestination() (pianoEngine.ts:79-96). One destination.</li><li>BUT EffectsGraph (effectsGraph.ts) duplicates the same gain-&gt;reverb-&gt;compressor chain and is DEAD CODE — only re-exported from audio/index.ts, never instantiated (grep). Two parallel implementations of the master chain indicate architectural drift.</li><li>The voice manager is decoupled from the actual synth voices (bookkeeping only), and control setters are unreachable from the UI, so the &#039;architecture&#039; is more scaffolding than a wired system.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Performance and cleanup</strong></td>
-      <td>0/4</td>
-      <td>0</td>
-      <td><ul><li>Dispose methods present in PianoEngine</li><li>Cleanup functions planned in App component</li><li>BLOCKER: App does not compile; cleanup untestable</li><li>No voice disposal tested</li><li>No rapid-play stability verified</li><li>pnpm build FAIL (exit code 1)</li><li>pnpm typecheck FAIL (7 errors)</li><li>Errors in: App.tsx (InputHandler import), inputHandler.ts (WebMidi types, MIDIInputMap.values())</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Cleanup is present: App unmount runs all input teardowns, allNotesOff, and pianoEngine.dispose() (App.tsx:81-102); dispose() disposes synth/gain/reverb/compressor and resets managers (pianoEngine.ts:236-253).</li><li>Keyboard listeners are removed on detach (inputHandler.ts:217-220); MIDI listeners removed on teardown.</li><li>Concerns: handleNoteOff schedules setTimeout for sustain without tracking/clearing timers, a minor leak risk under rapid play; voice steal deletes the manager entry but does not stop a corresponding audio voice, so under rapid polyphonic play the PolySynth manages its own voices while the manager count diverges.</li><li>No evidence of stress instability, but the divergence between bookkeeping and audio means claims of deterministic 32-voice stealing are not truly enforced on the audible graph.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
