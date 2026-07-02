@@ -20,7 +20,18 @@ const byId = (id) => {
   return run
 }
 const complete = byId('gpt-5-6-sol-high') // complete three-phase run
-const pianoOnly = byId('gpt5-6-sol-high') // partial test run, phases 1-2 only
+// Synthetic phases 1-2 fixture, decoupled from the registry so adding or
+// removing runs can't break the preview/URL behavior exercised below.
+const pianoOnly = {
+  id: 'gpt-5-6-sol-high-piano-only',
+  model: 'gpt-5.6-sol-high',
+  title: 'GPT 5.6 Sol High (Piano Only)',
+  isTest: true,
+  previews: {
+    '1': '/previews/gpt-5-6-sol-high-piano-only/stage1/index.html',
+    '2': '/previews/gpt-5-6-sol-high-piano-only/stage2/index.html',
+  },
+}
 
 test('display scores floor decimal values without changing stored data', () => {
   assert.equal(floorScore(58.8), 58)
@@ -96,8 +107,8 @@ test('every runs.json entry conforms to the BenchmarkRun shape', () => {
 
 test('viewer URLs deep-link to a run and phase with a latest-phase fallback', () => {
   const linked = createViewerUrl('http://127.0.0.1:5173/#runs', pianoOnly.id, 2)
-  assert.equal(linked.href, 'http://127.0.0.1:5173/?run=gpt5-6-sol-high&phase=2')
-  assert.deepEqual(parseViewerSearch(linked.search, runs), { run: pianoOnly, phase: 2 })
-  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=3`, runs), { run: pianoOnly, phase: 2 })
+  assert.equal(linked.href, 'http://127.0.0.1:5173/?run=gpt-5-6-sol-high-piano-only&phase=2')
+  assert.deepEqual(parseViewerSearch(linked.search, [pianoOnly]), { run: pianoOnly, phase: 2 })
+  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=3`, [pianoOnly]), { run: pianoOnly, phase: 2 })
   assert.equal(clearViewerUrl(linked.href).href, 'http://127.0.0.1:5173/')
 })

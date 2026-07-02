@@ -18,6 +18,7 @@ const runs = runsData as BenchmarkRun[]
 const isLocalEnvironment = import.meta.env.DEV
 const locallyAvailableRuns = runs.filter((run) => isLocalEnvironment || !run.isTest)
 const phaseNames = ['Surface + Piano', 'Pianos + FX', 'Complete System']
+const knobAngles = [-86, -22, 43]
 const v2PhaseNames = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
 const legacyPhaseNames = ['Visual', 'Piano', 'Complete']
 const noteOffsets = [0, 2, 4, 5, 7, 9, 11]
@@ -84,12 +85,11 @@ function getPhaseName(run: BenchmarkRun, phase: PhaseNumber) {
 }
 
 function getResultClass(run: BenchmarkRun) {
-  if (['partial', 'failed', 'invalid', 'budget-exceeded', 'infrastructure-failure'].includes(run.status) || ['invalid-technical', 'incomplete', 'budget-exceeded', 'infrastructure-failure'].includes(run.validity ?? '')) {
-    return { id: 'diagnostic', label: 'Incomplete / invalid', rank: 2, description: 'Diagnostic records that are not eligible for comparison.' }
-  }
+  const archive = { id: 'archive', label: 'Archive', rank: 2, description: 'Historical, incomplete, or invalid runs, kept for reference and excluded from ranking.' }
+  if (['partial', 'failed', 'invalid', 'budget-exceeded', 'infrastructure-failure'].includes(run.status) || ['invalid-technical', 'incomplete', 'budget-exceeded', 'infrastructure-failure'].includes(run.validity ?? '')) return archive
   if (run.classification?.kind === 'official' && run.classification.comparable && run.validity === 'valid') return { id: 'official', label: 'Official', rank: 0, description: 'Valid, complete runs from the current compatible comparison series.' }
   if (run.classification?.kind === 'exploratory') return { id: 'exploratory', label: 'Exploratory', rank: 1, description: 'Development runs recorded outside an official comparison series.' }
-  return { id: 'legacy', label: 'Legacy', rank: 3, description: 'Historical runs retained under their original protocol and rubric.' }
+  return archive
 }
 
 function StatusLight({ status }: { status: StageStatus | RunStatus }) {
@@ -172,7 +172,6 @@ function App() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [activeNotes, setActiveNotes] = useState<Set<number>>(() => new Set())
   const [lastPlayed, setLastPlayed] = useState<string | null>(null)
-  const [knobValues, setKnobValues] = useState([18, 42, 66, 90])
   const audioContextRef = useRef<AudioContext | null>(null)
   const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode }>())
   const pressedKeysRef = useRef(new Set<string>())
@@ -391,28 +390,13 @@ function App() {
             </div>
             <div className="oled-display">
               <span>{activeCount > 0 ? 'BENCHMARK RUNNING' : 'SYSTEM READY'}</span>
-              <strong>{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runs.find((run) => run.status === 'running')?.model : 'SELECT MODEL'}</strong>
+              <strong aria-live="polite">{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runs.find((run) => run.status === 'running')?.model : 'SELECT MODEL'}</strong>
             </div>
-            <ol className="stage-controls" aria-label="Adjustable benchmark phase levels">
+            <ol className="stage-controls" aria-label="Benchmark phases">
               {phaseNames.map((name, index) => (
                 <li key={name}>
-                  <div className="knob-control">
-                    <input
-                      aria-label={`${name} benchmark phase level`}
-                      max="100"
-                      min="0"
-                      onChange={(event) => {
-                        const value = Number(event.currentTarget.value)
-                        setKnobValues((current) => current.map((currentValue, currentIndex) => (
-                          currentIndex === index ? value : currentValue
-                        )))
-                      }}
-                      type="range"
-                      value={knobValues[index]}
-                    />
-                    <div className="knob" aria-hidden="true">
-                      <i style={{ transform: `rotate(${knobValues[index] * 2.7 - 135}deg)` }} />
-                    </div>
+                  <div className="knob" aria-hidden="true">
+                    <i style={{ transform: `rotate(${knobAngles[index]}deg)` }} />
                   </div>
                   <span>0{index + 1}</span>
                   <strong>{name}</strong>
@@ -468,7 +452,7 @@ function App() {
                   {run.evaluation && (
                     <div className="run-score" aria-label={`Aggregate evaluation ${floorScore(run.evaluation.score)} out of 100, ${run.evaluation.grade}`}>
                       <strong>{floorScore(run.evaluation.score)}</strong>
-                      <span>/100 · {run.evaluation.grade}<small>{run.evaluation.evaluatedStages.length}/{run.stages.length} selected phases evaluated{getResultClass(run).id !== 'official' ? ' · diagnostic, not ranked' : ''}</small></span>
+                      <span>/100 · {run.evaluation.grade}<small>{run.evaluation.evaluatedStages.length}/{run.stages.length} selected phases evaluated{getResultClass(run).id !== 'official' ? ' · not ranked' : ''}</small></span>
                     </div>
                   )}
                   {!run.evaluation && run.stages.some((stage) => stage.status === 'complete') && (
