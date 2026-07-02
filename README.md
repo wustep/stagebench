@@ -1,6 +1,15 @@
 # Stagebench
 
-A React + Vite gallery and repeatable three-phase benchmark for comparing coding-agent recreations of the Nord Stage 4.
+A benchmark that asks coding agents to recreate the Nord Stage 4 as an interactive browser instrument, plus a React gallery for comparing the results. The task, phases, feature IDs, and scoring live in [BENCHMARK.md](./BENCHMARK.md).
+
+## Repository layout
+
+- `BENCHMARK.md` — the task: three phases, feature IDs, evidence, scoring.
+- `prompts/`, `specs/` — per-phase instructions and machine-readable specs (the benchmark inputs).
+- `bench/` — all tooling: the `bench` CLI, run/eval libraries, rubric, schemas, and the candidate starter.
+- `runs/` — one directory per run; `runs/<id>/run.json` is authoritative.
+- `src/` — the gallery app; `src/data/runs.json` is generated.
+- `public/previews/`, `public/reports/` — published playable builds and static evaluation reports.
 
 ## Gallery
 
@@ -9,50 +18,25 @@ pnpm install
 pnpm dev
 ```
 
-Run `pnpm build` for a production build and `pnpm lint` for static checks. `pnpm test` runs the full suite (gallery, evaluator, and verifier self-test).
-
-## Private deployment protection
-
-The Vercel deployment uses server-side authentication through `middleware.js`. The password is stored as the sensitive Vercel environment variable `STAGEBENCH_PASSWORD` for Preview and Production; it is never bundled into the React app or saved in browser storage. Successful login creates a signed, seven-day, HttpOnly, Secure cookie, so the browser remembers access without retaining the password.
-
-The middleware fails closed with a `503` response if the environment variable is missing. Failed POST requests to `/__stagebench/auth` use the `stagebench-login` Vercel Firewall SDK limit: 10 attempts per source IP per hour. A throttled request returns the regular login screen with an inline error and HTTP `429`. Keep the password in Vercel's environment settings and do not add it to `.env`, source control, frontend `VITE_*` variables, or `localStorage`.
-
-## Evaluate a run
-
-The evaluator uses a versioned, evidence-backed rubric with different category values for each phase. Protocol-v3 evaluator bundles use opaque trial IDs so the evaluator does not see model/provider identity. Generate and score a Phase 1 assessment with:
-
-```sh
-pnpm evaluate:template --id <run-id> --phase 1
-pnpm evaluate:score --id <run-id> --phase 1
-```
-
-The scoring command reruns technical checks and registers phase and aggregate scores in the gallery data. The full workflow and weight table are in [evaluation/README.md](./evaluation/README.md).
+`pnpm build` for a production build, `pnpm lint` / `pnpm typecheck` for static checks, `pnpm test` for the suite (gallery, bench pipeline, specs, middleware). Node 24 (`.nvmrc`).
 
 ## Run the benchmark
 
-Before running the benchmark or scoring visual fidelity, fetch the reference material:
-
 ```sh
-pnpm fetch:reference
+pnpm bench fetch                                # Nord manual + product photos (gitignored, not redistributed)
+pnpm bench new --model <id> --target <1|2|3>
+pnpm bench start <run-id>                       # per phase: isolated workspace for the implementation agent
+pnpm bench exec <run-id> --command "pnpm test"  # optional: run candidate commands inside Docker
+pnpm bench seal <run-id> [--cost-usd N --input-tokens N --output-tokens N]   # import, check, capture, verify, seal
+pnpm bench score <run-id>                       # per phase: template first, then registers the filled assessment
 ```
 
-This downloads the Nord Stage 4 user manual and the official 88 / 73 / Compact 73 top-down photos from Nord's servers into `reference/` (gitignored). See [Reference material & attribution](#reference-material--attribution).
+`pnpm bench status <run-id>` prints the next command and telemetry. Wall time is recorded automatically per phase; pass cost/token usage at seal time (or later via `pnpm bench telemetry`). Runs recorded before the current schema appear in the gallery as Legacy with their frozen scores and reports.
 
-Start with the public CLI:
+## Private deployment protection
 
-```sh
-pnpm stagebench doctor
-pnpm stagebench create --model <id> --provider <provider> --model-snapshot <snapshot> --target-phase <1|2|3>
-```
-
-Target selection is cumulative: target 1 builds the complete surface and basic Piano; target 2 also builds the multi-Piano library and effects; target 3 also builds the complete Programs/Organ/Synth system. `$run-nord-benchmark` drives the same CLI with fresh-context implementation and blinded read-only evaluation agents.
-
-Each run’s `run.json` is authoritative. `src/data/runs.json` is generated with `pnpm stagebench reindex` (also run before dev/build). See [METHODOLOGY.md](./METHODOLOGY.md) before comparing scores.
-
-The complete specification is in [BENCHMARK.md](./BENCHMARK.md). Future benchmark runs evaluate each completed phase before publishing it.
+The Vercel deployment uses server-side authentication through `middleware.js`. The password is stored as the sensitive Vercel environment variable `STAGEBENCH_PASSWORD` for Preview and Production; it is never bundled into the React app or saved in browser storage. Successful login creates a signed, seven-day, HttpOnly, Secure cookie. The middleware fails closed with a `503` if the variable is missing, and failed logins are rate-limited (10 attempts per IP per hour).
 
 ## Reference material & attribution
 
-Stagebench is an independent, non-commercial benchmark for studying browser UI/audio reconstruction. It is **not affiliated with, authorized, or endorsed by Clavia DMI AB**. "Nord" and "Nord Stage" are trademarks of Clavia DMI AB, used here only to identify the product being studied.
-
-The Nord Stage 4 user manual and product photography are copyrighted by Clavia DMI AB and are **not redistributed** in this repository. `pnpm fetch:reference` downloads them from Nord's official servers into `reference/` (gitignored) for local evaluation only. Do not commit, re-host, or redistribute their contents. The benchmark recreations (and any code in this repo authored here) are independent works produced for comparison and study.
+Stagebench is an independent, non-commercial benchmark for studying browser UI/audio reconstruction. It is **not affiliated with, authorized, or endorsed by Clavia DMI AB**. "Nord" and "Nord Stage" are trademarks of Clavia DMI AB, used here only to identify the product being studied. The Nord Stage 4 user manual and product photography are copyrighted by Clavia DMI AB and are **not redistributed** in this repository — `pnpm bench fetch` downloads them from Nord's official servers into the gitignored `reference/` directory for local evaluation only. Do not commit, re-host, or redistribute them.

@@ -8,7 +8,7 @@ const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, re
 const manifest = readJson('specs/benchmark-phases.json')
 
 test('phase manifest defines a complete three-phase cumulative target contract', () => {
-  assert.equal(manifest.version, '3.0.0')
+  assert.equal(manifest.version, '3.1.0')
   assert.equal(manifest.phaseCount, 3)
   assert.equal(manifest.selectionMode, 'cumulative-target')
   assert.deepEqual(manifest.selection, { '1': [1], '2': [1, 2], '3': [1, 2, 3] })
@@ -65,23 +65,25 @@ test('variant registry defines the three Nord Stage 4 modes with a valid default
 test('manual-derived domain specs have page citations and acceptance gates', () => {
   const domainSpecs = [
     ['specs/nord-stage-4.piano.json', [23, 24, 25, 26]],
-    ['specs/nord-stage-4.programs.json', [37, 38, 39, 40, 41, 42, 43, 44]],
-    ['specs/nord-stage-4.effects.json', [47, 48, 49, 50, 51, 52]],
+    ['specs/nord-stage-4.programs.json', [38, 39, 40, 41, 42, 43, 44, 45]],
+    ['specs/nord-stage-4.effects.json', [48, 49, 50, 51, 52, 53]],
     ['specs/nord-stage-4.organ.json', [18, 19, 20, 21, 22]],
-    ['specs/nord-stage-4.synth.json', [27, 28, 29, 30, 31, 32, 33, 34, 35, 36]],
+    ['specs/nord-stage-4.synth.json', [27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]],
   ]
 
   for (const [specPath, pages] of domainSpecs) {
     const spec = readJson(specPath)
-    assert.equal(spec.version, '1.0.0')
+    assert.equal(spec.version, '2.0.0')
     assert.equal(spec.source.manual, manifest.manual.path)
     assert.deepEqual(spec.source.pages, pages)
     assert.ok(Array.isArray(spec.acceptance) && spec.acceptance.length >= 4, `${specPath} needs acceptance gates`)
+    assert.ok(spec.scope && Array.isArray(spec.scope.required) && spec.scope.required.length >= 4, `${specPath} needs an explicit required scope`)
+    assert.ok(Array.isArray(spec.scope.excluded) && spec.scope.excluded.length >= 2, `${specPath} needs an explicit excluded scope`)
   }
 })
 
 test('active rubric and phase manifest stay aligned', () => {
-  const rubric = readJson('evaluation/rubrics/v3.json')
+  const rubric = readJson('bench/rubric.json')
   assert.equal(rubric.version, manifest.version)
   assert.deepEqual(Object.keys(rubric.stages), manifest.phases.map(({ number }) => String(number)))
   assert.equal(Object.values(rubric.aggregateStageWeights).reduce((sum, weight) => sum + weight, 0), 100)

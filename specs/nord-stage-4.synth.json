@@ -1,53 +1,108 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "synth",
   "source": {
     "manual": "reference/manual.pdf",
-    "pages": [27, 28, 29, 30, 31, 32, 33, 34, 35, 36]
+    "pages": [27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]
+  },
+  "scope": {
+    "note": "Phase 3 scope. The synth is a reduced but honest Nord Wave 2-style engine: Analog mode only, an explicit waveform list, four filters, three envelopes, LFO, voice modes, and a deterministic arpeggiator/gate. Items under excluded are never required; their panel controls exist visually but stay decorative and are listed as unsupported.",
+    "required": [
+      "Three layers (A, B, C) with independent state and effect chains",
+      "Analog mode with the exact waveform list below and category-correct Osc Ctrl behavior",
+      "One FM Harmonic algorithm with Osc Ctrl as FM amount",
+      "LP12, LP24, HP, and BP filters with keyboard tracking, resonance, and drive",
+      "Oscillator, filter, and amplifier envelopes (attack/decay/release, velocity)",
+      "LFO with five waveforms, three destinations, and master-clock sync",
+      "Poly/mono/legato voice modes, note priority, glide, unison, vibrato",
+      "Arpeggiator/gate with rate, master-clock sync, range, direction, hold, and run"
+    ],
+    "optional": [
+      "Samples mode with a small bundled sample set",
+      "LP M and LP+HP filter types",
+      "Sub Osc, Shape, Shape Sine, Misc, and Wave oscillator categories",
+      "FM Inharmonic algorithms",
+      "Sound Init"
+    ],
+    "excluded": [
+      "Extern mode and everything MIDI-out (manual ch. 8)",
+      "Arpeggiator pattern editing, zig-zag, accent, pan, and per-layer KB Hold exclude (manual p. 35-36)",
+      "Filter/LFO/Arp Group modes (manual p. 32, 34, 35)",
+      "Synth preset library and Nord Sample Library downloads (cut benchmark-wide)"
+    ]
   },
   "architecture": {
     "layers": ["A", "B", "C"],
+    "layerControls": ["on/off", "focus", "level fader with LED graph", "octave shift ±12 semitones"],
     "independentEffectsPerLayer": true,
     "levelIsMorphable": true,
-    "modes": ["Samples", "Analog", "Extern"]
+    "oledDisplay": "The Synth section's OLED shows the selected waveform, envelope curves, and menu values through three dials below it (manual p. 27).",
+    "pitch": { "coarseSemitones": [-24, 24], "fineCents": [-50, 50] },
+    "sustainPedalPerSection": "SUSTPED toggle.",
+    "pitchStickRangeSemitones": 2
   },
-  "sources": {
-    "samples": ["Natural dynamics", "No dynamics", "Unison options"],
-    "analogCategories": ["Pure", "Sync", "Multi", "Super", "Misc", "Wave", "FM Harmonic", "FM Inharmonic"],
-    "minimumWaveforms": ["Sine", "Triangle", "Saw", "Square", "Pulse", "Noise", "Super Saw"],
-    "oscCtrlMeaningDependsOnSource": true
+  "oscillator": {
+    "requiredWaveforms": {
+      "Pure": ["Sine", "Triangle", "Saw", "Square", "Pulse 33", "Pulse 10", "White Noise"],
+      "Sync": ["Sync Saw", "Sync Square"],
+      "Multi": ["Multi Saw", "Multi Saw 8ve"],
+      "Super": ["Super Saw", "Super Square"],
+      "FM-H": ["FM 2-op (algorithm A)"]
+    },
+    "oscCtrlByCategory": {
+      "Pure": "No effect (manual p. 29).",
+      "Sync": "Relative pitch of the synced oscillator (manual p. 29).",
+      "Multi": "Detune amount between the stacked saws (manual p. 30).",
+      "Super": "Detune/width of the oscillator stack (manual p. 30).",
+      "FM-H": "FM modulation amount (manual p. 30)."
+    },
+    "oscCtrlKnob": "0-10, morphable, modulatable by the oscillator envelope and the LFO (manual p. 28)."
   },
   "filter": {
-    "types": ["LP24", "LP12", "LP M", "LP+HP", "HP", "BP"],
+    "requiredTypes": ["LP12", "LP24", "HP", "BP"],
+    "optionalTypes": ["LP M", "LP+HP"],
     "keyboardTracking": ["Off", "1/3", "2/3", "1"],
-    "driveLevels": [0, 1, 2, 3],
-    "parameters": ["Frequency", "Resonance or HP Frequency", "Envelope Amount"],
-    "groupMode": true
+    "driveLevels": ["Off", 1, 2, 3],
+    "knobs": ["Freq (cutoff, morphable)", "Res (resonance, morphable)", "Env Amt (filter-envelope amount)"]
   },
   "envelopes": {
-    "oscillator": ["Attack", "Decay", "Release", "Velocity", "Env To Pitch"],
-    "filter": ["Attack", "Decay", "Release", "Velocity", "Envelope Amount"],
-    "amplifier": ["Attack", "Decay", "Release", "Velocity response"]
+    "shared": "Attack, decay, and release times set from the display dials; decay at maximum acts as sustain mode (manual p. 33).",
+    "oscillator": ["Attack", "Decay", "Release", "Velocity toggle", "Env To Pitch retarget", "bipolar Env Amt"],
+    "filter": ["Attack", "Decay", "Release", "Velocity toggle", "Env Amt"],
+    "amplifier": ["Attack", "Decay", "Release", "Velocity levels Off/1/2/3"]
   },
   "lfo": {
-    "destinations": ["Oscillator Pitch", "Osc Ctrl", "Filter"],
-    "parameters": ["Rate", "Amount", "Master Clock", "Group"]
+    "waveforms": ["Triangle", "Saw down", "Saw up", "Square", "Sample & Hold"],
+    "destinations": ["Osc Pitch", "Osc Ctrl", "Filter Freq"],
+    "offState": "No destination LED lit means the LFO is off but keeps its settings (manual p. 34).",
+    "knobs": ["Rate (morphable, master-clock syncable)", "Mod Amt (morphable)"]
   },
   "voice": {
-    "modes": ["Poly", "Mono", "Legato", "Low Priority", "High Priority"],
-    "parameters": ["Glide", "Unison", "Vibrato Source", "Vibrato Amount", "Vibrato Delay"]
+    "modes": ["Poly", "Mono", "Legato"],
+    "priority": ["Off", "Low", "High"],
+    "glide": "Constant-rate portamento, active in mono/legato when playing legato (manual p. 35).",
+    "unisonLevels": ["Off", 1, 2, 3],
+    "vibrato": {
+      "requiredModes": ["On", "Wheel"],
+      "optionalModes": ["Delayed", "Aftertouch", "Pedal"],
+      "menu": ["Rate 2.0-8.0 Hz", "Amount 0-10"]
+    }
   },
   "arpeggiatorGate": {
-    "modes": ["Arpeggiator", "Gate"],
-    "parameters": ["Rate", "Master Clock", "Range", "Inversion", "Pattern", "Keyboard Sync", "Hold", "Run", "Exclude"],
-    "menuEditingRequired": true
+    "modes": ["Arp", "Poly", "Gate"],
+    "rate": "Quarter-note BPM, or subdivision (1/2 to 1/16, triplet variants) when synced to the master clock (manual p. 36).",
+    "range": "1-4 octaves (Gate mode repurposes the knob as gate envelope hardness).",
+    "direction": ["Up", "Down", "Up/Down", "Random"],
+    "kbHold": "Notes keep sounding and the arpeggio keeps running after keys are lifted (manual p. 36).",
+    "run": "ARP RUN starts and stops the arpeggiator.",
+    "determinism": "With a fixed clock and note set, step order and timing are deterministic and testable."
   },
   "acceptance": [
-    "Source category and Osc Ctrl produce distinct rendered spectra.",
-    "Filter type, frequency, resonance, tracking, drive, and envelope amount alter rendered audio.",
-    "All three envelopes and the LFO have observable time-domain or spectral effects.",
-    "Mono, legato, priority, glide, unison, and vibrato change voice behavior rather than labels only.",
-    "Arpeggiator and gate timing, range, inversion, pattern, hold, and clock synchronization are exercised deterministically.",
-    "All three layers integrate with inherited zones, morphs, Programs, scenes, presets, and Phase 3 effects."
+    "Every required waveform is selectable and Pure, Sync, Multi, Super, and FM-H are audibly distinct source behaviors, with Osc Ctrl acting per category.",
+    "Filter type, frequency, resonance, tracking, drive, and envelope amount each alter rendered audio.",
+    "All three envelopes and the LFO have observable time-domain or spectral effects, and LFO/arp lock to the master clock.",
+    "Mono, legato, priority, glide, unison, and vibrato change voice behavior, not just labels.",
+    "Arpeggiator and gate rate, range, direction, hold, and run behave deterministically under a fixed clock.",
+    "All three layers integrate with zones, scenes, morphs, programs, and their own effect chains."
   ]
 }

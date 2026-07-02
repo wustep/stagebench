@@ -1,81 +1,99 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "programs",
   "source": {
     "manual": "reference/manual.pdf",
-    "pages": [37, 38, 39, 40, 41, 42, 43, 44]
+    "pages": [38, 39, 40, 41, 42, 43, 44, 45]
+  },
+  "scope": {
+    "note": "Phase 3 scope. The real Stage 4 stores 512 programs in 8 banks and has a separate per-section preset library; this benchmark deliberately cuts that to one bank of 32 programs and no preset library. Items under excluded are never required; their panel controls exist visually but stay decorative and are listed as unsupported.",
+    "required": [
+      "32 program slots: 4 pages of 8, selected with the Program buttons and Page buttons",
+      "Program dial browsing and a numeric list view",
+      "Store and Store As (with naming), dirty-state indicator, edit-discard on program change",
+      "8 Live slots that auto-store edits",
+      "Splits with up to 4 zones, 3 editable split points, and crossfades",
+      "Layer Scenes I/II",
+      "Wheel and Control Pedal morph assignment",
+      "Master Clock (tap and dial), Transpose, Panic"
+    ],
+    "optional": [
+      "Alphabetic list sorting, program categories, Solo, and multi-view Prog View modes",
+      "Single-level undo for program change from an edited state"
+    ],
+    "excluded": [
+      "Banks beyond one, the 512-program factory bank layout, and Organize swap/move (manual p. 41, 45)",
+      "The Organ/Piano/Synth preset library (manual p. 41-42)",
+      "Aftertouch as a morph source (browser keyboards have no aftertouch; the A.T. button stays decorative)",
+      "Num Pad mode, Monitor/Copy/Paste/Swap, Section Edit, Layer Init (manual p. 43-44)",
+      "Aux KB, Extern, memory protection, and every Shift-menu (System/Sound/Organize/Output/Pedal/MIDI) (manual p. 44, 57-63)",
+      "External MIDI clock sync and pedal tap (manual p. 40)"
+    ]
   },
   "programState": {
     "includes": [
-      "panel settings",
-      "section and layer states",
-      "effect settings and routing",
-      "splits and keyboard zones",
-      "layer scenes",
-      "morph assignments",
-      "Aux KB settings",
-      "Extern settings"
+      "Section and layer enable/focus/level/octave state",
+      "Piano, Organ, and Synth sound selection and parameters",
+      "Effect settings, targeting, and rotary routing",
+      "Splits, keyboard zones, and crossfades",
+      "Layer Scenes I/II",
+      "Morph assignments",
+      "Master clock tempo and transpose"
     ],
-    "excludes": ["Master Level", "temporary Solo mode", "temporary Section Edit mode"],
-    "dirtyStateRequired": true
+    "excludes": ["Master Level"],
+    "dirtyState": "An edited program shows an E indicator; selecting another program without storing discards the edits (manual p. 13)."
   },
-  "morph": {
-    "sources": ["Wheel", "Aftertouch", "Control Pedal"],
-    "assignment": "Hold or latch a source while moving one or more destination controls from start to end value.",
-    "clearOperations": ["clear all assignments for one source", "remove one destination assignment"],
-    "destinations": {
-      "organ": ["Layer Level", "Drawbars", "Rotary Speed"],
-      "piano": ["Layer Level"],
-      "synth": ["Layer Level", "LFO Rate", "Osc Ctrl", "LFO Amount", "Filter Freq", "Filter Resonance", "Arp/Gate Rate"],
-      "effects": ["Mod 1 Rate", "Mod 1 Amount", "Mod 2 Amount", "Delay Tempo", "Delay Feedback", "Delay Dry/Wet", "EQ Mid/Filter Freq", "Drive Amount", "Reverb Dry/Wet"]
-    },
-    "indicators": ["LED fader range", "morph LED", "drawbar LEDs"]
+  "storage": {
+    "slots": 32,
+    "layout": "4 pages of 8 program buttons; the display shows page.button and the name (for example 3.2 Tine Stack).",
+    "factoryContent": "Ship at least 8 stored factory programs demonstrating piano, organ, synth, split, and layered setups.",
+    "store": "STORE once flashes and shows the destination; select with dial/page/program buttons (destination becomes audible for auditioning); STORE again confirms; Shift/Exit cancels (manual p. 13).",
+    "storeAs": "STORE AS opens naming (character entry, insert, delete) before the destination step (manual p. 41).",
+    "liveModeSlots": 8,
+    "liveMode": "LIVE MODE switches the 8 program buttons to Live slots; all edits are stored automatically; programs can be copied between Live and regular slots via Store (manual p. 13, 44).",
+    "listView": "Shift plus the Program dial opens a numeric list of all 32 programs (manual p. 41)."
   },
   "split": {
     "maximumZones": 4,
     "splitPoints": ["Low", "Mid", "High"],
     "possiblePositions": ["C2", "F2", "C3", "F3", "C4", "F4", "C5", "F5", "C6", "F6", "C7"],
     "crossfadeWidthsSemitones": [0, 6, 12],
-    "layerZoneAssignment": "Any Organ, Piano, or Synth layer can be assigned to any active zone combination."
+    "behavior": "SPLIT ON/SET toggles a single Mid split at C4; press-and-hold opens editing for each point's note and crossfade. Split-point LEDs above the keybed show active positions (manual p. 39).",
+    "zoneAssignment": "KB ZONE controls assign any Organ, Piano, or Synth layer to any contiguous zone range; zone LEDs show the assignment (manual p. 39).",
+    "crossfadeBehavior": "Off switches immediately at the split point; ±6/±12 fade sounds across that many semitones on each side (manual p. 39)."
+  },
+  "layerScenes": {
+    "scenes": ["I", "II"],
+    "behavior": "Two independent layer on/off configurations within one program; sound parameters are shared, only enable state differs. The LAYER SCENE II LED shows the active scene (manual p. 43)."
+  },
+  "morph": {
+    "sources": ["Wheel", "Control Pedal"],
+    "controlPedalInput": "A virtual on-screen pedal and MIDI CC11 both drive the Control Pedal source.",
+    "assignment": "Hold (or double-tap to latch) a morph source button, then move destination controls from start to end value; multiple destinations per source; a morph may increase one destination while decreasing another (manual p. 38-39).",
+    "clear": "Shift plus the source button clears all of that source's assignments; re-holding and zeroing a control removes a single assignment (manual p. 39).",
+    "destinations": {
+      "organ": ["Layer Level", "Drawbars", "Rotary Speed"],
+      "piano": ["Layer Level"],
+      "synth": ["Layer Level", "LFO Rate", "Osc Ctrl", "LFO Amount", "Filter Freq", "Filter Resonance", "Arp/Gate Rate"],
+      "effects": ["Mod 1 Rate", "Mod 1 Amount", "Mod 2 Amount", "Delay Tempo", "Delay Feedback", "Delay Dry/Wet", "EQ Mid/Filter Freq", "Drive Amount", "Reverb Dry/Wet"]
+    },
+    "indicators": "Assigned knobs light their green morph LED; level faders and drawbars show the morphed range on their LED graphs (manual p. 39)."
   },
   "clockAndPerformance": {
-    "masterClock": ["tap tempo", "dial tempo", "external MIDI clock", "keyboard sync Off/On/Soft", "pedal tap"],
+    "masterClock": {
+      "set": ["tap the MST CLK button four or more times", "hold it and dial a BPM"],
+      "range": "30-300 BPM",
+      "syncTargets": ["Arpeggiator/Gate", "Synth LFO", "Delay", "Mod 1 rate"],
+      "keyboardSync": ["Off", "On"]
+    },
     "transposeRangeSemitones": [-6, 6],
-    "panic": "All Notes Off plus reset of relevant performance parameters."
-  },
-  "storage": {
-    "storeFlow": ["select destination", "audition destination", "confirm overwrite"],
-    "storeAs": ["edit name", "insert", "delete", "assign category", "select destination", "confirm"],
-    "programOrganization": ["browse", "swap", "move"],
-    "liveModeSlots": 8,
-    "programButtonsPerPage": 8,
-    "pagesPerBank": 8,
-    "listModes": ["Numeric", "Alphabetic", "Category"]
-  },
-  "presetLibrary": {
-    "sections": ["Organ", "Piano", "Synth"],
-    "supportsWholeSection": true,
-    "supportsSingleLayer": ["Piano", "Synth"],
-    "supportsStoreAndStoreAs": true,
-    "cancelRestoresPreviousSound": true
-  },
-  "editing": {
-    "programViewModes": 4,
-    "solo": "One focused layer is audible while other layers are temporarily muted.",
-    "undoOperations": ["preset load", "group changes", "effect global changes", "all effects off", "clear morph", "copy/paste", "layer init", "program change from edited state"],
-    "sectionEdit": ["hold", "sticky double-tap"],
-    "layerInitTargets": ["All", "Organ AB", "Piano A", "Synth A"],
-    "layerScenes": ["I", "II"],
-    "copyPasteTargets": ["Layer", "Effect", "Program", "Morph"],
-    "monitorWithoutChanging": true,
-    "programLevelsShortcut": true
+    "panic": "Shift+Transpose sends an internal All Notes Off and resets held performance inputs (manual p. 40)."
   },
   "acceptance": [
-    "Program save/load round-trips all supported canonical state and reports dirty state correctly.",
-    "Morph source movement interpolates every assigned destination and updates its hardware indicator.",
-    "Split position, zone assignment, and crossfade are editable rather than fixed constants.",
-    "Layer Scene I/II changes enabled layers without duplicating sound settings.",
-    "Preset and Program cancel/undo operations restore the documented prior state.",
-    "Display modes, list modes, naming, category, store, and live-mode flows are navigable from rendered controls."
+    "Storing and re-loading any of the 32 programs round-trips all supported piano, organ, synth, effect, routing, split, scene, and morph state, and the dirty indicator is truthful.",
+    "Moving a morph source interpolates every assigned destination and updates its hardware indicator; clearing works per source.",
+    "Split positions, zone assignments, and crossfades are editable from the panel and audibly route notes, not fixed constants.",
+    "Layer Scene I/II toggles enable state without duplicating or losing sound parameters.",
+    "Live slots persist edits automatically and survive reload; Master Clock, Transpose, and Panic behave as specified."
   ]
 }

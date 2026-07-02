@@ -1,78 +1,48 @@
-# Phase 1 — Complete surface and basic Piano
+# Phase 1 — Complete surface and basic piano
 
-Work only inside the assigned Phase 1 candidate directory. Read the allowlisted inputs completely: `BENCHMARK.md`, `TESTING.md`, Phase 1 of `specs/benchmark-phases.json`, the visual and Piano specs, the selected variant entry, the selected product image, and the relevant manual pages.
+Work only inside the assigned Phase 1 candidate directory. Read `BENCHMARK.md`, Phase 1 of `specs/benchmark-phases.json`, both assigned specs, the selected variant entry, and the selected product image. The manual is the authority where a spec is ambiguous.
 
 Assigned specs: `specs/nord-stage-4.visual.json` and `specs/nord-stage-4.piano.json`.
 
-## Exact outcome
+## Outcome
 
-Build the entire visible Nord Stage 4 hardware surface for the assigned 88, 73, or Compact 73 variant. The exact keybed and one basic Piano voice are functional. All visible knobs, encoders, faders, drawbars, wheels, and buttons move or press and expose accessible state, but every panel control is intentionally presentation-only in this phase.
+Build the entire visible Nord Stage 4 for the assigned variant. Two things are functional: the keybed plays one dependable piano voice, and every visible control moves or presses accessibly. Nothing else works yet — and it must not pretend to.
 
-This boundary must be honest: do not connect visible panel knobs, buttons, wheels, faders, drawbars, or encoders to fake audio/state behavior, and do not claim that they work. Only keybed note input and the note lifecycle (including sustain events from the input boundary) affect audio.
+## Feature set
 
-## Required visual surface
+**Surface (visual spec):**
 
-Implement before polishing micro-detail:
+1. The variant's silhouette, aspect ratio, and exact key count/range/action, on one continuous red chassis.
+2. The 54/46 deck/keybed split and the six sections at their documented widths: Performance 13%, Organ 21%, Piano 15%, Program/Morph 9%, Synth 21%, Layer Effects 21%.
+3. Reference-specific landmarks per section: wheels and master level, nine drawbars with LED graphs, piano selectors, program display/dial/buttons, dense synth groups, effects matrix. Program and Synth get the only primary OLEDs.
+4. Reference materials and colors: red metal, dark inset panels, black indexed knobs, fader caps, LEDs, blue-green OLEDs, white legends.
+5. At 1440x900 the instrument fills 88–97% of viewport width with no vertical scroll; at 390x844 it remains inspectable without clipping.
 
-1. The assigned variant’s measured overall aspect ratio and exact key count/range/action.
-2. One continuous red chassis with connected top/bottom rails and end cheeks.
-3. The 54/46 control-deck/keybed vertical allocation.
-4. Six ordered sections with approximate horizontal allocations: Performance 13%, Organ 21%, Piano 15%, Program/Morph 9%, Synth 21%, Layer Effects 21%.
-5. Reference-specific control density and landmarks: Performance wheels/master controls, nine Organ drawbars, compact Piano selectors, Program display/keypad, dense Synth groups, and Layer Effects matrix.
-6. Only Program and Synth receive primary OLED displays. Do not invent OLEDs in Organ, Piano, Performance, or Layer Effects.
-7. Reference materials, colors, typography, legends, LEDs, spacing, shadows, hierarchy, and neutral product-study presentation.
+**Basic piano (piano spec, Phase 1 subset):**
 
-At 1440x900 the full instrument must occupy 88–97% of viewport width and remain visible without vertical scrolling. At 390x844 it must remain inspectable without clipping away keys, chassis, or control sections.
+One piano-like voice — a declared bundled sample set or honestly-described synthesis — fed by one deterministic note lifecycle:
 
-## Required basic Piano behavior
+- pointer down/up/cancel and independent multi-touch;
+- mapped computer keys with repeat suppression and blur cleanup;
+- Web MIDI note/velocity and sustain CC64, including denied/disconnected states;
+- velocity response, note release, repeated/overlapping notes;
+- sustain, polyphony with deterministic voice stealing, and all-notes-off cleanup on blur/disconnect/unmount;
+- truthful loading/ready/error/fallback status.
 
-Implement one dependable Piano-like voice. It may use one properly declared bundled sample set or honestly described generated/modelled synthesis. It does not need multiple selectable instruments; that begins in Phase 2.
+Tests must not require a physical MIDI device, network, or real audio output.
 
-All inputs feed one deterministic note lifecycle:
+**Decorative controls:**
 
-- pointer down/up/cancel/lost-capture;
-- multi-touch with independent pointer ownership;
-- mapped computer-key input with repeat suppression and blur cleanup;
-- Web MIDI note/velocity and sustain CC, including disconnected/denied states;
-- velocity-to-level response;
-- repeated and overlapping notes;
-- note release and cleanup;
-- sustain pedal down/up behavior;
-- useful polyphony with deterministic voice stealing;
-- internal all-notes-off cleanup on blur/disconnect/unmount (not a functional panel Panic button);
-- truthful loading, ready, error, and fallback status.
+Every visible physical input has a stable ID and accessible name, responds to pointer and keyboard, and shows its state (keys depress, buttons light, knobs turn, faders and drawbars slide). That presentation state lives in a normalized hardware model and changes nothing else: no audio, no fake program/effect state, no displays reporting unimplemented features as working.
 
-No physical MIDI device, network, or real audio output may be required by the tests.
+## Order of work
 
-## Decorative interaction contract
+1. Write `IMPLEMENTATION_PLAN.md` citing both assigned spec filenames and copying the Phase 1 `Hard gates` as a checklist.
+2. Normalized typed hardware/key data with stable IDs; chassis, sections, exact keybed.
+3. Section controls with accessible decorative interaction.
+4. Injectable audio/MIDI/timing boundaries, the note lifecycle, then the piano voice.
+5. Tests, browser pass, canonical captures, and provenance.
 
-Every visible physical input must have a stable ID and accessible name. Keys visibly depress. Buttons press/toggle their light where visually appropriate. Knobs/encoders/faders/drawbars/wheels respond to pointer and keyboard interaction. These presentation states live in the normalized hardware model.
+## Evidence
 
-All visible panel controls are decorative in Phase 1 and must not:
-
-- change the audible graph;
-- write fake Program/Organ/Synth/effect state;
-- update displays as though an unimplemented feature succeeded;
-- be described as functional in evidence or implementation details.
-
-## Required implementation order
-
-1. Write `IMPLEMENTATION_PLAN.md` with the assigned variant, both assigned spec filenames, an exact `Hard gates` checklist, measured bounds/ratios, section inventory, key model, audio source plan, and test mapping.
-2. Create normalized typed hardware/key data with stable IDs.
-3. Build chassis, sections, and exact keybed.
-4. Add section-specific controls and accessible decorative interaction.
-5. Add injectable audio/MIDI/timing boundaries and the unified note lifecycle.
-6. Add the basic Piano source, sustain/polyphony/cleanup, and status handling without activating panel controls.
-7. Complete tests, browser interactions, two visual repair passes, and provenance.
-
-## Required evidence and tests
-
-Maintain every Phase 1 feature ID in `TESTING.md`. Tests must cover exact key geometry, section/landmark inventory, accessible control movement, decorative-state honesty, note lifecycle, every input path, sustain, polyphony/stealing, failure cleanup, and the real audio boundary.
-
-Use the parent capture harness for canonical `stage1-desktop.png`, `stage1-narrow.png`, and `stage1-capture.json`. Write `stage1-visual-audit.md` with measured bounds, ratios, key counts, forbidden landmarks, corrections from two desktop passes, console state, and remaining deviations.
-
-Update `IMPLEMENTATION_DETAILS.json` with the truthful basic Piano source and all samples/licenses. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before verification.
-
-## Explicitly deferred to later phases
-
-Do not implement or claim multiple Piano instruments, detailed Piano model controls, audible effects, Programs/presets, Live Mode, splits, scenes, morphs, Organ audio, or Synth audio.
+Maintain every Phase 1 feature ID from `BENCHMARK.md` in `tests/feature-matrix.json`. Use the parent capture harness for `stage1-desktop.png`, `stage1-narrow.png`, and `stage1-capture.json`; write `stage1-visual-audit.md` with measured bounds, ratios, key counts, corrections, and known deviations. Record the true audio source in `IMPLEMENTATION_DETAILS.json`. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before verification.

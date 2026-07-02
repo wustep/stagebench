@@ -11,12 +11,10 @@ import {
   parseViewerSearch,
 } from './run-utils'
 import type { PhaseNumber } from './run-utils'
-import type { BenchmarkRun, RunStatus, StageStatus } from './types'
+import type { RunEntry, StageStatus } from './types'
 import './App.css'
 
-const runs = runsData as BenchmarkRun[]
-const isLocalEnvironment = import.meta.env.DEV
-const locallyAvailableRuns = runs.filter((run) => isLocalEnvironment || !run.isTest)
+const runs = runsData as RunEntry[]
 const phaseNames = ['Surface + Piano', 'Pianos + FX', 'Complete System']
 const knobAngles = [-86, -22, 43]
 const v2PhaseNames = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
@@ -78,22 +76,48 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-function getPhaseName(run: BenchmarkRun, phase: PhaseNumber) {
-  if (String(run.protocol?.version ?? run.benchmarkVersion ?? '').startsWith('3.')) return phaseNames[phase - 1]
+function formatTokens(value: number) {
+  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`
+  if (value >= 1e3) return `${Math.round(value / 1e3)}k`
+  return String(value)
+}
+
+function formatTelemetry(telemetry: RunEntry['telemetry']) {
+  if (!telemetry) return null
+  const parts: string[] = []
+  if (typeof telemetry.costUsd === 'number') parts.push(`$${telemetry.costUsd.toFixed(2)}`)
+  if (typeof telemetry.wallTimeSeconds === 'number') {
+    const hours = Math.floor(telemetry.wallTimeSeconds / 3600)
+    const minutes = Math.round((telemetry.wallTimeSeconds % 3600) / 60)
+    parts.push(hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`)
+  }
+  if (typeof telemetry.inputTokens === 'number') parts.push(`${formatTokens(telemetry.inputTokens)} tok in`)
+  if (typeof telemetry.outputTokens === 'number') parts.push(`${formatTokens(telemetry.outputTokens)} tok out`)
+  if (typeof telemetry.reasoningTokens === 'number') parts.push(`${formatTokens(telemetry.reasoningTokens)} reasoning`)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+function getPhaseName(run: RunEntry, phase: PhaseNumber) {
+  if (!run.legacy || String(run.protocolVersion ?? '').startsWith('3.')) return phaseNames[phase - 1]
   if (run.stages.length === 4) return v2PhaseNames[phase - 1]
   return legacyPhaseNames[phase - 1]
 }
 
-function getResultClass(run: BenchmarkRun) {
-  const archive = { id: 'archive', label: 'Archive', rank: 2, description: 'Historical, incomplete, or invalid runs, kept for reference and excluded from ranking.' }
-  if (['partial', 'failed', 'invalid', 'budget-exceeded', 'infrastructure-failure'].includes(run.status) || ['invalid-technical', 'incomplete', 'budget-exceeded', 'infrastructure-failure'].includes(run.validity ?? '')) return archive
-  if (run.classification?.kind === 'official' && run.classification.comparable && run.validity === 'valid') return { id: 'official', label: 'Official', rank: 0, description: 'Valid, complete runs from the current compatible comparison series.' }
-  if (run.classification?.kind === 'exploratory') return { id: 'exploratory', label: 'Exploratory', rank: 1, description: 'Development runs recorded outside an official comparison series.' }
-  return archive
+function getResultClass(run: RunEntry) {
+  if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 1, description: 'Runs recorded under earlier protocol versions, kept for reference with their frozen evaluation reports.' }
+  return { id: 'current', label: 'Runs', rank: 0, description: 'Runs recorded under the current benchmark protocol.' }
 }
 
-function StatusLight({ status }: { status: StageStatus | RunStatus }) {
+function StatusLight({ status }: { status: StageStatus | RunEntry['status'] }) {
   return <span className={`status-light status-${status}`} aria-hidden="true" />
+}
+
+function PlayIcon() {
+  return (
+    <svg className="play-icon" viewBox="0 0 10 12" width="10" height="12" aria-hidden="true">
+      <path d="M0 0l10 6-10 6z" fill="currentColor" />
+    </svg>
+  )
 }
 
 function KeyboardRail({
@@ -162,29 +186,27 @@ function KeyboardRail({
 }
 
 function App() {
-  const initialViewer = parseViewerSearch(window.location.search, locallyAvailableRuns)
-  const [selectedRun, setSelectedRun] = useState<BenchmarkRun | null>(
-    initialViewer ? initialViewer.run as BenchmarkRun : null,
+  const initialViewer = parseViewerSearch(window.location.search, runs)
+  const [selectedRun, setSelectedRun] = useState<RunEntry | null>(
+    initialViewer ? initialViewer.run as RunEntry : null,
   )
   const [selectedPhase, setSelectedPhase] = useState<PhaseNumber | null>(initialViewer?.phase ?? null)
-  const [selectedReport, setSelectedReport] = useState<BenchmarkRun | null>(null)
-  const [showTestRuns, setShowTestRuns] = useState(isLocalEnvironment)
+  const [selectedReport, setSelectedReport] = useState<RunEntry | null>(null)
+  const [showcaseOpen, setShowcaseOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [activeNotes, setActiveNotes] = useState<Set<number>>(() => new Set())
   const [lastPlayed, setLastPlayed] = useState<string | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode }>())
   const pressedKeysRef = useRef(new Set<string>())
-  const visibleRuns = [...locallyAvailableRuns]
-    .filter((run) => showTestRuns || !run.isTest)
+  const visibleRuns = [...runs]
     .sort((left, right) => getResultClass(left).rank - getResultClass(right).rank || right.startedAt.localeCompare(left.startedAt))
-  const testRunCount = locallyAvailableRuns.filter((run) => run.isTest).length
-  const activeCount = visibleRuns.filter((run) => run.status === 'running').length
+  const activeCount = visibleRuns.filter((run) => run.status === 'in-progress').length
   const selectedPreviewPath = selectedRun && selectedPhase
     ? getPreviewPath(selectedRun, selectedPhase)
     : undefined
 
-  const openPreview = useCallback((run: BenchmarkRun, phase = getLatestPhase(run)) => {
+  const openPreview = useCallback((run: RunEntry, phase = getLatestPhase(run)) => {
     if (!phase) return
     setSelectedReport(null)
     setSelectedRun(run)
@@ -259,12 +281,12 @@ function App() {
     setActiveNotes((current) => new Set(current).add(midi))
   }, [])
 
-  const overlayOpen = Boolean(selectedRun || selectedReport)
+  const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen)
 
   useEffect(() => {
     const syncViewerFromUrl = () => {
-      const viewer = parseViewerSearch(window.location.search, locallyAvailableRuns)
-      setSelectedRun(viewer ? viewer.run as BenchmarkRun : null)
+      const viewer = parseViewerSearch(window.location.search, runs)
+      setSelectedRun(viewer ? viewer.run as RunEntry : null)
       setSelectedPhase(viewer?.phase ?? null)
       setSelectedReport(null)
       setCopyStatus('idle')
@@ -367,7 +389,6 @@ function App() {
           <a className="wordmark" href="#runs" aria-label="Stagebench runs">
             <span>STAGEBENCH</span>
           </a>
-          <a href="https://github.com/wustep/stagebench/blob/main/METHODOLOGY.md">METHODOLOGY.md</a>
           <a href="https://github.com/wustep/stagebench/blob/main/BENCHMARK.md">BENCHMARK.md</a>
         </nav>
 
@@ -390,7 +411,7 @@ function App() {
             </div>
             <div className="oled-display">
               <span>{activeCount > 0 ? 'BENCHMARK RUNNING' : 'SYSTEM READY'}</span>
-              <strong aria-live="polite">{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runs.find((run) => run.status === 'running')?.model : 'SELECT MODEL'}</strong>
+              <strong aria-live="polite">{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runs.find((run) => run.status === 'in-progress')?.model : 'SELECT MODEL'}</strong>
             </div>
             <ol className="stage-controls" aria-label="Benchmark phases">
               {phaseNames.map((name, index) => (
@@ -408,21 +429,22 @@ function App() {
         </div>
       </header>
 
+      <section className="showcase-band" aria-labelledby="showcase-heading">
+        <div className="showcase-copy">
+          <span className="showcase-flag">Showcase</span>
+          <h2 id="showcase-heading">The evolving Stage 4</h2>
+          <p>Seeded from the top-scoring run, then iterated beyond the benchmark rules. Not scored against the gallery.</p>
+        </div>
+        <button type="button" className="open-preview showcase-play" onClick={() => { closePreview(); setSelectedReport(null); setShowcaseOpen(true) }}>
+          Play <PlayIcon />
+        </button>
+      </section>
+
       <section className="run-index" id="runs">
         <div className="run-index-heading">
           <h2>Runs</h2>
           <div className="run-index-meta">
             <span>{visibleRuns.length} {visibleRuns.length === 1 ? 'run' : 'runs'}</span>
-            {isLocalEnvironment && testRunCount > 0 && (
-              <button
-                aria-pressed={showTestRuns}
-                className="test-run-toggle"
-                onClick={() => setShowTestRuns((current) => !current)}
-                type="button"
-              >
-                {showTestRuns ? 'Hide test runs' : `Show test runs (${testRunCount})`}
-              </button>
-            )}
           </div>
         </div>
 
@@ -431,7 +453,8 @@ function App() {
             {visibleRuns.map((run, index) => {
               const resultClass = getResultClass(run)
               const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
-              const visibleStages = resultClass.id === 'archive' ? run.stages.filter((stage) => stage.status !== 'failed') : run.stages
+              // Failed legacy phases stay in run.json but are noise in the gallery.
+              const visibleStages = run.legacy ? run.stages.filter((stage) => stage.status !== 'failed') : run.stages
               return (
               <Fragment key={run.id}>
               {resultClass.id !== previousClass && (
@@ -445,23 +468,16 @@ function App() {
                   <div className="run-status-line">
                     <span className="run-status"><StatusLight status={run.status} />{run.status}</span>
                     <span className="model-target">{run.target ?? 'Stage 4 73'}</span>
-                    {resultClass.id !== 'archive' && (
-                      <span className={`result-class-badge result-class-${resultClass.id}`}>{resultClass.label}</span>
-                    )}
-                    {run.validity && <span className="validity-badge">{run.validity}</span>}
-                    {run.isTest && <span className="test-run-badge">Test run</span>}
                   </div>
                   <h3>{getRunTitle(run)}</h3>
-                  {run.evaluation && (
-                    <div className="run-score" aria-label={`Aggregate evaluation ${floorScore(run.evaluation.score)} out of 100, ${run.evaluation.grade}`}>
-                      <strong>{floorScore(run.evaluation.score)}</strong>
-                      <span>/100 · {run.evaluation.grade}<small>{run.evaluation.evaluatedStages.length}/{run.stages.length} selected phases evaluated{getResultClass(run).id !== 'official' ? ' · not ranked' : ''}</small></span>
+                  {run.score !== null && (
+                    <div className="run-score" aria-label={`Aggregate evaluation ${floorScore(run.score)} out of 100`}>
+                      <strong>{floorScore(run.score)}</strong>
+                      <span>/100</span>
                     </div>
                   )}
-                  {!run.evaluation && run.stages.some((stage) => stage.status === 'complete') && (
-                    <span className="evaluation-pending">Evaluation pending</span>
-                  )}
                   <p>{formatDate(run.startedAt)} · {run.model}</p>
+                  {formatTelemetry(run.telemetry) && <p className="run-telemetry">{formatTelemetry(run.telemetry)}</p>}
                 </div>
 
                 <ol className="stage-track" aria-label={`${getRunTitle(run)} phase progress`} style={{ gridTemplateColumns: `repeat(${visibleStages.length}, 1fr)` }}>
@@ -469,7 +485,7 @@ function App() {
                     <li className={`stage-${stage.status}`} key={stage.number}>
                       <span>0{stage.number}</span>
                       <div><StatusLight status={stage.status} /><strong>{getPhaseName(run, stage.number)}</strong></div>
-                      <small>{stage.evaluation ? `${floorScore(stage.evaluation.score)}/100 · ${stage.evaluation.grade}` : stage.status === 'complete' ? 'evaluation pending' : stage.status}</small>
+                      <small>{stage.score !== null ? `${floorScore(stage.score)}/100` : stage.status === 'complete' ? 'evaluation pending' : stage.status}</small>
                     </li>
                   ))}
                 </ol>
@@ -477,12 +493,12 @@ function App() {
                 <div className="run-actions">
                   {run.previewPath ? (
                     <button type="button" className="open-preview" onClick={() => openPreview(run)}>
-                      Play <span aria-hidden="true">▶</span>
+                      Play <PlayIcon />
                     </button>
                   ) : (
                     <span className="preview-pending">No preview available</span>
                   )}
-                  {run.evaluation?.reportPath && (
+                  {run.reportPath && (
                     <button type="button" className="open-report" onClick={() => { closePreview(); setSelectedReport(run) }}>
                       Evaluation report <span aria-hidden="true">→</span>
                     </button>
@@ -496,7 +512,7 @@ function App() {
         ) : (
           <div className="empty-state">
             <StatusLight status="queued" />
-            <div><h3>No runs yet</h3><p>Run the project skill to add the first model.</p></div>
+            <div><h3>No runs yet</h3><p>Run <code>pnpm bench new</code> to add the first model.</p></div>
           </div>
         )}
 
@@ -505,7 +521,7 @@ function App() {
           <ol>
             <li><span>01</span><div><strong>Complete surface + basic Piano</strong><p>Exact visual hardware and keybed, one playable Piano voice, and honestly decorative panel controls.</p></div></li>
             <li><span>02</span><div><strong>Piano library + working effects</strong><p>Multiple distinct Pianos, two layers, detailed controls, shared audio graph, and connected effect families.</p></div></li>
-            <li><span>03</span><div><strong>Complete Stage 4 system</strong><p>Programs, presets, performance systems, Organ, Synth, full routing, and meaningful hardware bindings.</p></div></li>
+            <li><span>03</span><div><strong>Complete Stage 4 system</strong><p>Programs, splits, scenes, morphs, Organ, Synth, full routing, and meaningful hardware bindings.</p></div></li>
           </ol>
         </section>
       </section>
@@ -558,20 +574,37 @@ function App() {
         </div>
       )}
 
-      {selectedReport?.evaluation?.reportPath && (
+      {showcaseOpen && (
+        <div className="preview-overlay" role="dialog" aria-modal="true" aria-label="Showcase preview">
+          <div className="preview-header">
+            <div className="preview-identity">
+              <strong>Showcase</strong>
+              <span>SEEDED FROM FABLE 5 HIGH · ITERATING</span>
+            </div>
+            <div className="preview-tools">
+              <button type="button" onClick={() => setShowcaseOpen(false)}>Close</button>
+            </div>
+          </div>
+          <div className="preview-stage">
+            <iframe scrolling="no" src="/previews/showcase/index.html" title="Showcase Nord Stage 4" />
+          </div>
+        </div>
+      )}
+
+      {selectedReport?.reportPath && (
         <div className="preview-overlay report-overlay" role="dialog" aria-modal="true" aria-label={`${getRunTitle(selectedReport)} evaluation report`}>
           <div className="preview-header">
             <div className="preview-identity report-identity">
               <StatusLight status={selectedReport.status} />
               <strong>{getRunTitle(selectedReport)}</strong>
               <span className="report-kind">Evaluation report</span>
-              <span className="report-score">{floorScore(selectedReport.evaluation.score)}/100</span>
+              {selectedReport.score !== null && <span className="report-score">{floorScore(selectedReport.score)}/100</span>}
             </div>
             <div className="preview-tools">
               <button type="button" onClick={() => setSelectedReport(null)}>Close</button>
             </div>
           </div>
-          <iframe className="report-frame" src={selectedReport.evaluation.reportPath} title={`${getRunTitle(selectedReport)} evaluation report`} />
+          <iframe className="report-frame" src={selectedReport.reportPath} title={`${getRunTitle(selectedReport)} evaluation report`} />
         </div>
       )}
     </main>

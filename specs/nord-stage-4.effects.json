@@ -1,83 +1,119 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "effects",
   "source": {
     "manual": "reference/manual.pdf",
-    "pages": [47, 48, 49, 50, 51, 52]
+    "pages": [48, 49, 50, 51, 52, 53]
+  },
+  "scope": {
+    "note": "Phase 2 scope for the Piano layers; Phase 3 extends the same units to Organ (shared chain) and Synth layers. Items under excluded are never required; their panel controls exist visually but stay decorative and are listed as unsupported.",
+    "required": [
+      "Six effect units per layer chain (Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb) plus one shared Rotary",
+      "Every listed effect type selectable and audibly distinct within its unit",
+      "FX focus following layer focus, manual focus buttons, group mode, and global mode",
+      "Per-unit on/bypass, all-effects bypass, and the documented signal order"
+    ],
+    "optional": [
+      "Delay ping-pong",
+      "Rotary stop mode"
+    ],
+    "excluded": [
+      "Per-type Variations and Reverb Chorale (manual p. 49-53)",
+      "Delay feedback-loop effects (Chor/Vibe/Ens/Flam/Space) and Analog mode (manual p. 51)",
+      "Mod 1 Pump/Wah pedal modes (manual p. 49)",
+      "Rotary close mic and stop angle (manual p. 53)",
+      "Global reverb post-rotary placement nuance; reverb always precedes rotary here (manual p. 52-53)"
+    ]
   },
   "routing": {
-    "effectChainInstancesPerProgram": 6,
-    "organLayersShareOneChain": true,
-    "pianoLayersHaveIndependentChains": true,
-    "synthLayersHaveIndependentChains": true,
+    "chainInstancesPerProgram": 6,
+    "chains": "Piano A, Piano B, Synth A, Synth B, Synth C each own a chain; Organ A and B share one chain (manual p. 48).",
     "rotaryInstancesPerProgram": 1,
     "rotaryIsLastInSignalPath": true,
-    "allEffectsBypass": true,
+    "allEffectsBypass": "The Layer Effects ON button bypasses every effect at once (manual p. 48).",
     "focusFollowsLayerFocus": true,
-    "manualFocusSections": ["Organ", "Piano", "Synth"],
-    "groupModeSections": ["Piano", "Synth"],
-    "globalCapableUnits": ["Delay", "Compressor", "Reverb"]
+    "manualFocusButtons": ["Organ", "Piano", "Synth"],
+    "groupMode": "Piano and Synth chains can be grouped so all layers of the section share one effect setting (manual p. 48).",
+    "globalCapableUnits": ["Delay", "Compressor", "Reverb"],
+    "globalMode": "Shift+On on a global-capable unit applies it to all layers of all sections (manual p. 48)."
   },
   "units": [
     {
       "id": "mod1",
-      "types": ["A-Pan", "Tremolo", "Ring Mod", "Auto-Wah", "Wah", "Pump"],
-      "parameters": ["Rate/Sensitivity", "Amount", "Variation/Pedal", "Master Clock where supported"],
+      "types": ["A-Pan", "Tremolo", "Ring Mod", "A-Wah", "Wah", "Pump"],
+      "typeNotes": {
+        "A-Pan": "LFO stereo panning.",
+        "Tremolo": "LFO volume modulation; full level at zero amount.",
+        "Ring Mod": "Signal multiplied by a sine; rate sets the sine pitch.",
+        "A-Wah": "Envelope-follower band-pass sweep; rate knob acts as sensitivity.",
+        "Wah": "LFO-driven resonant low-pass sweep.",
+        "Pump": "Side-chain-style LFO ducking."
+      },
+      "parameters": ["Rate/Sens", "Amount", "On", "Master Clock sync for LFO types"],
       "morphable": ["Rate", "Amount"]
     },
     {
       "id": "mod2",
-      "types": ["Phaser", "Flanger", "Vibe", "Chorus", "Ensemble", "Spin"],
-      "parameters": ["Rate", "Amount", "Variation"],
+      "types": ["Chorus", "Flanger", "Phaser", "Vibe", "Ensemble", "Spin"],
+      "typeNotes": {
+        "Chorus": "Detuned widening; high amounts add a second delay line.",
+        "Flanger": "Comb-filter sweep with feedback.",
+        "Phaser": "Classic all-pass phasing; amount adds feedback color.",
+        "Vibe": "Staggered phase filters with pitch-bend character.",
+        "Ensemble": "Three cross-connected modulated delay lines.",
+        "Spin": "Gentle rotary-like modulation; rate changes ramp gradually."
+      },
+      "parameters": ["Rate", "Amount", "On"],
       "morphable": ["Amount"]
     },
     {
       "id": "delay",
-      "types": ["Clean delay"],
-      "feedbackEffects": ["Chorus", "Vibe", "Ensemble", "Flam", "Space"],
-      "feedbackFilters": ["Off", "Low Pass", "High Pass", "Band Pass"],
-      "parameters": ["Tempo", "Feedback", "Dry/Wet", "Ping Pong", "Tap Tempo", "Analog", "Master Clock", "Variation"],
+      "parameters": ["Tempo", "Feedback", "Dry/Wet", "Feedback filter Off/LP/HP/BP", "Tap tempo", "Master Clock sync", "Ping Pong (optional)", "On", "Global"],
+      "feedbackFilterBehavior": "Each successive repeat passes through the filter again, becoming progressively more filtered (manual p. 51).",
       "morphable": ["Tempo", "Feedback", "Dry/Wet"]
     },
     {
       "id": "ampEq",
-      "types": ["Neutral EQ", "Twin", "JC", "Small", "LP24 Filter", "HP24 Filter", "To Rotary"],
-      "parameters": ["Drive", "Bass Gain", "Mid Gain", "Mid Frequency", "Treble Gain", "Filter Frequency", "Filter Resonance", "Variation"],
-      "fixedFrequenciesHz": { "bass": 100, "treble": 4000 },
-      "midFrequencyRangeHz": [200, 8000],
-      "gainRangeDb": [-15, 15],
-      "morphable": ["Drive", "Mid/Filter Frequency"]
+      "types": ["EQ only", "Twin", "JC", "Small", "LP24 Filter", "HP24 Filter", "To Rotary"],
+      "typeNotes": {
+        "amps": "Twin, JC, and Small are distinct tone-shaping drive/speaker colorations; a documented approximation is acceptable but the three must not sound identical.",
+        "filters": "LP24/HP24 are resonant 24 dB filters using Freq as cutoff and Gain/Res as resonance.",
+        "toRotary": "Routes this layer into the shared Rotary; other active units stay before it (manual p. 52)."
+      },
+      "eq": { "bassHz": 100, "trebleHz": 4000, "midRangeHz": [200, 8000], "gainRangeDb": [-15, 15] },
+      "parameters": ["Drive", "Bass", "Mid Gain/Res", "Mid Freq", "Treble", "On"],
+      "morphable": ["Drive", "Mid/Filter Freq"]
     },
     {
       "id": "compressor",
-      "types": ["Compressor"],
-      "parameters": ["Amount", "Fast", "Global", "On"]
+      "parameters": ["Amount", "Fast mode", "On", "Global"],
+      "behavior": "Higher amounts audibly reduce dynamic range; fast mode recovers quicker and pumps at high amounts (manual p. 52)."
     },
     {
       "id": "reverb",
-      "types": ["Spring", "Booth", "Room", "Stage", "Hall", "Cathedral"],
-      "parameters": ["Dry/Wet", "Variation/Chorale", "Bright", "Dark", "Global", "On"],
+      "types": ["Room", "Booth", "Spring", "Stage", "Hall", "Cathedral"],
+      "typeNotes": "Decay length grows from Booth (very short) to Cathedral (very long); Spring has a distinct boingy character (manual p. 52-53).",
+      "parameters": ["Dry/Wet (fully wet at max)", "Bright/Dark", "On", "Global"],
       "morphable": ["Dry/Wet"]
     },
     {
       "id": "rotary",
-      "types": ["Rotary Speaker"],
-      "parameters": ["Slow", "Fast", "Stop", "Stop Angle", "Close Mic", "Drive", "Morph Speed"],
-      "routingSources": ["Organ", "Piano via To Rotary", "Synth via To Rotary"]
+      "parameters": ["Slow/Fast", "Stop mode (optional)", "Drive", "Organ routing button", "Morphable speed", "On"],
+      "behavior": "Models a horn plus bass rotor; speed changes accelerate smoothly. Organ routes via its button; Piano/Synth route via To Rotary (manual p. 53)."
     }
   ],
   "signalContract": {
-    "requiredOrder": ["Layer source", "Mod 1", "Mod 2", "Delay", "Amp/EQ or Filter", "Compressor", "Reverb", "Rotary when routed", "Master bus", "Destination"],
+    "requiredOrder": ["Layer source", "Mod 1", "Mod 2", "Delay", "Amp Sim/EQ or Filter", "Compressor", "Reverb", "Rotary when routed", "Layer level", "Master gain/limiter", "Destination"],
     "oneAudioContext": true,
     "bypassMustBeClickFree": true,
-    "parameterAutomationRequired": true,
+    "parameterRampsRequired": "Use short ramps on audible parameter changes to avoid clicks.",
     "masterLimiterRequired": true
   },
   "acceptance": [
-    "Each required representative effect changes benchmark-rendered audio in a way consistent with its class.",
-    "Bypass, focus, group, global, and per-layer targeting alter the actual signal path.",
-    "Delay feedback effects and filters process repeats rather than the dry signal.",
-    "Reverb precedes Rotary for routed layers.",
-    "No unit counts as implemented when represented only by metadata, disconnected nodes, or display state."
+    "Every unit and every listed type processes real audio and measurably changes a standardized rendered signal; a label, enum, or disconnected node is not an effect.",
+    "On/bypass, all-effects bypass, dry/wet, focus, group, and global targeting alter the actual signal path.",
+    "Delay feedback filtering processes the repeats rather than the dry path, and tap/clock tempo agree.",
+    "Reverb precedes Rotary for routed layers; nothing bypasses the shared master path.",
+    "Parameter changes are click-free and the graph cleans up all nodes on release."
   ]
 }

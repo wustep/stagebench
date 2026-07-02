@@ -1,0 +1,325 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "claude-fable-5",
+  "blindId": "trial-4e79ed98c647beb2",
+  "stage": 2,
+  "stageName": "Piano library and working effects",
+  "status": "complete",
+  "evaluator": "independent-evaluator",
+  "evaluatedAt": "2026-07-02T06:37:35.000Z",
+  "summary": "Strong Phase 2 artifact with an exemplary audio graph, genuinely audible effects, and exceptional real-boundary evidence, held back mainly by an incomplete piano library. Direct browser inspection (headless Chromium against the sealed production build at localhost:4823, AnalyserNode tapped on the real master gain, plus AudioContext-construction counting injected before load) confirmed: one AudioContext; layer buses through the documented Mod1->Mod2->Delay->Amp/EQ->Comp->Reverb order into master gain -> limiter -> one destination; Grand/Upright/Electric are bundled recorded sample sets that load offline, sound (RMS 0.0015-0.0039 under --mute-audio tab) and are spectrally distinct; two layers with correct per-layer voice ownership, level fader binding (0..127, audible mute), and octave shift doubling the fundamental (258->527 Hz); KB Touch, Dyn Comp, Timbre (node gains follow state: treble -4.5 dB Soft, threshold -21 dB at Dyn Comp 1, readable only while the graph processes - a Chromium getter quirk I ruled out), Unison, Soft Release, String Res and Master Level all change canonical state and rendered/live audio; every effect family processes real audio (tremolo modulation 2.4x dry, delay repeats with LP-filtered repeat tail, LP24 centroid collapse, compressor dynamic range 16.2->1.8, Booth vs Cathedral tails, rotary fast 5.0x stop modulation via To Rotary); focus/group/global targeting, per-unit and all-FX bypass, wet/dry, tap tempo (~520 ms for 500 ms taps) all verified against store state and sound; MIDI-denied, asset-failure fallback (labeled synthesized, playable, never 'ready'), blur/pointercancel cleanup, 24-voice stealing and panic all behave; zero console errors across every session. The candidate's 203 tests pass (23 files) and include real OfflineAudioContext renders (node-web-audio-api) with measured assertions and graph-connectivity traversal. Key gaps: Clav/Digital/Misc types have no model at all (spec requires all six types playable, honest synthesis permitted - selecting them reports 'Piano not found' and plays nothing); SUSTPED/PSTICK exist only as indicator LEDs, not toggles; no on-screen UI sustain control (Space/CC64 only); several spec-excluded features (half-pedaling, pedal noise, delay feedback-loop effects, Analog mode) were implemented functionally instead of staying decorative (honestly declared); typecheck depends on @types/node being resolvable from a parent directory. Visual surface and narrow retention against Phase 1 captures show no drift.",
+  "score": 89.9,
+  "rawScore": 89.9,
+  "grade": "strong",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "label": "Visual and interaction retention",
+      "weight": 10,
+      "score": 100,
+      "contribution": 10,
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "label": "Surface fidelity retention",
+          "weight": 60,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Compared canonical evidence/stage2-desktop.png and stage2-narrow.png with stage1-desktop.png/stage1-narrow.png and with my own live 1440x900 and 390x844 screenshots of the running build: continuous red chassis, 73-key E-E keybed, six sections, 54/46 deck/keybed split, materials and typography are unchanged; no clipping or lost controls at 390x844.",
+            "Only documented deliberate deltas observed (Delay FILTER button added per real hardware; previously-static LEDs now stateful), matching evidence/stage2-visual-audit.md; stage2-capture.json records empty consoleMessages/pageErrors for both canonical captures.",
+            "Live DOM probe: [data-testid=deck-block] height 54%, keys-block 46%, all sections present; no marketing content or reference photo rendered."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "label": "Piano/effect hardware state",
+          "weight": 40,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Zoomed live screenshots of the deck with state engaged (layer B on, Delay/Reverb on): layer letters and FX FOCUS LEDs, unit ON LEDs, active type-token highlighting (e.g. HALL in the Reverb variation row), timbre BRIGHT/MID/SOFT LEDs, rotary SLOW/FAST LEDs, layer-level LED graphs and Program OLED all reflect canonical state.",
+            "DOM state probe: piano-layer-a aria-pressed=true, piano-layer-b false, reverb-on false after bypass, piano-on true, perf-master-level aria-valuenow=100, oled-piano-line '▤ A: Salamander Grand', oled-edit-line shows truthful last edit ('Delay Tempo 521 ms'); functional controls data-decorative=false, Organ controls data-decorative=true.",
+            "Program display piano line updates on every selection including 'Piano not found (Clav)'; PANIC shows 'PANIC — all notes off' on the edit line."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "label": "Piano library and performance",
+      "weight": 35,
+      "score": 73.8,
+      "contribution": 25.8,
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "label": "Distinct Piano instruments",
+          "weight": 30,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Grand/Upright/Electric are real bundled recorded sets served from dist/samples (90/19/19 mp3 files on disk, loaded same-origin, offline-capable): live analyser shows all three sound (max RMS 0.0015/0.0015/0.0039 in a muted headless tab) with distinct spectral centroids (77.2/84.3/61.3); rendered-audio tests (render-library.test.ts) additionally assert pairwise distinctness. Provenance (roots, velocity layers, license CC BY 3.0 / MIT) is complete and truthful in IMPLEMENTATION_DETAILS.json and src/audio/library.ts; Salamander Grand has 30 roots x 3 recorded velocity layers with crossfading.",
+            "GAP: Clav, Digital and Misc have no model at all — src/audio/library.ts ships only three instruments, and selecting those types live shows '▤ Piano not found (Clav/Digital/Misc)' with RMS 0.0000 (silent). The piano spec requires 'All six piano types selectable with at least one model each' with honest synthesis explicitly acceptable for these three; the candidate chose honest silence instead of a playable model, so half the required type inventory produces no sound.",
+            "Fidelity note: the 'Upright' is a GM Honky-tonk soundfont render (tack-piano character, single velocity layer) rather than a recorded acoustic upright set — declared honestly, audibly distinct from the Grand, but a character compromise."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "label": "Two-layer Piano behavior",
+          "weight": 25,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Live: enabling layer B via its panel button creates one voice per layer per key (engine.layerVoiceCount A=1 B=1), thickens output (RMS 0.0026 solo -> 0.0036 layered), and focus follows the enabled layer (hardware behavior); disabling B removes its voices.",
+            "Level fader binding verified live with layer B isolated: Home sets level 0 (state), End sets 127; audible drop from RMS 0.0042 to 0.0005. Octave shift on the focused layer doubled the sounding fundamental 258 Hz -> 527 Hz and shows 'Octave +1' feedback; octave selects different recorded zones per layers.test.ts.",
+            "Cleanup: after 40 rapid noteOn/noteOff across both layers, activeVoiceCount returns to 0; blur releases all voices (0 after window blur); layers.test.ts and graph.test.ts assert per-layer bus ownership through real node connections."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "label": "Detailed Piano controls",
+          "weight": 25,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "All six spec'd controls verified live to change canonical state and sound: KB Touch Heavy vs Light at fixed velocity 0.45 (RMS 0.0062 -> 0.0133); Dyn Comp 3 raises a soft stroke (0.0021 -> 0.0225); Timbre steps cycle state with per-family lists (acoustic 4, electric 6 incl. Dyno) and drive the bus EQ (timbreTreble.gain reads -4.5 dB at 'Soft' and dynComp.threshold -21 dB at level 1 while the graph is processing — confirmed the idle-0 readings were a Chromium AudioParam getter artifact); Unison 3 adds detuned panned copies (state + RMS up, buildSampleSources adds ±detuned sources); Soft Release doubles the release tail mean (0.00005 -> 0.00010); String Res send follows damper (resSend 0.4 with pedal down + StringRes on); Master Level knob Home mutes (RMS 0.00034 vs 0.0055).",
+            "render-piano-controls.test.ts proves each control measurably changes real offline-rendered audio; pitch stick bends live playbackRate ±2 semitones; Panic works from the panel.",
+            "GAP: SUSTPED and PSTICK are indicator LEDs only (sections.tsx:356-359) — no toggle exists anywhere in src/ (grep for sustped/pstick routing returns nothing), so the spec acceptance 'sustain ... only affects layers with SUSTPED on' cannot be exercised; sustain and pitch stick are unconditionally routed to the Piano section."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "label": "Input and fallback reliability",
+          "weight": 20,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Live: pointer key press/release, independent multi-touch (two touch pointers hold [60,64], releasing one leaves the other), pointercancel releases without stuck notes, computer keyboard KeyA=C4 with repeat suppression (second keydown does not add a voice) and visible key depression (data-pressed=true); window blur clears all held voices.",
+            "MIDI: headless Chromium denies access and the strip truthfully reports 'MIDI permission denied — keyboard, pointer and touch input still work'; CC64 half-pedal path verified via the controller (setSustain(0.5) -> engine.sustainPedalLevel()=0.5, longer damping release); soft (Z/CC67) and sostenuto (X/CC66) verified live and labeled as approximations; midi.test.ts covers note/velocity/hot-plug/disconnect/denied/unsupported.",
+            "Asset failure: with samples/ fetches aborted on a fresh page, the engine enters a labeled 'FALLBACK voice active (synthesized, not the recorded library)' state, stays playable (RMS 0.0131), and never reports ready; rapid play (30 fast notes) settles to silence with 0 voices and no console errors.",
+            "GAP: no on-screen UI sustain control exists (DOM scan found no sustain-named button) — sustain is reachable only via Space and MIDI CC64, while the spec lists 'UI control, keyboard mapping, and MIDI CC64' as three paths."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "label": "Effects and signal graph",
+      "weight": 30,
+      "score": 100,
+      "contribution": 30,
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "label": "Shared graph and gain staging",
+          "weight": 25,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Injected an AudioContext-constructor counter before page load: exactly 1 construction after full interaction across pianos, layers and all effect families. diagnostics() exposes the real masterGain, limiter (DynamicsCompressor, threshold -3 dB), single rotary and both layer channels.",
+            "graph.test.ts traverses REAL node connections (fake-context edges): voiceBus->timbre->dynComp->level->mod1->...->reverb->master, exactly one node feeds the destination (the limiter, fed by master), rotary tap hangs off the reverb output, no chain skips units; parameter changes emit only setTargetAtTime events (ramped, click-free); dispose() closes the context with zero live nodes and all LFOs stopped.",
+            "Live: master gain automation observable (gain.value 0.558 -> 0.0223 -> 0.558 through the Master Level store path); voice/timer cleanup returns activeVoiceCount to 0 after stress; engine restarts cleanly after dispose (StrictMode-safe)."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "label": "Audible effect coverage",
+          "weight": 45,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Every unit audibly processes signal live through the panel controls: Mod 1 Tremolo modulation 2.4x dry (detrended log-diff metric); Ring Mod shifts the mid-hold spectrum (centroid 44.9 on vs 49.6 bypassed mid-note) with sidebands; all six Mod 2 types produce output when cycled (Chorus/Ensemble/Spin/Phaser/Flanger/Vibe RMS 0.0015-0.0038); Delay produces repeats after release (tail max 0.0015) and the Low Pass loop filter darkens the repeat tail (centroid 93.1 -> 89.9); Amp drive/Twin colors and raises output (0.0352 -> 0.0510), LP24 at low cutoff collapses the centroid (77.2 -> 41.2); Compressor shrinks loud/soft ratio 16.2 -> 1.8; Booth vs Cathedral reverb tails differ >10x (0.00000 vs 0.00016 mean tail RMS); Rotary routed via To Rotary shows fast 5.0x stop modulation and fast/slow 3.7x with audible spin-up inertia.",
+            "src/audio/effects.ts implements distinct DSP topologies per type (allpass banks, modulated delay lines, envelope follower, ring-mod gain multiplication, feedback loop with in-loop filter/shaper, generated-IR convolver — declared generated, dual-band rotary with independent horn/rotor LFOs); nothing is a label or disconnected node, confirmed by graph traversal tests and live processing.",
+            "render-effects.test.ts asserts measured rendered-audio changes for Tremolo, A-Pan, Phaser, Chorus, Delay repeats/feedback/loop-filter, Neutral EQ mid band, Twin drive, LP24, Compressor, Reverb wet/dry, Rotary slow/fast/stop, All-FX-Off-equals-dry, and full-polyphony clipping protection. Per-type rendered assertions are representative rather than exhaustive (e.g. JC vs Small, Vibe vs Ensemble, 5 of 6 reverb types lack individual rendered distinctness checks), backed instead by distinct DSP structure and my live audibility checks."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "label": "Routing and control",
+          "weight": 30,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Live store-state verification: with layer A focused, panel effect edits changed only chains.A (A.reverb.on=true, B.reverb.on=false); fx-focus-piano cycles A -> B -> Group with LEDs; entering Group copies the focused chain to both layers (copy-on-entry per manual p.48); panel SHIFT + Delay ON sets fxGlobal.delay=true and subsequent tempo edits hit both chains (A=B=127).",
+            "Bypass/wet-dry: per-unit bypass kills the Cathedral tail (0.00016 -> 0.00000), All FX Off with every unit engaged matches dry both live and in render-effects.test.ts; delay/reverb mix knobs are equal-power crossfades (mix 0 tail = 0.00000); tap tempo: three ~500 ms taps set delay tempo to 46 (~520 ms), agreeing with the display.",
+            "Order and special paths verified structurally and audibly: delay feedback filter processes repeats only (effects-routing.test.ts asserts loop membership; live repeat tail darkens while the first tap does not), Reverb precedes Rotary (toRotary gain taps the reverb output; graph test), To Rotary reroutes the layer through the single rotary instance away from the direct master tap; rotary drive/speed/stop bound to physical controls."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "label": "System behavior and UX",
+      "weight": 10,
+      "score": 100,
+      "contribution": 10,
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "label": "Audible/visible feedback",
+          "weight": 50,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Every exercised control produced immediate coherent feedback across display, LED and sound: type selection updates the OLED piano line and type LEDs plus the sounding sample set; 'Piano not found' with flashing LED for unpopulated types; every parameter edit writes a truthful last-edit line (e.g. 'Timbre Soft', 'Delay Tempo 521 ms', 'Rotary Fast', 'PANIC — all notes off').",
+            "Status strip truthfully tracks engine state (idle -> loading -> 'Pianos ready (recorded samples) — A: Salamander Grand · B: Tine EP'), MIDI permission, and live pedal state (sustain/sostenuto/soft down/up verified while holding Space/Z/X).",
+            "piano-info button prints truthful provenance to the display: 'Salamander Grand: 3 vel layer(s), 90 files — CC BY 3.0 — Alexander Holm'."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "label": "Failure and stress behavior",
+          "weight": 50,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Failure paths: denied MIDI reported truthfully with inputs still working; blocked sample fetches on a fresh page enter a labeled playable synthesized fallback that never claims ready; window blur and pointercancel clear all voices (0 after each); Panic silences within ~200 ms (RMS 0.0007) with display feedback.",
+            "Stress: 40 simultaneous notes cap at the 24-voice-per-layer limit with deterministic oldest-first stealing and return to 0 voices; 12 rapid Mod 2 on/off + type cycles followed by playing caused no instability; 30-note rapid run settles to silence; master limiter present (threshold -3 dB) and a rendered test asserts full-polyphony peaks stay within full scale.",
+            "Zero console errors or page errors across every browser session (initial pass, follow-ups, input tests, fallback page), matching the canonical capture's empty console log."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 15,
+      "score": 93.8,
+      "contribution": 14.1,
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "label": "Audio architecture",
+          "weight": 45,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Clear boundaries: library (sample zones/provenance) / engine (voices, buses, lifecycle) / effects (self-contained EffectUnit shells with input/output/update/dispose) / InstrumentStore (canonical state) / PresentationStore (panel front door forwarding bound IDs, keeping decorative controls presentation-only) / InstrumentController (unified note lifecycle) / injectable AudioBoundary-MidiBoundary-AssetBoundary-timers (src/audio/boundaries.ts).",
+            "The engine subscribes to the store so every canonical change is applied to the live graph with ramps; the same code runs against the real browser context, a real Node OfflineAudioContext, and fake contexts — demonstrated by the passing suites. Effect chains are per-layer objects keyed A/B, extensible to the Phase 3 Synth A/B/C + shared Organ chain model; the single Rotary and global/group targeting already generalize.",
+            "Diagnostics hook exposes real graph nodes for verification only; window.__stagebench is not used by app logic."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "label": "Real-boundary tests",
+          "weight": 30,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Ran the candidate suite read-only on a scratch copy (pnpm install --frozen-lockfile, Node 22): 23 files, 203 tests, all pass in ~35 s. Feature matrix maps every Phase 2 ID (plus retained Phase 1 IDs) to real test files.",
+            "src/test/offline.ts renders the FULL engine graph through node-web-audio-api's real OfflineAudioContext reading the actual bundled mp3 files, then measures rms/peak/Goertzel band energy/zero-crossings/cross-correlation/high-band ratio — genuine audio-boundary proof for instrument distinctness, every piano control, effect processing, bypass-equals-dry, delay-repeat filtering, rotary rates, limiter behavior, velocity direction and sustain duration.",
+            "graph.test.ts asserts one context/one destination, documented unit order, no-skip chains, reverb-before-rotary and ramped automation by traversing actual node connections; effects-routing.test.ts covers focus/group/global/bypass/wet-dry/tap through the real panel path; status/fallback/pedals/layers suites cover honesty and cleanup. Tests run without network, devices or audio output."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "label": "Performance and maintainability",
+          "weight": 25,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Runtime quality is excellent: zero console errors everywhere, stable rapid interaction, voices/timers return to baseline, decoded sample tails truncated to 6.5 s to bound memory, lazy engine start, clean StrictMode-safe dispose/restart. Code is well-named, documented with manual page citations, and consistently typed; oxlint on src/scripts yields 0 errors (6 benign unicorn/no-useless-spread warnings on intentional iteration-safe spreads).",
+            "Reproducibility flaw: package.json omits @types/node while test files import node:fs/node:path/node:url, so 'pnpm typecheck' (tsc --noEmit) fails in an isolated checkout (TS2591) and passes only where node_modules/@types/node is resolvable from a parent directory — verified both ways on a scratch copy; the other three gates (test/lint/build) pass standalone, and build produces dist/index.html.",
+            "Minor maintainability nits: src/components/sections.tsx is a 51 KB monolith; inherited Phase 1 tests are all retained per the feature matrix and pass."
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "command": "pnpm run test",
+        "durationMs": 36247,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "command": "pnpm run typecheck",
+        "durationMs": 1682,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "command": "pnpm run lint",
+        "durationMs": 334,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "command": "pnpm run build",
+        "durationMs": 1925,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "runs/claude-fable-5/stage2/dist/index.html"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "id": "missing-piano-models",
+      "severity": "major",
+      "criterion": "pianoLibrary.instrumentBreadth",
+      "description": "Clav, Digital and Misc piano types have no bundled or synthesized model. The piano spec's scope.required includes 'All six piano types selectable with at least one model each' and its acceptance says 'All six types select a playable model' (honest synthesis explicitly acceptable for these three). Selecting them shows 'Piano not found (<Type>)' with a flashing LED and the layer plays nothing.",
+      "evidence": "Live: RMS 0.0000 while holding keys with Clav/Digital/Misc selected; oled-piano-line '▤ Piano not found (Clav)'; src/audio/library.ts ships only grand-salamander, upright-tack, electric-tine; IMPLEMENTATION_DETAILS.json notes[2] declares the choice."
+    },
+    {
+      "id": "sustped-pstick-not-toggles",
+      "severity": "minor",
+      "criterion": "pianoLibrary.pianoControls",
+      "description": "SUSTPED and PSTICK are rendered as indicator LEDs only; no toggle routes/unroutes the sustain pedal or pitch stick for the Piano section. The stage-2 prompt lists 'SUSTPED/PSTICK toggles' among layer features and the piano spec acceptance requires sustain to 'only affect layers with SUSTPED on'. Sustain and pitch stick are unconditionally active for Piano.",
+      "evidence": "sections.tsx:356-359 renders LEDs with no button; grep for sustped/pstick routing in src/ returns nothing beyond the LEDs; no test exercises a SUSTPED-off state."
+    },
+    {
+      "id": "no-ui-sustain-control",
+      "severity": "minor",
+      "criterion": "pianoLibrary.inputsReliability",
+      "description": "No on-screen (clickable/touchable) sustain control exists; sustain is only reachable via the Space key and MIDI CC64. The spec lists 'UI control, keyboard mapping, and MIDI CC64' as three sustain input paths.",
+      "evidence": "DOM scan of all buttons found no sustain-named control; status strip documents only 'Space / CC64 half-pedal'."
+    },
+    {
+      "id": "excluded-features-implemented",
+      "severity": "minor",
+      "criterion": "honesty-contract/scope",
+      "description": "Several spec-excluded features are implemented as functional instead of staying decorative: CC64 half-pedaling and pedal noise (piano spec excludes 'Pedal noise and half-pedaling'), Delay feedback-loop effects Chor/Vibe/Ens/Flam/Space and Analog mode (effects spec excludes both). The prompt says excluded items 'stay decorative, permanently'. All are honestly declared and tested, so this is benign over-delivery rather than dishonesty, but it deviates from the phase contract.",
+      "evidence": "engine.ts HALF_PEDAL_RELEASE_SECONDS/playPedalNoise; state/instrument.ts DelayEffect/analog; effects.ts in-loop fbEffectDelay/analogShaper; IMPLEMENTATION_DETAILS.json declares them."
+    },
+    {
+      "id": "types-node-undeclared",
+      "severity": "minor",
+      "criterion": "engineeringQuality.performanceMaintainability",
+      "description": "package.json does not declare @types/node although test files import node:fs/node:path/node:url; 'pnpm typecheck' fails (TS2591) in an isolated checkout and only passes where node_modules/@types/node is resolvable from a parent directory (as in the original nested workspace).",
+      "evidence": "Reproduced on a scratch copy: tsc --noEmit fails with 6 TS2591 errors after pnpm install --frozen-lockfile; passes after making @types/node resolvable. test/lint/build pass standalone (203/203 tests, 0 lint errors on src, dist/index.html built)."
+    },
+    {
+      "id": "per-type-render-coverage",
+      "severity": "info",
+      "criterion": "effectsAudio.effectCoverage",
+      "description": "Rendered-audio distinctness assertions cover representative types per unit, not every listed type (no individual rendered checks for Ring Mod, A-Wah/Wah/Pump, Flanger/Vibe/Ensemble/Spin, JC/Small, HP24, and 5 of 6 reverb types). The spec acceptance asks for every listed type to measurably change a standardized rendered signal. Live inspection showed all Mod 2 types audible, Ring Mod spectral change, and Booth/Hall/Cathedral tail differences, and each type has a distinct DSP topology in effects.ts.",
+      "evidence": "render-effects.test.ts test list; evaluator live measurements (mod2 six-type RMS 0.0015-0.0038; ring-mod centroid shift; reverb tail spread)."
+    },
+    {
+      "id": "upright-character-compromise",
+      "severity": "info",
+      "criterion": "pianoLibrary.instrumentBreadth",
+      "description": "The 'Upright' set is a GM Honky-tonk (tack piano) soundfont render with a single velocity layer rather than a recorded acoustic upright multi-velocity set; the underlying soundfont bank is unidentified. Declared honestly in IMPLEMENTATION_DETAILS.json ('declared honestly'), audibly distinct from the Grand, but a fidelity compromise against 'Recorded acoustic upright sample set'.",
+      "evidence": "IMPLEMENTATION_DETAILS.json sampleSources[1]; live centroid distinct from Grand (84.3 vs 77.2); 19 roots x 1 layer on disk."
+    }
+  ]
+}

@@ -1,45 +1,81 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domain": "piano",
   "source": {
     "manual": "reference/manual.pdf",
     "pages": [23, 24, 25, 26]
   },
+  "scope": {
+    "note": "Phase 1 needs only one dependable basic piano voice played from the keybed. Everything else in this file is Phase 2 scope. Items under excluded are never required in any phase; their panel controls exist visually but stay decorative and are listed as unsupported.",
+    "required": [
+      "Two layers (A, B) with enable, focus, level fader, and octave shift",
+      "All six piano types selectable with at least one model each",
+      "Recorded, bundled, redistributable sample sets for Grand, Upright, and Electric",
+      "KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res",
+      "Sustain pedal input (UI control, keyboard mapping, and MIDI CC64)",
+      "Truthful loading/ready/error state and a labeled playable fallback"
+    ],
+    "optional": [
+      "More than one model per type and the model list view",
+      "Soft and sostenuto pedal behavior (honest approximation allowed, must be labeled)",
+      "Pedal-down string resonance samples (simulated sympathetic resonance is sufficient)"
+    ],
+    "excluded": [
+      "Pedal noise and half-pedaling (manual p. 25-26)",
+      "Nord Triple Pedal hardware modeling and pedal-type configuration",
+      "Piano size classes (Sml/Med/Lrg/XL), INFO view, and Nord Sound Manager downloads",
+      "Piano preset library (cut benchmark-wide; see programs spec)"
+    ]
+  },
   "architecture": {
     "layers": ["A", "B"],
+    "layerControls": ["on/off", "focus", "level fader with LED graph", "octave shift ±12 semitones"],
     "effectFocusFollowsLayerFocus": true,
     "layerLevelIsMorphable": true,
-    "pitchStickRangeSemitones": 2
+    "sectionOnButton": "Turns the whole Piano section on or off.",
+    "sustainPedalPerSection": "SUSTPED toggle routes the sustain input to this section (manual p. 23).",
+    "pitchStickPerSection": "PSTICK toggle lets the pitch stick bend this section ±2 semitones (manual p. 23)."
   },
   "selection": {
     "types": ["Grand", "Upright", "Electric", "Clav", "Digital", "Misc"],
-    "modelSelectionWithinType": true,
-    "listModes": ["Num", "Abc", "Cat"],
-    "missingModelState": "Selected type LED flashes and the Program display reports Piano not found."
+    "typeButtonCyclesSixLeds": true,
+    "modelDialSelectsWithinType": true,
+    "modelNameShownInProgramDisplay": true,
+    "sourceRules": {
+      "Grand": "Recorded acoustic grand sample set (bundled, redistributable, offline).",
+      "Upright": "Recorded acoustic upright sample set, audibly distinct from the grand.",
+      "Electric": "Recorded tine or reed electric piano sample set.",
+      "Clav": "Clavinet or harpsichord character; honest synthesis is acceptable.",
+      "Digital": "Digital piano or layered piano character; honest synthesis is acceptable.",
+      "Misc": "Mallet character such as marimba or vibraphone; honest synthesis is acceptable."
+    },
+    "sampleQuality": "Use enough root notes and velocity variation that uniform pitch-shifting of one note is not audible. Declare every file, source, license, root note, and velocity layer in IMPLEMENTATION_DETAILS.json.",
+    "missingModelState": "If a model fails to load, the type LED flashes and the Program display reports the failure; a labeled fallback stays playable (manual p. 24)."
   },
   "performance": {
-    "touchCurves": ["Heavy", "Medium", "Light"],
-    "dynamicCompressionLevels": [0, 1, 2, 3],
-    "sustain": ["full", "half-pedal"],
-    "additionalPedals": ["sostenuto", "soft"],
+    "kbTouch": ["Heavy", "Medium", "Light"],
+    "dynCompLevels": ["Off", 1, 2, 3],
+    "dynCompBehavior": "Raises the level of softer strokes, narrowing dynamic range without changing timbre response (manual p. 25).",
+    "unisonLevels": ["Off", 1, 2, 3],
+    "unisonBehavior": "Detuned stereo voices; 1 is subtle, 3 is wide and obviously detuned (manual p. 26).",
+    "sustain": "Full sustain with damper-up cutoff; applies per enabled layer when SUSTPED is on.",
     "polyphonyRequired": true,
     "perNoteReleaseRequired": true
   },
   "acoustics": {
-    "softRelease": true,
-    "stringResonance": ["pedal-down samples", "sympathetic resonance"],
-    "pedalNoise": "Velocity-sensitive when a compatible pedal and sound are used.",
-    "unisonLevels": [0, 1, 2, 3]
+    "softRelease": "Slightly longer, less pronounced note release; disabled for Clav-type sounds (manual p. 25).",
+    "stringRes": "Sympathetic string resonance while other notes or the sustain pedal are held; simulation is acceptable (manual p. 25)."
   },
   "timbre": {
     "acoustic": ["Off", "Soft", "Mid", "Bright"],
     "electric": ["Off", "Soft", "Mid", "Bright", "Dyno 1", "Dyno 2"],
-    "clav": ["Off", "Soft", "Treble", "Soft+Treble", "Brilliant", "Soft+Brilliant", "Treble+Brilliant", "Soft+Treble+Brilliant"]
+    "behavior": "Soft dampens highs, Mid emphasizes midrange presence, Bright emphasizes treble; Dyno settings are preamp/EQ emulations for tine pianos (manual p. 26)."
   },
   "acceptance": [
-    "Both layers can be enabled, focused, leveled, zoned, transposed, sustained, and routed independently.",
-    "Type/model, touch, dynamic compression, timbre, unison, release, and resonance states are reflected in canonical state and displays.",
-    "Audio controls that claim sonic behavior measurably alter rendered audio.",
-    "The primary source is credible recorded or comparably convincing piano material; generated placeholder buffers do not satisfy this requirement."
+    "Both layers can be enabled, focused, leveled, octave-shifted, and played independently with correct voice ownership.",
+    "All six types select a playable model; Grand, Upright, and Electric are recorded samples and audibly distinct from each other.",
+    "KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res each measurably change rendered audio and are reflected in canonical state and panel feedback.",
+    "Sustain works from UI, computer keyboard, and MIDI CC64, and only affects layers with SUSTPED on.",
+    "Sample provenance is complete and truthful; generated sources are never described as recordings."
   ]
 }

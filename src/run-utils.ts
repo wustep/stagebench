@@ -1,9 +1,9 @@
-import type { BenchmarkRun, PhaseNumber } from './types'
+import type { PhaseNumber, RunEntry } from './types'
 
 export type { PhaseNumber } from './types'
 
 // The subset of a run the preview/URL helpers actually need.
-export type PreviewRun = Pick<BenchmarkRun, 'id' | 'model' | 'title' | 'previewPath' | 'previewStage' | 'previews'>
+export type PreviewRun = Pick<RunEntry, 'id' | 'model' | 'title' | 'previewPath' | 'previewStage' | 'previews'>
 
 export function getRunTitle(run: PreviewRun) {
   return run.title ?? run.model
