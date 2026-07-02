@@ -11,6 +11,12 @@
  *             web-music-score-samples/003-honkytonk-piano (MIDI-JS Soundfonts, MIT).
  * - Electric: GM Electric Piano 1 (tine EP) via
  *             web-music-score-samples/004-electric-piano-1 (MIDI-JS Soundfonts, MIT).
+ * - Clav:     GM Clavinet via
+ *             web-music-score-samples/007-clavinet (MIDI-JS Soundfonts, MIT).
+ * - Digital:  GM Electric Piano 2 (FM/DX digital piano character) via
+ *             web-music-score-samples/005-electric-piano-2 (MIDI-JS Soundfonts, MIT).
+ * - Misc:     GM Vibraphone (mallet character) via
+ *             web-music-score-samples/011-vibraphone (MIDI-JS Soundfonts, MIT).
  *
  * Run manually: node scripts/sync-samples.mjs
  */
@@ -96,6 +102,36 @@ for (const spec of [
     dir: 'electric',
     source:
       'GM Electric Piano 1 (tine/electromechanical character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/004-electric-piano-1. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
+    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
+  },
+  {
+    folder: '007-clavinet',
+    id: 'clav-gm',
+    type: 'Clav',
+    name: 'Clavinet',
+    dir: 'clav',
+    source:
+      'GM Clavinet (plucked electro-mechanical clavinet character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/007-clavinet. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
+    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
+  },
+  {
+    folder: '005-electric-piano-2',
+    id: 'digital-fm',
+    type: 'Digital',
+    name: 'FM Piano',
+    dir: 'digital',
+    source:
+      'GM Electric Piano 2 (FM/DX digital piano character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/005-electric-piano-2. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
+    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
+  },
+  {
+    folder: '011-vibraphone',
+    id: 'misc-vibraphone',
+    type: 'Misc',
+    name: 'Vibraphone',
+    dir: 'misc',
+    source:
+      'GM Vibraphone (mallet character, per the spec\'s Misc source rule), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/011-vibraphone. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
     license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
   },
 ]) {

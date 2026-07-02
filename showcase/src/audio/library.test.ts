@@ -9,32 +9,30 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 /**
  * piano.instrument-library — the bundled recorded library is truthfully
- * declared: three distinct sources, real files on disk, complete
- * root/velocity/license provenance, offline (no remote URLs anywhere).
+ * declared: six distinct sources (one per selectable type), real files on
+ * disk, complete root/velocity/license provenance, offline (no remote URLs
+ * anywhere).
  */
 describe('piano.instrument-library — bundled provenance', () => {
-  it('provides three selectable types covering grand, upright and electric character', () => {
-    expect(instrumentsOfType('Grand')).toHaveLength(1)
-    expect(instrumentsOfType('Upright')).toHaveLength(1)
-    expect(instrumentsOfType('Electric')).toHaveLength(1)
-    // Unpopulated types are truthfully empty ("Piano not found" behavior).
-    expect(instrumentsOfType('Clav')).toHaveLength(0)
-    expect(instrumentsOfType('Digital')).toHaveLength(0)
-    expect(instrumentsOfType('Misc')).toHaveLength(0)
+  it('provides all six selectable types with at least one bundled model each', () => {
     expect(PIANO_TYPES).toEqual(['Grand', 'Upright', 'Electric', 'Clav', 'Digital', 'Misc'])
+    for (const type of PIANO_TYPES) {
+      expect(instrumentsOfType(type).length, type).toBeGreaterThanOrEqual(1)
+    }
   })
 
   it('declares distinct sources and redistributable licenses per instrument', () => {
     const sources = new Set(INSTRUMENTS.map((i) => i.source))
-    expect(sources.size).toBe(3)
+    expect(sources.size).toBe(6)
     for (const instrument of INSTRUMENTS) {
       expect(instrument.license.length).toBeGreaterThan(5)
       expect(instrument.source.length).toBeGreaterThan(20)
       expect(instrument.source).toMatch(/npm/i) // registry-only acquisition
     }
     expect(INSTRUMENTS.find((i) => i.id === 'grand-salamander')!.license).toMatch(/CC BY 3\.0/)
-    expect(INSTRUMENTS.find((i) => i.id === 'upright-tack')!.license).toMatch(/MIT/)
-    expect(INSTRUMENTS.find((i) => i.id === 'electric-tine')!.license).toMatch(/MIT/)
+    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone']) {
+      expect(INSTRUMENTS.find((i) => i.id === id)!.license, id).toMatch(/MIT/)
+    }
   })
 
   it('bundles every declared sample file on disk (offline capable, no remote URLs)', () => {
@@ -74,9 +72,9 @@ describe('piano.instrument-library — bundled provenance', () => {
     expect(grandRoots.size).toBe(30) // minor-third spacing A0..C8
     expect(grand.velocityLayers).toBe(3)
     expect(grand.zones).toHaveLength(90)
-    for (const id of ['upright-tack', 'electric-tine']) {
+    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone']) {
       const instrument = INSTRUMENTS.find((i) => i.id === id)!
-      expect(new Set(instrument.zones.map((z) => z.rootMidi)).size).toBe(19) // major-third spacing
+      expect(new Set(instrument.zones.map((z) => z.rootMidi)).size, id).toBe(19) // major-third spacing
     }
     // Max shift distance from any keybed note (28..100) to a grand root <= 2 semitones.
     for (let midi = 28; midi <= 100; midi++) {

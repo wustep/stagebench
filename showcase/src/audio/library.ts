@@ -1,9 +1,10 @@
 /**
  * Bundled recorded Piano sample library.
  *
- * Three audibly distinct recorded sample sets, bundled under public/samples/
- * for offline playback (see public/samples/SOURCES.md and
- * IMPLEMENTATION_DETAILS.json for the complete source/license provenance):
+ * Six audibly distinct recorded sample sets — one per selectable piano type —
+ * bundled under public/samples/ for offline playback (see
+ * public/samples/SOURCES.md and IMPLEMENTATION_DETAILS.json for the complete
+ * source/license provenance):
  *
  * - Grand    "Salamander Grand" — Salamander Grand Piano V3 (Alexander Holm,
  *            CC BY 3.0), 30 roots x 3 recorded velocity layers.
@@ -11,9 +12,17 @@
  *            from the MIDI-JS Soundfonts collection (MIT), 19 roots x 1 layer.
  * - Electric "Tine EP" — GM Electric Piano 1 (tine/electromechanical) from the
  *            MIDI-JS Soundfonts collection (MIT), 19 roots x 1 layer.
+ * - Clav     "Clavinet" — GM Clavinet from the same collection (MIT),
+ *            19 roots x 1 layer (spec: clavinet/harpsichord character).
+ * - Digital  "FM Piano" — GM Electric Piano 2 (FM/DX digital piano character)
+ *            from the same collection (MIT), 19 roots x 1 layer.
+ * - Misc     "Vibraphone" — GM Vibraphone (mallet character) from the same
+ *            collection (MIT), 19 roots x 1 layer.
  *
- * Clav / Digital / Misc have no bundled model; selecting them truthfully
- * reports "Piano not found" (spec: nord-stage-4.piano.json selection).
+ * The "Piano not found" state (spec: nord-stage-4.piano.json
+ * selection.missingModelState) remains for any type whose model list is
+ * empty or whose samples fail to load; with all six types populated it is
+ * reachable only through load failure (see piano.fallback tests).
  */
 
 export const PIANO_TYPES = ['Grand', 'Upright', 'Electric', 'Clav', 'Digital', 'Misc'] as const
@@ -109,6 +118,36 @@ export const INSTRUMENTS: readonly InstrumentSpec[] = [
     license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
     gain: 1.5,
     zones: gmZones('electric'),
+  },
+  {
+    id: 'clav-gm',
+    type: 'Clav',
+    name: 'Clavinet',
+    velocityLayers: 1,
+    source: 'GM Clavinet (plucked clavinet character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
+    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    gain: 1.5,
+    zones: gmZones('clav'),
+  },
+  {
+    id: 'digital-fm',
+    type: 'Digital',
+    name: 'FM Piano',
+    velocityLayers: 1,
+    source: 'GM Electric Piano 2 (FM/DX digital piano character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
+    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    gain: 1.5,
+    zones: gmZones('digital'),
+  },
+  {
+    id: 'misc-vibraphone',
+    type: 'Misc',
+    name: 'Vibraphone',
+    velocityLayers: 1,
+    source: 'GM Vibraphone (mallet character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
+    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    gain: 1.4,
+    zones: gmZones('misc'),
   },
 ]
 

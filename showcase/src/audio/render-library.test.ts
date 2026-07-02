@@ -30,12 +30,12 @@ async function renderNote(type: PianoType, midi = 60, velocity = 0.85) {
 
 describe('piano.instrument-library — rendered distinctions', () => {
   it('renders each bundled instrument non-silent through the shared graph', async () => {
-    for (const type of ['Grand', 'Upright', 'Electric'] as const) {
+    for (const type of ['Grand', 'Upright', 'Electric', 'Clav', 'Digital', 'Misc'] as const) {
       const result = await renderNote(type)
       expect(result.engineStatus).toBe('ready')
       expect(rms(result.left, 0.05, 1.0), type).toBeGreaterThan(0.003)
     }
-  }, 120000)
+  }, 240000)
 
   it('the three instruments are audibly distinct (waveform and spectrum)', async () => {
     const grand = await renderNote('Grand')
@@ -57,6 +57,24 @@ describe('piano.instrument-library — rendered distinctions', () => {
     const spread = Math.max(zGrand, zUpright, zElectric) / Math.max(1, Math.min(zGrand, zUpright, zElectric))
     expect(spread).toBeGreaterThan(1.15)
   }, 120000)
+
+  it('the Clav, Digital and Misc sets are audibly distinct from each other and the tine EP', async () => {
+    const electric = await renderNote('Electric')
+    const clav = await renderNote('Clav')
+    const digital = await renderNote('Digital')
+    const misc = await renderNote('Misc')
+
+    const pairs: Array<[string, Float32Array, Float32Array]> = [
+      ['clav-vs-digital', clav.left, digital.left],
+      ['clav-vs-misc', clav.left, misc.left],
+      ['digital-vs-misc', digital.left, misc.left],
+      ['electric-vs-digital', electric.left, digital.left],
+      ['electric-vs-clav', electric.left, clav.left],
+    ]
+    for (const [label, a, b] of pairs) {
+      expect(Math.abs(similarity(a, b, 0.05, 1.0)), label).toBeLessThan(0.8)
+    }
+  }, 240000)
 
   it('different notes select different recorded roots (no uniform pitch shifting)', async () => {
     const low = await renderNote('Grand', 41)

@@ -29,3 +29,41 @@ Publish to the gallery with `pnpm bench showcase` (builds and copies to
   lazy path; offline render contexts are never resumed early.
 - Still open for a future iteration: `narrow-legend-legibility` (sub-pixel
   legends at 390x844 — needs an inspect/zoom affordance).
+
+### 2 — complete piano library + pedal routing (2026-07-02)
+
+Worked through the Phase 2 evaluation's priority issues (89/100, piano
+library was the weak category at 73):
+
+- **All six piano types now bundle a recorded model.** Clav = GM Clavinet,
+  Digital = GM Electric Piano 2 (FM/DX character), Misc = GM Vibraphone
+  (mallet, per the spec's Misc source rule) — same MIT MIDI-JS-Soundfonts
+  provenance chain as the existing Upright/Electric sets, 19 roots × 1 layer
+  each, synced by `scripts/sync-samples.mjs` and declared in
+  `IMPLEMENTATION_DETAILS.json` / `public/samples/SOURCES.md`. Rendered-audio
+  tests prove all six audibly distinct; live-browser analyser sweep confirmed
+  distinct zero-crossing/RMS signatures per type. "Piano not found" is now
+  reached only through load failure — the type LED flashes for a failed load
+  (spec `missingModelState`), and recovery restores samples.
+- **SUSTPED and PSTICK are functional** exactly as the manual specifies
+  (p. 23): Shift + Layer A routes/unroutes the sustain pedal for the Piano
+  section, Shift + Layer B gates the pitch stick (±2 st). Their panel LEDs now
+  show routing state; toggling mid-note releases held voices / re-applies the
+  bend. No new physical controls invented — the photo-measured surface is
+  unchanged.
+- **On-screen sustain pedal** (latching, accessible, in the status strip —
+  off-chassis) completes the spec's required UI/keyboard/MIDI sustain trio.
+- **Soft Release is disabled for Clav** (manual p. 25), tested.
+- Fixed a real dev-only bug found while verifying in the browser: StrictMode's
+  simulated unmount disposes the engine and detached its store subscription
+  permanently, freezing every panel control's audio effect in dev (production
+  unaffected). `attachStore` now re-attaches on mount, with a StrictMode
+  regression test.
+- Fixed `typecheck` portability: `@types/node` is now a direct devDependency,
+  so `tsc --noEmit` passes on an isolated copy (verified on a scratch clone
+  with a frozen-lockfile install).
+- Gates: 211/211 tests, typecheck, lint, build all green.
+- Still open: `narrow-legend-legibility` (above) and the evaluation's note
+  about spec-excluded extras (half-pedaling, pedal noise, delay feedback-loop
+  effects, Analog mode) staying functional — kept intentionally in the
+  showcase, declared honestly.

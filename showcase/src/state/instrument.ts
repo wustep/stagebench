@@ -79,6 +79,10 @@ export interface PianoSharedState {
   softRelease: boolean
   stringRes: boolean
   pedNoise: boolean
+  /** SUSTPED (Shift + Layer A): routes the sustain pedal to the Piano section (manual p. 23). */
+  sustped: boolean
+  /** PSTICK (Shift + Layer B): lets the pitch stick bend the Piano section ±2 semitones (manual p. 23). */
+  pstick: boolean
 }
 
 export interface InstrumentState {
@@ -129,6 +133,8 @@ export function initialInstrumentState(): InstrumentState {
       softRelease: false,
       stringRes: false,
       pedNoise: false,
+      sustped: true,
+      pstick: true,
     },
     layers: {
       A: { enabled: true, level: 100, octave: 0, type: 'Grand', model: 0 },
@@ -266,6 +272,16 @@ export class InstrumentStore {
   cycleUnison(): void {
     const next = ((this.state.piano.unison + 1) % 4) as 0 | 1 | 2 | 3
     this.patch({ piano: { ...this.state.piano, unison: next } }, `Unison ${next === 0 ? 'Off' : next}`)
+  }
+
+  togglePianoSustped(): void {
+    const sustped = !this.state.piano.sustped
+    this.patch({ piano: { ...this.state.piano, sustped } }, `Piano SUSTPED ${sustped ? 'On' : 'Off'}`)
+  }
+
+  togglePianoPstick(): void {
+    const pstick = !this.state.piano.pstick
+    this.patch({ piano: { ...this.state.piano, pstick } }, `Piano PSTICK ${pstick ? 'On' : 'Off'}`)
   }
 
   cycleAcoustics(): void {

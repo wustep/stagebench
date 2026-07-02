@@ -329,7 +329,11 @@ export function PianoSection({ store, instrument, engine }: BoundSectionProps & 
   const focused = state.layers[state.focusedLayer]
   const timbreList = timbreListFor(focused.type)
   const timbre = timbreList[Math.min(state.piano.timbre, timbreList.length - 1)]!
-  const sustainDown = engine.isSustainDown()
+  // Missing-model state (spec: selection.missingModelState): the type LED
+  // flashes when the selected type has no model or its samples failed to load.
+  const focusedModel = instrumentsOfType(focused.type)[focused.model]
+  const loadFailed = focusedModel ? engine.instrumentLoadStatus(focusedModel.id) === 'error' : false
+  const flashType = state.pianoNotFound ?? (loadFailed ? focused.type : null)
   return (
     <SectionShell id="piano">
       <div className="plate">
@@ -353,9 +357,9 @@ export function PianoSection({ store, instrument, engine }: BoundSectionProps & 
               />
             </div>
             <span className="tiny-led-row">
-              <Led color="yellow" on={sustainDown} />
+              <Led color="yellow" on={state.piano.sustped} />
               <Legend>SUSTPED</Legend>
-              <Led color="yellow" on={engine.pitchBendValue() !== 0} />
+              <Led color="yellow" on={state.piano.pstick} />
               <Legend>PSTICK</Legend>
             </span>
             <GroupBox title="Timbre" className="timbre-box">
@@ -456,24 +460,20 @@ export function PianoSection({ store, instrument, engine }: BoundSectionProps & 
               <div className="type-led-grid" aria-hidden="true">
                 <span>
                   <Legend>ELECTRIC</Legend>
-                  <Led color="red" on={focused.type === 'Electric'} />
-                  <Led color="red" on={focused.type === 'Clav'} className={state.pianoNotFound === 'Clav' ? 'flash' : ''} />
+                  <Led color="red" on={focused.type === 'Electric'} className={flashType === 'Electric' ? 'flash' : ''} />
+                  <Led color="red" on={focused.type === 'Clav'} className={flashType === 'Clav' ? 'flash' : ''} />
                   <Legend>CLAV</Legend>
                 </span>
                 <span>
                   <Legend>UPRIGHT</Legend>
-                  <Led color="red" on={focused.type === 'Upright'} />
-                  <Led
-                    color="red"
-                    on={focused.type === 'Digital'}
-                    className={state.pianoNotFound === 'Digital' ? 'flash' : ''}
-                  />
+                  <Led color="red" on={focused.type === 'Upright'} className={flashType === 'Upright' ? 'flash' : ''} />
+                  <Led color="red" on={focused.type === 'Digital'} className={flashType === 'Digital' ? 'flash' : ''} />
                   <Legend>DIGITAL</Legend>
                 </span>
                 <span>
                   <Legend>GRAND</Legend>
-                  <Led color="red" on={focused.type === 'Grand'} />
-                  <Led color="red" on={focused.type === 'Misc'} className={state.pianoNotFound === 'Misc' ? 'flash' : ''} />
+                  <Led color="red" on={focused.type === 'Grand'} className={flashType === 'Grand' ? 'flash' : ''} />
+                  <Led color="red" on={focused.type === 'Misc'} className={flashType === 'Misc' ? 'flash' : ''} />
                   <Legend>MISC</Legend>
                 </span>
               </div>

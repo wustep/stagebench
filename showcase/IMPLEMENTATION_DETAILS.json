@@ -3,7 +3,7 @@
   "version": 1,
   "phase": 2,
   "audio": {
-    "strategy": "Sampled multi-piano instrument with a live-DSP effect chain. Primary sound: three bundled RECORDED sample sets (Grand/Upright/Electric) played through AudioBufferSourceNodes with nearest-root selection, recorded-velocity-layer crossfading (grand) or declared gain+filter velocity shaping (single-layer sets), unison detune copies, and per-voice envelopes. One AudioContext: voices enter per-layer buses (timbre EQ, dynamic compression, level), then the ordered per-layer effect chain Mod 1 → Mod 2 → Delay → Amp Sim/EQ → Compressor → Reverb, then either the single Rotary Speaker instance (Amp unit 'To Rotary') or directly the master gain → limiter → one destination. All effects are live Web Audio processing (LFOs, modulated delays, biquads, waveshapers, convolution). The Phase 1 oscillator voice survives only as a clearly labeled synthesized fallback after primary sample failure.",
+    "strategy": "Sampled multi-piano instrument with a live-DSP effect chain. Primary sound: six bundled RECORDED sample sets (Grand/Upright/Electric/Clav/Digital/Misc — one per selectable piano type) played through AudioBufferSourceNodes with nearest-root selection, recorded-velocity-layer crossfading (grand) or declared gain+filter velocity shaping (single-layer sets), unison detune copies, and per-voice envelopes. One AudioContext: voices enter per-layer buses (timbre EQ, dynamic compression, level), then the ordered per-layer effect chain Mod 1 → Mod 2 → Delay → Amp Sim/EQ → Compressor → Reverb, then either the single Rotary Speaker instance (Amp unit 'To Rotary') or directly the master gain → limiter → one destination. All effects are live Web Audio processing (LFOs, modulated delays, biquads, waveshapers, convolution). The Phase 1 oscillator voice survives only as a clearly labeled synthesized fallback after primary sample failure.",
     "sampleSources": [
       {
         "name": "Salamander Grand ('Grand' type)",
@@ -24,6 +24,27 @@
         "source": "GM Electric Piano 1 (tine/electromechanical character) from the same MIDI-JS Soundfonts collection via npm web-music-score-samples v3.0.0 (samples/004-electric-piano-1), copied into public/samples/electric.",
         "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
         "files": ["public/samples/electric/<c1|e1|gs1…c7>.mp3 — 19 root notes × 1 velocity layer"],
+        "notes": "Same provenance chain and single-layer velocity declaration as the Upright set."
+      },
+      {
+        "name": "Clavinet ('Clav' type)",
+        "source": "GM Clavinet (plucked electro-mechanical clavinet character; the spec's Clav source rule allows clavinet or harpsichord) from the same MIDI-JS Soundfonts collection via npm web-music-score-samples v3.0.0 (samples/007-clavinet), copied into public/samples/clav.",
+        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "files": ["public/samples/clav/<c1|e1|gs1…c7>.mp3 — 19 root notes × 1 velocity layer"],
+        "notes": "Same provenance chain and single-layer velocity declaration as the Upright set. Soft Release is disabled for this type per the manual (p. 25)."
+      },
+      {
+        "name": "FM Piano ('Digital' type)",
+        "source": "GM Electric Piano 2 (FM/DX digital piano character) from the same MIDI-JS Soundfonts collection via npm web-music-score-samples v3.0.0 (samples/005-electric-piano-2), copied into public/samples/digital.",
+        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "files": ["public/samples/digital/<c1|e1|gs1…c7>.mp3 — 19 root notes × 1 velocity layer"],
+        "notes": "Same provenance chain and single-layer velocity declaration as the Upright set."
+      },
+      {
+        "name": "Vibraphone ('Misc' type)",
+        "source": "GM Vibraphone (mallet character; the spec's Misc source rule names marimba/vibraphone) from the same MIDI-JS Soundfonts collection via npm web-music-score-samples v3.0.0 (samples/011-vibraphone), copied into public/samples/misc.",
+        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "files": ["public/samples/misc/<c1|e1|gs1…c7>.mp3 — 19 root notes × 1 velocity layer"],
         "notes": "Same provenance chain and single-layer velocity declaration as the Upright set."
       }
     ],
@@ -56,8 +77,9 @@
     "notes": [
       "All recorded material was obtained exclusively through the npm registry (the run's only permitted network source) and is bundled under public/samples/ for fully offline playback; see public/samples/SOURCES.md and scripts/sync-samples.mjs for the exact provenance chain.",
       "One AudioContext feeds per-layer buses, ordered effects, the single rotary instance, master gain and limiter into one destination; no engine or effect creates a parallel context or destination.",
-      "Clav/Digital/Misc piano types have no bundled model: selecting them flashes the type LED and reports 'Piano not found' on the Program display, and the layer plays nothing rather than pretending (spec: nord-stage-4.piano.json selection.missingModelState).",
-      "Functional Phase 2 controls: keybed + pedals, full Piano section, full Layer Effects section (except the Synth FX-focus button, decorative until a Synth engine exists), Rotary strip (drive/speed/stop), Master Level, pitch stick (±2 semitones on Piano voices), Panic, and Shift as the Global-mode modifier. Organ, Synth and remaining Program/Morph controls stay truthfully decorative until Phase 3.",
+      "All six piano types (Grand/Upright/Electric/Clav/Digital/Misc) bundle a recorded model; the missing-model state (spec: nord-stage-4.piano.json selection.missingModelState — flashing type LED, truthful Program-display report, labeled playable fallback) is reached through sample load failure.",
+      "Sustain pedal input arrives three ways per the spec: the on-screen latching SUSTAIN PEDAL control in the status strip, the Space key, and MIDI CC64 (continuous half-pedal). SUSTPED (Shift + Layer A) and PSTICK (Shift + Layer B) route the sustain pedal and pitch stick to the Piano section per the manual (p. 23), with their panel LEDs showing the routing state.",
+      "Functional Phase 2 controls: keybed + pedals, full Piano section (including SUSTPED/PSTICK routing via Shift + Layer A/B), full Layer Effects section (except the Synth FX-focus button, decorative until a Synth engine exists), Rotary strip (drive/speed/stop), Master Level, pitch stick (±2 semitones on Piano voices while PSTICK is on), Panic, and Shift as the modifier for Global mode and SUSTPED/PSTICK. Organ, Synth and remaining Program/Morph controls stay truthfully decorative until Phase 3.",
       "Deterministic tests cross the real audio boundary via node-web-audio-api OfflineAudioContext rendering (no network, devices or audio output); browser boundaries (context, assets, MIDI, timers) remain injectable and fake-backed state tests complement, not replace, the rendered-audio proofs."
     ]
   }

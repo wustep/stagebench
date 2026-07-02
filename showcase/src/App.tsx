@@ -86,6 +86,14 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, panelC
   const midiStatus = useMidiStatus(midi)
   const pedals = usePedals(controller)
 
+  // (Re)attach canonical state on every mount: unmount cleanup disposes the
+  // engine and detaches its store subscription, and StrictMode's simulated
+  // unmount/remount would otherwise leave the engine frozen on initial state
+  // (attachStore is idempotent — it replaces any previous subscription).
+  useEffect(() => {
+    engine.attachStore(instrument)
+  }, [engine, instrument])
+
   // Diagnostics hook for real-browser audio verification (not used by app logic).
   useEffect(() => {
     window.__stagebench = { engine, controller, instrument }
@@ -149,15 +157,18 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, panelC
       controller.noteOn(midiNote, KEYBOARD_VELOCITY, 'keyboard')
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code === SUSTAIN_KEY_CODE) {
+      // Pedal key-ups mirror the key-down guard: keyboard activation of a
+      // focused control (e.g. Space on the on-screen sustain pedal) must not
+      // double as a pedal gesture.
+      if (event.code === SUSTAIN_KEY_CODE && !isInteractiveTarget(event.target)) {
         controller.setSustain(false)
         return
       }
-      if (event.code === SOFT_KEY_CODE) {
+      if (event.code === SOFT_KEY_CODE && !isInteractiveTarget(event.target)) {
         controller.setSoft(false)
         return
       }
-      if (event.code === SOSTENUTO_KEY_CODE) {
+      if (event.code === SOSTENUTO_KEY_CODE && !isInteractiveTarget(event.target)) {
         controller.setSostenuto(false)
         return
       }
@@ -218,12 +229,23 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, panelC
           <b>MIDI:</b> {midiStatus.message}
         </span>
         <span data-testid="pedal-status">
-          <b>Pedals:</b> sustain {pedals.sustain ? 'down' : 'up'} (Space / CC64 half-pedal) · sostenuto{' '}
+          <button
+            type="button"
+            className="sustain-pedal"
+            data-testid="sustain-pedal"
+            aria-pressed={pedals.sustain}
+            aria-label="Sustain Pedal"
+            onClick={() => controller.setSustain(!controller.isSustainDown())}
+          >
+            SUSTAIN PEDAL
+          </button>
+          <b>Pedals:</b> sustain {pedals.sustain ? 'down' : 'up'} (pedal latches / Space / CC64 half-pedal) · sostenuto{' '}
           {pedals.sostenuto ? 'down' : 'up'} (X / CC66) · soft {pedals.soft ? 'down' : 'up'} (Z / CC67)
         </span>
         <span className="status-note">
-          Functional this phase: keybed, pedals, Piano section, Layer Effects, Rotary, Master Level, pitch stick, Panic.
-          Organ, Synth and the remaining Program controls are visual-only until Phase 3.
+          Functional this phase: keybed, pedals, Piano section (all six types), Layer Effects, Rotary, Master Level,
+          pitch stick, Panic, and Shift+Layer A/B for SUSTPED/PSTICK routing. Organ, Synth and the remaining Program
+          controls are visual-only until Phase 3.
         </span>
       </footer>
     </main>

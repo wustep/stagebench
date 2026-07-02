@@ -143,6 +143,21 @@ describe('piano.velocity-controls', () => {
     fireEvent.pointerUp(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })
   })
 
+  it('PSTICK routes the pitch stick: off applies no bend, re-enabling reapplies it (manual p. 23)', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    engine.noteOn(60, 0.9)
+    const sources = context.bufferSources().filter((s) => s.started && !s.stopped)
+    expect(sources.length).toBeGreaterThan(0)
+    const baseRates = sources.map((s) => s.playbackRate.value)
+    store.togglePianoPstick() // default On -> Off
+    engine.setPitchBend(2)
+    sources.forEach((s, i) => expect(s.playbackRate.value).toBeCloseTo(baseRates[i]!, 5))
+    store.togglePianoPstick() // Off -> On: the held bend reapplies to sounding voices
+    sources.forEach((s, i) => expect(s.playbackRate.value).toBeCloseTo(baseRates[i]! * Math.pow(2, 2 / 12), 5))
+  })
+
   it('panel piano controls update LEDs, display feedback and canonical state together', () => {
     renderApp()
     fireEvent.click(screen.getByRole('button', { name: 'KB Touch Select' }))

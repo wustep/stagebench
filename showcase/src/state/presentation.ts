@@ -254,10 +254,14 @@ export class PresentationStore {
           store.setPianoSectionOn(!store.getState().piano.sectionOn)
           return
         case 'piano-layer-a':
-          store.toggleLayerEnabled('A')
+          // SUSTPED = Shift + Layer A (manual p. 23): routes the sustain pedal to this section.
+          if (shift) store.togglePianoSustped()
+          else store.toggleLayerEnabled('A')
           return
         case 'piano-layer-b':
-          store.toggleLayerEnabled('B')
+          // PSTICK = Shift + Layer B (manual p. 23): pitch stick bends this section ±2 semitones.
+          if (shift) store.togglePianoPstick()
+          else store.toggleLayerEnabled('B')
           return
         case 'piano-type':
           store.cyclePianoType()

@@ -134,6 +134,7 @@ export class PianoEngine {
   private softDown = false
   private sostenutoDown = false
   private pitchBend = 0
+  private appliedBend = 0
   private seqCounter = 0
 
   private state: InstrumentState = initialInstrumentState()
@@ -515,6 +516,18 @@ export class PianoEngine {
     const state = this.state
     rampTo(this.masterGain.gain, mappings.levelToGain(state.masterVolume) * 0.9, now)
 
+    // SUSTPED off: the damper is no longer routed here — release anything it held.
+    if (!state.piano.sustped) {
+      for (const voice of [...this.voices.values()]) {
+        if (voice.sustained && !voice.keyDown && !voice.sostenuto) {
+          voice.sustained = false
+          this.releaseVoice(voice, this.releaseSecondsFor(voice.layer))
+        }
+      }
+    }
+    // PSTICK toggles re-route the pitch stick on sounding voices immediately.
+    if (this.effectiveBend() !== this.appliedBend) this.applyBendToVoices()
+
     if (!this.channels || !this.rotary) return
     this.rotary.update(state.rotary, now)
 
@@ -541,8 +554,8 @@ export class PianoEngine {
         rampTo(channel.dynMakeup.gain, level === 0 ? 1 : 1 + level * 0.35, now)
       }
 
-      // Resonance send follows String Res + damper state.
-      const resActive = state.piano.stringRes && this.sustainLevel >= SUSTAIN_LIFT
+      // Resonance send follows String Res + damper state (as routed by SUSTPED).
+      const resActive = state.piano.stringRes && this.effectiveSustainLevel() >= SUSTAIN_LIFT
       rampTo(channel.resSend.gain, resActive ? 0.4 : 0.0001, now)
 
       // Ordered effect chain (families process real audio; allFxOff bypasses everything).
@@ -678,7 +691,7 @@ export class PianoEngine {
     const context = this.context!
     const zones = nearestZones(spec, midi)
     const layerGains = velocityLayerGains(spec.velocityLayers, velocity)
-    const bendFactor = Math.pow(2, this.pitchBend / 12)
+    const bendFactor = Math.pow(2, this.effectiveBend() / 12)
 
     let entry: AudioNodeLike = voiceGain
     if (spec.velocityLayers <= 1) {
@@ -777,7 +790,7 @@ export class PianoEngine {
       osc.type = partial.type
       osc.frequency.value = frequency * partial.ratio
       const baseDetune = partial.detune
-      osc.detune.value = baseDetune + this.pitchBend * 100
+      osc.detune.value = baseDetune + this.effectiveBend() * 100
       const partialGain = context.createGain()
       partialGain.gain.value = partial.level
       osc.connect(partialGain)
@@ -789,24 +802,32 @@ export class PianoEngine {
   }
 
   noteOff(midi: number): void {
+    const sustain = this.effectiveSustainLevel()
     for (const voice of [...this.voices.values()]) {
       if (voice.midi !== midi) continue
       voice.keyDown = false
       if (voice.sostenuto) continue
-      if (this.sustainLevel >= SUSTAIN_DOWN) {
+      if (sustain >= SUSTAIN_DOWN) {
         voice.sustained = true
         continue
       }
-      if (this.sustainLevel >= SUSTAIN_LIFT) {
+      if (sustain >= SUSTAIN_LIFT) {
         this.releaseVoice(voice, HALF_PEDAL_RELEASE_SECONDS)
         continue
       }
-      this.releaseVoice(voice, this.releaseSeconds())
+      this.releaseVoice(voice, this.releaseSecondsFor(voice.layer))
     }
   }
 
-  private releaseSeconds(): number {
-    return this.state.piano.softRelease ? RELEASE_SECONDS * 1.9 : RELEASE_SECONDS
+  /** Soft Release lengthens damping — except for Clav-type sounds (manual p. 25). */
+  private releaseSecondsFor(layer: LayerId): number {
+    const soft = this.state.piano.softRelease && this.state.layers[layer].type !== 'Clav'
+    return soft ? RELEASE_SECONDS * 1.9 : RELEASE_SECONDS
+  }
+
+  /** Sustain as the Piano section sees it: zero while SUSTPED routing is off (manual p. 23). */
+  private effectiveSustainLevel(): number {
+    return this.state.piano.sustped ? this.sustainLevel : 0
   }
 
   /* -------------------------------------------------------------- pedals -- */
@@ -818,15 +839,14 @@ export class PianoEngine {
     if (previous === level) return
     this.sustainLevel = level
     if (level < SUSTAIN_DOWN) {
-      const releaseSeconds = level >= SUSTAIN_LIFT ? HALF_PEDAL_RELEASE_SECONDS : this.releaseSeconds()
       for (const voice of [...this.voices.values()]) {
         if (voice.sustained && !voice.keyDown && !voice.sostenuto) {
           voice.sustained = false
-          this.releaseVoice(voice, releaseSeconds)
+          this.releaseVoice(voice, level >= SUSTAIN_LIFT ? HALF_PEDAL_RELEASE_SECONDS : this.releaseSecondsFor(voice.layer))
         }
       }
     }
-    if (previous < SUSTAIN_LIFT !== level < SUSTAIN_LIFT) {
+    if (this.state.piano.sustped && previous < SUSTAIN_LIFT !== level < SUSTAIN_LIFT) {
       this.playPedalNoise()
       this.applyState() // resonance send follows damper state
     }
@@ -851,8 +871,8 @@ export class PianoEngine {
         if (!voice.sostenuto) continue
         voice.sostenuto = false
         if (!voice.keyDown) {
-          if (this.sustainLevel >= SUSTAIN_DOWN) voice.sustained = true
-          else this.releaseVoice(voice, this.releaseSeconds())
+          if (this.effectiveSustainLevel() >= SUSTAIN_DOWN) voice.sustained = true
+          else this.releaseVoice(voice, this.releaseSecondsFor(voice.layer))
         }
       }
     }
@@ -914,15 +934,26 @@ export class PianoEngine {
     }
   }
 
-  /** Pitch stick: bends sounding Piano voices (spec: ±2 semitones). */
+  /** Pitch stick: bends sounding Piano voices (spec: ±2 semitones) while PSTICK routing is on. */
   setPitchBend(semitones: number): void {
     const clamped = Math.max(-2, Math.min(2, semitones))
     if (this.pitchBend === clamped) return
     this.pitchBend = clamped
+    this.applyBendToVoices()
+  }
+
+  /** Bend the section hears: zero while PSTICK routing is off (manual p. 23). */
+  private effectiveBend(): number {
+    return this.state.piano.pstick ? this.pitchBend : 0
+  }
+
+  private applyBendToVoices(): void {
     const context = this.context
     if (!context) return
+    const bend = this.effectiveBend()
+    this.appliedBend = bend
     const now = context.currentTime
-    const factor = Math.pow(2, clamped / 12)
+    const factor = Math.pow(2, bend / 12)
     const apply = (voice: Voice) => {
       for (const source of voice.sources) {
         if (source.kind === 'sample') {
@@ -930,7 +961,7 @@ export class PianoEngine {
           source.node.playbackRate.setTargetAtTime(source.baseRate * factor, now, 0.015)
         } else {
           source.node.detune.cancelScheduledValues(now)
-          source.node.detune.setTargetAtTime(source.baseDetune + clamped * 100, now, 0.015)
+          source.node.detune.setTargetAtTime(source.baseDetune + bend * 100, now, 0.015)
         }
       }
     }

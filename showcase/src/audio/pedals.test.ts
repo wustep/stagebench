@@ -1,5 +1,7 @@
+import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary, FakeGain } from '../test/fakes'
+import { renderApp } from '../test/renderApp'
 import { InstrumentStore } from '../state/instrument'
 import { PianoEngine } from './engine'
 
@@ -124,6 +126,80 @@ describe('piano.pedals', () => {
     engine.allNotesOff('panic')
     expect(engine.isSustainDown()).toBe(false)
     expect(engine.isSostenutoDown()).toBe(false)
+  })
+
+  it('SUSTPED off: the damper pedal is no longer routed to the Piano section (manual p. 23)', () => {
+    const { engine, store, timers } = makeSystem()
+    store.togglePianoSustped() // default On -> Off
+    engine.setSustain(1)
+    engine.noteOn(60, 0.8)
+    engine.noteOff(60)
+    timers.advance(1000)
+    expect(engine.activeVoiceCount()).toBe(0) // damper ignored by this section
+    expect(engine.isSustainDown()).toBe(true) // the physical pedal state itself is unchanged
+  })
+
+  it('turning SUSTPED off while the damper holds notes releases them', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.setSustain(1)
+    engine.noteOn(60, 0.8)
+    engine.noteOff(60)
+    timers.advance(1000)
+    expect(engine.activeVoiceCount()).toBe(1)
+    store.togglePianoSustped()
+    timers.advance(2000)
+    expect(engine.activeVoiceCount()).toBe(0)
+  })
+
+  it('soft release is disabled for Clav-type sounds (manual p. 25)', () => {
+    const cleanupTime = (type: 'Electric' | 'Clav'): number => {
+      const { engine, store, timers } = makeSystem()
+      store.cycleAcoustics() // Soft Release on
+      expect(store.getState().piano.softRelease).toBe(true)
+      store.selectPianoType(type)
+      engine.noteOn(60, 0.8)
+      engine.noteOff(60)
+      let elapsed = 0
+      while (engine.activeVoiceCount() > 0 && elapsed < 5000) {
+        timers.advance(50)
+        elapsed += 50
+      }
+      return elapsed
+    }
+    expect(cleanupTime('Electric')).toBeGreaterThan(cleanupTime('Clav'))
+  })
+
+  it('SUSTPED and PSTICK toggle from the real panel via Shift + Layer A/B (manual p. 23)', () => {
+    renderApp()
+    const layerA = screen.getByRole('button', { name: 'Piano Layer A On/Off' })
+    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
+    fireEvent.click(shift)
+    fireEvent.click(layerA)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Piano SUSTPED Off/)
+    expect(layerA.getAttribute('aria-pressed')).toBe('true') // layer enable untouched
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Layer B On/Off' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Piano PSTICK Off/)
+    fireEvent.click(shift) // shift off: plain layer toggles again
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Layer B On/Off' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Piano B On/)
+  })
+
+  it('the on-screen sustain pedal latches sustain and holds released notes', () => {
+    const { timers, getContext } = renderApp()
+    const pedal = screen.getByTestId('sustain-pedal')
+    fireEvent.click(pedal)
+    expect(pedal.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('pedal-status').textContent).toMatch(/sustain down/)
+    const key = document.querySelector('[data-control-id="key-60"]')!
+    fireEvent.pointerDown(key, { pointerId: 1 })
+    fireEvent.pointerUp(key, { pointerId: 1 })
+    timers.advance(1500)
+    const context = getContext()!
+    expect(context.bufferSources().some((s) => s.started && !s.stopped)).toBe(true) // held by the pedal
+    fireEvent.click(pedal) // unlatch: damps
+    expect(pedal.getAttribute('aria-pressed')).toBe('false')
+    timers.advance(1500)
+    expect(context.bufferSources().every((s) => !s.started || s.stopped)).toBe(true)
   })
 
   it('pedal noise plays a generated thump only when PED NOISE is enabled (declared generated)', () => {

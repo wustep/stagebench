@@ -35,13 +35,35 @@ Regenerate with `node scripts/sync-samples.mjs`.
 - **Source chain / license**: identical to `upright/` above, folder
   `samples/004-electric-piano-1`.
 
+## 4. `clav/` — "Clavinet" (type: Clav)
+
+- **What**: General MIDI "Clavinet" program — plucked electro-mechanical
+  clavinet character (the spec's Clav source rule allows clavinet or
+  harpsichord); 19 root notes × 1 velocity layer.
+- **Source chain / license**: identical to `upright/` above, folder
+  `samples/007-clavinet`.
+
+## 5. `digital/` — "FM Piano" (type: Digital)
+
+- **What**: General MIDI "Electric Piano 2" program — FM/DX digital piano
+  character; 19 root notes × 1 velocity layer.
+- **Source chain / license**: identical to `upright/` above, folder
+  `samples/005-electric-piano-2`.
+
+## 6. `misc/` — "Vibraphone" (type: Misc)
+
+- **What**: General MIDI "Vibraphone" program — mallet character (the spec's
+  Misc source rule names marimba/vibraphone); 19 root notes × 1 velocity layer.
+- **Source chain / license**: identical to `upright/` above, folder
+  `samples/011-vibraphone`.
+
 ## Honesty notes
 
-- The three sets are three genuinely different recordings/programs, not one
-  source under three labels.
-- The Grand crossfades its three recorded velocity layers. The Upright and
-  Electric sets have a single recorded layer; their velocity response is shaped
-  by gain and a velocity-keyed filter in the engine and is declared as such.
+- The six sets are six genuinely different recordings/programs, not one
+  source under different labels.
+- The Grand crossfades its three recorded velocity layers. The five GM-derived
+  sets have a single recorded layer; their velocity response is shaped by gain
+  and a velocity-keyed filter in the engine and is declared as such.
 - Everything else that sounds (synthesized fallback voice, generated reverb
   impulse responses, pedal-noise thump, all effect processing) is generated
   DSP, declared in IMPLEMENTATION_DETAILS.json, and never presented as a
