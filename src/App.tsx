@@ -431,6 +431,7 @@ function App() {
             {visibleRuns.map((run, index) => {
               const resultClass = getResultClass(run)
               const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
+              const visibleStages = resultClass.id === 'archive' ? run.stages.filter((stage) => stage.status !== 'failed') : run.stages
               return (
               <Fragment key={run.id}>
               {resultClass.id !== previousClass && (
@@ -444,7 +445,9 @@ function App() {
                   <div className="run-status-line">
                     <span className="run-status"><StatusLight status={run.status} />{run.status}</span>
                     <span className="model-target">{run.target ?? 'Stage 4 73'}</span>
-                    <span className={`result-class-badge result-class-${getResultClass(run).id}`}>{getResultClass(run).label}</span>
+                    {resultClass.id !== 'archive' && (
+                      <span className={`result-class-badge result-class-${resultClass.id}`}>{resultClass.label}</span>
+                    )}
                     {run.validity && <span className="validity-badge">{run.validity}</span>}
                     {run.isTest && <span className="test-run-badge">Test run</span>}
                   </div>
@@ -461,8 +464,8 @@ function App() {
                   <p>{formatDate(run.startedAt)} · {run.model}</p>
                 </div>
 
-                <ol className="stage-track" aria-label={`${getRunTitle(run)} phase progress`} style={{ gridTemplateColumns: `repeat(${run.stages.length}, 1fr)` }}>
-                  {run.stages.map((stage) => (
+                <ol className="stage-track" aria-label={`${getRunTitle(run)} phase progress`} style={{ gridTemplateColumns: `repeat(${visibleStages.length}, 1fr)` }}>
+                  {visibleStages.map((stage) => (
                     <li className={`stage-${stage.status}`} key={stage.number}>
                       <span>0{stage.number}</span>
                       <div><StatusLight status={stage.status} /><strong>{getPhaseName(run, stage.number)}</strong></div>

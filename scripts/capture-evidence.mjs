@@ -46,7 +46,7 @@ export async function captureEvidence(root, options) {
       await page.waitForTimeout(100)
       const file = path.join(outputDir, `stage${phase}-${profile}.png`)
       await page.screenshot({ path: file, fullPage: false, animations: 'disabled' })
-      captures.push({ profile, viewport, file: path.relative(root, file).split(path.sep).join('/'), bytes: fs.statSync(file).size, consoleMessages, pageErrors })
+      captures.push({ profile, viewport, file: path.relative(path.dirname(outputDir), file).split(path.sep).join('/'), bytes: fs.statSync(file).size, consoleMessages, pageErrors })
       await context.close()
     }
   } finally {
@@ -54,7 +54,6 @@ export async function captureEvidence(root, options) {
   }
   const metadata = {
     version: 1,
-    runId: options.id,
     phase,
     url: options.url,
     capturedAt: new Date().toISOString(),

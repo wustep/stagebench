@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { validateImplementationManifest } from '../../../../evaluation/lib/implementation-details.mjs'
+import { checkContamination } from '../lib/contamination.mjs'
 import { findRepoRoot, parseArgs, readJson, writeJson } from '../lib/cli.mjs'
 import { hashTree } from '../lib/protocol.mjs'
 
@@ -267,11 +268,12 @@ function verify(root, options) {
   const implementationDetails = verifyImplementationDetails(stageDir, stage)
   const checks = runChecks(stageDir)
   const evidence = evidenceChecks(stageDir, stage, run)
+  const contamination = checkContamination(root, options.id, stage)
   const runStage = run.stages.find((entry) => entry.number === stage)
   const verifierAttempts = (runStage?.verifierAttempts ?? 0) + 1
   const allowedRepairs = run.budget?.limits?.verifierRepairsPerPhase
   const budgetExceeded = isV3Run(run) && allowedRepairs !== undefined && verifierAttempts > allowedRepairs + 1
-  const passed = checks.every((check) => check.passed) && evidence.every((check) => check.passed) && !budgetExceeded
+  const passed = checks.every((check) => check.passed) && evidence.every((check) => check.passed) && contamination.passed && !budgetExceeded
   const artifact = passed ? hashTree(stageDir) : null
   const result = {
     version: 1,
@@ -289,6 +291,7 @@ function verify(root, options) {
     implementationDetails,
     checks,
     evidence,
+    contamination,
   }
   const outputPath = path.join(root, 'runs', options.id, 'verifications', `stage${stage}.json`)
   writeJson(outputPath, result)

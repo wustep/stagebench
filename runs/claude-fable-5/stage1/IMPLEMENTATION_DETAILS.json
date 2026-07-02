@@ -1,0 +1,23 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "audio": {
+    "strategy": "Generated live synthesis (no recorded samples). Each note builds a small stack of detuned oscillator partials (triangle fundamental plus sine partials at 1x, 2x and ~3x) through a velocity- and pitch-keyed lowpass filter and a percussive exponential-decay gain envelope, into a shared master gain and DynamicsCompressor soft limiter, then one destination. Piano-like by design and honestly not a sampled piano.",
+    "generatedSources": [
+      {
+        "name": "Basic piano-like oscillator voice",
+        "kind": "live Web Audio oscillator synthesis",
+        "files": ["src/audio/engine.ts"],
+        "notes": "Per-voice OscillatorNode/GainNode/BiquadFilterNode graphs created at note-on and disposed after release; 24-voice cap with deterministic oldest-first stealing."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "No recorded, downloaded, or bundled audio samples are used or claimed in Phase 1.",
+      "Audio starts lazily on the first key gesture; status is reported truthfully as idle/loading/ready/fallback/error in the status strip below the instrument.",
+      "Only keybed note input and the sustain input path (space bar, MIDI CC64) reach the audio graph. Every visible panel control is decorative presentation state only.",
+      "All browser boundaries (AudioContext factory, timers, Web MIDI access) are injectable; unit tests run against deterministic fakes and the real graph was exercised in headless Chrome."
+    ]
+  }
+}

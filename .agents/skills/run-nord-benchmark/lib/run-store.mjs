@@ -221,8 +221,9 @@ export function markStage(root, id, phaseValue, status, now = new Date()) {
   if (isV3(run)) {
     if (status === 'running') {
       if (previous && previous.status !== 'complete') throw new Error(`Phase ${previous.number} must be complete before Phase ${phase} starts`)
-      if (!['queued', 'prepared', 'running', 'verifying'].includes(current.status)) throw new Error(`Phase ${phase} cannot start from ${current.status}`)
-      const nextAttempts = (current.attempts ?? 0) + (['running', 'verifying'].includes(current.status) ? 0 : 1)
+      if (!['queued', 'prepared', 'running', 'verifying', 'complete'].includes(current.status)) throw new Error(`Phase ${phase} cannot start from ${current.status}`)
+      // Reopening a complete phase regenerates evidence for re-verification; it is not a new implementation attempt.
+      const nextAttempts = (current.attempts ?? 0) + (['running', 'verifying', 'complete'].includes(current.status) ? 0 : 1)
       const allowedAttempts = run.budget?.limits?.implementationAttemptsPerPhase
       if (allowedAttempts && nextAttempts > allowedAttempts) throw new Error(`Phase ${phase} exceeds its ${allowedAttempts}-attempt implementation budget`)
       current.attempts = nextAttempts
@@ -370,6 +371,29 @@ export function reindexRegistry(root) {
   runs.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)) || a.id.localeCompare(b.id))
   writeJson(locations.registry, runs)
   return { count: runs.length, ids: runs.map((run) => run.id), registry: locations.registry }
+}
+
+export function retargetRun(root, id, targetPhaseValue) {
+  const targetPhase = Number(targetPhaseValue)
+  const run = loadRun(root, id)
+  if (!isV3(run)) throw new Error('retarget requires a protocol v3 run')
+  if (!Number.isInteger(targetPhase) || targetPhase <= (run.targetPhase ?? 0)) {
+    throw new Error(`retarget only extends a run upward; current target is Phase ${run.targetPhase}`)
+  }
+  const { value: protocol } = loadProtocol(root)
+  const selected = selectedPhases(protocol, targetPhase)
+  run.targetPhase = targetPhase
+  run.selectedPhases = selected
+  for (const number of selected) {
+    if (!run.stages.some((stage) => stage.number === number)) {
+      run.stages.push({ number, status: 'queued', attempts: 0, startedAt: null, completedAt: null })
+    }
+  }
+  run.stages.sort((a, b) => a.number - b.number)
+  if (run.status === 'complete' || run.status === 'published') run.status = 'running'
+  run.updatedAt = new Date().toISOString()
+  saveRun(root, run)
+  return { id, targetPhase, selectedPhases: selected, stages: run.stages.map(({ number, status }) => ({ number, status })) }
 }
 
 export function resumePlan(root, id) {

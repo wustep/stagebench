@@ -1,0 +1,64 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "Sampled multi-piano instrument with a live-DSP effect chain. Primary sound: three bundled RECORDED sample sets (Grand/Upright/Electric) played through AudioBufferSourceNodes with nearest-root selection, recorded-velocity-layer crossfading (grand) or declared gain+filter velocity shaping (single-layer sets), unison detune copies, and per-voice envelopes. One AudioContext: voices enter per-layer buses (timbre EQ, dynamic compression, level), then the ordered per-layer effect chain Mod 1 → Mod 2 → Delay → Amp Sim/EQ → Compressor → Reverb, then either the single Rotary Speaker instance (Amp unit 'To Rotary') or directly the master gain → limiter → one destination. All effects are live Web Audio processing (LFOs, modulated delays, biquads, waveshapers, convolution). The Phase 1 oscillator voice survives only as a clearly labeled synthesized fallback after primary sample failure.",
+    "sampleSources": [
+      {
+        "name": "Salamander Grand ('Grand' type)",
+        "source": "Salamander Grand Piano V3 — Yamaha C5 recorded by Alexander Holm (archive.org/details/SalamanderGrandPianoV3), obtained exclusively through the npm registry packages @audio-samples/piano-mp3-velocity4, -velocity8 and -velocity13 (v1.0.5) and copied into public/samples/grand by scripts/sync-samples.mjs.",
+        "license": "CC BY 3.0 — attribution: 'Salamander Grand Piano V3' by Alexander Holm.",
+        "files": ["public/samples/grand/<a0|c1|ds1|fs1…c8>-l<1|2|3>.mp3 — 30 root notes (A/C/D#/F# per octave, A0–C8) × 3 recorded velocity layers (Salamander layers 4, 8, 13 of 16) = 90 files; per-file roots/layers listed in public/samples/manifest.json"],
+        "notes": "Recorded velocity layers are crossfaded by played velocity. Decoded tails longer than 6.5 s are truncated with a fade to bound memory; this is declared processing of recorded material, not synthesis."
+      },
+      {
+        "name": "Tack Upright ('Upright' type)",
+        "source": "GM Honky-tonk piano program (detuned tack-upright character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts, Benjamin Gleitzman), obtained via the npm registry package web-music-score-samples v3.0.0 (samples/003-honkytonk-piano) and copied into public/samples/upright.",
+        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "files": ["public/samples/upright/<c1|e1|gs1…c7>.mp3 — 19 root notes (C/E/Ab per octave) × 1 velocity layer"],
+        "notes": "The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy soundfont banks; the packaging does not identify which bank produced these renders — declared honestly. Single recorded velocity layer: velocity response is shaped by gain and a velocity-keyed lowpass in the engine and is declared as such."
+      },
+      {
+        "name": "Tine EP ('Electric' type)",
+        "source": "GM Electric Piano 1 (tine/electromechanical character) from the same MIDI-JS Soundfonts collection via npm web-music-score-samples v3.0.0 (samples/004-electric-piano-1), copied into public/samples/electric.",
+        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "files": ["public/samples/electric/<c1|e1|gs1…c7>.mp3 — 19 root notes × 1 velocity layer"],
+        "notes": "Same provenance chain and single-layer velocity declaration as the Upright set."
+      }
+    ],
+    "generatedSources": [
+      {
+        "name": "Synthesized fallback voice",
+        "kind": "live Web Audio oscillator synthesis",
+        "files": ["src/audio/engine.ts"],
+        "notes": "Used ONLY after primary sample failure (or a minimal reduced graph) and labeled 'FALLBACK … synthesized' in the status strip and Program display. Never presented as recorded material."
+      },
+      {
+        "name": "Reverb impulse responses",
+        "kind": "algorithmically generated buffers (deterministic xorshift noise, per-type decay/predelay/spring character)",
+        "files": ["src/audio/effects.ts"],
+        "notes": "Six reverb types use generated IRs through a ConvolverNode — generated DSP, not recorded spaces."
+      },
+      {
+        "name": "String-resonance impulse and pedal-noise thump",
+        "kind": "generated buffers",
+        "files": ["src/audio/engine.ts"],
+        "notes": "String Res is a generated sympathetic-resonance approximation active with the damper lifted (the spec's pedal-down samples are not available); Ped Noise is a generated filtered thump. Both are declared approximations, never recordings."
+      },
+      {
+        "name": "Effect processing (Mod 1/Mod 2/Delay/Amp-EQ/Compressor/Rotary)",
+        "kind": "live Web Audio DSP (LFO-modulated gains/panners/filters/delays, feedback delay loop with in-loop filtering, waveshaper drive, DynamicsCompressor, dual-band rotary with inertial speed ramps)",
+        "files": ["src/audio/effects.ts"],
+        "notes": "Every unit processes real audio through connected nodes with click-free crossfaded bypass; no unit is a label, enum or disconnected node."
+      }
+    ],
+    "notes": [
+      "All recorded material was obtained exclusively through the npm registry (the run's only permitted network source) and is bundled under public/samples/ for fully offline playback; see public/samples/SOURCES.md and scripts/sync-samples.mjs for the exact provenance chain.",
+      "One AudioContext feeds per-layer buses, ordered effects, the single rotary instance, master gain and limiter into one destination; no engine or effect creates a parallel context or destination.",
+      "Clav/Digital/Misc piano types have no bundled model: selecting them flashes the type LED and reports 'Piano not found' on the Program display, and the layer plays nothing rather than pretending (spec: nord-stage-4.piano.json selection.missingModelState).",
+      "Functional Phase 2 controls: keybed + pedals, full Piano section, full Layer Effects section (except the Synth FX-focus button, decorative until a Synth engine exists), Rotary strip (drive/speed/stop), Master Level, pitch stick (±2 semitones on Piano voices), Panic, and Shift as the Global-mode modifier. Organ, Synth and remaining Program/Morph controls stay truthfully decorative until Phase 3.",
+      "Deterministic tests cross the real audio boundary via node-web-audio-api OfflineAudioContext rendering (no network, devices or audio output); browser boundaries (context, assets, MIDI, timers) remain injectable and fake-backed state tests complement, not replace, the rendered-audio proofs."
+    ]
+  }
+}

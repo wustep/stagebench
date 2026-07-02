@@ -19,6 +19,7 @@ import {
   recordRunTelemetry,
   reindexRegistry,
   resumePlan,
+  retargetRun,
 } from '../.agents/skills/run-nord-benchmark/lib/run-store.mjs'
 import { loadProtocol } from '../.agents/skills/run-nord-benchmark/lib/protocol.mjs'
 
@@ -34,6 +35,7 @@ const COMMANDS = {
   identity: 'Record verified response-model and agent identity details.',
   status: 'Print the authoritative per-run manifest.',
   resume: 'Print the next durable action for an interrupted run.',
+  retarget: 'Extend a run to a higher cumulative target phase.',
   verify: 'Run the phase verifier and seal its artifact digest.',
   blind: 'Create an opaque evaluator bundle with a private identity mapping.',
   evaluate: 'Create, score, or rebuild a blinded evaluation.',
@@ -156,6 +158,7 @@ try {
     })
     else if (command === 'status') result = loadRun(root, options.id)
     else if (command === 'resume') result = resumePlan(root, options.id)
+    else if (command === 'retarget') result = retargetRun(root, options.id, options['target-phase'] ?? options.phase)
     else if (command === 'verify') {
       markStage(root, options.id, options.phase, 'verifying')
       try {
