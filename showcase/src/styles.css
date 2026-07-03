@@ -1409,8 +1409,10 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.1cqw;
-  padding: 0.05cqw 0.05cqw 0.1cqw;
+  gap: 0.24cqw;
+  /* Top offset so the MORPH ASSIGN band tops align with the neighboring
+     plates' light header bands (reference). */
+  padding: 0.07cqw 0.05cqw 0.15cqw;
 }
 
 /* Right utility rail (reference): Prog View → Mon/Copy stacked, Shift/Exit
@@ -1470,29 +1472,43 @@ body {
   background: var(--chassis-mid);
 }
 
-/* Reference: PRESET LIBRARY and PROGRAM are light-filled panels with dark
-   printed text (the morph/split/clk/transp boxes stay outlined on red). */
-.deck-section[data-section='program'] .preset-box,
-.deck-section[data-section='program'] .program-grid-box {
+/* Reference: PRESET LIBRARY is a light-filled panel with dark printed text;
+   the PROGRAM box has a full-width LIGHT heading band over a darker-gray
+   body (the morph/split/clk/transp boxes stay outlined on red). */
+.deck-section[data-section='program'] .preset-box {
   background: linear-gradient(180deg, #ccd0da 0%, #b7bcc8 100%);
   border-color: rgba(20, 24, 32, 0.4);
 }
 
-.deck-section[data-section='program'] .preset-box .legend,
-.deck-section[data-section='program'] .program-grid-box .legend,
-.deck-section[data-section='program'] .program-grid-box .prog-num {
+.deck-section[data-section='program'] .preset-box .legend {
   color: #232a38;
 }
 
-.deck-section[data-section='program'] .preset-box .legend.dim,
-.deck-section[data-section='program'] .program-grid-box .legend.dim {
+.deck-section[data-section='program'] .preset-box .legend.dim {
   color: #4d5464;
 }
 
-.deck-section[data-section='program'] .preset-box .group-box-title,
-.deck-section[data-section='program'] .program-grid-box .group-box-title {
+.deck-section[data-section='program'] .preset-box .group-box-title {
   color: #232a38;
   background: linear-gradient(180deg, #ccd0da 0%, #c9cdd8 100%);
+}
+
+.deck-section[data-section='program'] .program-grid-box {
+  background: linear-gradient(180deg, #454c58 0%, var(--panel-dark) 100%);
+  border-color: rgba(20, 24, 32, 0.5);
+  padding-top: 0.7cqw;
+  overflow: hidden;
+}
+
+.deck-section[data-section='program'] .program-grid-box > .group-box-title {
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: none;
+  text-align: center;
+  border-radius: 0.14cqw 0.14cqw 0 0;
+  color: #232a38;
+  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
 }
 
 .deck-section[data-section='program'] .panel-button.tiny {
@@ -1515,13 +1531,62 @@ body {
 
 .morph-buttons {
   display: flex;
-  gap: 0.18cqw;
+  gap: 0.1cqw;
+}
+
+.morph-box.group-box {
+  padding-left: 0.05cqw;
+  padding-right: 0.05cqw;
+}
+
+.morph-buttons .panel-button .panel-button-cap {
+  font-size: 0.22cqw;
+  padding: 0.05cqw 0.06cqw;
+}
+
+/* Content-sized: the program strip's tiny min-width floor would force the
+   three morph buttons past their box. */
+.deck-section[data-section='program'] .morph-buttons .panel-button.tiny {
+  min-width: 0;
 }
 
 .program-top-row {
   display: flex;
   gap: 0.15cqw;
   justify-content: space-between;
+}
+
+/* Share the row's width so no box clips its button caps; Morph Assign
+   holds three buttons and needs the biggest share. */
+.program-top-row .group-box {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding-top: 0.6cqw;
+}
+
+/* Light full-width heading bands, like the reference's MORPH ASSIGN /
+   SPLIT / MST CLK / TRANSP tabs. */
+.program-top-row .group-box > .group-box-title {
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: none;
+  text-align: center;
+  border-radius: 0.14cqw 0.14cqw 0 0;
+  color: #232a38;
+  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.program-top-row .morph-box {
+  flex: 1.9;
+}
+
+.program-top-row .panel-button .panel-button-cap {
+  font-size: 0.24cqw;
+  padding: 0.05cqw 0.08cqw;
 }
 
 .transp-box {
@@ -1618,7 +1683,16 @@ body {
 }
 
 .program-grid {
-  gap: 0.08cqw 0.15cqw;
+  gap: 0.08cqw 0.06cqw;
+}
+
+.program-grid .panel-button.tiny {
+  min-width: 0.95cqw;
+  padding: 0.05cqw;
+}
+
+.morph-buttons .panel-button.tiny {
+  padding: 0.04cqw;
 }
 
 .prog-num {
@@ -1676,8 +1750,15 @@ body {
 
 .program-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* minmax(0,…): a long single-word legend (ORGANIZE) must not blow out
+     its column past the box. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.15cqw 0.2cqw;
+}
+
+.program-cell .legend {
+  letter-spacing: 0;
+  font-size: 0.22cqw;
 }
 
 .program-cell {
@@ -1696,8 +1777,10 @@ body {
   color: var(--legend);
 }
 
-.program-cell .legend {
-  font-size: 0.28cqw;
+/* Beat the program-strip density rule's specificity (section attr + class). */
+.deck-section[data-section='program'] .program-cell .legend {
+  font-size: 0.2cqw;
+  letter-spacing: 0;
 }
 
 .shift-cluster {
@@ -1709,28 +1792,46 @@ body {
 
 /* ---------------------------------------------------------------- synth -- */
 
-/* Reference: the Synth section's group boxes (MODE, ARPEGGIATOR/GATE, VOICE,
-   VIBRATO, LFO, OSCILLATORS, FILTER, AMP, UNISON) are LIGHT panels with dark
-   printed text — unlike the dark outlined boxes of the Effects plate. */
-.deck-section[data-section='synth'] .group-box {
+/* Reference: MODE, LFO, OSCILLATORS, FILTER and AMP are LIGHT panels with
+   dark printed text; VOICE, VIBRATO, ARPEGGIATOR/GATE and UNISON stay the
+   darker plate gray with outlined borders. */
+.mode-box,
+.lfo-box,
+.osc-box,
+.filter-box,
+.amp-box {
   background: linear-gradient(180deg, #ccd0da 0%, #b7bcc8 100%);
   border-color: rgba(20, 24, 32, 0.4);
 }
 
-.deck-section[data-section='synth'] .group-box .legend {
+.mode-box .legend,
+.lfo-box .legend,
+.osc-box .legend,
+.filter-box .legend,
+.amp-box .legend {
   color: #232a38;
 }
 
-.deck-section[data-section='synth'] .group-box .legend.dim {
+.mode-box .legend.dim,
+.lfo-box .legend.dim,
+.osc-box .legend.dim,
+.filter-box .legend.dim,
+.amp-box .legend.dim {
   color: #4d5464;
 }
 
-.deck-section[data-section='synth'] .group-box .legend.red-tag,
-.deck-section[data-section='synth'] .group-box .legend .red-tag {
+.lfo-box .legend.red-tag,
+.lfo-box .legend .red-tag,
+.osc-box .legend.red-tag,
+.filter-box .legend.red-tag {
   color: #8f1f27;
 }
 
-.deck-section[data-section='synth'] .group-box-title {
+.mode-box > .group-box-title,
+.lfo-box > .group-box-title,
+.osc-box > .group-box-title,
+.filter-box > .group-box-title,
+.amp-box > .group-box-title {
   color: #232a38;
   background: linear-gradient(180deg, #ccd0da 0%, #c6cbd6 100%);
 }
@@ -2080,8 +2181,9 @@ body {
 }
 
 .focus-caption {
-  letter-spacing: 0.18cqw;
-  margin-right: -0.18cqw; /* balance the trailing letter-space */
+  letter-spacing: 0.14cqw;
+  margin-right: -0.14cqw; /* balance the trailing letter-space */
+  white-space: nowrap;
 }
 
 /* Second Shift/Exit on its light tab (reference), pinned at the strip foot. */

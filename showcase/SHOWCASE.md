@@ -1091,3 +1091,17 @@ A discrepancy sweep against fresh high-detail crops of the reference photo
   letters pinned to one line (nowrap).
 - Gates: typecheck, test (404/404), lint, build, verify:layout (12/12,
   after re-tightening the piano tabs and Mod 1/2 ON rows).
+
+### 25 — Program strip: box palette corrections and header alignment (2026-07-03)
+
+User-directed corrections to the previous pass: VOICE, VIBRATO,
+ARPEGGIATOR/GATE and UNISON revert to the darker plate gray (only MODE,
+LFO, OSCILLATORS, FILTER and AMP are light panels on the reference); the
+PROGRAM box is a darker-gray body under a full-width light heading band;
+MORPH ASSIGN / SPLIT / MST CLK / TRANSP get the same light heading bands
+and now share the top row without clipping their buttons (flex shares +
+content-sized caps + minmax(0,1fr) program-grid columns beat a
+specificity conflict that kept ORGANIZE over-wide); the program layout
+top-aligns the MORPH ASSIGN band with the neighboring plates' header
+bands to the pixel; the FX FOCUS "A B C" caption is pinned to one line.
+Gates: typecheck, test 404/404, lint, build, verify:layout 12/12.
