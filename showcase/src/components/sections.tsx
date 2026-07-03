@@ -2,7 +2,7 @@ import { useSyncExternalStore, type ReactNode } from 'react'
 import { DRAWBAR_FOOTAGES, DRAWBAR_LEGENDS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
 import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
-import { usePresentationMorphRange, usePresentationValue } from '../state/presentation'
+import { usePresentationMorphRange, usePresentationToggle, usePresentationValue } from '../state/presentation'
 import {
   mappings,
   programLabel,
@@ -158,6 +158,7 @@ function LayerFaderColumn({
 }) {
   const level = usePresentationValue(store, faderId)
   const range = usePresentationMorphRange(store, faderId, 9)
+  const enabled = usePresentationToggle(store, buttonId)
   return (
     <div className="layer-column" data-focused={focused ? 'true' : undefined}>
       <div className="layer-fader-row">
@@ -167,9 +168,13 @@ function LayerFaderColumn({
       <Legend className="layer-letter">
         <b>{letter}</b> AUX KB
       </Legend>
-      <PanelButton store={store} id={buttonId} className="pill small" led="yellow">
-        ON/OFF ▾
-      </PanelButton>
+      {/* Reference: the ON/OFF legend lives on a light tab above the button
+          (with the layer LED), and the tan-gray button cap itself is blank. */}
+      <span className="onoff-tab" aria-hidden="true">
+        <Led color="yellow" on={enabled} />
+        <Legend>ON/OFF ▾</Legend>
+      </span>
+      <PanelButton store={store} id={buttonId} className="pill small blank" />
     </div>
   )
 }
@@ -1052,9 +1057,9 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <span className="waveform-cluster">
                   <Legend>WAVEFORM</Legend>
                   <Legend className="dim">KEEP EDITS ▿</Legend>
-                  <PanelButton store={store} id="waveform-select" className="red tiny" />
+                  <PanelButton store={store} id="waveform-select" className="framed tiny" />
                   <Legend>SOUND INIT</Legend>
-                  <PanelButton store={store} id="sound-init" className="dark tiny" />
+                  <PanelButton store={store} id="sound-init" className="framed tiny" />
                 </span>
               </div>
               <div className="arp-column">
@@ -1079,7 +1084,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                       <Legend>{synth.arp.mode === 'Gate' ? 'HARDNESS' : 'RANGE'} ENV</Legend>
                     </span>
                     <span className="arp-mode-cell">
-                      <PanelButton store={store} id="arp-menu" className="red tiny">
+                      <PanelButton store={store} id="arp-menu" className="framed tiny">
                         MENU
                       </PanelButton>
                       <Legend className="dim">GROUP ▿</Legend>
@@ -1111,7 +1116,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     <PanelButton store={store} id="vibrato-mode" className="dark tiny" led="green">
                       {focused.voice.vibrato === 'Off' ? 'OFF' : focused.voice.vibrato.toUpperCase()}
                     </PanelButton>
-                    <PanelButton store={store} id="vibrato-menu" className="red tiny">
+                    <PanelButton store={store} id="vibrato-menu" className="framed tiny">
                       MENU
                     </PanelButton>
                   </GroupBox>
@@ -1124,7 +1129,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <Led color="green" on={lfo.destination !== null} />
                   <Legend>{lfo.waveform.toUpperCase()}</Legend>
                 </span>
-                <PanelButton store={store} id="lfo-waveform" className="dark tiny">
+                <PanelButton store={store} id="lfo-waveform" className="framed tiny">
                   WAVEFORM
                 </PanelButton>
                 <Legend className="dim">{lfo.destination ?? 'OFF'} ▿</Legend>
@@ -1141,10 +1146,10 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               </GroupBox>
               <GroupBox title="Oscillators" className="osc-box">
                 <span className="button-cell">
-                  <PanelButton store={store} id="osc-pitch-smp" className="red tiny">
+                  <PanelButton store={store} id="osc-pitch-smp" className="framed tiny">
                     PITCH/SMP
                   </PanelButton>
-                  <PanelButton store={store} id="osc-envelope" className="red tiny" led="red">
+                  <PanelButton store={store} id="osc-envelope" className="framed tiny" led="red">
                     ENVELOPE
                   </PanelButton>
                 </span>
@@ -1166,10 +1171,10 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               </GroupBox>
               <GroupBox title="Filter" className="filter-box">
                 <span className="button-cell">
-                  <PanelButton store={store} id="filter-type" className="red tiny">
+                  <PanelButton store={store} id="filter-type" className="framed tiny">
                     TYPE
                   </PanelButton>
-                  <PanelButton store={store} id="filter-envelope" className="red tiny" led="red">
+                  <PanelButton store={store} id="filter-envelope" className="framed tiny" led="red">
                     ENVELOPE
                   </PanelButton>
                 </span>
@@ -1198,7 +1203,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               </GroupBox>
               <div className="amp-unison-column">
                 <GroupBox title="Amp" className="amp-box">
-                  <PanelButton store={store} id="amp-envelope" className="red tiny" led="red">
+                  <PanelButton store={store} id="amp-envelope" className="framed tiny" led="red">
                     ENVELOPE
                   </PanelButton>
                   <span className="tiny-led-row" aria-hidden="true">
@@ -1332,50 +1337,51 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 </PanelButton>
               </span>
               <span className="fx-on-cell">
-                <PanelButton store={store} id="mod1-on" className="pill small" led="green">
-                  ON
-                </PanelButton>
+                <Legend>ON</Legend>
+                <PanelButton store={store} id="mod1-on" className="pill small blank" led="red" />
               </span>
             </GroupBox>
+            {/* Cell placement mirrors the reference photo: TEMPO over the
+                light TAP/SET sub-box (left), EFFECTS + DRY WET (center),
+                FEEDBACK over FILTER over ON (right). */}
             <GroupBox title="Delay" className="fx-box delay-box">
-              <span className="knob-cell">
+              <span className="knob-cell delay-tempo-cell">
                 <Knob store={store} id="delay-tempo" className="small" />
                 <Legend>TEMPO</Legend>
                 <Legend className={`dim red-tag ${chain.delay.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
               </span>
-              <span className="variation-cell">
+              <span className="variation-cell delay-effects-cell">
+                <Legend className="dim">EFFECTS</Legend>
                 <TokenRow
                   tokens={['CHOR', 'VIBE', 'ENS', 'FLAM', 'SPACE']}
                   active={delayEffectToken(chain.delay.effect)}
                 />
-                <PanelButton store={store} id="delay-variation" className="dark tiny">
-                  VARIATION ▿
-                </PanelButton>
+                <PanelButton store={store} id="delay-variation" className="dark tiny" />
+                <Legend className="dim">VARIATION ▿</Legend>
               </span>
-              <span className="knob-cell">
+              <span className="knob-cell delay-feedback-cell">
                 <Knob store={store} id="delay-feedback" className="small" />
                 <Legend>FEEDBACK</Legend>
-                <TokenRow tokens={['HP', 'BP', 'LP']} active={delayFilterToken(chain.delay.filter)} />
-                <PanelButton store={store} id="delay-filter" className="dark tiny">
-                  FILTER ▿
-                </PanelButton>
               </span>
-              <span className="variation-cell">
-                <PanelButton store={store} id="delay-tap" className="dark tiny">
-                  TAP/SET ▾
-                </PanelButton>
-                <PanelButton store={store} id="delay-analog" className="dark tiny">
-                  ANALOG ▿
-                </PanelButton>
+              <span className="variation-cell tap-box delay-tap-cell">
+                <Legend>TAP/SET ▾</Legend>
+                <PanelButton store={store} id="delay-tap" className="dark tiny" />
+                <PanelButton store={store} id="delay-analog" className="dark tiny" />
+                <Legend className="dim">ANALOG ▿</Legend>
               </span>
-              <span className="knob-cell">
+              <span className="knob-cell delay-mix-cell">
                 <Knob store={store} id="delay-mix" className="small" />
                 <Legend>DRY WET</Legend>
               </span>
-              <span className="fx-on-cell">
-                <PanelButton store={store} id="delay-on" className="pill small" led="green">
-                  ON
-                </PanelButton>
+              <span className="variation-cell delay-filter-cell">
+                <Legend className="dim">FILTER</Legend>
+                <TokenRow tokens={['HP', 'BP', 'LP']} active={delayFilterToken(chain.delay.filter)} />
+                <PanelButton store={store} id="delay-filter" className="dark tiny" />
+                <Legend className="dim">PING PONG ▿</Legend>
+              </span>
+              <span className="fx-on-cell delay-on-cell">
+                <Legend>ON</Legend>
+                <PanelButton store={store} id="delay-on" className="pill small blank" led="red" />
                 <Legend className={`dim red-tag ${state.fxGlobal.delay ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
             </GroupBox>
@@ -1396,9 +1402,8 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 </PanelButton>
               </span>
               <span className="fx-on-cell">
-                <PanelButton store={store} id="mod2-on" className="pill small" led="green">
-                  ON
-                </PanelButton>
+                <Legend>ON</Legend>
+                <PanelButton store={store} id="mod2-on" className="pill small blank" led="red" />
               </span>
             </GroupBox>
             <GroupBox title="Comp" className="fx-box comp-box">
@@ -1408,9 +1413,8 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend className="dim">ACTIVE · FAST ▿</Legend>
               </span>
               <span className="fx-on-cell">
-                <PanelButton store={store} id="comp-on" className="pill small" led="green">
-                  ON
-                </PanelButton>
+                <Legend>ON</Legend>
+                <PanelButton store={store} id="comp-on" className="pill small blank" led="red" />
                 <Legend className={`dim red-tag ${state.fxGlobal.comp ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
             </GroupBox>
@@ -1443,9 +1447,8 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>TREBLE</Legend>
               </span>
               <span className="fx-on-cell">
-                <PanelButton store={store} id="amp-on" className="pill small" led="green">
-                  ON
-                </PanelButton>
+                <Legend>ON</Legend>
+                <PanelButton store={store} id="amp-on" className="pill small blank" led="red" />
               </span>
             </GroupBox>
             <GroupBox title="Reverb" className="fx-box reverb-box">
@@ -1466,9 +1469,8 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>DRY WET</Legend>
               </span>
               <span className="fx-on-cell">
-                <PanelButton store={store} id="reverb-on" className="pill small" led="green">
-                  ON
-                </PanelButton>
+                <Legend>ON</Legend>
+                <PanelButton store={store} id="reverb-on" className="pill small blank" led="red" />
                 <Legend className={`dim red-tag ${state.fxGlobal.reverb ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
             </GroupBox>

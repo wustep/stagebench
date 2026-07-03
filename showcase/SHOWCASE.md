@@ -1058,3 +1058,36 @@ numbers said:
   no-op). The "Live edits survive a reload" test evolved to flush before
   the simulated reload, exactly mirroring the app's pagehide flush.
 - Gates: typecheck, test (404/404), lint, build, verify:layout (12/12).
+
+### 24 — Visual fidelity pass: colors, tabs, delay layout, rotations (2026-07-03)
+
+A discrepancy sweep against fresh high-detail crops of the reference photo
+(performance zone, full synth section, effects plate):
+
+- **Button colors**: the synth menu/select buttons (TYPE, ENVELOPE ×3,
+  PITCH/SMP, WAVEFORM, SOUND INIT, LFO WAVEFORM, ARP MENU, VIBRATO MENU)
+  are BLACK caps recessed in dark-red frames on the hardware, not red caps
+  — new `.panel-button.framed` style; only ARP RUN keeps a genuinely red
+  cap. Gray caps re-tinted warm tan-gray (photo's rubber caps), including
+  the rockers.
+- **Labels off the caps**: layer ON/OFF legends now live on light tabs
+  (with the layer LED) above blank tan buttons, exactly as printed on the
+  panel; effect ON pills are blank caps with the ON legend + red LED
+  beside them; section-header ON buttons are dark caps on the light band.
+- **Synth group boxes are LIGHT panels** with dark printed text (MODE,
+  ARPEGGIATOR/GATE, VOICE, VIBRATO, LFO, OSCILLATORS, FILTER, AMP,
+  UNISON) — previously dark like the effects plate. Program's PRESET
+  LIBRARY and PROGRAM boxes are light-filled panels too.
+- **Delay box** rebuilt as an explicit 3×3 grid matching the photo: TEMPO
+  above the light TAP/SET/ANALOG sub-panel (left), EFFECTS + DRY WET
+  (center), FEEDBACK above FILTER above ON (right), with VARIATION/PING
+  PONG legends printed under blank dark buttons.
+- **Program section**: taller OLED (2.5cqw min, larger name line), larger
+  grid buttons, center column justified — fills the middle instead of
+  leaving dead space.
+- **Performance zone**: the wooden pitch stick now sits diagonally
+  (rotate -38°) in a black recessed slot, and the mod wheel's slot leans
+  right (rotate 12°), matching the photo's geometry; synth A/B/C layer
+  letters pinned to one line (nowrap).
+- Gates: typecheck, test (404/404), lint, build, verify:layout (12/12,
+  after re-tightening the piano tabs and Mod 1/2 ON rows).
