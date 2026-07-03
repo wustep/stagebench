@@ -120,6 +120,54 @@ function PlayIcon() {
   )
 }
 
+function PreviewFrame({
+  className,
+  scrolling,
+  src,
+  title,
+  frameKey,
+}: {
+  className?: string
+  scrolling?: 'no'
+  src: string
+  title: string
+  frameKey?: string
+}) {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+
+  // Iframe error signaling is limited across origins, so pair the native
+  // onError with a load-timeout heuristic that only fires while still loading.
+  useEffect(() => {
+    setState('loading')
+    const timeout = window.setTimeout(() => {
+      setState((current) => (current === 'loading' ? 'error' : current))
+    }, 12000)
+    return () => window.clearTimeout(timeout)
+  }, [src])
+
+  if (state === 'error') {
+    return (
+      <div className="preview-error" role="alert">
+        <strong>Preview failed to load</strong>
+        <p>The published build did not respond.</p>
+        <code>{src}</code>
+      </div>
+    )
+  }
+
+  return (
+    <iframe
+      className={className}
+      key={frameKey}
+      onError={() => setState('error')}
+      onLoad={() => setState('ready')}
+      scrolling={scrolling}
+      src={src}
+      title={title}
+    />
+  )
+}
+
 function KeyboardRail({
   activeNotes,
   onNoteOn,
@@ -564,8 +612,8 @@ function App() {
             </div>
           </div>
           <div className="preview-stage">
-            <iframe
-              key={`${selectedRun.id}-${selectedPhase}`}
+            <PreviewFrame
+              frameKey={`${selectedRun.id}-${selectedPhase}`}
               scrolling="no"
               src={selectedPreviewPath}
               title={`${getRunTitle(selectedRun)} Phase ${selectedPhase} output`}
@@ -586,7 +634,7 @@ function App() {
             </div>
           </div>
           <div className="preview-stage">
-            <iframe scrolling="no" src="/previews/showcase/index.html" title="Showcase Nord Stage 4" />
+            <PreviewFrame scrolling="no" src="/previews/showcase/index.html" title="Showcase Nord Stage 4" />
           </div>
         </div>
       )}
@@ -604,7 +652,7 @@ function App() {
               <button type="button" onClick={() => setSelectedReport(null)}>Close</button>
             </div>
           </div>
-          <iframe className="report-frame" src={selectedReport.reportPath} title={`${getRunTitle(selectedReport)} evaluation report`} />
+          <PreviewFrame className="report-frame" src={selectedReport.reportPath} title={`${getRunTitle(selectedReport)} evaluation report`} />
         </div>
       )}
     </main>
