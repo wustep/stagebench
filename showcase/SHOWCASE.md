@@ -1024,3 +1024,37 @@ FOCUS column didn't match the reference.
 - Verification: computed-layout audit 12/12 (overflow scan clean at both
   desktop and 390px), typecheck, lint, build green; tests 403/403 with the
   two FX-focus LED probes and the fraction pin evolved truthfully.
+
+### 23 — Technical performance pass (2026-07-03)
+
+Profiled the running app in Chrome (synthetic pointer/keyboard drives
+through the real event pipeline, Long Animation Frames API, frame-time
+histograms, `performance.memory` deltas) before touching anything. What the
+numbers said:
+
+- Panel-edit commits (store patch → full engine `applyState` → presentation
+  fan-out → React) measured **0.12 ms and ~0 KB garbage each** — a 120 Hz
+  knob drag uses ~1.5% of the main thread. Program switches ≤7 ms,
+  `noteOn` handlers ≤1.1 ms, idle frame times a flat 16.7 ms. The
+  hot paths suspected in advance (whole-panel applyState, subscriber
+  fan-out) are already cheap; no change made there, deliberately.
+- **Live mode was the real multiplier**: every edit tick serialized all 40
+  program slots to localStorage — 0.55 ms and 6 KB of garbage per commit,
+  4.6× the normal cost, at pointer-move rate while dragging. Fix: the
+  in-memory Live-slot auto-store stays synchronous (manual p. 13 semantics
+  unchanged), but the storage serialization is now a 300 ms trailing
+  debounce (`schedulePersist`/`flushPersist` in instrument.ts), flushed on
+  pagehide/visibilitychange (App.tsx) and before any immediate persist.
+  Re-measured after: **0.19 ms, 0 KB per Live commit** — parity with
+  normal mode — with the trailing write verified landing in localStorage.
+- Sustained key spam showed sporadic 70–90 ms hitches with no script or
+  style/layout attribution (LoAF) — major-GC pauses from ~16 KB of
+  allocation per key press (voice graph objects + React commits), i.e. a
+  rare stutter under hard continuous playing, not steady jank. Noted
+  honestly as the remaining known cost; voice-object pooling would be the
+  lever if it ever matters.
+- Tests: 404/404 (one new: Live-mode bursts produce a single trailing
+  storage write carrying the latest state; flush-with-nothing-pending is a
+  no-op). The "Live edits survive a reload" test evolved to flush before
+  the simulated reload, exactly mirroring the app's pagehide flush.
+- Gates: typecheck, test (404/404), lint, build, verify:layout (12/12).

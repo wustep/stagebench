@@ -142,6 +142,22 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     }
   }, [engine, controller, instrument])
 
+  // Live-mode auto-store serialization is debounced (see schedulePersist);
+  // flush it whenever the page hides so a reload/close never loses edits.
+  useEffect(() => {
+    const flush = () => instrument.flushPersist()
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+      flush()
+    }
+  }, [instrument])
+
   // Warm the audio engine ahead of the first note: the context is created
   // (suspended, pending a gesture) and samples fetch/decode during idle time,
   // so the first key press only has to resume the context instead of paying

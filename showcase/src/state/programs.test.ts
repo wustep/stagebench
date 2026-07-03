@@ -1,5 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { PianoEngine } from '../audio/engine'
 import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
@@ -283,12 +283,42 @@ describe('programs.store-live — Live slots auto-store and persist', () => {
     first.selectProgram(2)
     first.cycleDynComp()
     expect(first.getState().programs.live[2]!.snapshot.piano.dynComp).toBe(1)
-    // A fresh store over the same storage = the app reloading.
+    // Live auto-store serialization is debounced (performance: it writes all
+    // 40 slots); the app flushes on pagehide/visibilitychange, so a "reload"
+    // is flush + fresh store over the same storage.
+    first.flushPersist()
     const second = new InstrumentStore(storage)
     const programs = second.getState().programs
     expect(programs.liveMode).toBe(true)
     expect(programs.current).toBe(2)
     expect(second.getState().piano.dynComp).toBe(1)
+  })
+
+  it('Live-mode edit bursts debounce the storage writes (one trailing save, not one per tick)', () => {
+    vi.useFakeTimers()
+    try {
+      const storage = fakeStorageBoundary()
+      let saves = 0
+      const counting = { ...storage, save: (key: string, value: string) => (saves++, storage.save(key, value)) }
+      const store = new InstrumentStore(counting)
+      store.toggleLiveMode()
+      saves = 0
+      // A knob drag: ~60 snapshot-key edits well inside the debounce window.
+      for (let i = 0; i < 60; i++) store.setLayerLevel('A', i)
+      expect(saves).toBe(0) // in-memory Live slot is current, storage untouched
+      expect(store.getState().programs.live[0]!.snapshot.layers.A.level).toBe(59)
+      vi.advanceTimersByTime(350)
+      expect(saves).toBe(1) // single trailing write carrying the latest state
+      const persisted = JSON.parse(storage.data.get('stagebench.programs.v1')!) as {
+        live: Array<{ snapshot: { layers: { A: { level: number } } } }>
+      }
+      expect(persisted.live[0]!.snapshot.layers.A.level).toBe(59)
+      // flushPersist with nothing pending is a no-op.
+      store.flushPersist()
+      expect(saves).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('Store copies a Live slot into a bank slot (manual p. 44)', () => {
