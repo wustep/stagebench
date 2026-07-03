@@ -45,7 +45,7 @@ const COMMANDS = {
   status: 'status <run-id> — show run state, telemetry, and the next command',
   showcase: 'Check, build, and publish showcase/ to public/previews/showcase',
   reindex: 'Regenerate src/data/runs.json from runs/*/run.json',
-  fetch: 'Download the Nord manual and product photos into ./reference [--force]',
+  fetch: 'Download the Nord manual and product photos into ./reference [--force] [--timeout <ms>]',
   help: 'Show this help',
 }
 
@@ -275,7 +275,7 @@ try {
     } else if (command === 'reindex') {
       result = await reindexRegistry(root)
     } else if (command === 'fetch') {
-      result = await fetchReference(root, { force: options.force === 'true' })
+      result = await fetchReference(root, { force: options.force === 'true', timeout: options.timeout })
       if (result.failed > 0) process.exitCode = 1
     }
     if (result) console.log(JSON.stringify(result, null, 2))
