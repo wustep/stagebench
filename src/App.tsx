@@ -245,7 +245,7 @@ function App() {
   const [activeNotes, setActiveNotes] = useState<Set<number>>(() => new Set())
   const [lastPlayed, setLastPlayed] = useState<string | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
-  const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode }>())
+  const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode; ended: boolean }>())
   const pressedKeysRef = useRef(new Set<string>())
   const visibleRuns = [...runs]
     .sort((left, right) => getResultClass(left).rank - getResultClass(right).rank || right.startedAt.localeCompare(left.startedAt))
@@ -319,12 +319,14 @@ function App() {
     gain.gain.exponentialRampToValueAtTime(0.075, now + 0.8)
     oscillator.connect(gain)
     gain.connect(context.destination)
+    const voice = { oscillator, gain, ended: false }
     oscillator.onended = () => {
+      voice.ended = true
       oscillator.disconnect()
       gain.disconnect()
     }
     oscillator.start(now)
-    voicesRef.current.set(midi, { oscillator, gain })
+    voicesRef.current.set(midi, voice)
     setLastPlayed(name)
     setActiveNotes((current) => new Set(current).add(midi))
   }, [])
@@ -424,7 +426,16 @@ function App() {
   useEffect(() => {
     const voices = voicesRef.current
     return () => {
-      for (const { oscillator } of voices.values()) oscillator.stop()
+      // A voice may already have ended via its onended callback; calling stop()
+      // on a stopped oscillator throws, so skip ended voices and guard the rest.
+      for (const voice of voices.values()) {
+        if (voice.ended) continue
+        try {
+          voice.oscillator.stop()
+        } catch {
+          // Oscillator already stopped or context torn down; nothing to do.
+        }
+      }
       voices.clear()
       if (audioContextRef.current) void audioContextRef.current.close()
     }
