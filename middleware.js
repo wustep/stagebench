@@ -48,13 +48,20 @@ async function isValidSession(value, password) {
 
   try {
     const key = await importSigningKey(password)
-    return crypto.subtle.verify(
+    // verify() resolves false for an invalid signature — an expected result,
+    // not an error. Any throw here is a genuine crypto/config failure.
+    return await crypto.subtle.verify(
       'HMAC',
       key,
       Buffer.from(encodedSignature, 'base64url'),
       encoder.encode(expiresAt),
     )
-  } catch {
+  } catch (error) {
+    // Log unexpected crypto failures (with stack) so they are distinguishable
+    // from an ordinary bad cookie in the logs. Still fail closed, and keep the
+    // response identical to the invalid-signature path (no status/body/timing
+    // difference): return false exactly as an invalid signature would.
+    console.error('Stagebench session verification crypto error', error)
     return false
   }
 }

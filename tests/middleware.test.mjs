@@ -69,4 +69,33 @@ test('middleware rejects a tampered session cookie', async () => {
   assert.equal(response.status, 401)
 })
 
+test('a crypto failure is logged but stays indistinguishable from a bad signature', async () => {
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
+  const cookie = 'stagebench_session=9999999999999.invalid'
+
+  // Baseline: an ordinary invalid signature (verify resolves false, no throw).
+  const invalid = await middleware(request('/', { headers: { cookie } }))
+  const invalidBody = await invalid.text()
+
+  // Force a genuine crypto error and confirm it is logged separately but the
+  // response (status + body) is identical to the invalid-signature path.
+  const originalVerify = crypto.subtle.verify
+  const errors = []
+  const originalConsoleError = console.error
+  console.error = (...args) => errors.push(args)
+  crypto.subtle.verify = () => { throw new Error('boom: simulated crypto/config failure') }
+  try {
+    const failed = await middleware(request('/', { headers: { cookie } }))
+    assert.equal(failed.status, invalid.status)
+    assert.equal(await failed.text(), invalidBody)
+    assert.ok(
+      errors.some(([message]) => String(message).includes('crypto error')),
+      'a crypto error should be logged distinctly',
+    )
+  } finally {
+    crypto.subtle.verify = originalVerify
+    console.error = originalConsoleError
+  }
+})
+
 delete process.env.STAGEBENCH_PASSWORD
