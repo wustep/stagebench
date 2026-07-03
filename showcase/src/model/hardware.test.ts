@@ -38,12 +38,16 @@ describe('visual.control-inventory — normalized hardware model', () => {
     // Synth scope: section on/off, three layers (level/enable/octave),
     // waveform selection (category button + dial 2), Osc Ctrl and the
     // Amp/Filter/Osc Envelope buttons (plus dials 1/2/3 while one is the
-    // edit target), the filter (type/tracking/drive/on/freq/res/env amt),
-    // the oscillator envelope (amount + Env To Pitch), the LFO
-    // (waveform/rate/mod amt/destination via dial 3/clock sync), voice
-    // modes (mode/priority/glide/unison/vibrato) and the arpeggiator/gate
-    // (run/mode/direction/rate/range/hold via KB Hold) are all functional
-    // now. Only Synth Mode's Extern/Samples positions stay spec-excluded.
+    // edit target), the filter (type/tracking/drive/on/freq/res/env amt,
+    // now including the optional LP M/LP+HP types on the same cycle), the
+    // oscillator envelope (amount + Env To Pitch), the LFO (waveform/rate/
+    // mod amt/destination via dial 3/clock sync), voice modes (mode/
+    // priority/glide/unison/vibrato, now including the optional Delayed/
+    // Pedal vibrato modes on the same cycle), the arpeggiator/gate (run/
+    // mode/direction/rate/range/hold via KB Hold), and the optional Sound
+    // Init and Synth Mode (Analog<->Samples cycle) are all functional now.
+    // Only Synth Mode's Extern position stays spec-excluded (unreachable
+    // from the button, which cycles only the two real modes).
     const synthFunctional = new Set([
       'synth-on',
       'synth-level-a',
@@ -55,6 +59,8 @@ describe('visual.control-inventory — normalized hardware model', () => {
       'synth-octave-down',
       'synth-octave-up',
       'waveform-select',
+      'sound-init',
+      'synth-mode',
       'synth-dial-1',
       'synth-dial-2',
       'synth-dial-3',

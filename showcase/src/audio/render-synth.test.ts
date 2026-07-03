@@ -128,3 +128,82 @@ describe('synth — rendered category distinctness', () => {
     expect(earlySlow / steadySlow).toBeLessThan(earlyFast / steadyFast)
   }, 240000)
 })
+
+describe('synth — optional-scope rendered proof', () => {
+  it('LP M vs LP24 at identical settings render measurably differently (declared ladder-style approximation)', async () => {
+    // White Noise's broadband spectrum makes LP M's hotter second-stage
+    // resonance and fixed pre-shaper saturation clearly audible against
+    // LP24's identical-Q pair, more than a single-fundamental Saw would.
+    const configureWith = (type: 'LP24' | 'LP M') => (store: InstrumentStore) => {
+      withWaveform('White Noise')(store)
+      store.setSynthFilterParam('freq', 64)
+      store.setSynthFilterParam('res', 110)
+      let current = store.getState().synth.layers.A.filter.type
+      let guard = 0
+      while (current !== type && guard++ < 8) {
+        store.cycleSynthFilterType()
+        current = store.getState().synth.layers.A.filter.type
+      }
+    }
+    const lp24 = await renderSynth(configureWith('LP24'))
+    const lpM = await renderSynth(configureWith('LP M'))
+    expect(rms(lp24.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(rms(lpM.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(Math.abs(similarity(lp24.left, lpM.left, 0.1, 0.9))).toBeLessThan(0.95)
+  }, 240000)
+
+  it('LP+HP vs BP render measurably differently (wider/shallower band vs a single resonant stage)', async () => {
+    const configureWith = (type: 'BP' | 'LP+HP') => (store: InstrumentStore) => {
+      withWaveform('Saw')(store)
+      store.setSynthFilterParam('freq', 70)
+      store.setSynthFilterParam('res', 60)
+      let current = store.getState().synth.layers.A.filter.type
+      let guard = 0
+      while (current !== type && guard++ < 8) {
+        store.cycleSynthFilterType()
+        current = store.getState().synth.layers.A.filter.type
+      }
+    }
+    const bp = await renderSynth(configureWith('BP'))
+    const lpHp = await renderSynth(configureWith('LP+HP'))
+    expect(rms(bp.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(rms(lpHp.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(Math.abs(similarity(bp.left, lpHp.left, 0.1, 0.9))).toBeLessThan(0.95)
+  }, 240000)
+
+  it("'Saw Sub' has more low-band energy than 'Saw' (real sub-oscillator one octave down)", async () => {
+    const saw = await renderSynth(withWaveform('Saw'), 69) // A4, so the sub octave-down still sits in an audible low band
+    const sawSub = await renderSynth(withWaveform('Saw Sub', 127), 69)
+    expect(rms(saw.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(rms(sawSub.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    // highBandRatio inverted: a LOWER high-band ratio means more relative
+    // low-band energy — Saw Sub's added sub-octave content pulls it down.
+    expect(highBandRatio(sawSub.left, 600, 0.1, 0.9)).toBeLessThan(highBandRatio(saw.left, 600, 0.1, 0.9))
+  }, 240000)
+
+  it('Samples-mode voice renders non-silent and spectrally distinct from Analog Saw, and the filter audibly darkens it', async () => {
+    const analogSaw = await renderSynth(withWaveform('Saw'))
+    const samplesVoice = await renderSynth((store) => {
+      synthOnly(store)
+      store.cycleSynthLayerMode() // Analog -> Samples
+    })
+    expect(rms(analogSaw.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(rms(samplesVoice.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(Math.abs(similarity(analogSaw.left, samplesVoice.left, 0.1, 0.9))).toBeLessThan(0.95)
+
+    // Filter freq 127 (wide open) vs 30 (dark) on the same Samples-mode voice.
+    const bright = await renderSynth((store) => {
+      synthOnly(store)
+      store.cycleSynthLayerMode()
+      store.setSynthFilterParam('freq', 127)
+    })
+    const dark = await renderSynth((store) => {
+      synthOnly(store)
+      store.cycleSynthLayerMode()
+      store.setSynthFilterParam('freq', 30)
+    })
+    expect(rms(bright.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(rms(dark.left, 0.05, 0.9)).toBeGreaterThan(0.0001) // still audible, just darker
+    expect(highBandRatio(dark.left, 2000, 0.1, 0.9)).toBeLessThan(highBandRatio(bright.left, 2000, 0.1, 0.9))
+  }, 240000)
+})

@@ -7,14 +7,16 @@ import type { SectionId } from './variant'
  * Contract: nearly every control is FUNCTIONAL — it writes canonical
  * instrument state that the audio engine applies to the live signal graph.
  * This now spans Piano, Organ (all six models), the complete Synth section
- * (oscillators, filter, envelopes, LFO, voice modes, arpeggiator/gate),
- * Layer Effects (per-layer piano/organ-shared/synth-layer chains), Rotary,
- * Master Level, pitch stick, Shift/Panic, and Programs/scenes/splits/morphs/
- * master clock/transpose. A small, truthfully DECORATIVE remainder moves or
- * presses and exposes accessible presentation state but has no audio effect,
- * matching spec exclusions: Synth Mode's Extern/Samples positions, the
- * preset-library buttons, the Prog View/Section Edit/Layer Init/Mon·Copy
- * menus, Morph A.T. (no browser aftertouch), and the Organ preset button.
+ * (oscillators, filter, envelopes, LFO, voice modes, arpeggiator/gate, Sound
+ * Init, and Synth Mode's Analog<->Samples cycle), Layer Effects (per-layer
+ * piano/organ-shared/synth-layer chains), Rotary, Master Level, pitch stick,
+ * Shift/Panic, and Programs/scenes/splits/morphs/master clock/transpose. A
+ * small, truthfully DECORATIVE remainder moves or presses and exposes
+ * accessible presentation state but has no audio effect, matching spec
+ * exclusions: Synth Mode's Extern position (the button cycles only between
+ * the two real modes and never lands there), the preset-library buttons,
+ * the Prog View/Section Edit/Layer Init/Mon·Copy menus, Morph A.T. (no
+ * browser aftertouch), and the Organ preset button.
  */
 export type ControlType = 'knob' | 'encoder' | 'button' | 'fader' | 'drawbar' | 'wheel' | 'stick'
 
@@ -172,6 +174,10 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'arp-range',
   'kb-hold',
   'fx-focus-synth',
+  // Optional scope: Sound Init and Synth Mode (Analog <-> Samples; Extern
+  // stays spec-excluded and unreachable from this button).
+  'sound-init',
+  'synth-mode',
   // Layer Effects section
   'effects-on',
   'all-fx-off',

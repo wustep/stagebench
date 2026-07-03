@@ -170,6 +170,34 @@ describe('programs.roundtrip — store and reload restores supported state', () 
     }).not.toThrow()
   })
 
+  it('tolerates an old-snapshot payload with `synth` present but every layer missing the newer `mode` field (backfills to Analog)', () => {
+    // A snapshot from before Samples mode existed (spec.scope.optional):
+    // `synth` and every layer sub-object are present, but `mode` itself is
+    // absent from each layer object — narrower than the whole-key-missing
+    // case above, and the case normalizeSynthLayer's `...defaults, ...layer`
+    // spread must backfill correctly (a present key with an explicit
+    // `undefined` value would NOT be backfilled by that spread; deleting the
+    // key entirely, as done here, is the actual old-payload shape and IS).
+    const seed = new InstrumentStore()
+    const strip = (slot: { name: string; snapshot: unknown }) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as { synth: { layers: Record<string, Record<string, unknown>> } }
+      for (const layer of Object.values(snapshot.synth.layers)) delete layer.mode
+      return { name: slot.name, snapshot }
+    }
+    const rawBank = seed.getState().programs.bank.map(strip)
+    const rawLive = seed.getState().programs.live.map(strip)
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({ version: 1, bank: rawBank, live: rawLive, liveMode: false, current: 2 }),
+    })
+    expect(() => new InstrumentStore(storage)).not.toThrow()
+    const restored = new InstrumentStore(storage)
+    expect(restored.getState().synth.layers.A.mode).toBe('Analog')
+    expect(restored.getState().synth.layers.B.mode).toBe('Analog')
+    expect(restored.getState().synth.layers.C.mode).toBe('Analog')
+    expect(() => restored.selectProgram(10)).not.toThrow()
+    expect(restored.getState().synth.layers.A.mode).toBe('Analog')
+  })
+
   it('program state excludes Master Level', () => {
     const store = new InstrumentStore()
     store.setMasterVolume(30)

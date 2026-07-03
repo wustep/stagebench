@@ -17,7 +17,7 @@ import {
   type InstrumentStore,
   type SectionKey,
 } from '../state/instrument'
-import { instrumentsOfType } from '../audio/library'
+import { instrumentsOfType, SYNTH_SAMPLE_SETS } from '../audio/library'
 import type { EngineStatusInfo, PianoEngine } from '../audio/engine'
 import {
   Drawbar,
@@ -181,25 +181,25 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
     <SectionShell id="performance">
       <div className="perf-layout">
         <div className="perf-main">
-          <div className="perf-master">
-            <Legend>MASTER LEVEL</Legend>
-            <Knob store={store} id="perf-master-level" className="large" />
-          </div>
           <div className="perf-wheels">
-            <div className="perf-wheel-slot">
+            <div className="perf-wheel-slot stick-slot">
               <PitchStick store={store} id="perf-pitch-stick" />
             </div>
-            <div className="perf-wheel-slot">
+            <div className="perf-wheel-slot wheel-slot">
               <Wheel store={store} id="perf-mod-wheel" />
             </div>
           </div>
           <div className="branding" aria-hidden="true">
-            <span className="brand-script">nord</span>
-            <span className="brand-model">stage 4</span>
+            <span className="brand-line">nord stage 4</span>
             <span className="brand-sub">HAMMER ACTION 73</span>
           </div>
         </div>
-        <div className="rotary-strip">
+        <div className="perf-right">
+          <div className="perf-master">
+            <Legend>MASTER LEVEL</Legend>
+            <Knob store={store} id="perf-master-level" className="large" />
+          </div>
+          <div className="rotary-strip">
           <span className="rotary-title">
             ROTARY
             <br />
@@ -235,6 +235,7 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
           <PanelButton store={store} id="rotary-morph" className="dark small">
             MORPH
           </PanelButton>
+          </div>
         </div>
       </div>
     </SectionShell>
@@ -817,7 +818,13 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
   const state = useInstrumentState(instrument)
   const synth = state.synth
   const focused = synth.layers[synth.focusedLayer]
+  const isSamplesMode = focused.mode === 'Samples'
   const wave = SYNTH_WAVEFORMS[focused.waveform] ?? SYNTH_WAVEFORMS[0]!
+  // Samples mode reuses the `waveform` index field, clamped to the 2-item
+  // SYNTH_SAMPLE_SETS list (spec.scope.optional Samples mode): the OLED WAVE
+  // list shows sample-set names instead of the Analog waveform list.
+  const sampleSet = SYNTH_SAMPLE_SETS[Math.min(focused.waveform, SYNTH_SAMPLE_SETS.length - 1)] ?? SYNTH_SAMPLE_SETS[0]!
+  const displayName = isSamplesMode ? sampleSet.name : wave.name
   const envelope = focused.ampEnvelope
   const filter = focused.filter
   const oscEnvelope = focused.oscEnvelope
@@ -905,7 +912,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                             {editedEnvelope.label}
                           </span>,
                           <b key="w" className="oled-name" data-testid="oled-synth-name-line">
-                            {wave.name}
+                            {displayName}
                           </b>,
                           <span key="adr" data-testid="oled-synth-envelope-line">
                             A {editedEnvelope.attack} · D {editedEnvelope.decay === 127 ? 'HOLD' : editedEnvelope.decay} · R{' '}
@@ -928,17 +935,17 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                             OSC WAVEFORM
                           </span>,
                           <b key="w" className="oled-name" data-testid="oled-synth-name-line">
-                            {wave.name}
+                            {displayName}
                           </b>,
                           <span key="d" data-testid="oled-synth-ctrl-line">
-                            OSC CTRL: {(focused.oscCtrl / 12.7).toFixed(1)}
+                            OSC CTRL: {isSamplesMode ? '—' : (focused.oscCtrl / 12.7).toFixed(1)}
                           </span>,
                           <span key="m" className="oled-menu">
                             <span>
-                              ANALOG <b>TYPE</b>
+                              {isSamplesMode ? 'SAMPLES' : 'ANALOG'} <b>TYPE</b>
                             </span>
                             <span>
-                              {wave.category.toUpperCase()} <b>CAT</b>
+                              {isSamplesMode ? '—' : synthCategoryLabel(wave.category)} <b>CAT</b>
                             </span>
                             <span>
                               {synth.focusedLayer} <b>LAYER</b>
@@ -965,11 +972,11 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               <div className="mode-column">
                 <GroupBox title="Mode" className="mode-box">
                   <span className="tiny-led-row">
-                    <Led color="yellow" />
+                    <Led color="yellow" on={isSamplesMode} />
                     <Legend>SAMPLES</Legend>
                   </span>
                   <span className="tiny-led-row">
-                    <Led color="red" on />
+                    <Led color="red" on={!isSamplesMode} />
                     <Legend>ANALOG</Legend>
                   </span>
                   <span className="tiny-led-row">
@@ -1156,6 +1163,13 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
       </div>
     </SectionShell>
   )
+}
+
+/** OLED CAT display label (spec.scope.optional's "Shape"/"Shape Sine" are
+ *  separate categories internally, printed with a space like the panel's
+ *  other two-word category names). */
+function synthCategoryLabel(category: string): string {
+  return category === 'ShapeSine' ? 'SHAPE SINE' : category.toUpperCase()
 }
 
 /* -------------------------------------------------------------- Effects -- */

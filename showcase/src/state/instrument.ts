@@ -154,9 +154,15 @@ export interface OrganState {
 export type SynthLayerId = 'A' | 'B' | 'C'
 export const SYNTH_LAYER_IDS: readonly SynthLayerId[] = ['A', 'B', 'C']
 
-/** One waveform category (spec oscillator.requiredWaveforms); Osc Ctrl's
- *  meaning depends on which category the selected waveform belongs to. */
-export type SynthWaveformCategory = 'Pure' | 'Sync' | 'Multi' | 'Super' | 'FM-H'
+/** One waveform category (spec oscillator.requiredWaveforms, plus the
+ *  optional Sub Osc/Shape/Shape Sine/Wave/FM-I categories); Osc Ctrl's
+ *  meaning depends on which category the selected waveform belongs to.
+ *  Shape and Shape Sine are SEPARATE categories per spec.scope.optional
+ *  ("Sub Osc, Shape, Shape Sine, Misc, and Wave oscillator categories") even
+ *  though both waveforms share a "wavefold/duty" family flavor — kept apart
+ *  so the category-cycle button (manual p. 28) steps through Shape Pulse and
+ *  Shape Sine as their own stops, not lumped into one. */
+export type SynthWaveformCategory = 'Pure' | 'Sync' | 'Multi' | 'Super' | 'FM-H' | 'Sub' | 'Shape' | 'ShapeSine' | 'Wave' | 'FM-I'
 
 export interface SynthWaveform {
   category: SynthWaveformCategory
@@ -164,7 +170,10 @@ export interface SynthWaveform {
 }
 
 /** The exact Analog-mode waveform list (spec oscillator.requiredWaveforms),
- *  in panel order: Pure, Sync, Multi, Super, FM-H. */
+ *  in panel order: Pure, Sync, Multi, Super, FM-H, then the OPTIONAL Sub
+ *  Osc/Shape/Shape Sine/Wave/FM-I categories APPENDED after — factory
+ *  programs reference these by index, so the required-scope entries never
+ *  move. */
 export const SYNTH_WAVEFORMS: readonly SynthWaveform[] = [
   { category: 'Pure', name: 'Sine' },
   { category: 'Pure', name: 'Triangle' },
@@ -180,12 +189,31 @@ export const SYNTH_WAVEFORMS: readonly SynthWaveform[] = [
   { category: 'Super', name: 'Super Saw' },
   { category: 'Super', name: 'Super Square' },
   { category: 'FM-H', name: 'FM 2-op' },
+  // Optional scope (spec.scope.optional), appended — never reorder above.
+  { category: 'Sub', name: 'Saw Sub' },
+  { category: 'Sub', name: 'Square Sub' },
+  { category: 'Shape', name: 'Shape Pulse' },
+  { category: 'ShapeSine', name: 'Shape Sine' },
+  { category: 'Wave', name: 'Wave Organ' },
+  { category: 'Wave', name: 'Wave Formant' },
+  { category: 'FM-I', name: 'FM 2-op B' },
 ]
 
 /** Index of Saw within SYNTH_WAVEFORMS — the default waveform for layer A. */
 const SYNTH_SAW_INDEX = SYNTH_WAVEFORMS.findIndex((w) => w.name === 'Saw')
 
-export const SYNTH_WAVEFORM_CATEGORIES: readonly SynthWaveformCategory[] = ['Pure', 'Sync', 'Multi', 'Super', 'FM-H']
+export const SYNTH_WAVEFORM_CATEGORIES: readonly SynthWaveformCategory[] = [
+  'Pure',
+  'Sync',
+  'Multi',
+  'Super',
+  'FM-H',
+  'Sub',
+  'Shape',
+  'ShapeSine',
+  'Wave',
+  'FM-I',
+]
 
 export interface SynthAmpEnvelopeState {
   attack: number // 0..127
@@ -203,7 +231,9 @@ export interface SynthEnvelopeState {
   velocity: boolean
 }
 
-export const SYNTH_FILTER_TYPES = ['LP12', 'LP24', 'HP', 'BP'] as const
+/** Required LP12/LP24/HP/BP, plus the optional LP M (declared ladder-style
+ *  approximation) and LP+HP (series lowpass+highpass) types, appended. */
+export const SYNTH_FILTER_TYPES = ['LP12', 'LP24', 'HP', 'BP', 'LP M', 'LP+HP'] as const
 export type SynthFilterType = (typeof SYNTH_FILTER_TYPES)[number]
 
 export interface SynthFilterState {
@@ -252,8 +282,11 @@ export const SYNTH_VOICE_MODES: readonly SynthVoiceMode[] = ['Poly', 'Mono', 'Le
 export type SynthVoicePriority = 'Off' | 'Low' | 'High'
 export const SYNTH_VOICE_PRIORITIES: readonly SynthVoicePriority[] = ['Off', 'Low', 'High']
 
-export type SynthVibratoMode = 'Off' | 'On' | 'Wheel'
-export const SYNTH_VIBRATO_MODES: readonly SynthVibratoMode[] = ['Off', 'On', 'Wheel']
+/** Off/On/Wheel are required; Delayed and Pedal are optional scope (spec
+ *  voice.vibrato.optionalModes). Aftertouch is spec-excluded (no browser
+ *  aftertouch input) and never appears in this cycle. */
+export type SynthVibratoMode = 'Off' | 'On' | 'Wheel' | 'Delayed' | 'Pedal'
+export const SYNTH_VIBRATO_MODES: readonly SynthVibratoMode[] = ['Off', 'On', 'Wheel', 'Delayed', 'Pedal']
 
 /** Voice behavior (spec voice): mode/priority/glide/unison/vibrato — governs
  *  how the layer's notes are triggered and held, not what they sound like. */
@@ -272,19 +305,27 @@ function defaultSynthVoice(): SynthVoiceState {
   return { mode: 'Poly', priority: 'Off', glide: 0, unison: 0, vibrato: 'Off', vibratoAmount: 40 }
 }
 
+/** Analog (oscillator) or Samples (bundled recorded sample sets) sound
+ *  source (spec.scope.optional: "Samples mode with a small bundled sample
+ *  set"). Extern is spec-excluded and never represented here. */
+export type SynthLayerMode = 'Analog' | 'Samples'
+
 export interface SynthLayerState {
   enabled: boolean
   level: number // 0..127
   octave: -1 | 0 | 1
   zone: ZoneRange
-  /** Index into SYNTH_WAVEFORMS. */
+  /** Analog mode: index into SYNTH_WAVEFORMS. Samples mode: reused, clamped
+   *  to the 2-item SYNTH_SAMPLE_SETS list (spec: "the OLED WAVE list
+   *  selects between the two sample sets"). */
   waveform: number
-  oscCtrl: number // 0..127, displayed 0..10 with one decimal
+  oscCtrl: number // 0..127, displayed 0..10 with one decimal; no effect in Samples mode
   ampEnvelope: SynthAmpEnvelopeState
   filter: SynthFilterState
   oscEnvelope: SynthOscEnvelopeState
   lfo: SynthLfoState
   voice: SynthVoiceState
+  mode: SynthLayerMode
 }
 
 export type ArpMode = 'Arp' | 'Poly' | 'Gate'
@@ -579,6 +620,7 @@ function defaultSynthLayer(enabled: boolean): SynthLayerState {
     oscEnvelope: { attack: 0, decay: 64, release: 20, velocity: false, toPitch: false, amount: 64 },
     lfo: { waveform: 'Triangle', rate: 64, amount: 0, destination: null, mstClk: false },
     voice: defaultSynthVoice(),
+    mode: 'Analog',
   }
 }
 
@@ -1692,6 +1734,40 @@ export class InstrumentStore {
     const layer = this.state.synth.focusedLayer
     const clamped = clamp(value)
     this.patchSynthLayer(layer, { oscCtrl: clamped }, `Synth ${layer} Osc Ctrl ${(clamped / 12.7).toFixed(1)}`)
+  }
+
+  /** SYNTH MODE (spec.scope.optional "Samples mode"): cycles Analog <-> Samples
+   *  for the focused layer. EXTERN is spec-excluded and never a stop on this
+   *  cycle (manual's third position stays decorative). */
+  cycleSynthLayerMode(): void {
+    const layer = this.state.synth.focusedLayer
+    const next: SynthLayerMode = this.state.synth.layers[layer].mode === 'Analog' ? 'Samples' : 'Analog'
+    this.patchSynthLayer(layer, { mode: next }, `Synth ${layer} Mode: ${next}`)
+  }
+
+  /** SOUND INIT (spec.scope.optional): resets the focused layer's sound
+   *  parameters (waveform, Osc Ctrl, envelopes, filter, LFO, voice) to init
+   *  defaults, mirroring defaultSynthLayer's sound fields, while PRESERVING
+   *  enabled/level/octave/zone (manual's Layer Init resets a whole layer;
+   *  Sound Init is the Synth-specific sound-only variant of that idea). */
+  synthSoundInit(): void {
+    const layer = this.state.synth.focusedLayer
+    const current = this.state.synth.layers[layer]
+    const defaults = defaultSynthLayer(current.enabled)
+    this.patchSynthLayer(
+      layer,
+      {
+        waveform: defaults.waveform,
+        oscCtrl: defaults.oscCtrl,
+        ampEnvelope: defaults.ampEnvelope,
+        filter: defaults.filter,
+        oscEnvelope: defaults.oscEnvelope,
+        lfo: defaults.lfo,
+        voice: defaults.voice,
+        mode: defaults.mode,
+      },
+      `Sound Init — Synth ${layer}`,
+    )
   }
 
   setSynthAmpEnvelope(partial: Partial<SynthAmpEnvelopeState>): void {

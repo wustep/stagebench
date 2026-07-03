@@ -155,6 +155,68 @@ export function instrumentsOfType(type: PianoType): InstrumentSpec[] {
   return INSTRUMENTS.filter((i) => i.type === type)
 }
 
+/**
+ * Synth section's optional Samples mode (spec.scope.optional: "Samples mode
+ * with a small bundled sample set"): two recorded sets, bundled under
+ * public/samples/ alongside the Piano library (see SOURCES.md and
+ * IMPLEMENTATION_DETAILS.json for full provenance). Kept as a SEPARATE
+ * export from INSTRUMENTS/instrumentsOfType/PIANO_TYPES so the existing
+ * piano-type filtering and tests are untouched — these are not piano models.
+ *
+ * - Strings "Strings" — GM String Ensemble 1 (bowed string-section
+ *   character) from the MIDI-JS Soundfonts collection (MIT), 19 roots x 1 layer.
+ * - Choir   "Choir" — GM Choir Aahs (sustained vocal-pad character) from the
+ *   same collection (MIT), 19 roots x 1 layer.
+ */
+export interface SynthSampleSet {
+  id: string
+  name: string
+  source: string
+  license: string
+  gain: number
+  zones: SampleZone[]
+}
+
+export const SYNTH_SAMPLE_SETS: readonly SynthSampleSet[] = [
+  {
+    id: 'synth-strings',
+    name: 'Strings',
+    source: 'GM String Ensemble 1 (bowed string-section character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
+    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    gain: 1.3,
+    zones: gmZones('synth-strings'),
+  },
+  {
+    id: 'synth-choir',
+    name: 'Choir',
+    source: 'GM Choir Aahs (sustained vocal-pad character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
+    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    gain: 1.3,
+    zones: gmZones('synth-choir'),
+  },
+]
+
+export function getSynthSampleSet(id: string): SynthSampleSet {
+  const found = SYNTH_SAMPLE_SETS.find((s) => s.id === id)
+  if (!found) throw new Error(`Unknown synth sample set: ${id}`)
+  return found
+}
+
+/** Picks the closest recorded root for a target note (fewest semitones of
+ *  shift) from a synth sample set — mirrors nearestZones for InstrumentSpec. */
+export function nearestSynthZone(set: SynthSampleSet, midi: number): SampleZone {
+  let best = set.zones[0]!
+  let bestDistance = Math.abs(midi - best.rootMidi)
+  for (const zone of set.zones) {
+    const distance = Math.abs(midi - zone.rootMidi)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = zone
+    }
+  }
+  return best
+}
+
 export function getInstrument(id: string): InstrumentSpec {
   const found = INSTRUMENTS.find((i) => i.id === id)
   if (!found) throw new Error(`Unknown instrument: ${id}`)

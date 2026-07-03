@@ -15,9 +15,13 @@ import type {
 } from './boundaries'
 import {
   getInstrument,
+  getSynthSampleSet,
+  nearestSynthZone,
   nearestZones,
+  SYNTH_SAMPLE_SETS,
   velocityLayerGains,
   type InstrumentSpec,
+  type SampleZone,
 } from './library'
 import {
   createAmpEq,
@@ -34,14 +38,22 @@ import {
 } from './effects'
 import { drawbarPartialGain, ORGAN_MODEL_RECIPES } from './organ-models'
 import {
+  FM_INHARMONIC_RATIO,
   fmModulationIndex,
   multiDetuneCents,
   oscCtrlActiveFor,
   pulse10Wave,
   pulse33Wave,
+  shapeFoldCurve,
+  shapeFoldDriveGain,
+  shapePulseDuty,
+  shapePulseWave,
+  subOscGain,
   superDetuneCents,
   syncPeakHarmonic,
   syncWave,
+  waveFormantWave,
+  waveOrganWave,
 } from './synth-oscillators'
 import {
   initialInstrumentState,
@@ -124,6 +136,18 @@ type SynthVoiceLive =
   | { kind: 'super'; detuned: LiveDetunedSource[]; oscCtrlParam: AudioParamLike }
   | { kind: 'fm'; modGain: AudioParamLike; carrierFrequency: number; oscCtrlParam: AudioParamLike }
   | { kind: 'sync'; square: boolean; oscillator: OscillatorNodeLike; peak: number; oscCtrlParam: AudioParamLike }
+  // Optional-scope categories (spec.scope.optional):
+  // Sub Osc's sub-oscillator gain follows Osc Ctrl directly (a real linear
+  // AudioParam, not a declared detune approximation) — oscCtrlParam mirrors
+  // subGain so the shared oscillator-envelope/LFO "Osc Ctrl" plumbing works.
+  | { kind: 'sub'; subGain: AudioParamLike; oscCtrlParam: AudioParamLike }
+  // Shape Pulse rebuilds its PeriodicWave on quantized ctrl steps exactly
+  // like 'sync' above; oscCtrlParam is the same declared detune-summed
+  // approximation gain the other non-FM-H categories use.
+  | { kind: 'shapePulse'; oscillator: OscillatorNodeLike; duty: number; oscCtrlParam: AudioParamLike }
+  // Shape Sine's fold amount is a LIVE pre-shaper drive gain (a real linear
+  // AudioParam); the fold curve itself only rebuilds on quantized steps.
+  | { kind: 'shapeFold'; driveGain: AudioParamLike; shaper: WaveShaperNodeLike; quantStep: number; oscCtrlParam: AudioParamLike }
   | null
 
 /** Per-voice filter + drive stage (synth only): the source mix (`gain`)
@@ -136,6 +160,10 @@ interface SynthVoiceFilter {
   driveShaper: WaveShaperNodeLike
   filters: BiquadFilterNodeLike[]
   envBaseHz: number
+  /** LP M's always-on fixed drive stage (declared ladder-style saturation),
+   *  present only when the filter type is 'LP M'; distinct from driveShaper
+   *  (the user-facing Drive knob's stage, which stays independently gated). */
+  lpMPreShaper: WaveShaperNodeLike | null
 }
 
 interface Voice {
@@ -319,19 +347,43 @@ function stopAndDisconnect(nodes: AudioNodeLike[]): void {
   }
 }
 
-/** Native BiquadFilterNode type per filter type (LP24 cascades two lowpass
- *  stages — see synthFilterStageCount). */
+/** Native BiquadFilterNode type per filter type (LP24/LP M cascade two
+ *  lowpass stages, LP+HP pairs a lowpass with a highpass — see
+ *  synthFilterStageSpecs for the per-stage breakdown). Only used for the
+ *  single-stage required types here; LP24/LP M/LP+HP resolve their stages'
+ *  types from synthFilterStageSpecs instead. */
 function biquadTypeFor(type: SynthFilterType): string {
   if (type === 'HP') return 'highpass'
   if (type === 'BP') return 'bandpass'
-  return 'lowpass' // LP12, LP24
+  return 'lowpass' // LP12, LP24, LP M (cascade default), LP+HP (stage 1)
 }
 
-/** LP24 is two cascaded LP12 stages (spec filter.requiredTypes: "LP12, LP24
- *  ... " — 24 dB/oct = two 12 dB/oct stages in series); every other type is
- *  a single stage. */
-function synthFilterStageCount(type: SynthFilterType): number {
-  return type === 'LP24' ? 2 : 1
+/** Per-stage cascade spec: LP12/HP/BP are one stage; LP24 is two identical
+ *  lowpass stages (24 dB/oct); the optional LP M is a ladder-style
+ *  approximation — two lowpass stages, but the SECOND stage's resonance is
+ *  mapped hotter (qMultiplier 1.5x) for a self-oscillating-ladder character
+ *  distinct from LP24's identical-Q pair; the optional LP+HP is a lowpass
+ *  at the cutoff in series with a highpass fixed 2 octaves below it — a
+ *  wider/shallower band emphasis than BP's single resonant stage. */
+function synthFilterStageSpecs(type: SynthFilterType): Array<{ type: string; qMultiplier: number; freqOctaveOffset: number }> {
+  if (type === 'LP24') return [{ type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }, { type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }]
+  if (type === 'LP M') return [{ type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }, { type: 'lowpass', qMultiplier: 1.5, freqOctaveOffset: 0 }]
+  if (type === 'LP+HP') return [{ type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }, { type: 'highpass', qMultiplier: 1, freqOctaveOffset: -2 }]
+  return [{ type: biquadTypeFor(type), qMultiplier: 1, freqOctaveOffset: 0 }]
+}
+
+/** LP M's fixed gentle drive waveshaper (tanh k=1.5): a declared ladder-
+ *  style saturating character applied BEFORE the filter stages, always
+ *  active for this type (independent of the Drive knob's own stage), so LP M
+ *  measurably differs from LP24 at identical freq/res/tracking settings. */
+const LP_M_DRIVE_K = 1.5
+function lpMDriveCurve(): Float32Array {
+  const curve = new Float32Array(2048)
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1
+    curve[i] = Math.tanh(x * LP_M_DRIVE_K) / Math.tanh(LP_M_DRIVE_K)
+  }
+  return curve
 }
 
 /** 0..127 -> 40..16000 Hz cutoff, reusing the shared filterFreqHz mapping. */
@@ -841,12 +893,25 @@ export class PianoEngine {
     return [...ids]
   }
 
+  /** Synth sample-set ids needed by any synth layer currently in Samples
+   *  mode (spec.scope.optional Samples mode) — loaded/tracked through the
+   *  same sample-cache and status machinery as the Piano library, kept as a
+   *  separate id namespace (getSynthSampleSet vs getInstrument) so piano
+   *  status/fallback reporting stays untouched. */
+  private neededSynthSampleSetIds(): string[] {
+    const anySamplesLayer = SYNTH_LAYER_IDS.some((layer) => this.state.synth.layers[layer].mode === 'Samples')
+    // Both bundled sets load together (the WAVE list switches between them
+    // instantly with no load gap) once any layer is in Samples mode.
+    return anySamplesLayer ? SYNTH_SAMPLE_SETS.map((set) => set.id) : []
+  }
+
   private loadNeededInstruments(): void {
     if (!this.context || !this.channels) return
     for (const id of this.neededInstrumentIds()) this.loadInstrument(getInstrument(id))
+    for (const id of this.neededSynthSampleSetIds()) this.loadInstrument(getSynthSampleSet(id))
   }
 
-  private loadInstrument(spec: InstrumentSpec): void {
+  private loadInstrument(spec: { id: string; zones: SampleZone[] }): void {
     if (!this.context) return
     const existing = this.instrumentStatus.get(spec.id)
     if (existing === 'ready' || existing === 'loading') return
@@ -934,10 +999,11 @@ export class PianoEngine {
     return this.instrumentStatus.get(id)
   }
 
-  /** Resolves once every currently needed instrument has finished loading (ready or error). */
+  /** Resolves once every currently needed instrument (piano models AND any
+   *  Samples-mode synth sample sets) has finished loading (ready or error). */
   whenReady(): Promise<EngineStatusInfo> {
     const settled = () => {
-      const needed = this.neededInstrumentIds()
+      const needed = [...this.neededInstrumentIds(), ...this.neededSynthSampleSetIds()]
       return needed.every((id) => {
         const status = this.instrumentStatus.get(id)
         return status === 'ready' || status === 'error'
@@ -979,13 +1045,22 @@ export class PianoEngine {
       )
       return
     }
+    // Synth Samples-mode sets (optional scope): a labeled fallback note
+    // appended to the truthful piano status line, same "declared fallback"
+    // convention as above, without overriding the piano section's own status.
+    const synthNeeded = this.neededSynthSampleSetIds()
+    const synthFailed = synthNeeded.filter((id) => this.instrumentStatus.get(id) === 'error')
+    const synthNote =
+      synthFailed.length > 0
+        ? ` Synth Samples-mode FALLBACK: ${synthFailed.map((id) => getSynthSampleSet(id).name).join(', ')} failed to load — affected layer uses the synthesized fallback voice.`
+        : ''
     const layerLine = (['A', 'B'] as const)
       .map((layer) => {
         const id = selectedInstrumentId(this.state.layers[layer])
         return `${layer}: ${id ? getInstrument(id).name : '—'}`
       })
       .join(' · ')
-    this.setStatus('ready', `Pianos ready (recorded samples) — ${layerLine}.${reducedNote}`)
+    this.setStatus('ready', `Pianos ready (recorded samples) — ${layerLine}.${reducedNote}${synthNote}`)
   }
 
   /* ------------------------------------------------------- state -> DSP -- */
@@ -1129,11 +1204,21 @@ export class PianoEngine {
         rampTo(channel.toRotary.gain, routed ? 1 : 0.0001, now)
         rampTo(channel.toMaster.gain, routed ? 0.0001 : 1, now)
 
-        // Vibrato depth: On = fixed vibratoAmount; Wheel = live mod-wheel
-        // position (spec voice.vibrato); Off = 0. ±40 cents at full depth.
+        // Vibrato depth: On/Delayed = fixed vibratoAmount (Delayed's per-
+        // voice 0->full ramp lives on each voice's own delayGain — see
+        // startSynthVoice/buildSynthVibrato); Wheel = live mod-wheel
+        // position; Pedal = live control-pedal position (spec
+        // voice.vibrato.optionalModes, mirroring Wheel); Off = 0. ±40 cents
+        // at full depth.
         const voice = layerState.voice
         const vibratoDepth =
-          voice.vibrato === 'On' ? (voice.vibratoAmount / 127) * 40 : voice.vibrato === 'Wheel' ? (state.morphValues.wheel / 127) * 40 : 0
+          voice.vibrato === 'On' || voice.vibrato === 'Delayed'
+            ? (voice.vibratoAmount / 127) * 40
+            : voice.vibrato === 'Wheel'
+              ? (state.morphValues.wheel / 127) * 40
+              : voice.vibrato === 'Pedal'
+                ? (state.morphValues.pedal / 127) * 40
+                : 0
         rampTo(channel.vibrato.depth.gain, vibratoDepth, now)
       }
       // Osc Ctrl moves retarget sounding synth voices immediately (Sync,
@@ -1213,6 +1298,26 @@ export class PianoEngine {
             }
             break
           }
+          case 'sub': {
+            rampTo(live.subGain, subOscGain(oscCtrl), now)
+            break
+          }
+          case 'shapePulse': {
+            const duty = shapePulseDuty(oscCtrl)
+            if (Math.abs(duty - live.duty) > 0.0001) {
+              live.duty = duty
+              live.oscillator.setPeriodicWave(shapePulseWave(context, oscCtrl))
+            }
+            break
+          }
+          case 'shapeFold': {
+            rampTo(live.driveGain, shapeFoldDriveGain(oscCtrl), now)
+            if (oscCtrl !== live.quantStep) {
+              live.quantStep = oscCtrl
+              live.shaper.curve = shapeFoldCurve(oscCtrl)
+            }
+            break
+          }
         }
       }
       const filter = voice.synthFilter
@@ -1221,12 +1326,14 @@ export class PianoEngine {
         filter.driveShaper.curve = synthDriveCurve(filterState.drive)
         const baseHz = synthFilterFreqHz(filterState.freq) * synthFilterTrackingScale(filterState.tracking, voice.midi)
         filter.envBaseHz = baseHz
-        const q = synthFilterQ(filterState.res)
-        for (const biquad of filter.filters) {
-          biquad.type = biquadTypeFor(filterState.type)
-          rampTo(biquad.frequency, baseHz, now)
-          rampTo(biquad.Q, q, now)
-        }
+        const baseQ = synthFilterQ(filterState.res)
+        const stageSpecs = synthFilterStageSpecs(filterState.type)
+        filter.filters.forEach((biquad, i) => {
+          const spec = stageSpecs[i] ?? stageSpecs[stageSpecs.length - 1]!
+          biquad.type = spec.type
+          rampTo(biquad.frequency, baseHz * Math.pow(2, spec.freqOctaveOffset), now)
+          rampTo(biquad.Q, baseQ * spec.qMultiplier, now)
+        })
       }
     }
     for (const voice of this.voices.values()) apply(voice)
@@ -1803,22 +1910,70 @@ export class PianoEngine {
     // duplicate, not a full per-category rebuild).
     let unisonOscType = 'sawtooth'
 
-    const oscCtrlActive = oscCtrlActiveFor(wave.category)
-    const oscCtrl = oscCtrlActive ? layerState.oscCtrl : 0
+    // Samples mode (spec.scope.optional): AudioBufferSource voices from the
+    // bundled SYNTH_SAMPLE_SETS, nearest-root + playbackRate pitch shift —
+    // instead of the oscillator switch below. OSC CTRL has no effect (like
+    // Wave); the WAVE list (the `waveform` field, reused) selects between
+    // the two sample sets, clamped to that 2-item list.
+    if (layerState.mode === 'Samples') {
+      const setIndex = Math.max(0, Math.min(SYNTH_SAMPLE_SETS.length - 1, layerState.waveform))
+      const set = SYNTH_SAMPLE_SETS[setIndex]!
+      const buildSampleVoice = (detuneCents: number, panValue: number | null, levelScale: number): void => {
+        const zone = nearestSynthZone(set, shifted)
+        const buffer = this.sampleCache.get(zone.file)
+        const source = context.createBufferSource()
+        if (buffer) source.buffer = buffer
+        const baseRate = Math.pow(2, (shifted - zone.rootMidi) / 12) * Math.pow(2, detuneCents / 1200)
+        source.playbackRate.value = baseRate * Math.pow(2, (bend * 100) / 1200)
+        // Declared per-set level (spec-consistent with the piano sample
+        // pattern's `spec.gain`): each recorded set carries its own gain so
+        // the two sets sit at a comparable perceived level.
+        const levelGain = context.createGain()
+        levelGain.gain.value = set.gain * levelScale
+        source.connect(levelGain)
+        ownedNodes.push(levelGain)
+        let node: AudioNodeLike = levelGain
+        if (panValue !== null) {
+          const panner = context.createStereoPanner()
+          panner.pan.value = panValue
+          levelGain.connect(panner)
+          node = panner
+          ownedNodes.push(panner)
+        }
+        node.connect(gain)
+        source.start(now)
+        sources.push({ kind: 'sample', node: source, baseRate })
+      }
+      buildSampleVoice(0, null, 1)
+      unisonOscType = 'sawtooth' // unused in Samples mode; kept for type continuity below
+      const unisonLevel = layerState.voice.unison
+      if (unisonLevel > 0) {
+        for (const side of [-1, 1]) {
+          buildSampleVoice(side * (5 + unisonLevel * 6), side * (0.25 + unisonLevel * 0.18), 0.35 + unisonLevel * 0.08)
+        }
+      }
+    } else {
+      const oscCtrlActive = oscCtrlActiveFor(wave.category)
+      const oscCtrl = oscCtrlActive ? layerState.oscCtrl : 0
 
-    // Sync/Multi/Super get a real, audio-rate "Osc Ctrl live target" gain
-    // that sums into their oscillator(s)' detune as an additive offset — a
-    // declared approximation (their Osc Ctrl math is JS-computed, not a
-    // single linear AudioParam) that still gives the oscillator envelope's
-    // non-toPitch mode and the LFO's "Osc Ctrl" destination a real, audible
-    // connection. FM-H needs no such gain: its modulation-index gain IS
-    // already that live target, connected directly below.
-    let oscCtrlGain: GainNodeLike | null = null
-    if (oscCtrlActive && wave.category !== 'FM-H') {
-      oscCtrlGain = context.createGain()
-      oscCtrlGain.gain.value = 0
-      ownedNodes.push(oscCtrlGain)
-    }
+      // Sync/Multi/Super/Shape Pulse get a real, audio-rate "Osc Ctrl live
+      // target" gain that sums into their oscillator(s)' detune as an
+      // additive offset — a declared approximation (their Osc Ctrl math is
+      // JS-computed, not a single linear AudioParam) that still gives the
+      // oscillator envelope's non-toPitch mode and the LFO's "Osc Ctrl"
+      // destination a real, audible connection. FM-H/FM-I need no such gain:
+      // their modulation-index gain IS already that live target, connected
+      // directly below; Sub Osc's sub-level gain and Shape Sine's fold-drive
+      // gain are likewise already real linear params, connected in their own
+      // case blocks; Wave has no Osc Ctrl target at all.
+      const usesDeclaredOscCtrlGain =
+        wave.category === 'Sync' || wave.category === 'Multi' || wave.category === 'Super' || wave.name === 'Shape Pulse'
+      let oscCtrlGain: GainNodeLike | null = null
+      if (oscCtrlActive && usesDeclaredOscCtrlGain) {
+        oscCtrlGain = context.createGain()
+        oscCtrlGain.gain.value = 0
+        ownedNodes.push(oscCtrlGain)
+      }
 
     switch (wave.category) {
       case 'Pure': {
@@ -1913,14 +2068,18 @@ export class PianoEngine {
         synthLive = { kind: 'super', detuned, oscCtrlParam: oscCtrlGain!.gain }
         break
       }
-      case 'FM-H': {
+      case 'FM-H':
+      case 'FM-I': {
         const carrier = context.createOscillator()
         carrier.type = 'sine'
         carrier.frequency.value = frequency
         carrier.detune.value = bend * 100
         const modulator = context.createOscillator()
         modulator.type = 'sine'
-        modulator.frequency.value = frequency // 1:1 ratio (algorithm A)
+        // FM-H's 'FM 2-op' uses a 1:1 (harmonic) ratio (algorithm A); FM-I's
+        // 'FM 2-op B' uses the inharmonic 1.414 ratio instead (spec: "FM
+        // Inharmonic algorithms") — otherwise identical 2-op FM structure.
+        modulator.frequency.value = wave.category === 'FM-I' ? frequency * FM_INHARMONIC_RATIO : frequency
         const modGain = context.createGain()
         modGain.gain.value = fmModulationIndex(oscCtrl, frequency)
         modulator.connect(modGain)
@@ -1934,43 +2093,137 @@ export class PianoEngine {
         synthLive = { kind: 'fm', modGain: modGain.gain, carrierFrequency: frequency, oscCtrlParam: modGain.gain }
         break
       }
-    }
+      case 'Sub': {
+        // Sub Osc: main osc (Saw Sub -> sawtooth, Square Sub -> square) plus
+        // a real square sub-oscillator one octave down; Osc Ctrl = sub level
+        // (0..1 gain, live-retargetable) — true synthesis, no approximation.
+        const mainType = wave.name === 'Square Sub' ? 'square' : 'sawtooth'
+        const main = context.createOscillator()
+        main.type = mainType
+        main.frequency.value = frequency
+        main.detune.value = bend * 100
+        main.connect(gain)
+        main.start(now)
+        sources.push({ kind: 'synth', node: main, baseDetune: 0 })
+        unisonOscType = mainType
 
-    // Unison (spec voice.unisonLevels): detuned duplicate source stacks,
-    // reusing the piano unison pattern (buildSampleSources) scaled by level
-    // 1..3 — each duplicate re-plays the layer's fundamental waveform at a
-    // small detune, panned to opposite sides, feeding the same voice `gain`
-    // so the shared envelope/filter/LFO/vibrato stage still applies once.
-    const unisonLevel = layerState.voice.unison
-    if (unisonLevel > 0) {
-      for (const side of [-1, 1]) {
+        const sub = context.createOscillator()
+        sub.type = 'square'
+        sub.frequency.value = frequency / 2
+        sub.detune.value = bend * 100
+        const subGain = context.createGain()
+        subGain.gain.value = subOscGain(oscCtrl)
+        sub.connect(subGain)
+        subGain.connect(gain)
+        sub.start(now)
+        ownedNodes.push(subGain)
+        sources.push({ kind: 'synth', node: sub, baseDetune: 0 })
+        synthLive = { kind: 'sub', subGain: subGain.gain, oscCtrlParam: subGain.gain }
+        break
+      }
+      case 'Shape': {
+        // Shape Pulse: a PeriodicWave pulse whose duty follows Osc Ctrl,
+        // rebuilt on quantized ctrl steps exactly like Sync's peak-harmonic
+        // wave rebuild; the same declared detune-summed approximation gain
+        // as the other non-FM-H categories gives the oscillator envelope
+        // and LFO "Osc Ctrl" destination a real connection.
         const osc = context.createOscillator()
-        osc.type = unisonOscType
+        osc.setPeriodicWave(shapePulseWave(context, oscCtrl))
         osc.frequency.value = frequency
-        const baseDetune = side * (5 + unisonLevel * 6)
-        osc.detune.value = baseDetune + bend * 100
-        const panner = context.createStereoPanner()
-        panner.pan.value = side * (0.25 + unisonLevel * 0.18)
-        const unisonGain = context.createGain()
-        unisonGain.gain.value = 0.35 + unisonLevel * 0.08
-        osc.connect(unisonGain)
-        unisonGain.connect(panner)
-        panner.connect(gain)
+        osc.detune.value = bend * 100
+        oscCtrlGain!.connect(osc.detune)
+        osc.connect(gain)
         osc.start(now)
-        ownedNodes.push(unisonGain, panner)
-        sources.push({ kind: 'synth', node: osc, baseDetune })
+        sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
+        synthLive = { kind: 'shapePulse', oscillator: osc, duty: shapePulseDuty(oscCtrl), oscCtrlParam: oscCtrlGain!.gain }
+        break
+      }
+      case 'ShapeSine': {
+        // Shape Sine: sine through a wavefolding waveshaper; Osc Ctrl is a
+        // LIVE pre-shaper drive gain (fold amount) — the fold curve itself
+        // only rebuilds on quantized ctrl steps (Sync's quantization
+        // convention), same as Shape Pulse above. Split into its own
+        // category (spec.scope.optional lists "Shape" and "Shape Sine" as
+        // separate categories) even though both share a wavefold/duty family
+        // flavor.
+        const osc = context.createOscillator()
+        osc.type = 'sine'
+        osc.frequency.value = frequency
+        osc.detune.value = bend * 100
+        const driveGain = context.createGain()
+        driveGain.gain.value = shapeFoldDriveGain(oscCtrl)
+        const shaper = context.createWaveShaper()
+        shaper.curve = shapeFoldCurve(oscCtrl)
+        osc.connect(driveGain)
+        driveGain.connect(shaper)
+        shaper.connect(gain)
+        osc.start(now)
+        ownedNodes.push(driveGain, shaper)
+        sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
+        synthLive = { kind: 'shapeFold', driveGain: driveGain.gain, shaper, quantStep: oscCtrl, oscCtrlParam: driveGain.gain }
+        break
+      }
+      case 'Wave': {
+        // Wave Organ / Wave Formant: two fixed digital PeriodicWaves. Osc
+        // Ctrl has no effect for this category (spec-consistent with Pure's
+        // "No effect" rule) — no oscCtrlGain is even created (oscCtrlActiveFor
+        // returns false for 'Wave'), so this is a plain oscillator voice.
+        const osc = context.createOscillator()
+        osc.setPeriodicWave(wave.name === 'Wave Formant' ? waveFormantWave(context) : waveOrganWave(context))
+        osc.frequency.value = frequency
+        osc.detune.value = bend * 100
+        osc.connect(gain)
+        osc.start(now)
+        sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
+        break
+      }
+      }
+
+      // Unison (spec voice.unisonLevels): detuned duplicate source stacks,
+      // reusing the piano unison pattern (buildSampleSources) scaled by
+      // level 1..3 — each duplicate re-plays the layer's fundamental
+      // waveform at a small detune, panned to opposite sides, feeding the
+      // same voice `gain` so the shared envelope/filter/LFO/vibrato stage
+      // still applies once.
+      const unisonLevel = layerState.voice.unison
+      if (unisonLevel > 0) {
+        for (const side of [-1, 1]) {
+          const osc = context.createOscillator()
+          osc.type = unisonOscType
+          osc.frequency.value = frequency
+          const baseDetune = side * (5 + unisonLevel * 6)
+          osc.detune.value = baseDetune + bend * 100
+          const panner = context.createStereoPanner()
+          panner.pan.value = side * (0.25 + unisonLevel * 0.18)
+          const unisonGain = context.createGain()
+          unisonGain.gain.value = 0.35 + unisonLevel * 0.08
+          osc.connect(unisonGain)
+          unisonGain.connect(panner)
+          panner.connect(gain)
+          osc.start(now)
+          ownedNodes.push(unisonGain, panner)
+          sources.push({ kind: 'synth', node: osc, baseDetune })
+        }
       }
     }
 
     // Oscillator envelope (spec envelopes.oscillator): schedules pitch
-    // retarget (toPitch: every source oscillator's detune) or the live Osc
-    // Ctrl target (the same per-category param the LFO's Osc Ctrl
-    // destination and Osc Ctrl live-retargeting use), bipolar around 64 = 0.
+    // retarget (toPitch: every source oscillator's detune, or — in Samples
+    // mode — every buffer source's playbackRate, spec: "osc envelope toPitch
+    // retargets playbackRate") or the live Osc Ctrl target (the same per-
+    // category param the LFO's Osc Ctrl destination and Osc Ctrl live-
+    // retargeting use; no effect in Samples mode), bipolar around 64 = 0.
     const oscEnv = layerState.oscEnvelope
     const oscillatorNodes = sources.filter((s): s is VoiceSource & { kind: 'synth' } => s.kind === 'synth').map((s) => s.node)
+    const sampleNodes = sources.filter((s): s is VoiceSource & { kind: 'sample' } => s.kind === 'sample').map((s) => s.node)
+    const isSamplesMode = layerState.mode === 'Samples'
     const oscEnvTarget: AudioParamLike | AudioParamLike[] | null = oscEnv.toPitch
-      ? oscillatorNodes.map((osc) => osc.detune)
-      : (synthLive?.oscCtrlParam ?? null)
+      ? isSamplesMode
+        ? sampleNodes.map((source) => source.playbackRate)
+        : oscillatorNodes.map((osc) => osc.detune)
+      : isSamplesMode
+        ? null // Osc Ctrl has no effect in Samples mode
+        : (synthLive?.oscCtrlParam ?? null)
     if (oscEnvTarget) {
       const oscAttack = Math.max(0.001, synthAttackSeconds(oscEnv.attack))
       const oscFloor = oscEnv.velocity ? 0.05 + 0.95 * velocity : 1
@@ -1979,16 +2232,22 @@ export class PianoEngine {
       if (Math.abs(peakOffset) > 0.0001) {
         const oscDecaySeconds = synthDecaySeconds(oscEnv.decay)
         for (const param of Array.isArray(oscEnvTarget) ? oscEnvTarget : [oscEnvTarget]) {
+          // Samples-mode toPitch retargets a playback-rate ratio: the same
+          // bipolar cents amount converts to a rate multiplier so the sweep
+          // reads as pitch, not raw rate cents.
+          const peakValue = isSamplesMode && oscEnv.toPitch ? param.value * Math.pow(2, peakOffset / 1200) : param.value + peakOffset
           param.setValueAtTime(param.value, now)
-          param.linearRampToValueAtTime(param.value + peakOffset, now + oscAttack)
+          param.linearRampToValueAtTime(peakValue, now + oscAttack)
           if (oscDecaySeconds !== null) param.setTargetAtTime(param.value, now + oscAttack, oscDecaySeconds)
         }
       }
     }
 
     // Filter + drive stage: the source mix (`gain`) feeds the drive
-    // waveshaper (bypassed at drive 0) into one or two cascaded biquad
-    // filter stages (LP24), whose output — not `gain` — connects onward.
+    // waveshaper (bypassed at drive 0) — and, for LP M, an always-on fixed
+    // pre-shaper first — into one or two cascaded biquad filter stages
+    // (LP24/LP M/LP+HP; see synthFilterStageSpecs), whose output — not
+    // `gain` — connects onward.
     const filterState = layerState.filter
     let filterOut: AudioNodeLike = gain
     let synthFilter: SynthVoiceFilter | null = null
@@ -1996,14 +2255,22 @@ export class PianoEngine {
       const driveShaper = context.createWaveShaper()
       driveShaper.curve = synthDriveCurve(filterState.drive)
       const baseHz = synthFilterFreqHz(filterState.freq) * synthFilterTrackingScale(filterState.tracking, midi)
-      const stageCount = synthFilterStageCount(filterState.type)
+      const stageSpecs = synthFilterStageSpecs(filterState.type)
       const filters: BiquadFilterNodeLike[] = []
       let node: AudioNodeLike = driveShaper
-      for (let i = 0; i < stageCount; i++) {
+      let lpMPreShaper: WaveShaperNodeLike | null = null
+      if (filterState.type === 'LP M') {
+        lpMPreShaper = context.createWaveShaper()
+        lpMPreShaper.curve = lpMDriveCurve()
+        node.connect(lpMPreShaper)
+        node = lpMPreShaper
+        ownedNodes.push(lpMPreShaper)
+      }
+      for (const spec of stageSpecs) {
         const biquad = context.createBiquadFilter()
-        biquad.type = biquadTypeFor(filterState.type)
-        biquad.Q.value = synthFilterQ(filterState.res)
-        biquad.frequency.value = baseHz
+        biquad.type = spec.type
+        biquad.Q.value = synthFilterQ(filterState.res) * spec.qMultiplier
+        biquad.frequency.value = baseHz * Math.pow(2, spec.freqOctaveOffset)
         node.connect(biquad)
         node = biquad
         filters.push(biquad)
@@ -2011,36 +2278,78 @@ export class PianoEngine {
       gain.connect(driveShaper)
       ownedNodes.push(driveShaper, ...filters)
       filterOut = node
-      synthFilter = { driveShaper, filters, envBaseHz: baseHz }
+      synthFilter = { driveShaper, filters, envBaseHz: baseHz, lpMPreShaper }
 
       // Filter envelope (spec envelopes.filter): ramps cutoff from the base
       // toward the envAmount-scaled peak and back (decay=127 holds at the
-      // peak, matching the shared sustain-mode convention).
+      // peak, matching the shared sustain-mode convention). Each stage keeps
+      // its own octave offset (LP+HP's HP stage stays 2 octaves below).
       const filterEnv = filterState.envelope
       const filterAttack = Math.max(0.001, synthAttackSeconds(filterEnv.attack))
       const envFloor = filterEnv.velocity ? 0.05 + 0.95 * velocity : 1
       const peakHz = baseHz + (synthFilterEnvPeakHz(baseHz, filterState.envAmount) - baseHz) * envFloor
       if (Math.abs(peakHz - baseHz) > 0.5) {
-        for (const biquad of filters) {
-          biquad.frequency.setValueAtTime(baseHz, now)
-          biquad.frequency.linearRampToValueAtTime(peakHz, now + filterAttack)
+        filters.forEach((biquad, i) => {
+          const offset = Math.pow(2, stageSpecs[i]!.freqOctaveOffset)
+          biquad.frequency.setValueAtTime(baseHz * offset, now)
+          biquad.frequency.linearRampToValueAtTime(peakHz * offset, now + filterAttack)
           const filterDecaySeconds = synthDecaySeconds(filterEnv.decay)
-          if (filterDecaySeconds !== null) biquad.frequency.setTargetAtTime(baseHz, now + filterAttack, filterDecaySeconds)
-        }
+          if (filterDecaySeconds !== null) biquad.frequency.setTargetAtTime(baseHz * offset, now + filterAttack, filterDecaySeconds)
+        })
       }
     }
 
     // LFO: the layer's one standing LFO connects its depth gain to this
     // voice's destination param, chosen by the current destination setting.
+    // In Samples mode, Osc Pitch and vibrato connect through a per-source
+    // cents->playbackRate-ratio scaling gain (declared: LFO/vibrato depth is
+    // computed in "cents" terms — see updateSynthLfos/vibratoDepth — so this
+    // translator keeps the SAME depth gain meaningful for a ratio param
+    // instead of dropping the destination, per the spec's practicality
+    // allowance for Samples-mode Osc Pitch).
     const voiceOscillators = sources.filter((s): s is VoiceSource & { kind: 'synth' } => s.kind === 'synth').map((s) => s.node)
+    const sampleVoiceSources = sources.filter((s): s is VoiceSource & { kind: 'sample' } => s.kind === 'sample')
+    // Cents-depth-to-playbackRate-ratio translator: one small fixed-gain
+    // node per sample source, input fed by the LFO/vibrato depth gain,
+    // output summed onto that source's playbackRate — keeps the SAME
+    // cents-shaped depth gains (updateSynthLfos/vibratoDepth) meaningful for
+    // a ratio param instead of dropping the destination in Samples mode.
+    const centsToRateScale = (baseRate: number): number => baseRate * (Math.pow(2, 1 / 1200) - 1)
+    const pitchScalers: GainNodeLike[] = sampleVoiceSources.map(({ node, baseRate }) => {
+      const scaler = context.createGain()
+      scaler.gain.value = centsToRateScale(baseRate)
+      scaler.connect(node.playbackRate)
+      ownedNodes.push(scaler)
+      return scaler
+    })
     this.connectSynthLfoDestination(channel, layerState.lfo.destination, {
       oscillators: voiceOscillators,
       filters: synthFilter?.filters ?? [],
-      oscCtrlParam: synthLive?.oscCtrlParam ?? null,
+      oscCtrlParam: isSamplesMode ? null : (synthLive?.oscCtrlParam ?? null),
+      pitchScalers: isSamplesMode ? pitchScalers : [],
     })
     // Vibrato (spec voice.vibrato): the layer's fixed-rate pitch LFO connects
-    // to every source's detune at voice build, same connect-at-build pattern.
-    for (const osc of voiceOscillators) channel.vibrato.depth.connect(osc.detune)
+    // to every source's detune at voice build (or, in Samples mode, through
+    // the same cents->rate scaling gains above), same connect-at-build
+    // pattern — through one per-VOICE ramp gain shared by every target on
+    // this voice. Delayed mode (spec voice.vibrato.optionalModes) needs the
+    // depth to start at 0 and ramp to full only ~700ms after THIS voice's
+    // note-on — `channel.vibrato.depth` is a single shared gain per layer
+    // (every sounding voice's target), so a per-voice indirection stage is
+    // the simplest correct way to give each voice its own onset time without
+    // disturbing already-sounding voices when a new note starts. Every other
+    // mode's ramp gain is simply fixed at 1 (pass-through).
+    const vibratoRamp = context.createGain()
+    vibratoRamp.gain.value = layerState.voice.vibrato === 'Delayed' ? 0 : 1
+    if (layerState.voice.vibrato === 'Delayed') {
+      const delaySeconds = 0.7
+      vibratoRamp.gain.setValueAtTime(0, now)
+      vibratoRamp.gain.setTargetAtTime(1, now, delaySeconds / 4)
+    }
+    ownedNodes.push(vibratoRamp)
+    channel.vibrato.depth.connect(vibratoRamp)
+    for (const osc of voiceOscillators) vibratoRamp.connect(osc.detune)
+    for (const scaler of pitchScalers) vibratoRamp.connect(scaler)
 
     filterOut.connect(channel.voiceBus)
     const voice: Voice = {
@@ -2080,10 +2389,18 @@ export class PianoEngine {
   private connectSynthLfoDestination(
     channel: SynthChannel,
     destination: SynthLfoDestination | null,
-    targets: { oscillators: OscillatorNodeLike[]; filters: BiquadFilterNodeLike[]; oscCtrlParam: AudioParamLike | null },
+    targets: {
+      oscillators: OscillatorNodeLike[]
+      filters: BiquadFilterNodeLike[]
+      oscCtrlParam: AudioParamLike | null
+      /** Samples-mode Osc Pitch destination: per-source cents->rate
+       *  translator gains (see startSynthVoice) instead of oscillator detune. */
+      pitchScalers: GainNodeLike[]
+    },
   ): void {
     if (destination === 'Osc Pitch') {
       for (const osc of targets.oscillators) channel.lfo.depth.connect(osc.detune)
+      for (const scaler of targets.pitchScalers) channel.lfo.depth.connect(scaler)
     } else if (destination === 'Filter Freq') {
       for (const filter of targets.filters) channel.lfo.depth.connect(filter.frequency)
     } else if (destination === 'Osc Ctrl' && targets.oscCtrlParam) {

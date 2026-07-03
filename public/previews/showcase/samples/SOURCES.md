@@ -1,4 +1,4 @@
-# Bundled Piano sample sets — sources and licenses
+# Bundled Piano and Synth sample sets — sources and licenses
 
 All audio in this directory is **recorded sample material** obtained exclusively
 through the npm registry, bundled here so the built application plays fully
@@ -57,14 +57,41 @@ Regenerate with `node scripts/sync-samples.mjs`.
 - **Source chain / license**: identical to `upright/` above, folder
   `samples/011-vibraphone`.
 
+## 7. `synth-strings/` — "Strings" (Synth Samples mode, optional scope)
+
+- **What**: General MIDI "String Ensemble 1" program — a bowed string-section
+  character; 19 root notes (major-third spacing) × 1 velocity layer. Selected
+  via the Synth section's Samples mode WAVE list (spec.scope.optional).
+- **Source chain**: MIDI-JS Soundfonts collection
+  (github.com/gleitz/midi-js-soundfonts, Benjamin Gleitzman) → npm package
+  `web-music-score-samples`, folder `samples/048-string-ensemble-1`.
+- **License**: MIT (both the MIDI-JS Soundfonts collection and the npm
+  repackaging). The collection is rendered from the FluidR3_GM / MusyngKite /
+  FatBoy soundfont banks; the packaging does not identify which bank produced
+  these renders — this uncertainty is declared rather than papered over.
+
+## 8. `synth-choir/` — "Choir" (Synth Samples mode, optional scope)
+
+- **What**: General MIDI "Choir Aahs" program — a sustained vocal-pad
+  character; 19 root notes × 1 velocity layer.
+- **Source chain / license**: identical to `synth-strings/` above, folder
+  `samples/052-choir-aahs`.
+
 ## Honesty notes
 
-- The six sets are six genuinely different recordings/programs, not one
-  source under different labels.
-- The Grand crossfades its three recorded velocity layers. The five GM-derived
-  sets have a single recorded layer; their velocity response is shaped by gain
-  and a velocity-keyed filter in the engine and is declared as such.
+- The eight sets (six Piano types plus the two Synth Samples-mode sets) are
+  genuinely different recordings/programs, not one source under different
+  labels.
+- The Grand crossfades its three recorded velocity layers. The seven other
+  GM-derived sets (five Piano types plus Strings/Choir) have a single recorded
+  layer each; their velocity response is shaped by gain and a velocity-keyed
+  filter in the engine and is declared as such.
+- The two Synth sample sets are a SEPARATE library (SYNTH_SAMPLE_SETS) from
+  the six Piano types (INSTRUMENTS) — they are never selectable as a Piano
+  model, and selecting them is only possible through the Synth section's
+  Samples mode (spec.scope.optional).
 - Everything else that sounds (synthesized fallback voice, generated reverb
-  impulse responses, pedal-noise thump, all effect processing) is generated
-  DSP, declared in IMPLEMENTATION_DETAILS.json, and never presented as a
-  recording.
+  impulse responses, pedal-noise thump, all effect processing, and the Synth
+  section's Analog-mode oscillators/filter/LFO — see IMPLEMENTATION_DETAILS.json's
+  generatedSources) is generated DSP, declared in IMPLEMENTATION_DETAILS.json,
+  and never presented as a recording.

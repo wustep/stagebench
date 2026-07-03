@@ -189,14 +189,21 @@ describe('synth.voice — unison, vibrato', () => {
     expect(vibratoOsc).toBeDefined()
     expect(vibratoOsc.started).toBe(true)
 
-    // Off: depth is 0 and the wheel position has no effect.
+    // Off: depth is 0 and the wheel position has no effect. The shared
+    // per-layer depth gain connects through a per-VOICE ramp gain (spec
+    // voice.vibrato.optionalModes' Delayed mode needs its own per-voice
+    // onset time — see startSynthVoice's vibratoRamp) which is fixed at 1
+    // (pass-through) for every mode except Delayed, so the voice's detune
+    // is still reachable from the depth gain either way, one hop further.
     expect(store.getState().synth.layers.A.voice.vibrato).toBe('Off')
     engine.noteOn(60, 0.8)
     const voiceOff = context.oscillators().slice(-1)[0]!
     const diagnosticsA = engine.diagnostics().synthChannels!.A
     const depth = diagnosticsA.vibrato.depth as unknown as FakeGain
     expect(depth.gain.value).toBe(0)
-    expect(depth.paramConnections).toContain(voiceOff.detune) // connected either way
+    const rampOff = depth.connections.find((n): n is FakeGain => n instanceof FakeGain && n.paramConnections.includes(voiceOff.detune))!
+    expect(rampOff).toBeDefined() // connected either way, through the per-voice ramp
+    expect(rampOff.gain.value).toBe(1) // pass-through outside Delayed mode
     engine.noteOff(60)
 
     // On: a fixed depth (voice.vibratoAmount, default 40 -> ~12.6 cents),
@@ -206,10 +213,61 @@ describe('synth.voice — unison, vibrato', () => {
     const voiceOn = context.oscillators().slice(-1)[0]!
     const depthOn = depth.gain.value
     expect(depthOn).toBeGreaterThan(0)
-    expect(depth.paramConnections).toContain(voiceOn.detune)
+    const rampOn = depth.connections.find((n): n is FakeGain => n instanceof FakeGain && n.paramConnections.includes(voiceOn.detune))!
+    expect(rampOn).toBeDefined()
+    expect(rampOn.gain.value).toBe(1)
     store.setMorphSource('wheel', 127) // the wheel must NOT move the depth in On mode
     expect(depth.gain.value).toBe(depthOn)
     engine.noteOff(62)
+  })
+
+  it("Delayed vibrato's depth gain ramps (setTargetAtTime) vs On's immediate (unramped) per-voice gain", () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+
+    store.cycleSynthVibratoMode() // Off -> On
+    engine.noteOn(60, 0.8)
+    const voiceOn = context.oscillators().slice(-1)[0]!
+    const diagnosticsA = engine.diagnostics().synthChannels!.A
+    const depth = diagnosticsA.vibrato.depth as unknown as FakeGain
+    const rampOn = depth.connections.find((n): n is FakeGain => n instanceof FakeGain && n.paramConnections.includes(voiceOn.detune))!
+    expect(rampOn.gain.events.some((e) => e.kind === 'target')).toBe(false) // On: no per-voice ramp
+    engine.noteOff(60)
+
+    store.cycleSynthVibratoMode() // On -> Wheel
+    store.cycleSynthVibratoMode() // Wheel -> Delayed
+    engine.noteOn(62, 0.8)
+    const voiceDelayed = context.oscillators().slice(-1)[0]!
+    const rampDelayed = depth.connections.find(
+      (n): n is FakeGain => n instanceof FakeGain && n.paramConnections.includes(voiceDelayed.detune) && n !== rampOn,
+    )!
+    expect(rampDelayed).toBeDefined()
+    expect(rampDelayed.gain.events[0]).toMatchObject({ kind: 'set', value: 0 }) // scheduled to start at 0
+    expect(rampDelayed.gain.events.some((e) => e.kind === 'target')).toBe(true) // ramps toward full via setTargetAtTime
+    engine.noteOff(62)
+  })
+
+  it('Pedal vibrato depth follows state.morphValues.pedal (mirrors Wheel)', () => {
+    const { engine, store } = makeSystem()
+    engine.ensureStarted()
+    store.cycleSynthVibratoMode() // Off -> On
+    store.cycleSynthVibratoMode() // On -> Wheel
+    store.cycleSynthVibratoMode() // Wheel -> Delayed
+    store.cycleSynthVibratoMode() // Delayed -> Pedal
+    engine.noteOn(60, 0.8)
+
+    store.setMorphSource('pedal', 0)
+    const diagnosticsA = engine.diagnostics().synthChannels!.A
+    const depthAtZero = diagnosticsA.vibrato.depth.gain.value
+    expect(depthAtZero).toBe(0)
+    store.setMorphSource('pedal', 127)
+    const depthAtFull = diagnosticsA.vibrato.depth.gain.value
+    expect(depthAtFull).toBeGreaterThan(depthAtZero)
+    // The mod wheel must NOT move the depth in Pedal mode.
+    store.setMorphSource('wheel', 0)
+    expect(diagnosticsA.vibrato.depth.gain.value).toBe(depthAtFull)
+    engine.noteOff(60)
   })
 })
 

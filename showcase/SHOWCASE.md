@@ -818,3 +818,100 @@ playwright-core against the built artifact, self-served via vite preview):
 - Deliberately a separate script rather than a fifth package gate: it needs
   a real browser, and the benchmark contract requires the four package
   gates to run deterministically without devices.
+
+### 19 — Optional synth scope (2026-07-02)
+
+The synth spec's `scope.optional` items land — every one either works
+canonically or stays truthfully decorative, per the honesty contract:
+
+- **Sound Init**: the `sound-init` button (decorative until now) resets the
+  FOCUSED layer's sound parameters — waveform (Saw), Osc Ctrl (64), all
+  three envelopes, filter, LFO, voice, and mode (Analog) — to
+  `defaultSynthLayer`'s init pose while PRESERVING enabled/level/octave/
+  zone. `synthSoundInit()`, lastEdit `Sound Init — Synth <layer>`.
+- **LP M and LP+HP filter types**: the cycle grows to LP12→LP24→HP→BP→
+  LP M→LP+HP. LP M is a DECLARED ladder-style approximation: two cascaded
+  lowpass biquads like LP24, but the second stage's resonance maps ~1.5x
+  hotter and a fixed gentle tanh pre-shaper saturates ahead of the
+  stages — rendered proof shows it differs measurably from LP24 at
+  identical settings. LP+HP is a lowpass at the cutoff in series with a
+  highpass fixed 2 octaves below — a wider, shallower band emphasis than
+  BP's single resonant stage (rendered proof again).
+- **Six new oscillator categories** appended to SYNTH_WAVEFORMS (existing
+  indices untouched — factory programs reference them by position):
+  Sub Osc ('Saw Sub'/'Square Sub': a real square sub one octave down whose
+  gain IS Osc Ctrl, live), Shape ('Shape Pulse': duty 0.05..0.5 follows
+  Osc Ctrl, PeriodicWave rebuilt on quantized steps like Sync) and the
+  SEPARATE ShapeSine category ('Shape Sine': a sine through a wavefolding
+  waveshaper, Osc Ctrl = live pre-shaper drive gain, fold curve per
+  quantized step — kept as its own category, not merged with Shape, per
+  spec.scope.optional's explicit "Shape, Shape Sine" listing), Wave ('Wave
+  Organ'/'Wave Formant': two fixed digital PeriodicWaves, Osc Ctrl
+  spec-consistently inert like Pure), and FM-I ('FM 2-op B': the same true
+  2-op FM as FM-H at an inharmonic 1.414 ratio).
+- **Samples mode (per-layer)**: `mode: 'Analog' | 'Samples'` on
+  SynthLayerState (snapshot-covered; old snapshots — whether missing the
+  whole `synth` key or just each layer's `mode` field — backfill 'Analog'
+  through the existing normalizer). Two small bundled RECORDED sets — GM
+  String Ensemble 1 and GM Choir Aahs from the MIDI-JS Soundfonts
+  collection (MIT) via npm web-music-score-samples, synced to
+  public/samples/synth-strings and synth-choir with full provenance in
+  SOURCES.md/IMPLEMENTATION_DETAILS.json. The `synth-mode` button becomes
+  functional (Analog↔Samples for the focused layer; EXTERN stays
+  spec-excluded and unreachable), the Mode LEDs bind truthfully, and in
+  Samples mode the OLED WAVE list selects between the two sets (waveform
+  index reused, clamped) with OSC CTRL showing '—'. Engine-side, Samples
+  voices are AudioBufferSources (nearest root + playbackRate shift through
+  the same cache/status machinery as the piano library, including each
+  set's own declared gain) and everything downstream still applies: the
+  shared filter, amp envelope, and unison (detuned duplicate buffer
+  sources, mirroring the piano unison pattern), plus zones/scenes/arp/
+  voice-mode/glide/sustain, all through the same shared Voice machinery.
+  DECLARED LIMITATION: the oscillator envelope's toPitch mode and the
+  vibrato/LFO "Osc Pitch" destination retarget a sample voice's
+  `playbackRate` (not detune — there is no pitch-cents AudioParam on a
+  buffer source) through a small per-source cents-to-rate-ratio translator
+  gain fed by the SAME cents-shaped depth gains the Analog path uses,
+  rather than dropping the destination; Osc Ctrl and the non-toPitch
+  oscillator-envelope/LFO "Osc Ctrl" destination have no effect in Samples
+  mode, since there is no per-category Osc Ctrl target for a recorded
+  voice.
+- **Delayed and Pedal vibrato**: the cycle grows to Off→On→Wheel→Delayed→
+  Pedal (Aftertouch stays excluded). Delayed is On with a per-voice depth
+  ramp gain that `setTargetAtTime`-ramps 0→full over ~700 ms after that
+  voice's own note-on (every other mode's ramp gain is a fixed 1 pass-
+  through, so already-sounding voices are unaffected by a mode change);
+  Pedal follows `morphValues.pedal` live, exactly as Wheel follows the mod
+  wheel.
+- Also fixed while finishing this scope: Samples-mode voices now apply
+  each sample set's own declared gain (previously connected straight to
+  the voice gain, unscaled); the decorative-controls probe test that used
+  to click Synth Mode Select (now functional) moved to Preset Library
+  Synth, with a new dedicated test asserting Synth Mode Select's canonical
+  effect on the OLED's WAVE name readout.
+- Tests: 391 passing (up from 371 before this scope; ~20 new/evolved
+  across synth.test.ts, synth-filter.test.ts, synth-voice.test.ts,
+  render-synth.test.ts, programs.test.ts, library.test.ts,
+  hardware.test.ts and decorative-controls.test.tsx). All five gates green:
+  `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`,
+  `pnpm verify:layout` (12/12 checks).
+
+### 20 — Reference-fidelity pass: headers, branding, performance zone (2026-07-02)
+
+Orchestrator-side visual pass against reference/nord-stage-4-73.jpg crops:
+
+- **Section headers**: every section (and the Rotary Speaker tab) now wears
+  the reference's full-width light gray-lavender band with dark navy title,
+  SECTION subtitle, FX FOCUS, ON and SOLO — previously dark-with-white-text.
+  Panel slate lifted slightly toward the reference tint.
+- **Branding**: "nord stage 4" renders on ONE line in a rounded logotype
+  approximation (locally-available rounded faces; no webfont — the artifact
+  stays self-contained), bottom-left of the red zone, with HAMMER ACTION 73
+  letter-spaced to span exactly the logo width beneath it.
+- **Performance zone geography** now matches the photo: wooden pitch stick
+  high at top-left, bright ribbed mod wheel in its slot below-right,
+  MASTER LEVEL (label above knob) at the top of the right column tight
+  against the Organ section, Rotary Speaker strip directly beneath it.
+- Fixed the status-strip note that still called Synth Samples mode
+  visual-only (iteration 19 made it functional; only Extern is excluded).
+- Gates: 391/391, typecheck, lint, build, verify:layout 12/12.

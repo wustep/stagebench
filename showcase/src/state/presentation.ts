@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { getControl, HARDWARE_CONTROLS } from '../model/hardware'
-import { instrumentsOfType, type InstrumentSpec } from '../audio/library'
+import { instrumentsOfType, SYNTH_SAMPLE_SETS, type InstrumentSpec } from '../audio/library'
 import type { InstrumentController } from '../input/controller'
 import {
   mappings,
@@ -152,6 +152,9 @@ export class PresentationStore {
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.decay
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.decay
           if (state.synthEnvEdit === 'osc') return synth.oscEnvelope.decay
+          // Samples mode reuses this dial for the 2-item sample-set list
+          // (spec.scope.optional Samples mode) instead of the waveform list.
+          if (synth.mode === 'Samples') return Math.round((synth.waveform / (SYNTH_SAMPLE_SETS.length - 1)) * 127)
           return Math.round((synth.waveform / (SYNTH_WAVEFORMS.length - 1)) * 127)
         }
         case 'synth-dial-3': {
@@ -476,7 +479,9 @@ export class PresentationStore {
           if (edit === 'amp') store.setSynthAmpEnvelope({ decay: clamped })
           else if (edit === 'filter') store.setSynthFilterEnvelope({ decay: clamped })
           else if (edit === 'osc') store.setSynthOscEnvelope({ decay: clamped })
-          else store.selectSynthWaveform(Math.round((clamped / 127) * (SYNTH_WAVEFORMS.length - 1)))
+          else if (store.getState().synth.layers[store.getState().synth.focusedLayer].mode === 'Samples') {
+            store.selectSynthWaveform(Math.round((clamped / 127) * (SYNTH_SAMPLE_SETS.length - 1)))
+          } else store.selectSynthWaveform(Math.round((clamped / 127) * (SYNTH_WAVEFORMS.length - 1)))
           return
         }
         case 'synth-dial-3': {
@@ -638,6 +643,12 @@ export class PresentationStore {
           return
         case 'waveform-select':
           store.cycleSynthWaveformCategory()
+          return
+        case 'sound-init':
+          store.synthSoundInit()
+          return
+        case 'synth-mode':
+          store.cycleSynthLayerMode()
           return
         case 'amp-envelope':
           store.setSynthEnvEdit(store.getState().synthEnvEdit === 'amp' ? null : 'amp')

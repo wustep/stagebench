@@ -326,11 +326,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           </span>
           <span className="status-note">
             Functional: keybed, pedals, all Piano and Organ sections (all six organ models including B3 Bass and Pipe
-            2), the complete Synth section, Layer Effects (including each synth layer's own effect chain and the
-            organ layers' shared chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, and section
-            zoom. Visual-only by spec exclusion: Synth Mode's Extern/Samples positions, the preset-library buttons,
-            the Prog View/Section Edit/Layer Init/Mon·Copy menus, Morph A.T. (no browser aftertouch), and the Organ
-            preset button.
+            2), the complete Synth section (Analog and Samples modes, all optional oscillator categories and
+            filters), Layer Effects (including each synth layer's own effect chain and the organ layers' shared
+            chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, and section zoom. Visual-only by
+            spec exclusion: Synth Mode's Extern position, the preset-library buttons, the Prog View/Section
+            Edit/Layer Init/Mon·Copy menus, Morph A.T. (no browser aftertouch), and the Organ preset button.
           </span>
         </span>
       </footer>

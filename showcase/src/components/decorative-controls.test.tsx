@@ -95,7 +95,11 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     fireEvent.click(screen.getByRole('button', { name: 'Organ Section On' }))
     fireEvent.click(screen.getByRole('button', { name: 'Store' }))
     fireEvent.click(screen.getByRole('button', { name: 'Live Mode' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Synth Mode Select' }))
+    // Synth Mode Select is now FUNCTIONAL (spec.scope.optional Samples mode)
+    // — see the "functional panel controls" test below for its canonical
+    // effect. Preset Library Synth stays decorative (spec exclusion: "Synth
+    // preset library... downloads").
+    fireEvent.click(screen.getByRole('button', { name: 'Preset Library Synth' }))
     fireEvent.keyDown(screen.getByRole('slider', { name: 'Mod Wheel' }), { key: 'ArrowUp' })
 
     // No AudioContext may even have been created by decorative interaction.
@@ -109,6 +113,24 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     const masterKnob = screen.getByRole('slider', { name: 'Master Level' })
     fireEvent.keyDown(masterKnob, { key: 'ArrowDown' })
     expect(Number(masterKnob.getAttribute('aria-valuenow'))).toBeLessThan(100)
+    expect(getContext()).toBeNull()
+  })
+
+  it('Synth Mode Select is functional: it cycles the focused layer\'s canonical Analog/Samples mode', () => {
+    const { getContext } = renderApp()
+    const modeButton = screen.getByRole('button', { name: 'Synth Mode Select' })
+    expect(modeButton.dataset.decorative).toBe('false')
+    // Canonical effect visible through the OLED's mode-dependent readout
+    // (spec.scope.optional Samples mode) rather than through internal store
+    // access — clicking it swaps the WAVE name list from the Analog
+    // waveform list to the SYNTH_SAMPLE_SETS names.
+    const before = screen.getByTestId('oled-synth-name-line').textContent
+    fireEvent.click(modeButton)
+    const after = screen.getByTestId('oled-synth-name-line').textContent
+    expect(after).not.toBe(before)
+    fireEvent.click(modeButton) // back to Analog
+    expect(screen.getByTestId('oled-synth-name-line').textContent).toBe(before)
+    // Still no audio started by pressing a panel button on its own.
     expect(getContext()).toBeNull()
   })
 

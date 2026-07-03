@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator } from '../test/fakes'
+import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator, FakeWaveShaper } from '../test/fakes'
 import { InstrumentStore, SYNTH_WAVEFORMS } from '../state/instrument'
+import { SYNTH_SAMPLE_SETS } from './library'
 import { PianoEngine } from './engine'
 
 /**
@@ -74,6 +75,16 @@ describe('synth.sources — waveform navigation', () => {
     store.cycleSynthWaveformCategory() // Multi -> Super
     store.cycleSynthWaveformCategory() // Super -> FM-H
     expect(SYNTH_WAVEFORMS[store.getState().synth.layers.A.waveform]!.category).toBe('FM-H')
+    store.cycleSynthWaveformCategory() // FM-H -> Sub (optional scope)
+    expect(SYNTH_WAVEFORMS[store.getState().synth.layers.A.waveform]!.category).toBe('Sub')
+    store.cycleSynthWaveformCategory() // Sub -> Shape
+    expect(SYNTH_WAVEFORMS[store.getState().synth.layers.A.waveform]!.category).toBe('Shape')
+    store.cycleSynthWaveformCategory() // Shape -> ShapeSine (spec: separate categories)
+    expect(SYNTH_WAVEFORMS[store.getState().synth.layers.A.waveform]!.category).toBe('ShapeSine')
+    store.cycleSynthWaveformCategory() // ShapeSine -> Wave
+    expect(SYNTH_WAVEFORMS[store.getState().synth.layers.A.waveform]!.category).toBe('Wave')
+    store.cycleSynthWaveformCategory() // Wave -> FM-I
+    expect(SYNTH_WAVEFORMS[store.getState().synth.layers.A.waveform]!.category).toBe('FM-I')
     store.cycleSynthWaveformCategory() // wraps back to Pure
     expect(SYNTH_WAVEFORMS[store.getState().synth.layers.A.waveform]!.category).toBe('Pure')
   })
@@ -328,5 +339,141 @@ describe('synth.snapshot — program round-trip and old-snapshot tolerance', () 
     // over canonical state) must also tolerate the missing key.
     expect(() => restored.selectProgram(7)).not.toThrow()
     expect(restored.getState().synth.layers.A.enabled).toBe(true)
+  })
+})
+
+describe('synth.sound-init — optional scope', () => {
+  it('SOUND INIT resets sound params but preserves enable/level/octave/zone', () => {
+    const { store } = makeSystem()
+    store.setSynthLayerLevel('A', 55)
+    store.shiftSynthOctave('A', 1)
+    store.cycleLayerZone('synth', 'A', 1)
+    const zoneBefore = store.getState().synth.layers.A.zone
+    selectWaveform(store, 'FM 2-op')
+    store.setSynthOscCtrl(100)
+    store.setSynthAmpEnvelope({ attack: 90 })
+    store.cycleSynthFilterType()
+    store.setSynthOscEnvelope({ toPitch: true })
+    store.cycleSynthLfoWaveform()
+    store.cycleSynthVoiceMode()
+    store.cycleSynthLayerMode() // Analog -> Samples
+
+    store.synthSoundInit()
+    const layer = store.getState().synth.layers.A
+    // Preserved.
+    expect(layer.level).toBe(55)
+    expect(layer.octave).toBe(1)
+    expect(layer.zone).toEqual(zoneBefore)
+    // Reset to init defaults.
+    expect(SYNTH_WAVEFORMS[layer.waveform]!.name).toBe('Saw')
+    expect(layer.oscCtrl).toBe(64)
+    expect(layer.ampEnvelope.attack).toBe(0)
+    expect(layer.filter.type).toBe('LP24')
+    expect(layer.oscEnvelope.toPitch).toBe(false)
+    expect(layer.lfo.waveform).toBe('Triangle')
+    expect(layer.voice.mode).toBe('Poly')
+    expect(layer.mode).toBe('Analog')
+    expect(store.getState().lastEdit).toMatch(/Sound Init — Synth A/)
+  })
+})
+
+describe('synth.sources — optional oscillator categories', () => {
+  it('Sub Osc has a sub oscillator at half the fundamental frequency whose gain follows OSC CTRL live', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    selectWaveform(store, 'Saw Sub')
+    store.setSynthOscCtrl(0)
+    const before = context.nodes.length
+    const beforeOscCount = context.oscillators().length
+    engine.noteOn(60, 0.8)
+    const created = context.oscillators().slice(beforeOscCount)
+    expect(created).toHaveLength(2)
+    const [main, sub] = created
+    expect(sub!.frequency.value).toBeCloseTo(main!.frequency.value / 2, 5)
+    const subGain = context.nodes.slice(before).filter((n): n is FakeGain => n instanceof FakeGain).find((g) => g.gain.value === 0)!
+    expect(subGain).toBeDefined()
+    store.setSynthOscCtrl(127)
+    expect(subGain.gain.value).toBeGreaterThan(0)
+    engine.noteOff(60)
+  })
+
+  it('Shape Pulse rebuilds its periodic wave across a large ctrl move', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    selectWaveform(store, 'Shape Pulse')
+    store.setSynthOscCtrl(0)
+    const low = newOscillators(context, () => engine.noteOn(60, 0.8))
+    expect(low[0]!.type).toBe('custom')
+    const lowImag = Array.from(low[0]!.periodicWave!.imag)
+    store.setSynthOscCtrl(127)
+    expect(Array.from(low[0]!.periodicWave!.imag)).not.toEqual(lowImag) // rebuilt in place
+    engine.noteOff(60)
+  })
+
+  it('Shape Sine has a waveshaper whose drive follows ctrl', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.toggleSynthFilterOn() // isolate the oscillator's own fold shaper from the filter's drive shaper
+    selectWaveform(store, 'Shape Sine')
+    store.setSynthOscCtrl(0)
+    const before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    const shapers = context.nodes.slice(before).filter((n): n is FakeWaveShaper => n instanceof FakeWaveShaper)
+    expect(shapers).toHaveLength(1) // just the fold shaper — the filter stage is off
+    expect(shapers[0]!.curve).not.toBeNull()
+    const driveGain = context.nodes
+      .slice(before)
+      .filter((n): n is FakeGain => n instanceof FakeGain)
+      .find((g) => g.connections.includes(shapers[0]!))!
+    expect(driveGain).toBeDefined()
+    const before2 = driveGain.gain.value
+    store.setSynthOscCtrl(127)
+    expect(driveGain.gain.value).toBeGreaterThan(before2)
+    engine.noteOff(60)
+  })
+
+  it('FM 2-op B has modulator at ~1.414 ratio (vs FM-H\'s 1.0)', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    selectWaveform(store, 'FM 2-op')
+    const before = context.oscillators().length
+    engine.noteOn(60, 0.8)
+    const harmonic = context.oscillators().slice(before)
+    engine.noteOff(60)
+
+    selectWaveform(store, 'FM 2-op B')
+    const before2 = context.oscillators().length
+    engine.noteOn(62, 0.8)
+    const inharmonic = context.oscillators().slice(before2)
+    engine.noteOff(62)
+
+    const harmonicRatio = harmonic[1]!.frequency.value / harmonic[0]!.frequency.value
+    const inharmonicRatio = inharmonic[1]!.frequency.value / inharmonic[0]!.frequency.value
+    expect(harmonicRatio).toBeCloseTo(1, 5)
+    expect(inharmonicRatio).toBeCloseTo(1.414, 3)
+  })
+})
+
+describe('synth.mode — Analog/Samples cycle (optional scope)', () => {
+  it('SYNTH MODE cycles state + Mode LEDs + WAVE list switches to sample names', () => {
+    const { store } = makeSystem()
+    expect(store.getState().synth.layers.A.mode).toBe('Analog')
+    store.cycleSynthLayerMode()
+    expect(store.getState().synth.layers.A.mode).toBe('Samples')
+    expect(store.getState().lastEdit).toMatch(/Synth A Mode: Samples/)
+    // The WAVE list now selects between the two bundled sample sets.
+    expect(SYNTH_SAMPLE_SETS).toHaveLength(2)
+    store.selectSynthWaveform(1)
+    expect(store.getState().synth.layers.A.waveform).toBe(1)
+    store.cycleSynthLayerMode()
+    expect(store.getState().synth.layers.A.mode).toBe('Analog')
+    // EXTERN is never reachable from this cycle.
+    store.cycleSynthLayerMode()
+    store.cycleSynthLayerMode()
+    expect(['Analog', 'Samples']).toContain(store.getState().synth.layers.A.mode)
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary, FakeFilter, FakeGain, FakeWaveShaper } from '../test/fakes'
-import { InstrumentStore, mappings, SYNTH_LFO_DESTINATIONS, SYNTH_WAVEFORMS } from '../state/instrument'
+import { InstrumentStore, mappings, SYNTH_FILTER_TYPES, SYNTH_LFO_DESTINATIONS, SYNTH_WAVEFORMS, type SynthFilterType } from '../state/instrument'
 import { PianoEngine } from './engine'
 
 /**
@@ -21,6 +21,16 @@ function makeSystem() {
 
 function filtersFrom(context: { nodes: unknown[] }, before: number): FakeFilter[] {
   return (context.nodes as unknown[]).slice(before).filter((n): n is FakeFilter => n instanceof FakeFilter)
+}
+
+/** Cycles FILTER TYPE up to the requested type (starts from LP24 by default). */
+function selectFilterType(store: InstrumentStore, type: SynthFilterType): void {
+  let current = store.getState().synth.layers.A.filter.type
+  let guard = 0
+  while (current !== type && guard++ < SYNTH_FILTER_TYPES.length) {
+    store.cycleSynthFilterType()
+    current = store.getState().synth.layers.A.filter.type
+  }
 }
 
 describe('synth.filter — node types and cascade per filter type', () => {
@@ -45,23 +55,94 @@ describe('synth.filter — node types and cascade per filter type', () => {
     expect(filters[0]!.type).toBe('bandpass')
     engine.noteOff(61)
 
-    store.cycleSynthFilterType() // BP -> LP12
+    store.cycleSynthFilterType() // BP -> LP M (optional scope)
     before = context.nodes.length
     engine.noteOn(62, 0.8)
     filters = filtersFrom(context, before)
+    expect(filters).toHaveLength(2)
+    expect(filters.every((f) => f.type === 'lowpass')).toBe(true)
+    engine.noteOff(62)
+
+    store.cycleSynthFilterType() // LP M -> LP+HP (optional scope)
+    before = context.nodes.length
+    engine.noteOn(63, 0.8)
+    filters = filtersFrom(context, before)
+    expect(filters).toHaveLength(2)
+    expect(filters[0]!.type).toBe('lowpass')
+    expect(filters[1]!.type).toBe('highpass')
+    engine.noteOff(63)
+
+    store.cycleSynthFilterType() // LP+HP -> LP12
+    before = context.nodes.length
+    engine.noteOn(64, 0.8)
+    filters = filtersFrom(context, before)
     expect(filters).toHaveLength(1)
     expect(filters[0]!.type).toBe('lowpass')
-    engine.noteOff(62)
+    engine.noteOff(64)
 
     store.cycleSynthFilterType() // LP12 -> LP24
     before = context.nodes.length
-    engine.noteOn(63, 0.8)
+    engine.noteOn(65, 0.8)
     filters = filtersFrom(context, before)
     expect(filters).toHaveLength(2)
     expect(filters.every((f) => f.type === 'lowpass')).toBe(true)
     // Cascaded in series: the first stage's only filter connection is the second.
     expect(filters[0]!.connections).toContain(filters[1]!)
-    engine.noteOff(63)
+    engine.noteOff(65)
+  })
+
+  it('LP M builds 2 cascaded lowpass filters plus a pre-shaper, with hotter Q than LP24 at the same res setting', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setSynthFilterParam('res', 80)
+
+    selectFilterType(store, 'LP24')
+    let before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    let filters = filtersFrom(context, before)
+    let shapers = context.nodes.slice(before).filter((n): n is FakeWaveShaper => n instanceof FakeWaveShaper)
+    expect(filters).toHaveLength(2)
+    expect(filters.every((f) => f.type === 'lowpass')).toBe(true)
+    expect(filters[0]!.Q.value).toBeCloseTo(filters[1]!.Q.value, 6) // identical Q on both LP24 stages
+    expect(shapers).toHaveLength(1) // just the Drive-knob shaper (Off), no LP M pre-shaper
+    const lp24SecondStageQ = filters[1]!.Q.value
+    engine.noteOff(60)
+
+    selectFilterType(store, 'LP M')
+    before = context.nodes.length
+    engine.noteOn(61, 0.8)
+    filters = filtersFrom(context, before)
+    shapers = context.nodes.slice(before).filter((n): n is FakeWaveShaper => n instanceof FakeWaveShaper)
+    expect(filters).toHaveLength(2)
+    expect(filters.every((f) => f.type === 'lowpass')).toBe(true)
+    // LP M's always-on fixed drive pre-shaper, distinct from the (still Off) Drive-knob shaper.
+    expect(shapers).toHaveLength(2)
+    expect(shapers.some((s) => s.curve !== null)).toBe(true)
+    // Second stage's resonance is mapped hotter than LP24's identical-Q pair.
+    expect(filters[0]!.Q.value).toBeCloseTo(lp24SecondStageQ, 6) // first stage unchanged
+    expect(filters[1]!.Q.value).toBeGreaterThan(lp24SecondStageQ)
+    expect(filters[1]!.Q.value).toBeCloseTo(lp24SecondStageQ * 1.5, 3)
+    engine.noteOff(61)
+  })
+
+  it('LP+HP builds an LP+HP pair with the HP fixed 2 octaves below the LP cutoff', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setSynthFilterParam('freq', 100)
+
+    selectFilterType(store, 'LP+HP')
+    const before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    const filters = filtersFrom(context, before)
+    expect(filters).toHaveLength(2)
+    expect(filters[0]!.type).toBe('lowpass')
+    expect(filters[1]!.type).toBe('highpass')
+    // The HP stage sits exactly 2 octaves (÷4) below the LP stage's cutoff —
+    // a wider/shallower band than BP's single resonant stage.
+    expect(filters[1]!.frequency.value).toBeCloseTo(filters[0]!.frequency.value / 4, 3)
+    engine.noteOff(60)
   })
 
   it('keyboard tracking scales the base cutoff with the played note', () => {

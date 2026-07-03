@@ -18,6 +18,12 @@
  * - Misc:     GM Vibraphone (mallet character) via
  *             web-music-score-samples/011-vibraphone (MIDI-JS Soundfonts, MIT).
  *
+ * Synth section (optional Samples mode, spec.scope.optional):
+ * - synth-strings: GM String Ensemble 1 via
+ *             web-music-score-samples/048-string-ensemble-1 (MIDI-JS Soundfonts, MIT).
+ * - synth-choir:   GM Choir Aahs via
+ *             web-music-score-samples/052-choir-aahs (MIDI-JS Soundfonts, MIT).
+ *
  * Run manually: node scripts/sync-samples.mjs
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
@@ -132,6 +138,53 @@ for (const spec of [
     dir: 'misc',
     source:
       'GM Vibraphone (mallet character, per the spec\'s Misc source rule), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/011-vibraphone. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
+    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
+  },
+]) {
+  const sourceDir = join(root, 'node_modules', 'web-music-score-samples', 'samples', spec.folder)
+  const dir = join(out, spec.dir)
+  mkdirSync(dir, { recursive: true })
+  const zones = []
+  for (const file of readdirSync(sourceDir).sort()) {
+    if (!file.endsWith('.mp3')) continue
+    const midi = nameToMidi(file.replace('.mp3', ''))
+    const target = `${midiToStem(midi)}.mp3`
+    copyFileSync(join(sourceDir, file), join(dir, target))
+    zones.push({ file: target, rootMidi: midi, velocityLayer: 1, sourceFile: `web-music-score-samples/samples/${spec.folder}/${file}` })
+  }
+  instruments.push({
+    id: spec.id,
+    type: spec.type,
+    name: spec.name,
+    dir: spec.dir,
+    velocityLayers: 1,
+    kind: 'recorded',
+    source: spec.source,
+    license: spec.license,
+    zones: zones.sort((a, b) => a.rootMidi - b.rootMidi),
+  })
+}
+
+/* --------------------------- Synth section (optional Samples mode) sets -- */
+for (const spec of [
+  {
+    folder: '048-string-ensemble-1',
+    id: 'synth-strings',
+    type: 'SynthStrings',
+    name: 'Strings',
+    dir: 'synth-strings',
+    source:
+      'GM String Ensemble 1 (bowed string-section character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/048-string-ensemble-1. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
+    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
+  },
+  {
+    folder: '052-choir-aahs',
+    id: 'synth-choir',
+    type: 'SynthChoir',
+    name: 'Choir',
+    dir: 'synth-choir',
+    source:
+      'GM Choir Aahs (sustained vocal-pad character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/052-choir-aahs. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
     license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
   },
 ]) {

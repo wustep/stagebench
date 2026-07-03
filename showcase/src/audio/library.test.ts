@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { INSTRUMENTS, instrumentsOfType, nearestZones, PIANO_TYPES, velocityLayerGains } from './library'
+import { getSynthSampleSet, INSTRUMENTS, instrumentsOfType, nearestSynthZone, nearestZones, PIANO_TYPES, SYNTH_SAMPLE_SETS, velocityLayerGains } from './library'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -96,5 +96,66 @@ describe('piano.instrument-library — bundled provenance', () => {
     // Adjacent layers crossfade smoothly (weights sum to ~1).
     const between = velocityLayerGains(3, 0.25)
     expect(between[0]! + between[1]!).toBeCloseTo(1, 5)
+  })
+})
+
+/**
+ * synth.sample-sets — the Synth section's optional Samples mode bundles two
+ * recorded sets (spec.scope.optional), following the exact same provenance
+ * pattern as the Piano library's GM-derived sets above but kept as a
+ * SEPARATE export (SYNTH_SAMPLE_SETS, not INSTRUMENTS) so this coverage
+ * never touches PIANO_TYPES/instrumentsOfType filtering.
+ */
+describe('synth.sample-sets — bundled provenance (optional Samples mode)', () => {
+  it('bundles exactly two sample sets with distinct sources and MIT licenses', () => {
+    expect(SYNTH_SAMPLE_SETS).toHaveLength(2)
+    const sources = new Set(SYNTH_SAMPLE_SETS.map((s) => s.source))
+    expect(sources.size).toBe(2)
+    for (const set of SYNTH_SAMPLE_SETS) {
+      expect(set.license).toMatch(/MIT/)
+      expect(set.source).toMatch(/npm/i) // registry-only acquisition
+    }
+    expect(getSynthSampleSet('synth-strings').name).toBe('Strings')
+    expect(getSynthSampleSet('synth-choir').name).toBe('Choir')
+    expect(() => getSynthSampleSet('nope')).toThrow(/Unknown synth sample set/)
+  })
+
+  it('bundles every declared sample file on disk (offline capable, no remote URLs)', () => {
+    for (const set of SYNTH_SAMPLE_SETS) {
+      for (const zone of set.zones) {
+        expect(zone.file.startsWith('samples/'), zone.file).toBe(true)
+        expect(zone.file).not.toMatch(/^https?:/)
+        const path = join(ROOT, 'public', zone.file)
+        expect(existsSync(path), path).toBe(true)
+        expect(statSync(path).size).toBeGreaterThan(2000)
+      }
+    }
+  })
+
+  it('matches the generated public/samples/manifest.json (root notes, 19 roots x 1 layer each)', () => {
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'public', 'samples', 'manifest.json'), 'utf8')) as {
+      instruments: Array<{ id: string; velocityLayers: number; zones: Array<{ file: string; rootMidi: number; velocityLayer: number }> }>
+    }
+    for (const set of SYNTH_SAMPLE_SETS) {
+      const manifested = manifest.instruments.find((m) => m.id === set.id)!
+      expect(manifested, set.id).toBeTruthy()
+      expect(manifested.velocityLayers).toBe(1)
+      expect(new Set(set.zones.map((z) => z.rootMidi)).size).toBe(19) // major-third spacing, same as the GM piano sets
+      const declared = new Map(set.zones.map((z) => [z.file.replace(/^samples\/[^/]+\//, ''), z]))
+      expect(manifested.zones).toHaveLength(set.zones.length)
+      for (const zone of manifested.zones) {
+        const match = declared.get(zone.file)!
+        expect(match, zone.file).toBeTruthy()
+        expect(match.rootMidi).toBe(zone.rootMidi)
+      }
+    }
+  })
+
+  it('nearestSynthZone picks the closest recorded root for a target note', () => {
+    const strings = getSynthSampleSet('synth-strings')
+    for (let midi = 24; midi <= 96; midi++) {
+      const zone = nearestSynthZone(strings, midi)
+      expect(Math.abs(midi - zone.rootMidi), `midi ${midi}`).toBeLessThanOrEqual(2)
+    }
   })
 })
