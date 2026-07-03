@@ -93,7 +93,7 @@ async function seal(root, id, options) {
   ensureInstalled(stageDir)
 
   console.error('→ running test, typecheck, lint, build')
-  const checks = runChecks(stageDir)
+  const checks = await runChecks(stageDir)
   const failed = checks.filter((check) => !check.passed)
   if (failed.length > 0) {
     throw new Error(`Package checks failed (${failed.map((check) => check.id).join(', ')}). Fix in the workspace, then seal again.\n${failed.map((check) => `--- ${check.id} ---\n${check.detail}`).join('\n')}`)
@@ -186,7 +186,7 @@ async function score(root, id, options) {
   if (options['skip-checks'] !== 'true') ensureInstalled(stageDir)
   const technicalChecks = options['skip-checks'] === 'true'
     ? skippedTechnicalChecks(stageDir, rubric)
-    : runTechnicalChecks(stageDir, rubric)
+    : await runTechnicalChecks(stageDir, rubric)
   const evaluation = scoreAssessment(rubric, assessment, technicalChecks)
   const evaluationPath = path.join(root, 'runs', id, 'evaluations', `stage${phase}.json`)
   writeJson(evaluationPath, evaluation)
@@ -265,7 +265,7 @@ try {
       const showcaseDir = path.join(root, 'showcase')
       if (!fs.existsSync(path.join(showcaseDir, 'package.json'))) throw new Error('Missing showcase/ directory')
       ensureInstalled(showcaseDir)
-      const checks = runChecks(showcaseDir)
+      const checks = await runChecks(showcaseDir)
       const failed = checks.filter((check) => !check.passed)
       if (failed.length > 0) throw new Error(`Showcase checks failed (${failed.map((check) => check.id).join(', ')}):\n${failed.map((check) => check.detail).join('\n')}`)
       const destination = path.join(pathsFor(root).previews, 'showcase')

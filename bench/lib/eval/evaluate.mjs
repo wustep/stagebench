@@ -4,9 +4,8 @@
 // the CLI bridges the two sides.
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { readJson } from '../shared.mjs'
+import { readJson, runCommand } from '../shared.mjs'
 import { validateRubric } from './scoring.mjs'
 
 export function loadRubric() {
@@ -20,32 +19,36 @@ function outputTail(value, length = 1600) {
 
 // Rerun the package gates against the sealed artifact so the recorded score
 // reflects checks the scorer executed, not checks the candidate claimed.
-export function runTechnicalChecks(stageDir, rubric) {
+export async function runTechnicalChecks(stageDir, rubric) {
   const packagePath = path.join(stageDir, 'package.json')
   if (!fs.existsSync(packagePath)) {
     return [{ id: 'artifact', label: 'Runnable phase artifact', passed: false, detail: `Missing ${packagePath}` }]
   }
   const packageJson = readJson(packagePath)
-  const checks = rubric.technicalGate.requiredChecks.map((script) => {
+  const checks = []
+  for (const script of rubric.technicalGate.requiredChecks) {
     if (!packageJson.scripts?.[script]) {
-      return { id: script, label: script, passed: false, detail: `Missing package script: ${script}` }
+      checks.push({ id: script, label: script, passed: false, detail: `Missing package script: ${script}` })
+      continue
     }
     const startedAt = Date.now()
-    const result = spawnSync('pnpm', ['run', script], {
+    process.stderr.write(`  · ${script} … `)
+    const result = await runCommand('pnpm', ['run', script], {
       cwd: stageDir,
-      encoding: 'utf8',
       timeout: 240_000,
       env: { ...process.env, CI: '1' },
+      onOutput: (text) => process.stderr.write(text),
     })
     const passed = result.status === 0 && !result.error
-    return {
+    process.stderr.write(passed ? `${script} passed\n` : `${script} failed\n`)
+    checks.push({
       id: script,
       label: script,
       passed,
       durationMs: Date.now() - startedAt,
       detail: passed ? 'Passed' : outputTail(result.stderr || result.stdout || result.error?.message),
-    }
-  })
+    })
+  }
   const artifactPath = path.join(stageDir, 'dist', 'index.html')
   checks.push({
     id: 'artifact',

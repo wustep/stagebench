@@ -100,7 +100,7 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     fs.writeFileSync(path.join(stageDir, 'evidence', 'stage1-narrow.png'), pngHeader(390, 844))
     writeJson(path.join(stageDir, 'evidence', 'stage1-capture.json'), { version: 1, phase: 1, captures: [] })
 
-    const checks = runChecks(stageDir)
+    const checks = await runChecks(stageDir)
     assert.ok(checks.every((check) => check.passed), JSON.stringify(checks.filter((check) => !check.passed)))
     const verification = verifyPhase(root, created.id, 1, { checks })
     assert.equal(verification.passed, true)

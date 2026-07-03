@@ -4,8 +4,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
-import { hashTree, readJson } from '../shared.mjs'
+import { hashTree, readJson, runCommand } from '../shared.mjs'
 import { validateImplementationManifest } from '../implementation-details.mjs'
 
 export const REQUIRED_FEATURES = {
@@ -64,29 +63,33 @@ function packageCommand(stageDir, script) {
   return { executable: 'pnpm', args: ['run', script] }
 }
 
-export function runChecks(stageDir) {
+export async function runChecks(stageDir) {
   const packagePath = path.join(stageDir, 'package.json')
   assert.ok(fs.existsSync(packagePath), 'Missing package.json')
   const packageJson = readJson(packagePath)
-  return ['test', 'typecheck', 'lint', 'build'].map((script) => {
+  const results = []
+  for (const script of ['test', 'typecheck', 'lint', 'build']) {
     assert.ok(packageJson.scripts?.[script], `Missing package script: ${script}`)
     const command = packageCommand(stageDir, script)
     const startedAt = Date.now()
-    const result = spawnSync(command.executable, command.args, {
+    process.stderr.write(`  · ${script} … `)
+    const result = await runCommand(command.executable, command.args, {
       cwd: stageDir,
-      encoding: 'utf8',
       timeout: 240_000,
       env: { ...process.env, CI: '1' },
+      onOutput: (text) => process.stderr.write(text),
     })
     const passed = result.status === 0 && !result.error
-    return {
+    process.stderr.write(passed ? `${script} passed\n` : `${script} failed\n`)
+    results.push({
       id: script,
       command: [command.executable, ...command.args].join(' '),
       passed,
       durationMs: Date.now() - startedAt,
       detail: passed ? 'Passed' : String(result.stderr || result.stdout || result.error?.message || 'Unknown failure').trim().slice(-2400),
-    }
-  })
+    })
+  }
+  return results
 }
 
 function verifyFeatureMatrix(stageDir, phase) {
@@ -181,7 +184,10 @@ export function verifyPhase(root, id, phase, options = {}) {
   const phaseContract = verifyPhaseContract(root, stageDir, phase)
   const featureMatrix = verifyFeatureMatrix(stageDir, phase)
   const implementationDetails = verifyImplementationDetails(stageDir, phase)
-  const checks = options.checks ?? runChecks(stageDir)
+  // Callers run the (now async) package checks and pass the results in, so
+  // verifyPhase itself stays synchronous over the sealed stage directory.
+  assert.ok(options.checks, 'verifyPhase requires precomputed package checks (call runChecks first)')
+  const checks = options.checks
   const evidence = evidenceChecks(stageDir, phase)
   const passed = checks.every((check) => check.passed) && evidence.every((check) => check.passed)
   const artifact = passed ? hashTree(stageDir) : null

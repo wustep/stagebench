@@ -2,6 +2,86 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { spawn } from 'node:child_process'
+
+// Async replacement for spawnSync that streams the child's output as progress
+// while still collecting it, enforces a timeout by sending SIGTERM (then
+// SIGKILL) to the child, and forwards a parent SIGTERM/SIGINT to the child so
+// Ctrl-C never orphans a candidate build. Resolves with the same
+// { status, stdout, stderr, error } shape spawnSync returned, so callers keep
+// their exit-code semantics unchanged.
+export function runCommand(executable, args, options = {}) {
+  const { timeout, onOutput, ...spawnOptions } = options
+  return new Promise((resolve) => {
+    let child
+    try {
+      child = spawn(executable, args, { ...spawnOptions, stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch (error) {
+      resolve({ status: null, stdout: '', stderr: '', error })
+      return
+    }
+
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    let timedOut = false
+    let timer = null
+    let killTimer = null
+
+    const forwardSignal = (signal) => child.kill(signal)
+    process.on('SIGTERM', forwardSignal)
+    process.on('SIGINT', forwardSignal)
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer)
+      if (killTimer) clearTimeout(killTimer)
+      process.off('SIGTERM', forwardSignal)
+      process.off('SIGINT', forwardSignal)
+    }
+
+    child.stdout.on('data', (chunk) => {
+      const text = chunk.toString()
+      stdout += text
+      onOutput?.(text)
+    })
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString()
+      stderr += text
+      onOutput?.(text)
+    })
+
+    if (typeof timeout === 'number' && timeout > 0) {
+      timer = setTimeout(() => {
+        timedOut = true
+        child.kill('SIGTERM')
+        // Match spawnSync: escalate to SIGKILL if the child ignores SIGTERM.
+        killTimer = setTimeout(() => child.kill('SIGKILL'), 2000)
+      }, timeout)
+    }
+
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve({ status: null, stdout, stderr, error })
+    })
+
+    child.on('close', (code, signal) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve({
+        status: code,
+        signal,
+        stdout,
+        stderr,
+        // spawnSync reports a timeout via an ETIMEDOUT error; mirror that so
+        // callers that inspect result.error keep working.
+        error: timedOut ? Object.assign(new Error(`Command timed out after ${timeout}ms`), { code: 'ETIMEDOUT' }) : undefined,
+      })
+    })
+  })
+}
 
 export function parseArgs(argv) {
   const positional = []
