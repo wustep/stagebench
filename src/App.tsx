@@ -11,10 +11,49 @@ import {
   parseViewerSearch,
 } from './run-utils'
 import type { PhaseNumber } from './run-utils'
-import type { RunEntry, StageStatus } from './types'
+import type { RawRunEntry, RunEntry, StageStatus, Telemetry } from './types'
 import './App.css'
 
-const runs = runsData as RunEntry[]
+const TELEMETRY_FIELDS: Array<keyof Telemetry> = [
+  'wallTimeSeconds', 'costUsd', 'inputTokens', 'outputTokens', 'reasoningTokens', 'toolCalls',
+]
+
+// Project a raw runs.json entry into a complete RunEntry so the render path can
+// assume every field is present. Legacy-schema runs that omitted optional
+// fields get honest defaults (null telemetry, empty previews) rather than
+// scattered optional chaining downstream.
+function normalizeRunEntry(raw: RawRunEntry): RunEntry {
+  const telemetry: Telemetry | null = raw.telemetry
+    ? Object.fromEntries(TELEMETRY_FIELDS.map((field) => [field, raw.telemetry?.[field] ?? null])) as Telemetry
+    : null
+  return {
+    id: raw.id,
+    model: raw.model,
+    title: raw.title ?? raw.model,
+    variant: raw.variant ?? null,
+    target: raw.target ?? 'Stage 4 73',
+    targetPhase: raw.targetPhase ?? null,
+    protocolVersion: raw.protocolVersion ?? null,
+    legacy: raw.legacy,
+    status: raw.status,
+    startedAt: raw.startedAt,
+    updatedAt: raw.updatedAt,
+    score: raw.score ?? null,
+    reportPath: raw.reportPath ?? null,
+    telemetry,
+    previewPath: raw.previewPath ?? null,
+    previewStage: raw.previewStage ?? null,
+    previews: raw.previews ?? {},
+    stages: (raw.stages ?? []).map((stage) => ({
+      number: stage.number,
+      status: stage.status ?? 'queued',
+      score: stage.score ?? null,
+      reportPath: stage.reportPath ?? null,
+    })),
+  }
+}
+
+const runs = (runsData as RawRunEntry[]).map(normalizeRunEntry)
 const phaseNames = ['Surface + Piano', 'Pianos + FX', 'Complete System']
 const knobAngles = [-86, -22, 43]
 const v2PhaseNames = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
@@ -526,7 +565,7 @@ function App() {
                 <div className="run-model">
                   <div className="run-status-line">
                     <span className="run-status"><StatusLight status={run.status} />{run.status}</span>
-                    <span className="model-target">{run.target ?? 'Stage 4 73'}</span>
+                    <span className="model-target">{run.target}</span>
                   </div>
                   <h3>{getRunTitle(run)}</h3>
                   {run.score !== null && (
