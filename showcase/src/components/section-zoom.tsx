@@ -31,10 +31,14 @@ export function SectionZoomOverlay({
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
-  // Trap initial focus on the close button.
+  // Trap initial focus on the close button; restore focus to whatever opened
+  // the overlay (the section's Inspect button) when it closes.
   useEffect(() => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     closeButtonRef.current?.focus()
+    return () => previousFocusRef.current?.focus()
   }, [])
 
   useEffect(() => {
@@ -42,6 +46,30 @@ export function SectionZoomOverlay({
       if (event.key === 'Escape') {
         event.preventDefault()
         onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      // Tab containment: the dialog is modal (aria-modal), so focus wraps at
+      // its first/last focusable instead of escaping to the deck behind it.
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusables = [
+        ...dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ]
+      if (focusables.length === 0) return
+      const first = focusables[0]!
+      const last = focusables[focusables.length - 1]!
+      const active = document.activeElement
+      if (event.shiftKey) {
+        if (active === first || !dialog.contains(active)) {
+          event.preventDefault()
+          last.focus()
+        }
+      } else if (active === last || !dialog.contains(active)) {
+        event.preventDefault()
+        first.focus()
       }
     }
     document.addEventListener('keydown', onKeyDown)

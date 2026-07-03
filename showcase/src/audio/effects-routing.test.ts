@@ -213,4 +213,15 @@ describe('effects.routing', () => {
     const edit = screen.getByTestId('oled-edit-line').textContent!
     expect(edit).toMatch(/Delay Tempo 50\d ms/)
   })
+
+  it('Shift + Tap/Set toggles the delay Analog mode (one physical button) and lights its LED', () => {
+    renderApp()
+    // The ANALOG LED is the second LED in the TAP/SET sub-box (below the button).
+    const analogLed = () => (document.querySelectorAll('.delay-tap-cell .led')[1] as HTMLElement).dataset.on
+    expect(analogLed()).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delay Tap/Set' }))
+    expect(analogLed()).toBe('true')
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Delay Analog On/)
+  })
 })

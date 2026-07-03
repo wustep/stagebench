@@ -116,4 +116,13 @@ describe('interaction.keys — accessible naming', () => {
     expect(screen.getByRole('button', { name: 'C4 key' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'E7 key' })).toBeInTheDocument()
   })
+
+  it('renders keys in chromatic DOM order (tab/focus order matches pitch order)', () => {
+    renderApp()
+    const midis = [...screen.getByTestId('keybed').querySelectorAll('.key')].map((k) =>
+      Number((k as HTMLElement).dataset.midi),
+    )
+    expect(midis).toHaveLength(73)
+    expect(midis).toEqual([...midis].sort((a, b) => a - b))
+  })
 })

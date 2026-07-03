@@ -1,10 +1,11 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
-import { DRAWBAR_FOOTAGES, DRAWBAR_LEGENDS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
+import { DRAWBAR_FOOTAGES, DRAWBAR_LEGENDS, DRAWBAR_REGISTERS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
 import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
 import { usePresentationMorphRange, usePresentationToggle, usePresentationValue } from '../state/presentation'
 import {
   mappings,
+  organModelLabel,
   programLabel,
   splitBoundaries,
   SPLIT_POINT_NAMES,
@@ -230,9 +231,14 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
             <Legend>ORGAN</Legend>
           </span>
           {/* Reference: blank tan cap with CLOSE MIC printed on the panel
-              beneath it; MORPH is an LED legend under the blank speed button. */}
+              beneath it. The app has no close-mic state (manual p. 53's
+              Shift+Organ close-mic variant is not modeled), so its LED stays
+              truthfully unlit and the legend is a declared print. */}
           <PanelButton store={store} id="rotary-source" className="pill small blank" />
-          <Legend className="dim">CLOSE MIC ▿</Legend>
+          <span className="rotary-led-row">
+            <Led color="yellow" />
+            <Legend className="dim">CLOSE MIC ▿</Legend>
+          </span>
           <span className="rotary-led-row">
             <Led color="yellow" on={state.rotary.speed === 'stop'} />
             <Legend>STOP MODE</Legend>
@@ -246,11 +252,12 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
             <Legend>FAST</Legend>
           </span>
           <PanelButton store={store} id="rotary-speed" className="dark small" />
+          {/* MORPH is an indicator LED, not a button (manual p. 53: an
+              "active morph is indicated by the MORPH LED being lit"). */}
           <span className="rotary-led-row">
             <Led color="yellow" on={rotarySpeedMorphed} />
             <Legend>MORPH</Legend>
           </span>
-          <PanelButton store={store} id="rotary-morph" className="dark small" />
           </div>
         </div>
       </div>
@@ -268,6 +275,9 @@ function DrawbarColumn({ store, index }: { store: PresentationStore; index: numb
   return (
     <div className="drawbar-column">
       <Legend className="drawbar-name">{DRAWBAR_LEGENDS[index]}</Legend>
+      {/* Second printed register row (reference photo): footage/harmonic
+          registers, blank under STR4, a sine-span glyph under the last. */}
+      <Legend className="dim drawbar-register">{DRAWBAR_REGISTERS[index] || ' '}</Legend>
       <div className="drawbar-row">
         {/* Reference: each LED ladder sits in a light-outlined frame with the
             1-8 amount numerals printed beside the segments. */}
@@ -320,7 +330,8 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
               />
             </div>
             <span className="tiny-led-row">
-              <Led color="yellow" on={organ.sustped} />
+              {/* SUSTPED lights RED on the reference photo. */}
+              <Led color="red" on={organ.sustped} />
               <Legend>SUSTPED</Legend>
               <Led color="yellow" on={organ.pstick} />
               <Legend>PSTICK</Legend>
@@ -395,21 +406,32 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                 </span>
               </GroupBox>
               <GroupBox title="B3 Percussion" className="organ-perc">
+                {/* Reference: a round LED left of each SOFT/FAST/THIRD print,
+                    lit from the canonical percussion state. */}
                 <div className="perc-grid">
                   <span className="perc-cell">
                     <Legend>VOLUME</Legend>
-                    <Legend className="dim">SOFT</Legend>
-                    <PanelButton store={store} id="organ-perc-volume" className="dark tiny" led="yellow" />
+                    <span className="tiny-led-row">
+                      <Led color="red" on={organ.percussion.soft} />
+                      <Legend>SOFT</Legend>
+                    </span>
+                    <PanelButton store={store} id="organ-perc-volume" className="dark tiny" />
                   </span>
                   <span className="perc-cell">
                     <Legend>DECAY</Legend>
-                    <Legend className="dim">FAST</Legend>
-                    <PanelButton store={store} id="organ-perc-decay" className="dark tiny" led="yellow" />
+                    <span className="tiny-led-row">
+                      <Led color="red" on={organ.percussion.fast} />
+                      <Legend>FAST</Legend>
+                    </span>
+                    <PanelButton store={store} id="organ-perc-decay" className="dark tiny" />
                   </span>
                   <span className="perc-cell">
                     <Legend>HARMONIC</Legend>
-                    <Legend className="dim">THIRD</Legend>
-                    <PanelButton store={store} id="organ-perc-harmonic" className="dark tiny" led="yellow" />
+                    <span className="tiny-led-row">
+                      <Led color="red" on={organ.percussion.third} />
+                      <Legend>THIRD</Legend>
+                    </span>
+                    <PanelButton store={store} id="organ-perc-harmonic" className="dark tiny" />
                   </span>
                 </div>
                 <span className="perc-on">
@@ -475,7 +497,8 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
               />
             </div>
             <span className="tiny-led-row">
-              <Led color="yellow" on={state.piano.sustped} />
+              {/* SUSTPED lights RED on the reference photo. */}
+              <Led color="red" on={state.piano.sustped} />
               <Legend>SUSTPED</Legend>
               <Led color="yellow" on={state.piano.pstick} />
               <Legend>PSTICK</Legend>
@@ -590,9 +613,10 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
                   <Legend>MISC</Legend>
                 </span>
               </div>
+              {/* One physical button (reference photo): INFO is its printed
+                  Shift pairing (manual p. 25, Shift + Piano Select). */}
               <PanelButton store={store} id="piano-type" className="dark small" />
               <Legend className="dim">INFO</Legend>
-              <PanelButton store={store} id="piano-info" className="dark tiny" />
               <div className="model-dial">
                 <Encoder store={store} id="piano-model" />
                 <Legend>
@@ -616,10 +640,15 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
   const models = instrumentsOfType(focused.type)
   const model = models[focused.model]
   const loadStatus = model ? engine.instrumentLoadStatus(model.id) : undefined
+  // PRESET NAME (Shift + Prog View, manual p. 42): the layer lines show the
+  // underlying sound source. Declared adaptation: with no preset library in
+  // scope, the "sound name" IS the source, so the toggle switches to the
+  // fully-qualified source form (piano type/model, synth waveform/sample set).
+  const presetNameOn = state.programs.presetName
   const pianoLine = state.pianoNotFound
     ? `Piano not found (${state.pianoNotFound})`
     : model
-      ? `${state.focusedLayer}: ${model.name}${loadStatus === 'loading' ? ' — loading…' : loadStatus === 'error' ? ' — FALLBACK' : ''}`
+      ? `${state.focusedLayer}: ${presetNameOn ? `${focused.type} / ` : ''}${model.name}${loadStatus === 'loading' ? ' — loading…' : loadStatus === 'error' ? ' — FALLBACK' : ''}`
       : `${state.focusedLayer}: —`
   const statusLine =
     engineInfo.status === 'fallback'
@@ -635,9 +664,16 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
   const reference = programs.storePending ? programs.storePending.destination : programs.current
   const currentSlot = activeBank[programs.current]!
   const naming = programs.naming
-  const programReadout = `${programLabel(programs.current, programs.liveMode)}${programs.dirty ? ' E' : ''}${
-    programs.storePending ? ` ▸ STORE ${programLabel(reference, programs.liveMode)}?` : ''
-  }`
+  // Num Pad entry pending (manual p. 44): the readout shows the page digit
+  // and a dash until the slot digit arrives, e.g. "1–".
+  const programReadout =
+    programs.numPadPending !== null
+      ? `${programs.numPadPending}–`
+      : `${programLabel(programs.current, programs.liveMode)}${programs.dirty ? ' E' : ''}${
+          programs.storePending ? ` ▸ STORE ${programLabel(reference, programs.liveMode)}?` : ''
+        }`
+  // PROG VIEW mode 1 (manual p. 42): large name/number only.
+  const xl = programs.progView === 1 ? ' xl' : ''
   const nameLine = naming ? (
     <b className="oled-name" data-testid="oled-name-line">
       {naming.name
@@ -646,7 +682,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         .map((char, i) => (i === naming.cursor ? <u key={i}>{char}</u> : <span key={i}>{char}</span>))}
     </b>
   ) : (
-    <b className="oled-name" data-testid="oled-name-line">
+    <b className={`oled-name${xl}`} data-testid="oled-name-line">
       {programs.storePending ? programs.storePending.captured.name : currentSlot.name}
     </b>
   )
@@ -689,6 +725,18 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         ]
       })()
     : null
+  // LAYER INIT screen (Shift + Section Edit, manual p. 43): PROGRAM 1-4 act
+  // as the four soft buttons; Pno/Syn name the focused layer they reset.
+  const layerInitRows = state.layerInitEdit
+    ? [
+        <span key="li1" className="oled-slot" data-testid="oled-layer-init-line">
+          ⌂ LAYER INIT — 1 All · 2 Org AB · 3 Pno {state.focusedLayer} · 4 Syn {state.synth.focusedLayer}
+        </span>,
+        <span key="li2" className="oled-slot">
+          PROG 1-4: soft buttons · SHIFT: exit
+        </span>,
+      ]
+    : null
   const listStart = Math.max(0, Math.min(reference - 1, activeBank.length - 2))
   const listRows = [listStart, listStart + 1].map((i) => (
     <span key={i} className="oled-slot" data-testid={`oled-list-${i}`}>
@@ -705,41 +753,118 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         </span>
       ))
     : null
+  // PROG VIEW mode 2 (manual p. 42): the complete program configuration —
+  // every layer's on/off plus its sound name, all read from canonical state.
+  // PRESET NAME switches each name to its fully-qualified source form.
+  const layerMark = (on: boolean) => (on ? '●' : '○')
+  const pianoLayerName = (id: 'A' | 'B') => {
+    const layer = state.layers[id]
+    const m = instrumentsOfType(layer.type)[layer.model]
+    return m ? `${presetNameOn ? `${layer.type}/` : ''}${m.name}` : '—'
+  }
+  const synthLayerName = (id: 'A' | 'B' | 'C') => {
+    const layer = state.synth.layers[id]
+    if (layer.mode === 'Samples') {
+      const set = SYNTH_SAMPLE_SETS[Math.min(layer.waveform, SYNTH_SAMPLE_SETS.length - 1)] ?? SYNTH_SAMPLE_SETS[0]!
+      return `${presetNameOn ? 'Smp/' : ''}${set.name}`
+    }
+    const wave = SYNTH_WAVEFORMS[layer.waveform] ?? SYNTH_WAVEFORMS[0]!
+    return `${presetNameOn ? 'Wave/' : ''}${wave.name}`
+  }
+  const configRows =
+    programs.progView === 2
+      ? [
+          <span key="cfg-p" className="oled-slot" data-testid="oled-config-piano">
+            Pno A{layerMark(state.layers.A.enabled)} {pianoLayerName('A')} · B{layerMark(state.layers.B.enabled)} {pianoLayerName('B')}
+          </span>,
+          <span key="cfg-o" className="oled-slot" data-testid="oled-config-organ">
+            Org A{layerMark(state.organ.layers.A.enabled)} {organModelLabel(state.organ.layers.A.model)} · B
+            {layerMark(state.organ.layers.B.enabled)} {organModelLabel(state.organ.layers.B.model)}
+          </span>,
+          <span key="cfg-s" className="oled-slot" data-testid="oled-config-synth">
+            Syn A{layerMark(state.synth.layers.A.enabled)} {synthLayerName('A')} · B{layerMark(state.synth.layers.B.enabled)}{' '}
+            {synthLayerName('B')} · C{layerMark(state.synth.layers.C.enabled)} {synthLayerName('C')}
+          </span>,
+        ]
+      : null
+  // PROG VIEW mode 3 (manual p. 42): the current page's eight programs as
+  // list rows (same row markup as the numeric list view), current one marked.
+  const pageStart = Math.floor(reference / 8) * 8
+  const pageRows =
+    programs.progView === 3
+      ? Array.from({ length: 8 }, (_, i) => pageStart + i).map((i) => (
+          <span key={i} className="oled-slot" data-testid={`oled-page-list-${i}`}>
+            {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode)} {activeBank[i]!.name}
+          </span>
+        ))
+      : null
   return (
     <SectionShell id="program">
       <div className="program-layout">
         <div className="program-top-row">
           <GroupBox title="Morph Assign" className="morph-box">
+            {/* Printed LED + label row above the blank caps (reference); each
+                LED lights truthfully from the same morph-arming latch its
+                button toggles (A.T. is spec-excluded, so its LED stays dark). */}
+            <span className="morph-legend-row" aria-hidden="true">
+              <span className="tiny-led-row">
+                <Led color="green" on={state.morphArming === 'wheel'} />
+                <Legend>WHEEL ⇟</Legend>
+              </span>
+              <span className="tiny-led-row">
+                <Led color="green" />
+                <Legend>A.T. ⇟</Legend>
+              </span>
+              <span className="tiny-led-row">
+                <Led color="green" on={state.morphArming === 'pedal'} />
+                <Legend>CTRLPED ⇟</Legend>
+              </span>
+            </span>
             <div className="morph-buttons">
-              <PanelButton store={store} id="morph-wheel" className="dark tiny" led="yellow">
-                WHEEL
-              </PanelButton>
-              <PanelButton store={store} id="morph-at" className="dark tiny" led="yellow">
-                A.T.
-              </PanelButton>
-              <PanelButton store={store} id="morph-ctrlped" className="dark tiny" led="yellow">
-                CTRLPED
-              </PanelButton>
+              <PanelButton store={store} id="morph-wheel" className="dark tiny" />
+              <PanelButton store={store} id="morph-at" className="dark tiny" />
+              <PanelButton store={store} id="morph-ctrlped" className="dark tiny" />
             </div>
-            <Legend className="dim">CLEAR MORPH ▾</Legend>
+            <Legend className="legend-rule">CLEAR MORPH</Legend>
           </GroupBox>
           <GroupBox title="Split" className="split-box">
-            <PanelButton store={store} id="split-onset" className="dark tiny" led="yellow">
-              ON/SET ▾
-            </PanelButton>
+            {/* One LED per split point — split.points[0..2] = Low/Mid/High
+                (manual p. 39); a LED lights while the split is on and that
+                point is active. */}
+            <span className="split-leds" aria-hidden="true">
+              {state.split.points.map((point, i) => (
+                <Led key={i} color="yellow" on={state.split.on && point.active} />
+              ))}
+            </span>
+            <Legend>ON/SET ▽</Legend>
+            <PanelButton store={store} id="split-onset" className="dark tiny" />
+            <Legend className="dim">SET KEY</Legend>
           </GroupBox>
           <GroupBox title="Mst Clk" className="clk-box">
-            <PanelButton store={store} id="mstclk-tap" className="dark tiny">
-              TAP/SET ▾
-            </PanelButton>
+            {/* TAP/SET LED lights while the Mst Clk edit view is latched on
+                the OLED (our latched dial-edit convention). */}
+            <span className="tiny-led-row">
+              <Led color="green" on={state.clockEdit} />
+              <Legend>TAP/SET ▽</Legend>
+            </span>
+            <PanelButton store={store} id="mstclk-tap" className="dark tiny" />
+            {/* No pedal-tap input is implemented, so this LED never lights. */}
+            <span className="tiny-led-row">
+              <Led color="green" />
+              <Legend className="dim">PEDAL TAP</Legend>
+            </span>
           </GroupBox>
           <GroupBox title="Transp" className="transp-box">
-            <PanelButton store={store} id="transpose-onset" className="dark tiny" led="yellow">
-              ON/SET ▾
-            </PanelButton>
-            <PanelButton store={store} id="panic" className="dark tiny">
-              PANIC
-            </PanelButton>
+            <span className="tiny-led-row">
+              <Led color="yellow" on={state.transpose.on} />
+              <Legend>ON/SET ▽</Legend>
+            </span>
+            <PanelButton store={store} id="transpose-onset" className="dark tiny" />
+            {/* Declared deviation: on the reference PANIC is the Shift print
+                under the single ON/SET button; we keep a separate functional
+                panic button, blank its cap, and print PANIC beneath it. */}
+            <PanelButton store={store} id="panic" className="dark tiny" />
+            <Legend className="dim">PANIC</Legend>
           </GroupBox>
         </div>
         <div className="program-mid">
@@ -776,6 +901,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               </Legend>
             </div>
             <div className="page-block">
+              <Legend>◂ PAGE/CAT ▸</Legend>
               <span className="page-buttons">
                 <PanelButton store={store} id="page-left" className="dark tiny">
                   ◂
@@ -784,59 +910,87 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                   ▸
                 </PanelButton>
               </span>
-              <Legend>◂ PAGE/CAT ▸</Legend>
               <Legend className="dim">◂ BANK ▸</Legend>
             </div>
             <div className="mode-block">
               <span className="mode-cell">
-                <PanelButton store={store} id="live-mode" className="pill small" led="red">
-                  LIVE MODE
-                </PanelButton>
-                <Legend className="dim">NUM PAD ▿</Legend>
+                <span className="tiny-led-row">
+                  <Led color="red" on={programs.liveMode} />
+                  <Legend>LIVE MODE</Legend>
+                </span>
+                <PanelButton store={store} id="live-mode" className="pill small" />
+                {/* NUM PAD = Shift + Live Mode (manual p. 44): the LED lights
+                    while two-digit page.slot entry is active. */}
+                <span className="tiny-led-row">
+                  <Led color="red" on={programs.numPad} />
+                  <Legend className="dim">NUM PAD</Legend>
+                </span>
               </span>
-              <span className="mode-cell">
-                <PanelButton store={store} id="layer-scene" className="dark tiny" led="green">
-                  LAYER SCENE II
-                </PanelButton>
-                <Legend className="dim">PEDAL ▿</Legend>
+              {/* Reference: LAYER SCENE II sits in its own outlined box. */}
+              <span className="mode-cell rail-box scene-box">
+                <span className="tiny-led-row">
+                  <Led color="green" on={state.scenes.active === 'II'} />
+                  <Legend>LAYER SCENE II</Legend>
+                </span>
+                <PanelButton store={store} id="layer-scene" className="dark tiny" />
+                {/* No scene-pedal input is implemented; the LED never lights. */}
+                <span className="tiny-led-row">
+                  <Led color="green" />
+                  <Legend className="dim">PEDAL</Legend>
+                </span>
               </span>
             </div>
           </div>
           <div className="program-center">
             <GroupBox title="Preset Library" className="preset-box">
+              {/* The preset library isn't implemented (buttons are decorative),
+                  so all three LEDs stay unlit. */}
+              <span className="preset-legend-row" aria-hidden="true">
+                <span className="tiny-led-row">
+                  <Led color="green" />
+                  <Legend>ORGAN</Legend>
+                </span>
+                <span className="tiny-led-row">
+                  <Led color="green" />
+                  <Legend>PIANO</Legend>
+                </span>
+                <span className="tiny-led-row">
+                  <Led color="green" />
+                  <Legend>SYNTH</Legend>
+                </span>
+              </span>
               <div className="preset-buttons">
-                <PanelButton store={store} id="preset-organ" className="dark tiny">
-                  ORGAN
-                </PanelButton>
-                <PanelButton store={store} id="preset-piano" className="dark tiny">
-                  PIANO
-                </PanelButton>
-                <PanelButton store={store} id="preset-synth" className="dark tiny">
-                  SYNTH
-                </PanelButton>
+                <PanelButton store={store} id="preset-organ" className="dark tiny" />
+                <PanelButton store={store} id="preset-piano" className="dark tiny" />
+                <PanelButton store={store} id="preset-synth" className="dark tiny" />
               </div>
-              <Legend className="dim">SINGLE LAYER ▾</Legend>
+              <Legend className="legend-rule">SINGLE LAYER</Legend>
             </GroupBox>
             <div className="display-block">
             <Oled
               section="program"
               lines={[
-                <span key="p" className="oled-program" data-testid="oled-program-line">{programReadout}</span>,
+                <span key="p" className={`oled-program${xl}`} data-testid="oled-program-line">{programReadout}</span>,
                 <span key="n">{nameLine}</span>,
-                ...(splitRows ??
+                ...(layerInitRows ??
+                  splitRows ??
                   clockRows ??
                   transposeRows ??
                   modelListRows ??
                   (programs.listView
                     ? listRows
-                    : [
-                      <span key="piano" className="oled-slot" data-testid="oled-piano-line">
-                        ▤ {pianoLine}
-                      </span>,
-                      <span key="status" className="oled-slot" data-testid="oled-status-line">
-                        {statusLine || '〜 Piano · FX ready'}
-                      </span>,
-                    ])),
+                    : configRows ??
+                      pageRows ??
+                      (programs.progView === 1
+                        ? [] // PROG VIEW mode 1: large name/number only
+                        : [
+                          <span key="piano" className="oled-slot" data-testid="oled-piano-line">
+                            ▤ {pianoLine}
+                          </span>,
+                          <span key="status" className="oled-slot" data-testid="oled-status-line">
+                            {statusLine || '〜 Piano · FX ready'}
+                          </span>,
+                        ]))),
                 <span key="edit" className="oled-slot oled-edit" data-testid="oled-edit-line">
                   {state.lastEdit || '◫ —'}
                 </span>,
@@ -892,13 +1046,21 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               <span className="rail-cell">
                 <Legend>SECTION EDIT ⇕</Legend>
                 <PanelButton store={store} id="section-edit" className="dark tiny" />
+                {/* LAYER INIT = Shift + Section Edit (manual p. 43). The
+                    printed ▽ shift-legend below the cap is itself clickable
+                    and opens the same init screen (the panel's hold-to-shift
+                    convention, manual p. 44). */}
+                <button
+                  type="button"
+                  className="legend-button"
+                  aria-label="Layer Init"
+                  onClick={() => instrument.setLayerInitEdit(!state.layerInitEdit)}
+                >
+                  <Legend className="dim">LAYER INIT ▽</Legend>
+                </button>
               </span>
               <span className="rail-cell">
-                <Legend>LAYER INIT</Legend>
-                <PanelButton store={store} id="layer-init" className="dark tiny" />
-              </span>
-              <span className="rail-cell">
-                <Legend>MON|COPY</Legend>
+                <Legend>MON/COPY</Legend>
                 <PanelButton store={store} id="mon-copy" className="dark tiny" />
                 <Legend className="dim">PASTE ⇕</Legend>
               </span>
@@ -972,7 +1134,8 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               />
             </div>
             <span className="tiny-led-row">
-              <Led color="yellow" on={synth.sustped} />
+              {/* SUSTPED lights RED on the reference photo. */}
+              <Led color="red" on={synth.sustped} />
               <Legend>SUSTPED</Legend>
               <Led color="yellow" on={synth.pstick} />
               <Legend>PSTICK/RNG ▿</Legend>
@@ -1009,7 +1172,30 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <Oled
                   section="synth"
                   lines={
-                    state.synthVibratoEdit
+                    state.synthOscPitchEdit
+                      ? [
+                          <span key="t" className="oled-dim">
+                            OSC PITCH
+                          </span>,
+                          <b key="w" className="oled-name" data-testid="oled-synth-name-line">
+                            {displayName}
+                          </b>,
+                          <span key="op" data-testid="oled-synth-osc-pitch-line">
+                            OSC PITCH {fmtSigned(focused.oscPitch.semis)} st · {fmtSigned(focused.oscPitch.cents)} c
+                          </span>,
+                          <span key="m" className="oled-menu">
+                            <span>
+                              {fmtSigned(focused.oscPitch.semis)} st <b>PITCH</b>
+                            </span>
+                            <span>
+                              {fmtSigned(focused.oscPitch.cents)} c <b>FINE TUNE</b>
+                            </span>
+                            <span>
+                              {synth.focusedLayer} <b>LAYER</b>
+                            </span>
+                          </span>,
+                        ]
+                      : state.synthVibratoEdit
                       ? [
                           <span key="t" className="oled-dim">
                             VIBRATO
@@ -1098,6 +1284,8 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               </div>
               <div className="mode-column">
                 <GroupBox title="Mode" className="mode-box">
+                  {/* Reference order: SAMPLES, ANALOG, the selector button,
+                      then EXTERN below it. */}
                   <span className="tiny-led-row">
                     <Led color="yellow" on={isSamplesMode} />
                     <Legend>SAMPLES</Legend>
@@ -1106,18 +1294,19 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     <Led color="red" on={!isSamplesMode} />
                     <Legend>ANALOG</Legend>
                   </span>
+                  <PanelButton store={store} id="synth-mode" className="dark small" />
                   <span className="tiny-led-row">
                     <Led color="red" />
                     <Legend>EXTERN</Legend>
                   </span>
-                  <PanelButton store={store} id="synth-mode" className="dark small" />
                 </GroupBox>
                 <span className="waveform-cluster">
+                  {/* ONE red-framed button: WAVEFORM on press, SOUND INIT on
+                      Shift + press (manual p. 37: "SOUND INIT (Shift+Waveform)"). */}
                   <Legend>WAVEFORM</Legend>
                   <Legend className="dim">KEEP EDITS ▿</Legend>
                   <PanelButton store={store} id="waveform-select" className="framed tiny" />
-                  <Legend>SOUND INIT</Legend>
-                  <PanelButton store={store} id="sound-init" className="framed tiny" />
+                  <Legend className="dim">SOUND INIT</Legend>
                 </span>
               </div>
               <div className="arp-column">
@@ -1130,11 +1319,24 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     </span>
                     <span className="arp-mode-cell">
                       <span className="tiny-led-row" aria-hidden="true">
-                        <Legend>{synth.arp.mode === 'Poly' ? 'POLY ▾' : synth.arp.mode}</Legend>
-                        <Led color="green" on={synth.arp.mode === 'Gate'} />
+                        <Legend>POLY</Legend>
+                        <Led color="red" on={synth.arp.mode === 'Poly'} />
+                      </span>
+                      <span className="tiny-led-row" aria-hidden="true">
+                        {/* The LED beside the GATE tag lights in Gate mode;
+                            Arp is the unlit base mode (reference print). */}
+                        <Legend>ARP</Legend>
+                        <Led color="red" on={synth.arp.mode === 'Gate'} />
                         <Legend>GATE</Legend>
                       </span>
                       <PanelButton store={store} id="arp-mode" className="dark tiny" led="green" />
+                      {/* PATTERN LED stays dark: arp patterns are not
+                          implemented (Shift + this button cycles Direction
+                          instead, printed on the readout below). */}
+                      <span className="tiny-led-row" aria-hidden="true">
+                        <Led color="red" />
+                        <Legend className="dim">PATTERN ▿</Legend>
+                      </span>
                       <Legend className="dim">{synth.arp.direction} ▿</Legend>
                     </span>
                     <span className="knob-cell">
@@ -1168,15 +1370,43 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     </span>
                   </GroupBox>
                   <GroupBox title="Vibrato" className="vibrato-box">
-                    <span className="tiny-led-row" aria-hidden="true">
-                      <Legend>WHL DLY A.T. PED</Legend>
+                    {/* Reference layout: WHL/DLY/ON LED column, A.T./PED LED
+                        column, MENU legend + red-framed button at the right.
+                        LEDs light truthfully from the layer's vibrato mode;
+                        A.T. stays unlit — aftertouch is spec-excluded (no
+                        browser aftertouch input). */}
+                    <span className="vibrato-grid">
+                      <span className="vibrato-led-col" aria-hidden="true">
+                        <span className="tiny-led-row">
+                          <Legend>WHL</Legend>
+                          <Led color="red" on={focused.voice.vibrato === 'Wheel'} />
+                        </span>
+                        <span className="tiny-led-row">
+                          <Legend>DLY</Legend>
+                          <Led color="red" on={focused.voice.vibrato === 'Delayed'} />
+                        </span>
+                        <span className="tiny-led-row">
+                          <Legend>ON</Legend>
+                          <Led color="red" on={focused.voice.vibrato === 'On'} />
+                        </span>
+                      </span>
+                      <span className="vibrato-led-col" aria-hidden="true">
+                        <span className="tiny-led-row">
+                          <Led color="red" />
+                          <Legend>A.T.</Legend>
+                        </span>
+                        <span className="tiny-led-row">
+                          <Led color="red" on={focused.voice.vibrato === 'Pedal'} />
+                          <Legend>PED</Legend>
+                        </span>
+                      </span>
+                      <span className="vibrato-menu-cell">
+                        <Legend>MENU</Legend>
+                        <PanelButton store={store} id="vibrato-menu" className="framed tiny" />
+                      </span>
                     </span>
-                    <PanelButton store={store} id="vibrato-mode" className="dark tiny" led="green">
-                      {focused.voice.vibrato === 'Off' ? 'OFF' : focused.voice.vibrato.toUpperCase()}
-                    </PanelButton>
-                    <PanelButton store={store} id="vibrato-menu" className="framed tiny">
-                      MENU
-                    </PanelButton>
+                    {/* Blank cap: the LED columns above show the mode. */}
+                    <PanelButton store={store} id="vibrato-mode" className="dark tiny vibrato-mode-button" />
                   </GroupBox>
                 </div>
               </div>
@@ -1191,16 +1421,20 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   WAVEFORM
                 </PanelButton>
                 <Legend className="dim">{lfo.destination ?? 'OFF'} ▿</Legend>
-                <span className="knob-cell">
-                  <Knob store={store} id="lfo-rate" className="small" />
-                  <Legend>RATE/<wbr />TIME</Legend>
-                  <Legend className={`dim red-tag ${lfo.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
+                {/* Reference: the two LFO knobs sit side by side (RATE/TIME
+                    left, MOD AMT right), not stacked. */}
+                <span className="lfo-knob-row">
+                  <span className="knob-cell">
+                    <Knob store={store} id="lfo-rate" className="small" />
+                    <Legend>RATE/<wbr />TIME</Legend>
+                    <Legend className={`dim red-tag ${lfo.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
+                  </span>
+                  <span className="knob-cell">
+                    <Knob store={store} id="lfo-mod-amt" className="small" />
+                    <Legend>MOD AMT</Legend>
+                  </span>
                 </span>
-                <span className="knob-cell">
-                  <Knob store={store} id="lfo-mod-amt" className="small" />
-                  <Legend>MOD AMT</Legend>
-                  <Legend className="dim">OSC PITCH · OSC CTRL · FILTER</Legend>
-                </span>
+                <Legend className="dim">OSC PITCH · OSC CTRL · FILTER</Legend>
               </GroupBox>
               <GroupBox title="Oscillators" className="osc-box">
                 <span className="button-cell">
@@ -1264,10 +1498,16 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <PanelButton store={store} id="amp-envelope" className="framed tiny" led="red">
                     ENVELOPE
                   </PanelButton>
+                  {/* VELOCITY ▿ = Shift + ENVELOPE cycles Off/1/2/3.
+                      Two-LED encoding (reference print "1 ● 2 ●"): level 1
+                      lights LED 1, level 2 lights LED 2, level 3 lights
+                      both, Off lights none. */}
+                  <Legend className="dim">VELOCITY ▿</Legend>
                   <span className="tiny-led-row" aria-hidden="true">
-                    <Legend>VEL</Legend>
-                    <Led color="red" on={envelope.velocity >= 1} />
-                    <Legend>{envelope.velocity}</Legend>
+                    <Legend>1</Legend>
+                    <Led color="red" on={envelope.velocity === 1 || envelope.velocity === 3} />
+                    <Legend>2</Legend>
+                    <Led color="red" on={envelope.velocity === 2 || envelope.velocity === 3} />
                   </span>
                 </GroupBox>
                 <GroupBox title="Unison" className="unison-box">
@@ -1297,6 +1537,11 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
  *  other two-word category names). */
 function synthCategoryLabel(category: string): string {
   return category === 'ShapeSine' ? 'SHAPE SINE' : category.toUpperCase()
+}
+
+/** Signed Osc Pitch readout: leading '+' for >= 0 (e.g. '+7', '-24', '+0'). */
+function fmtSigned(value: number): string {
+  return value >= 0 ? `+${value}` : `${value}`
 }
 
 /* -------------------------------------------------------------- Effects -- */
@@ -1434,9 +1679,14 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                   </Legend>
                 </span>
               </span>
+              {/* Reference: vertical light rocker at the box's right edge,
+                  ON ● printed above it. */}
               <span className="fx-on-cell">
-                <Legend>ON</Legend>
-                <PanelButton store={store} id="mod1-on" className="pill small blank" led="red" />
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Legend>ON</Legend>
+                  <Led color="red" on={chain.mod1.on} />
+                </span>
+                <PanelButton store={store} id="mod1-on" className="rocker fx-on-rocker" />
               </span>
             </GroupBox>
             {/* Cell placement mirrors the reference photo: TEMPO over the
@@ -1450,17 +1700,35 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="variation-cell delay-effects-cell">
                 <Legend className="dim">EFFECTS</Legend>
-                <SelectorLedGrid
-                  rows={selectorRows(
-                    [
-                      ['CHOR', 'FLAM'],
-                      ['VIBE', 'SPACE'],
-                      ['ENS', undefined],
-                    ],
-                    DELAY_EFFECT_POS,
-                    chain.delay.effect,
-                  )}
-                />
+                {/* Reference: round LEDs beside each type word here — the ◀▶
+                    arrow-pair grids belong only to Mod 1/2, Amp Sim and
+                    Reverb. Staggered two-column print, LEDs on the inner side. */}
+                <span className="led-word-cols" aria-hidden="true">
+                  <span className="led-word-col">
+                    <span className="tiny-led-row">
+                      <Legend>CHOR</Legend>
+                      <Led color="red" on={chain.delay.effect === 'Chorus'} />
+                    </span>
+                    <span className="tiny-led-row">
+                      <Legend>VIBE</Legend>
+                      <Led color="red" on={chain.delay.effect === 'Vibe'} />
+                    </span>
+                    <span className="tiny-led-row">
+                      <Legend>ENS</Legend>
+                      <Led color="red" on={chain.delay.effect === 'Ensemble'} />
+                    </span>
+                  </span>
+                  <span className="led-word-col">
+                    <span className="tiny-led-row">
+                      <Led color="red" on={chain.delay.effect === 'Flam'} />
+                      <Legend>FLAM</Legend>
+                    </span>
+                    <span className="tiny-led-row">
+                      <Led color="red" on={chain.delay.effect === 'Space'} />
+                      <Legend>SPACE</Legend>
+                    </span>
+                  </span>
+                </span>
                 <PanelButton store={store} id="delay-variation" className="dark tiny" />
                 <Legend className="dim">VARIATION ▿</Legend>
               </span>
@@ -1469,10 +1737,19 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>FEEDBACK</Legend>
               </span>
               <span className="variation-cell tap-box delay-tap-cell">
-                <Legend>TAP/SET ▾</Legend>
-                <PanelButton store={store} id="delay-tap" className="dark tiny" />
-                <PanelButton store={store} id="delay-analog" className="dark tiny" />
-                <Legend className="dim">ANALOG ▿</Legend>
+                <span className="tiny-led-row">
+                  {/* The hardware blinks this LED with the delay tempo; no
+                      blink state is modeled, so it is truthfully an unlit print. */}
+                  <Led color="red" on={false} />
+                  <Legend>TAP/SET ▾</Legend>
+                </span>
+                {/* ONE physical button (reference): TAP/SET on press, ANALOG
+                    on Shift + press — the ▿-marked print below. */}
+                <PanelButton store={store} id="delay-tap" className="dark tap-button" />
+                <span className="tiny-led-row">
+                  <Led color="red" on={chain.delay.analog} />
+                  <Legend className="dim">ANALOG ▿</Legend>
+                </span>
               </span>
               <span className="knob-cell delay-mix-cell">
                 <Knob store={store} id="delay-mix" className="small" />
@@ -1480,16 +1757,24 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="variation-cell delay-filter-cell">
                 <Legend className="dim">FILTER</Legend>
-                <SelectorLedGrid
-                  rows={selectorRows(
-                    [
-                      ['HP', 'BP'],
-                      ['LP', undefined],
-                    ],
-                    DELAY_FILTER_POS,
-                    chain.delay.filter,
-                  )}
-                />
+                <span className="led-word-cols" aria-hidden="true">
+                  <span className="led-word-col">
+                    <span className="tiny-led-row">
+                      <Legend>HP</Legend>
+                      <Led color="red" on={chain.delay.filter === 'High Pass'} />
+                    </span>
+                    <span className="tiny-led-row">
+                      <Legend>LP</Legend>
+                      <Led color="red" on={chain.delay.filter === 'Low Pass'} />
+                    </span>
+                  </span>
+                  <span className="led-word-col">
+                    <span className="tiny-led-row">
+                      <Led color="red" on={chain.delay.filter === 'Band Pass'} />
+                      <Legend>BP</Legend>
+                    </span>
+                  </span>
+                </span>
                 <PanelButton store={store} id="delay-filter" className="dark tiny" />
                 <Legend className="dim">PING PONG ▿</Legend>
               </span>
@@ -1526,19 +1811,37 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 </span>
               </span>
               <span className="fx-on-cell">
-                <Legend>ON</Legend>
-                <PanelButton store={store} id="mod2-on" className="pill small blank" led="red" />
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Legend>ON</Legend>
+                  <Led color="red" on={chain.mod2.on} />
+                </span>
+                <PanelButton store={store} id="mod2-on" className="rocker fx-on-rocker" />
               </span>
             </GroupBox>
             <GroupBox title="Comp" className="fx-box comp-box">
               <span className="knob-cell">
+                <span className="tiny-led-row" aria-hidden="true">
+                  {/* ACTIVE is the hardware's live gain-reduction indicator;
+                      no such signal state is modeled, so the LED is
+                      truthfully an unlit print. */}
+                  <Led color="red" on={false} />
+                  <Legend>ACTIVE</Legend>
+                </span>
                 <Knob store={store} id="comp-amount" className="small" />
                 <Legend>AMOUNT</Legend>
-                <Legend className="dim">ACTIVE · FAST ▿</Legend>
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Led color="red" on={chain.comp.fast} />
+                  <Legend>FAST</Legend>
+                </span>
               </span>
-              <span className="fx-on-cell">
-                <Legend>ON</Legend>
-                <PanelButton store={store} id="comp-on" className="pill small blank" led="red" />
+              <span className="fx-on-cell comp-on-cell">
+                <span className="comp-on-row">
+                  <span className="tiny-led-row" aria-hidden="true">
+                    <Legend>ON</Legend>
+                    <Led color="red" on={chain.comp.on} />
+                  </span>
+                  <PanelButton store={store} id="comp-on" className="dark tiny" />
+                </span>
                 <Legend className={`dim red-tag ${state.fxGlobal.comp ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
             </GroupBox>
@@ -1581,8 +1884,11 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>TREBLE</Legend>
               </span>
               <span className="fx-on-cell">
-                <Legend>ON</Legend>
-                <PanelButton store={store} id="amp-on" className="pill small blank" led="red" />
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Legend>ON</Legend>
+                  <Led color="red" on={chain.ampEq.on} />
+                </span>
+                <PanelButton store={store} id="amp-on" className="rocker fx-on-rocker" />
               </span>
             </GroupBox>
             <GroupBox title="Reverb" className="fx-box reverb-box">
@@ -1667,20 +1973,6 @@ const AMP_POS: SelectorPos = {
   'LP24 Filter': [1, 'right'],
   Twin: [2, 'left'],
   'HP24 Filter': [2, 'right'],
-}
-
-const DELAY_EFFECT_POS: SelectorPos = {
-  Chorus: [0, 'left'],
-  Flam: [0, 'right'],
-  Vibe: [1, 'left'],
-  Space: [1, 'right'],
-  Ensemble: [2, 'left'],
-}
-
-const DELAY_FILTER_POS: SelectorPos = {
-  'High Pass': [0, 'left'],
-  'Band Pass': [0, 'right'],
-  'Low Pass': [1, 'left'],
 }
 
 const REVERB_POS: SelectorPos = {

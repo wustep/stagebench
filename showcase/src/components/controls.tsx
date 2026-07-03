@@ -1,4 +1,4 @@
-import { memo, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { memo, useCallback, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { getControl } from '../model/hardware'
 import { PresentationStore, usePresentationToggle, usePresentationValue } from '../state/presentation'
 
@@ -60,14 +60,42 @@ function useContinuous(store: PresentationStore, id: string) {
     if (control.type === 'drawbar') delta = -delta
     // The pitch stick moves SIDE TO SIDE on the hardware (right = bend up).
     if (control.type === 'stick') delta = event.clientX - drag.startX
-    store.setValue(id, drag.startValue + (delta / 120) * range)
+    // Shift while dragging = fine adjust (quarter-speed).
+    const gain = event.shiftKey ? 0.25 : 1
+    store.setValue(id, drag.startValue + (delta / 200) * range * gain)
   }
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (dragState.current?.pointerId === event.pointerId) dragState.current = null
     if (control.springLoaded) store.setValue(id, control.initial ?? 0)
   }
 
+  // Scroll-wheel stepping. Attached as a NATIVE non-passive listener via a
+  // ref callback: React's synthetic onWheel rides the root's passive listener,
+  // so preventDefault there cannot reliably stop the page from scrolling.
+  const latest = useRef({ value, range })
+  latest.current = { value, range }
+  const wheelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return undefined
+      const onWheel = (event: WheelEvent) => {
+        event.preventDefault()
+        const { value: current, range: span } = latest.current
+        // Shift = fine adjust (single-unit steps).
+        const step = event.shiftKey ? 1 : Math.max(1, Math.round(span / 64))
+        store.setValue(id, current + -Math.sign(event.deltaY) * step)
+      }
+      node.addEventListener('wheel', onWheel, { passive: false })
+      return () => node.removeEventListener('wheel', onWheel)
+    },
+    [store, id],
+  )
+
   const sliderProps = {
+    // Spring-loaded controls (pitch stick) skip the wheel: a discrete wheel
+    // tick has no "release" gesture, so honoring it would honestly have to
+    // leave the bend parked off-center — the hardware stick can never rest
+    // there, so we skip wheel input rather than fake an auto-return.
+    ref: control.springLoaded ? undefined : wheelRef,
     role: 'slider' as const,
     tabIndex: 0,
     'aria-label': control.label,
@@ -106,7 +134,9 @@ function KnobScaleArc({ labels }: { labels: (string | null)[] }) {
           <g key={i}>
             <line x1={50 + sin * 54} y1={50 - cos * 54} x2={50 + sin * 62} y2={50 - cos * 62} />
             {label ? (
-              <text x={50 + sin * 80} y={50 - cos * 80}>
+              // Numerals hug the ticks (reference print) — a wider radius
+              // collides with neighboring knobs' arcs in the dense boxes.
+              <text x={50 + sin * 72} y={50 - cos * 72}>
                 {label}
               </text>
             ) : null}
@@ -226,18 +256,46 @@ export const PanelButton = memo(function PanelButton({ store, id, className, chi
     }
   }
 
-  const onPointerDown = holdAction
-    ? () => {
-        held.current = false
-        holdTimer.current = window.setTimeout(() => {
-          held.current = true
-          holdTimer.current = null
-          holdAction()
-        }, HOLD_MS)
+  const startHold = () => {
+    held.current = false
+    holdTimer.current = window.setTimeout(() => {
+      held.current = true
+      holdTimer.current = null
+      holdAction?.()
+    }, HOLD_MS)
+  }
+
+  const onPointerDown = holdAction ? startHold : undefined
+
+  const onPointerUp = holdAction ? clearHoldTimer : undefined
+
+  // Keyboard hold parity: holding Enter/Space for HOLD_MS performs the same
+  // SOLO gesture as a pointer hold. preventDefault suppresses the browser's
+  // native key-activation click (Enter fires it on keydown, before the hold
+  // could elapse); a quick press toggles from keyup instead.
+  const onKeyDown = holdAction
+    ? (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        if (event.repeat) return
+        startHold()
       }
     : undefined
 
-  const onPointerUp = holdAction ? clearHoldTimer : undefined
+  const onKeyUp = holdAction
+    ? (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        if (held.current) {
+          // The hold already fired the solo action; swallow the release.
+          held.current = false
+          return
+        }
+        if (holdTimer.current !== null) {
+          clearHoldTimer()
+          store.toggle(id)
+        }
+      }
+    : undefined
 
   const onClick = () => {
     // A hold already fired the solo action; suppress the trailing click toggle.
@@ -260,6 +318,9 @@ export const PanelButton = memo(function PanelButton({ store, id, className, chi
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
+      onKeyDown={onKeyDown}
+      onKeyUp={onKeyUp}
+      onBlur={holdAction ? clearHoldTimer : undefined}
       onClick={onClick}
     >
       {led !== 'none' && <span className={`btn-led led-${led}`} data-on={latching && lit ? 'true' : 'false'} aria-hidden="true" />}

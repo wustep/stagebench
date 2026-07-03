@@ -1,5 +1,5 @@
-import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, fireEvent, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { HARDWARE_CONTROLS } from '../model/hardware'
 import { renderApp } from '../test/renderApp'
 
@@ -69,6 +69,67 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     expect(Number(stick.getAttribute('aria-valuenow'))).toBeGreaterThan(0)
     fireEvent.pointerUp(stick, { pointerId: 9, clientX: 90, clientY: 50 })
     expect(stick).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('Shift-drag makes fine (quarter-gain) adjustments at the 200px full-range resolution', () => {
+    renderApp()
+    const wheel = screen.getByRole('slider', { name: 'Mod Wheel' })
+    expect(wheel).toHaveAttribute('aria-valuenow', '0')
+    // 40px of the 200px full-range travel at 0.25 shift gain: 40/200 * 127 * 0.25 ≈ 6.
+    fireEvent.pointerDown(wheel, { pointerId: 8, clientY: 100 })
+    fireEvent.pointerMove(wheel, { pointerId: 8, clientY: 60, shiftKey: true })
+    expect(wheel).toHaveAttribute('aria-valuenow', '6')
+    fireEvent.pointerUp(wheel, { pointerId: 8, clientY: 60 })
+    // Same 40px without Shift: full gain, 6 + 40/200 * 127 ≈ 31.
+    fireEvent.pointerDown(wheel, { pointerId: 8, clientY: 100 })
+    fireEvent.pointerMove(wheel, { pointerId: 8, clientY: 60 })
+    expect(wheel).toHaveAttribute('aria-valuenow', '31')
+    fireEvent.pointerUp(wheel, { pointerId: 8, clientY: 60 })
+  })
+
+  it('continuous controls step with the scroll wheel; Shift steps single units', () => {
+    renderApp()
+    const knob = screen.getByRole('slider', { name: 'Master Level' })
+    const start = Number(knob.getAttribute('aria-valuenow'))
+    fireEvent.wheel(knob, { deltaY: -120 }) // up = increase, step = round(127/64) = 2
+    expect(Number(knob.getAttribute('aria-valuenow'))).toBe(start + 2)
+    fireEvent.wheel(knob, { deltaY: -120, shiftKey: true }) // fine: single unit
+    expect(Number(knob.getAttribute('aria-valuenow'))).toBe(start + 3)
+    fireEvent.wheel(knob, { deltaY: 120 })
+    expect(Number(knob.getAttribute('aria-valuenow'))).toBe(start + 1)
+
+    // The spring-loaded pitch stick deliberately ignores the wheel: a wheel
+    // tick has no release gesture to spring back from.
+    const stick = screen.getByRole('slider', { name: 'Pitch Stick' })
+    fireEvent.wheel(stick, { deltaY: -120 })
+    expect(stick).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('holding Enter on a section ON button performs SOLO; a quick key tap still toggles', () => {
+    renderApp()
+    vi.useFakeTimers()
+    try {
+      const organOn = screen.getByRole('button', { name: 'Organ Section On' })
+      const pianoOn = screen.getByRole('button', { name: 'Piano Section On' })
+      expect(pianoOn).toHaveAttribute('aria-pressed', 'true')
+      expect(organOn).toHaveAttribute('aria-pressed', 'false')
+
+      // Hold for HOLD_MS: SOLO Organ (manual p. 18) — the other sections turn
+      // off and the release does NOT toggle the button back off.
+      fireEvent.keyDown(organOn, { key: 'Enter' })
+      act(() => vi.advanceTimersByTime(500))
+      fireEvent.keyUp(organOn, { key: 'Enter' })
+      expect(organOn).toHaveAttribute('aria-pressed', 'true')
+      expect(pianoOn).toHaveAttribute('aria-pressed', 'false')
+
+      // Quick Space tap: a plain toggle, no solo (organ stays on).
+      fireEvent.keyDown(pianoOn, { key: ' ' })
+      fireEvent.keyUp(pianoOn, { key: ' ' })
+      expect(pianoOn).toHaveAttribute('aria-pressed', 'true')
+      expect(organOn).toHaveAttribute('aria-pressed', 'true')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('latching buttons toggle their pressed state and light', () => {
@@ -165,16 +226,18 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
   })
 
   it('the OLED content does not react to decorative program controls', () => {
-    // Program buttons, Store and the dial belong to the functional Programs
-    // cluster now — the still-decorative controls are the morph/preset/menu scope.
+    // Program buttons, Store, the dial and Prog View (display view modes,
+    // manual p. 42) belong to the functional Programs cluster now — the
+    // still-decorative controls are the morph-A.T./preset/menu scope.
+    // Section Edit is functional only through its LAYER INIT Shift pairing
+    // (manual p. 43); its plain press stays truthfully inert.
     renderApp()
     const oled = screen.getByTestId('oled-program')
     const before = oled.textContent
     fireEvent.click(screen.getByRole('button', { name: 'Morph Assign Aftertouch' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Prog View' }))
     fireEvent.click(screen.getByRole('button', { name: 'Preset Library Piano' }))
     fireEvent.click(screen.getByRole('button', { name: 'Section Edit' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Layer Init' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Monitor/Copy Paste' }))
     expect(oled.textContent).toBe(before)
   })
 })

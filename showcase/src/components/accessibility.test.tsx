@@ -1,6 +1,8 @@
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import App from '../App'
 import { HARDWARE_CONTROLS } from '../model/hardware'
+import { fakeAudioBoundary, fakeMidiBoundary, fakeStorageBoundary, FakeMidiAccess } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
 
 function controlElement(id: string): HTMLElement {
@@ -114,9 +116,40 @@ describe('accessibility.controls', () => {
     }
   })
 
-  it('status messages live in an aria-live region (no hidden state changes)', () => {
+  it('only engine and MIDI status announce politely; pedal lines stay quiet during play', () => {
     renderApp()
+    // The strip itself is NOT a live region — otherwise every pedal/ctrl-pedal
+    // move would be announced mid-performance.
     const strip = document.querySelector('.status-strip')
-    expect(strip?.getAttribute('aria-live')).toBe('polite')
+    expect(strip?.getAttribute('aria-live')).toBeNull()
+    expect(screen.getByTestId('engine-status').getAttribute('aria-live')).toBe('polite')
+    expect(screen.getByTestId('midi-status').getAttribute('aria-live')).toBe('polite')
+    expect(screen.getByTestId('pedal-status').getAttribute('aria-live')).toBeNull()
+    expect(screen.getByTestId('ctrl-pedal-status').getAttribute('aria-live')).toBeNull()
+  })
+
+  it('a failed engine start stays visible in the default minimal chrome', async () => {
+    const setup = fakeAudioBoundary()
+    render(
+      <App
+        audioBoundary={{ ...setup.boundary, createContext: () => { throw new Error('no audio device') } }}
+        midiBoundary={fakeMidiBoundary(new FakeMidiAccess())}
+        storageBoundary={fakeStorageBoundary()}
+      />,
+    )
+    const strip = screen.getByTestId('status-strip')
+    expect(strip.className).toContain('chrome-minimal')
+    // Trigger the lazy engine start through a real key gesture.
+    const key = document.querySelector('[data-control-id="key-60"]')!
+    fireEvent.pointerDown(key, { pointerId: 1 })
+    fireEvent.pointerUp(key, { pointerId: 1 })
+    await waitFor(() => {
+      expect(screen.getByTestId('engine-status').getAttribute('data-status')).toBe('error')
+    })
+    // The degraded engine line escapes the collapsed (display: none) info
+    // block and renders directly in the always-visible strip.
+    const engineLine = screen.getByTestId('engine-status')
+    expect(engineLine.closest('.chrome-info')).toBeNull()
+    expect(strip.contains(engineLine)).toBe(true)
   })
 })

@@ -142,6 +142,8 @@ export class PresentationStore {
           return Math.round(((state.synth.arp.range - 1) / 3) * 127)
         case 'synth-dial-1': {
           const synth = state.synth.layers[state.synth.focusedLayer]
+          // Osc Pitch edit (manual p. 28): dial 1 spans -24..+24 semitones.
+          if (state.synthOscPitchEdit) return Math.round(((synth.oscPitch.semis + 24) / 48) * 127)
           if (state.synthVibratoEdit) return synth.voice.vibratoRate
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.attack
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.attack
@@ -150,6 +152,8 @@ export class PresentationStore {
         }
         case 'synth-dial-2': {
           const synth = state.synth.layers[state.synth.focusedLayer]
+          // Osc Pitch edit (manual p. 28): dial 2 spans ±50 cents fine tune.
+          if (state.synthOscPitchEdit) return Math.round(((synth.oscPitch.cents + 50) / 100) * 127)
           if (state.synthVibratoEdit) return synth.voice.vibratoAmount
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.decay
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.decay
@@ -272,6 +276,8 @@ export class PresentationStore {
           return state.synthEnvEdit === 'osc'
         case 'vibrato-menu':
           return state.synthVibratoEdit
+        case 'osc-pitch-smp':
+          return state.synthOscPitchEdit
         case 'filter-on':
           return state.synth.layers[state.synth.focusedLayer].filter.on
         case 'arp-run':
@@ -310,8 +316,6 @@ export class PresentationStore {
           return chain.mod2.on
         case 'delay-on':
           return chain.delay.on
-        case 'delay-analog':
-          return chain.delay.analog
         case 'amp-on':
           return chain.ampEq.on
         case 'comp-on':
@@ -479,6 +483,11 @@ export class PresentationStore {
           return
         case 'synth-dial-1': {
           const state = store.getState()
+          // Osc Pitch edit (manual p. 28): dial 1 = pitch -24..+24 semitones.
+          if (state.synthOscPitchEdit) {
+            store.setSynthOscPitchSemis(Math.round((clamped / 127) * 48) - 24)
+            return
+          }
           if (state.synthVibratoEdit) {
             store.setSynthVibratoRate(clamped)
             return
@@ -491,6 +500,11 @@ export class PresentationStore {
         }
         case 'synth-dial-2': {
           const state = store.getState()
+          // Osc Pitch edit (manual p. 28): dial 2 = fine tune ±50 cents.
+          if (state.synthOscPitchEdit) {
+            store.setSynthOscPitchCents(Math.round((clamped / 127) * 100) - 50)
+            return
+          }
           if (state.synthVibratoEdit) {
             store.setSynthVibratoAmount(clamped)
             return
@@ -673,16 +687,25 @@ export class PresentationStore {
           else store.shiftSynthOctave(store.getState().synth.focusedLayer, 1)
           return
         case 'waveform-select':
-          store.cycleSynthWaveformCategory()
+          // SOUND INIT = Shift + Waveform (manual p. 37: "Pressing SOUND
+          // INIT (Shift+Waveform)") — the panel's one red-framed button.
+          if (shift) store.synthSoundInit()
+          else store.cycleSynthWaveformCategory()
           return
-        case 'sound-init':
-          store.synthSoundInit()
+        case 'osc-pitch-smp':
+          // PITCH/SMP (manual p. 28 "Pitch and Fine Tune"): latches the
+          // Synth OLED dials 1/2 onto Osc Pitch semitones / Fine Tune cents,
+          // mirroring the envelope/vibrato-menu dial-repurposing pattern.
+          store.setSynthOscPitchEdit(!store.getState().synthOscPitchEdit)
           return
         case 'synth-mode':
           store.cycleSynthLayerMode()
           return
         case 'amp-envelope':
-          store.setSynthEnvEdit(store.getState().synthEnvEdit === 'amp' ? null : 'amp')
+          // Shift + AMP ENVELOPE = VELOCITY (the panel's "VELOCITY ▿ 1·2"
+          // print under this button): cycles Off/1/2/3, shown on the 1/2 LEDs.
+          if (shift) store.cycleSynthAmpVelocity()
+          else store.setSynthEnvEdit(store.getState().synthEnvEdit === 'amp' ? null : 'amp')
           return
         case 'filter-on':
           store.toggleSynthFilterOn()
@@ -741,9 +764,22 @@ export class PresentationStore {
         case 'kb-hold':
           store.toggleKbHold()
           return
-        case 'piano-type':
-          store.cyclePianoType()
+        case 'piano-type': {
+          // INFO = Shift + Piano Select (manual p. 25: "Pressing INFO
+          // (Shift + Piano Select) displays some additional info about the
+          // currently selected model"), printed under the one button.
+          if (shift) {
+            const state = store.getState()
+            const layer = state.layers[state.focusedLayer]
+            const spec: InstrumentSpec | undefined = instrumentsOfType(layer.type)[layer.model]
+            store.setLastEdit(
+              spec
+                ? `${spec.name}: ${spec.velocityLayers} vel layer(s), ${spec.zones.length} files — ${spec.license}`
+                : `No ${layer.type} model bundled`,
+            )
+          } else store.cyclePianoType()
           return
+        }
         case 'piano-timbre':
           store.cycleTimbre()
           return
@@ -768,17 +804,6 @@ export class PresentationStore {
           if (shift) store.cycleLayerZone('piano', store.getState().focusedLayer, 1)
           else store.shiftOctave(store.getState().focusedLayer, 1)
           return
-        case 'piano-info': {
-          const state = store.getState()
-          const layer = state.layers[state.focusedLayer]
-          const spec: InstrumentSpec | undefined = instrumentsOfType(layer.type)[layer.model]
-          store.setLastEdit(
-            spec
-              ? `${spec.name}: ${spec.velocityLayers} vel layer(s), ${spec.zones.length} files — ${spec.license}`
-              : `No ${layer.type} model bundled`,
-          )
-          return
-        }
         case 'panic':
           wiring.controller.panic()
           store.setLastEdit('PANIC — all notes off')
@@ -798,10 +823,27 @@ export class PresentationStore {
           else store.shiftProgramPage(1)
           return
         case 'live-mode':
-          store.toggleLiveMode()
+          // NUM PAD = Shift + Live Mode (manual p. 44): two-digit page.slot
+          // entry on the PROGRAM 1-8 buttons. Plain press toggles Live Mode.
+          if (shift) store.toggleNumPad()
+          else store.toggleLiveMode()
+          return
+        case 'prog-view':
+          // PRESET NAME = Shift + Prog View (manual p. 42): layer lines show
+          // the underlying sound source. Plain press cycles the view modes.
+          if (shift) store.togglePresetName()
+          else store.cycleProgView()
           return
         case 'solo-undo':
           store.undoProgramChange()
+          return
+        case 'section-edit':
+          // LAYER INIT = Shift + Section Edit (manual p. 43): opens the init
+          // screen on the Program OLED (PROGRAM 1-4 = soft buttons). The
+          // plain press stays truthfully inert — the hardware's hold/sticky
+          // Section Edit mode (edits apply to all Layers of the Section) is
+          // not modeled, so the button moves and changes nothing.
+          if (shift) store.setLayerInitEdit(!store.getState().layerInitEdit)
           return
         case 'layer-scene':
           store.toggleLayerScene()
@@ -865,6 +907,16 @@ export class PresentationStore {
             if (button === 0) store.toggleSplitPointActive()
             else if (button === 1) store.cycleSplitXf()
             else store.setLastEdit('Split Edit — PROG 1: on/off · PROG 2: xfade')
+            return
+          }
+          if (store.getState().layerInitEdit) {
+            // Layer Init screen (manual p. 43): PROGRAM 1-4 are the four
+            // soft buttons — All / Org AB / Pno (focused) / Syn (focused).
+            if (button === 0) store.layerInitAll()
+            else if (button === 1) store.layerInitOrganAB()
+            else if (button === 2) store.layerInitPiano()
+            else if (button === 3) store.layerInitSynth()
+            else store.setLastEdit('Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn')
             return
           }
           store.selectProgramButton(button)
@@ -938,10 +990,14 @@ export class PresentationStore {
         case 'delay-filter':
           store.cycleDelayFilter()
           return
-        case 'delay-analog':
-          store.toggleDelayAnalog()
-          return
         case 'delay-tap': {
+          // ONE physical TAP/SET button (reference photo): tap tempo on
+          // press, ANALOG mode on Shift + press (the ▿-marked panel print
+          // below the button — the panel's Shift-function convention).
+          if (shift) {
+            store.toggleDelayAnalog()
+            return
+          }
           const time = this.now()
           this.tapTimes = this.tapTimes.filter((t) => time - t < 3000)
           this.tapTimes.push(time)
@@ -976,6 +1032,8 @@ export class PresentationStore {
         case 'shift':
           // Shift/Exit first aborts an ongoing Store or naming step (manual p. 13)…
           if (store.cancelStoreFlow()) return
+          // …then clears a pending Num Pad page digit (manual p. 44)…
+          if (store.clearNumPadPending()) return
           // …then exits split-edit mode…
           if (store.getState().splitEdit) {
             store.setSplitEdit(false)
@@ -987,6 +1045,10 @@ export class PresentationStore {
           }
           if (store.getState().transposeEdit) {
             store.setTransposeEdit(false)
+            return
+          }
+          if (store.getState().layerInitEdit) {
+            store.setLayerInitEdit(false)
             return
           }
           // …and dropping Shift closes the numeric list view and the piano

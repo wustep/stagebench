@@ -46,6 +46,32 @@ describe('ui.section-zoom', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
   })
 
+  it('restores focus to the opener when the overlay closes', () => {
+    renderApp()
+    const inspect = screen.getByRole('button', { name: 'Inspect Organ section' })
+    inspect.focus()
+    fireEvent.click(inspect)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(document.activeElement).toBe(inspect)
+  })
+
+  it('contains Tab focus inside the dialog, wrapping at the first/last focusable', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Organ section' }))
+    const dialog = screen.getByRole('dialog', { name: 'Organ section magnified' })
+    const close = screen.getByRole('button', { name: 'Close' })
+    // Initial focus sits on the close button — the dialog's first focusable.
+    expect(document.activeElement).toBe(close)
+    // Shift+Tab from the first focusable wraps to the last (inside the dialog).
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(dialog.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).not.toBe(close)
+    // Tab from the last focusable wraps back to the first.
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(close)
+  })
+
   it('the default DOM without the overlay is unchanged (chassis regression assertions)', () => {
     renderApp()
     // Open and close the overlay first — its presence must not leave marks.

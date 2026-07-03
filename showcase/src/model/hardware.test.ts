@@ -36,20 +36,22 @@ describe('visual.control-inventory — normalized hardware model', () => {
     expect(getControl('fx-focus-synth').decorative).toBe(false)
     expect(getControl('organ-preset').decorative).toBe(true)
     // Synth scope: section on/off, three layers (level/enable/octave),
-    // waveform selection (category button + dial 2), Osc Ctrl and the
-    // Amp/Filter/Osc Envelope buttons (plus dials 1/2/3 while one is the
-    // edit target), the filter (type/tracking/drive/on/freq/res/env amt,
-    // now including the optional LP M/LP+HP types on the same cycle), the
-    // oscillator envelope (amount + Env To Pitch), the LFO (waveform/rate/
-    // mod amt/destination via dial 3/clock sync), voice modes (mode/
-    // priority/glide/unison/vibrato, now including the optional Delayed/
-    // Pedal vibrato modes on the same cycle), the VIBRATO MENU button (spec
-    // voice.vibrato.menu: latches dials 1/2 onto Rate/Amount editing), the
-    // arpeggiator/gate (run/mode/direction/rate/range/hold via KB Hold), and
-    // the optional Sound Init and Synth Mode (Analog<->Samples cycle) are
-    // all functional now. Only Synth Mode's Extern position stays
-    // spec-excluded (unreachable from the button, which cycles only the two
-    // real modes).
+    // waveform selection (category button + dial 2; SOUND INIT is that same
+    // button's Shift pairing, manual p. 37 — no separate control), Osc Ctrl
+    // and the Amp/Filter/Osc Envelope buttons (plus dials 1/2/3 while one is
+    // the edit target), the PITCH/SMP button (manual p. 28 Osc Pitch view:
+    // latches dials 1/2 onto pitch/fine-tune editing), the filter
+    // (type/tracking/drive/on/freq/res/env amt, now including the optional
+    // LP M/LP+HP types on the same cycle), the oscillator envelope (amount +
+    // Env To Pitch), the LFO (waveform/rate/mod amt/destination via dial
+    // 3/clock sync), voice modes (mode/priority/glide/unison/vibrato, now
+    // including the optional Delayed/Pedal vibrato modes on the same cycle),
+    // the VIBRATO MENU button (spec voice.vibrato.menu: latches dials 1/2
+    // onto Rate/Amount editing), the arpeggiator/gate (run/mode/direction/
+    // rate/range/hold via KB Hold), and the optional Synth Mode
+    // (Analog<->Samples cycle) are all functional now. Only Synth Mode's
+    // Extern position stays spec-excluded (unreachable from the button,
+    // which cycles only the two real modes).
     const synthFunctional = new Set([
       'synth-on',
       'synth-level-a',
@@ -61,7 +63,7 @@ describe('visual.control-inventory — normalized hardware model', () => {
       'synth-octave-down',
       'synth-octave-up',
       'waveform-select',
-      'sound-init',
+      'osc-pitch-smp',
       'synth-mode',
       'synth-dial-1',
       'synth-dial-2',
@@ -96,15 +98,22 @@ describe('visual.control-inventory — normalized hardware model', () => {
     expect(getControl('panic').decorative).toBe(false)
     expect(getControl('perf-master-level').decorative).toBe(false)
     // The Programs cluster (32 slots + 8 Live, store flows, navigation),
-    // Layer Scenes and Split are functional; morphs, presets and the
+    // Layer Scenes, Split, Prog View (display view modes + Preset Name,
+    // manual p. 42) and Section Edit (functional through its LAYER INIT
+    // Shift pairing, manual p. 43 — there is no separate layer-init button;
+    // the plain press is truthfully inert) are functional; presets and the
     // spec-excluded menus remain decorative.
-    for (const id of ['store', 'store-as', 'program-dial', 'page-left', 'page-right', 'live-mode', 'solo-undo', 'program-1', 'program-8', 'layer-scene', 'split-onset', 'mstclk-tap', 'transpose-onset', 'morph-wheel', 'morph-ctrlped', 'perf-mod-wheel']) {
+    for (const id of ['store', 'store-as', 'program-dial', 'page-left', 'page-right', 'live-mode', 'solo-undo', 'program-1', 'program-8', 'layer-scene', 'split-onset', 'mstclk-tap', 'transpose-onset', 'morph-wheel', 'morph-ctrlped', 'perf-mod-wheel', 'prog-view', 'section-edit']) {
       expect(getControl(id).decorative, id).toBe(false)
     }
     // morph-at stays decorative: aftertouch is spec-excluded (no browser aftertouch).
-    for (const id of ['morph-at', 'preset-piano', 'prog-view', 'section-edit', 'layer-init', 'mon-copy']) {
+    for (const id of ['morph-at', 'preset-piano', 'mon-copy']) {
       expect(getControl(id).decorative, id).toBe(true)
     }
+    // The rail has no layer-init button of its own (the reference photo's
+    // outlined box holds SOLO/UNDO, SECTION EDIT with the LAYER INIT ▽
+    // shift-legend below it, and MON/COPY).
+    expect(HARDWARE_CONTROLS.some((c) => c.id === 'layer-init')).toBe(false)
   })
 
   it('orders the six sections with the measured width fractions', () => {
@@ -131,7 +140,9 @@ describe('visual.control-inventory — normalized hardware model', () => {
     expect(perf.find((c) => c.id === 'perf-pitch-stick')?.type).toBe('stick')
     expect(perf.find((c) => c.id === 'perf-pitch-stick')?.springLoaded).toBe(true)
     expect(perf.find((c) => c.id === 'perf-mod-wheel')?.type).toBe('wheel')
-    expect(perf.filter((c) => c.group === 'Rotary Speaker')).toHaveLength(5)
+    // Drive, source, stop mode, speed — MORPH is an indicator LED, not a
+    // button (manual p. 53), so it is not part of the control inventory.
+    expect(perf.filter((c) => c.group === 'Rotary Speaker')).toHaveLength(4)
   })
 
   it('has exactly nine drawbars, all owned by the organ section', () => {
@@ -188,7 +199,10 @@ describe('visual.control-inventory — normalized hardware model', () => {
       expect(effects.some((c) => c.group === group), `missing effects group ${group}`).toBe(true)
     }
     expect(effects.filter((c) => c.group === 'Amp Sim/EQ' && c.type === 'knob')).toHaveLength(5)
-    expect(effects.filter((c) => c.group === 'Delay')).toHaveLength(8)
+    // 7 Delay controls: tempo/variation/feedback/tap/filter/mix/on — ANALOG
+    // has no button of its own; it is Shift + Tap/Set (reference photo: one
+    // button between the ● TAP/SET ▾ and ● ANALOG ▿ prints).
+    expect(effects.filter((c) => c.group === 'Delay')).toHaveLength(7)
     expect(effects.some((c) => c.id === 'all-fx-off')).toBe(true)
   })
 

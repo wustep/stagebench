@@ -86,13 +86,15 @@ body {
   gap: 0.25cqw;
 }
 
-/* "HANDMADE IN SWEDEN..." vertical print on the bare red right margin. */
+/* "HANDMADE IN SWEDEN..." vertical print on the bare red right margin:
+   reads bottom-to-top (vertical-rl rotated 180°), anchored at the panel's
+   bottom-right like the hardware print. */
 .made-in {
   position: absolute;
-  top: 50%;
+  bottom: 0.45cqw;
   right: 1.6cqw;
-  transform: translateY(-50%);
   writing-mode: vertical-rl;
+  transform: rotate(180deg);
   font-size: 0.3cqw;
   font-weight: 600;
   letter-spacing: 0.06cqw;
@@ -224,8 +226,10 @@ body {
 }
 
 .key:focus-visible {
-  outline: 0.2cqw solid #57b7ff;
-  outline-offset: -0.2cqw;
+  /* max() floors the cqw ring so it never thins below visibility at small
+     container widths (WCAG focus-appearance). */
+  outline: max(2px, 0.2cqw) solid #57b7ff;
+  outline-offset: calc(-1 * max(2px, 0.2cqw));
   z-index: 3;
 }
 
@@ -336,8 +340,11 @@ body {
 }
 
 /* Section-inspect/zoom affordance (narrow-legend-legibility): the plate
-   title doubles as a real button, visually identical to the plain span. */
-.plate-title-button {
+   title doubles as a real button, visually identical to the plain span.
+   .legend-button gives a printed shift-legend the same treatment (the
+   clickable LAYER INIT ▽ print below Section Edit). */
+.plate-title-button,
+.legend-button {
   appearance: none;
   background: none;
   border: none;
@@ -348,8 +355,9 @@ body {
   font-family: inherit;
 }
 
-.plate-title-button:focus-visible {
-  outline: 0.15cqw solid #57b7ff;
+.plate-title-button:focus-visible,
+.legend-button:focus-visible {
+  outline: max(2px, 0.15cqw) solid #57b7ff;
   outline-offset: 0.15cqw;
   border-radius: 0.1cqw;
 }
@@ -528,12 +536,16 @@ body {
   text-align: left;
 }
 
-/* Variation button + printed bracket legend share one compact row. */
+/* Variation button + printed bracket legend share one compact row; the
+   legend wraps under the button when the box leaves no side-by-side slack. */
 .variation-row {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
-  gap: 0.14cqw;
+  gap: 0.08cqw 0.14cqw;
   min-width: 0;
+  max-width: 100%;
 }
 
 .variation-row .panel-button.tiny {
@@ -551,11 +563,11 @@ body {
 }
 
 .fx-box .sel-row {
-  gap: 0.1cqw;
+  gap: 0.08cqw;
 }
 
 .fx-box .sel-row .legend {
-  font-size: 0.24cqw;
+  font-size: 0.23cqw;
 }
 
 .fx-box .sel-leds .led {
@@ -739,14 +751,16 @@ body {
   background: linear-gradient(180deg, #c8353c 0%, #8f1f27 100%);
 }
 
-/* Reference: the synth menu/select buttons are BLACK caps recessed in a
-   dark-red frame (only ARP RUN is a genuinely red cap). */
+/* Reference: the synth menu/select buttons are BLACK caps inside a THIN
+   dark-red frame (only ARP RUN is a genuinely red cap). The frame is an
+   outline ring — at small sizes a thick red pad would read as a red pill. */
 .panel-button.framed {
-  background: linear-gradient(180deg, #8a2b35 0%, #641b24 100%);
-  padding: 0.14cqw;
+  background: linear-gradient(180deg, #23262b 0%, #131519 100%);
+  padding: 0.06cqw;
   box-shadow:
-    inset 0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.5),
-    0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.35);
+    0 0 0 0.07cqw #71222b,
+    inset 0 0.05cqw 0.08cqw rgba(255, 255, 255, 0.12),
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.4);
 }
 
 .deck-section[data-section='program'] .panel-button.red.small {
@@ -1070,7 +1084,7 @@ body {
 
 [role='slider']:focus-visible,
 .panel-button:focus-visible {
-  outline: 0.22cqw solid #57b7ff;
+  outline: max(2px, 0.22cqw) solid #57b7ff;
   outline-offset: 0.1cqw;
   z-index: 4;
 }
@@ -1269,18 +1283,18 @@ body {
 /* Reference: the Rotary Speaker strip is a light-outlined box printed
    directly on the RED chassis (no dark panel fill). */
 .rotary-strip {
-  flex: 1;
-  min-height: 0;
+  /* Sized to its content: the reference outline closes just below MORPH,
+     leaving bare red chassis beneath (it never reaches the plate bottom). */
+  flex: none;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.16cqw;
+  gap: 0.12cqw;
   background: none;
-  border-radius: 0.3cqw 0.3cqw 0 0;
+  border-radius: 0.3cqw;
   border: 0.07cqw solid var(--panel-line);
-  border-bottom: none;
-  padding: 0.25cqw 0.2cqw;
+  padding: 0.2cqw 0.16cqw 0.24cqw;
 }
 
 /* Light title tab with dark text, like every section header (reference). */
@@ -1392,9 +1406,10 @@ body {
   gap: 0.1cqw;
 }
 
+/* The octave shift button pair abuts (reference photo: no gap). */
 .octave-buttons {
   display: inline-flex;
-  gap: 0.2cqw;
+  gap: 0;
 }
 
 .kb-zone {
@@ -1503,6 +1518,14 @@ body {
 .drawbar-name {
   font-size: 0.3cqw;
   color: var(--legend-dim);
+}
+
+/* Second printed register row under each drawbar name (reference photo);
+   white-space preserves the blank STR4 cell's row height. */
+.drawbar-register {
+  font-size: 0.26cqw;
+  line-height: 1;
+  white-space: pre;
 }
 
 .drawbar-row {
@@ -1662,6 +1685,13 @@ body {
 .deck-section[data-section='piano'] .acoustics-cell .panel-button.dark.small {
   min-width: 1.05cqw;
   min-height: 0.62cqw;
+}
+
+/* SOFT REL / STRING RES / PED NOISE ▽ each render on one line (reference):
+   nowrap plus one size notch down from the piano tiny-led-row's 0.24cqw. */
+.deck-section[data-section='piano'] .acoustics-cell .tiny-led-row .legend {
+  white-space: nowrap;
+  font-size: 0.22cqw;
 }
 
 /* Reference: TIMBRE is a tall dark rocker LEFT of the printed label column
@@ -1849,8 +1879,9 @@ body {
   color: #4d5464;
 }
 
+/* Reference: the PRESET LIBRARY title is printed in RED on the light band. */
 .deck-section[data-section='program'] .preset-box .group-box-title {
-  color: #232a38;
+  color: #b23230;
   background: linear-gradient(180deg, #ccd0da 0%, #c9cdd8 100%);
 }
 
@@ -1893,6 +1924,14 @@ body {
 .morph-buttons {
   display: flex;
   gap: 0.1cqw;
+  /* Blank caps have no print to size them: stretch the three buttons
+     across the box like the reference. */
+  align-self: stretch;
+  padding: 0 0.15cqw;
+}
+
+.morph-buttons .panel-button {
+  flex: 1;
 }
 
 .morph-box.group-box {
@@ -1911,10 +1950,70 @@ body {
   min-width: 0;
 }
 
+/* Printed LED + label rows above the Morph Assign / Preset Library blank
+   caps (reference). */
+.morph-legend-row,
+.preset-legend-row {
+  display: flex;
+  justify-content: space-between;
+  align-self: stretch;
+  padding: 0 0.08cqw;
+  gap: 0.12cqw;
+  min-width: 0;
+}
+
+.morph-legend-row .tiny-led-row,
+.preset-legend-row .tiny-led-row {
+  gap: 0.08cqw;
+  min-width: 0;
+}
+
+.program-top-row .morph-legend-row .legend,
+.preset-legend-row .legend {
+  font-size: 0.22cqw;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.morph-legend-row .led,
+.preset-legend-row .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
+}
+
+/* Centered legend between short flanking horizontal rules (reference:
+   —— CLEAR MORPH —— / —— SINGLE LAYER ——). */
+.legend.legend-rule {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15cqw;
+  white-space: nowrap;
+}
+
+.legend.legend-rule::before,
+.legend.legend-rule::after {
+  content: '';
+  flex: none;
+  width: 0.55cqw;
+  height: 0.06cqw;
+  border-radius: 0.05cqw;
+  background: currentColor;
+  opacity: 0.75;
+}
+
+/* Three split-point LEDs (Low/Mid/High) above the SPLIT button. */
+.split-leds {
+  display: inline-flex;
+  gap: 0.3cqw;
+}
+
 .program-top-row {
   display: flex;
   gap: 0.15cqw;
   justify-content: space-between;
+  /* Each box hugs its content (reference: MORPH ASSIGN closes right under
+     CLEAR MORPH; the boxes never stretch to a shared height). */
+  align-items: flex-start;
 }
 
 /* Share the row's width so no box clips its button caps; Morph Assign
@@ -1923,22 +2022,42 @@ body {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  padding-top: 0.6cqw;
+}
+
+/* Beat the program-strip density rule's specificity: the printed LED rows
+   are the first content and must clear the light heading band. */
+.deck-section[data-section='program'] .program-top-row .group-box {
+  padding-top: 0.62cqw;
+  gap: 0.08cqw;
 }
 
 /* Light full-width heading bands, like the reference's MORPH ASSIGN /
    SPLIT / MST CLK / TRANSP tabs. */
+/* Reference: the four top-row titles are FULLY-ROUNDED light lozenges
+   centered on each box's top edge (not full-width bands). */
 .program-top-row .group-box > .group-box-title {
-  top: 0;
-  left: 0;
-  right: 0;
-  transform: none;
+  top: -0.16cqw;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   text-align: center;
-  border-radius: 0.14cqw 0.14cqw 0 0;
+  border-radius: 0.6cqw;
+  padding: 0.04cqw 0.22cqw;
+  font-size: 0.34cqw;
+  letter-spacing: 0.03cqw;
   color: #232a38;
   background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
   white-space: nowrap;
-  overflow: hidden;
+  max-width: 100%;
+}
+
+/* SPLIT / MST CLK / TRANSP have no surrounding outline on the panel — just
+   the floating pill title over controls printed on bare red. */
+.program-top-row .split-box,
+.program-top-row .clk-box,
+.program-top-row .transp-box {
+  border-color: transparent;
+  overflow: visible;
 }
 
 .program-top-row .morph-box {
@@ -1948,6 +2067,13 @@ body {
 .program-top-row .panel-button .panel-button-cap {
   font-size: 0.24cqw;
   padding: 0.05cqw 0.08cqw;
+}
+
+/* Dense printed legends around the blank caps in the four top-row boxes. */
+.program-top-row .legend {
+  font-size: 0.24cqw;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .transp-box {
@@ -2045,7 +2171,8 @@ body {
   gap: 0.1cqw;
   min-height: 0;
   flex: 1;
-  max-height: 6.4cqw;
+  /* A slightly lower cap lifts the Program box up the strip (reference). */
+  max-height: 5.7cqw;
 }
 
 /* Display bezel tick marks between the OLED and the Program box. */
@@ -2095,6 +2222,18 @@ body {
   min-width: 0;
 }
 
+.mode-block .legend {
+  font-size: 0.24cqw;
+  letter-spacing: 0;
+}
+
+/* LAYER SCENE II reuses the rail-box outline, sized down for its cell. */
+.mode-block .rail-box {
+  gap: 0.08cqw;
+  padding: 0.15cqw 0.12cqw;
+  align-self: auto;
+}
+
 .preset-buttons {
   display: flex;
   gap: 0.18cqw;
@@ -2123,8 +2262,22 @@ body {
   font-size: 0.32cqw;
 }
 
+/* PROG VIEW mode 1 (manual p. 42): large Program name/number only. */
+.deck-section[data-section='program'] .oled .oled-program.xl {
+  font-size: 0.6cqw;
+}
+
+.deck-section[data-section='program'] .oled .oled-name.xl {
+  font-size: 0.92cqw;
+}
+
 .deck-section[data-section='program'] .program-grid-box {
-  padding: 0.3cqw 0.1cqw 0.1cqw;
+  /* A touch more air around the 8-button grid (reference proportions). */
+  padding: 0.34cqw 0.16cqw 0.18cqw;
+}
+
+.deck-section[data-section='program'] .program-grid {
+  gap: 0.12cqw 0.14cqw;
 }
 
 .program-grid {
@@ -2175,6 +2328,15 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.1cqw;
+}
+
+/* PROGRAM [LIST] prints on one line under the dial; inline-flex keeps the
+   bordered LIST tag beside the word instead of overlapping a wrap. */
+.program-dial-block > .legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1cqw;
+  white-space: nowrap;
 }
 
 .page-block {
@@ -2479,6 +2641,44 @@ body {
   padding: 0.34cqw 0.08cqw 0.08cqw;
 }
 
+/* Reference VIBRATO layout: WHL/DLY/ON and A.T./PED LED columns with the
+   MENU legend + red-framed button at the right; the blank dark mode-selector
+   button sits bottom-left. */
+.vibrato-grid {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.14cqw;
+  width: 100%;
+}
+
+.vibrato-led-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05cqw;
+}
+
+.vibrato-led-col:first-child .tiny-led-row {
+  justify-content: flex-end;
+}
+
+.vibrato-led-col:nth-child(2) {
+  /* A.T./PED sit a row lower on the reference print. */
+  padding-top: 0.28cqw;
+}
+
+.vibrato-menu-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.08cqw;
+}
+
+.vibrato-box .vibrato-mode-button {
+  align-self: flex-start;
+  margin-left: 0.1cqw;
+}
+
 .synth-bottom {
   flex: 1;
   min-height: 0;
@@ -2510,6 +2710,62 @@ body {
 .synth-bottom .knob.small {
   width: 0.92cqw;
   height: 0.92cqw;
+}
+
+/* Dense knob clusters (Osc/Voice/LFO/Filter boxes): one notch smaller scale
+   print plus headroom above each knob so the numeral arcs never overlap the
+   legends printed above them. */
+.synth-bottom .knob-scale text,
+.arp-box .knob-scale text,
+.voice-box .knob-scale text {
+  font-size: 17px;
+}
+
+.osc-box .knob-pair,
+.filter-box .knob-pair,
+.voice-box .knob-cell {
+  margin-top: 0.26cqw;
+}
+
+/* The LFO box stacks two scaled knobs in one short column: slightly smaller
+   knobs + tighter cell gaps keep the pair inside the box. */
+.lfo-box .knob-cell {
+  margin-top: 0.02cqw;
+  gap: 0.02cqw;
+}
+
+.lfo-box .knob.small {
+  width: 0.72cqw;
+  height: 0.72cqw;
+}
+
+/* Beats .synth-bottom .group-box's shared gap/padding for this short box. */
+.synth-bottom .lfo-box {
+  gap: 0.04cqw;
+  padding-bottom: 0.03cqw;
+}
+
+/* The two LFO knobs share one row (reference: RATE/TIME left, MOD AMT right). */
+.lfo-knob-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.2cqw;
+  min-width: 0;
+}
+
+.lfo-box .knob-cell .legend {
+  font-size: 0.21cqw;
+}
+
+.synth-bottom .lfo-box,
+.synth-bottom .osc-box,
+.synth-bottom .filter-box {
+  gap: 0.05cqw;
+}
+
+.filter-box .knob-pair {
+  column-gap: 0.26cqw;
 }
 
 .synth-bottom .group-box {
@@ -2767,20 +3023,64 @@ body {
   grid-area: on;
 }
 
-/* TAP/SET + ANALOG sit together on a light sub-panel (reference). */
+/* TAP/SET: an OUTLINED sub-box (transparent fill, reference) holding the
+   ● TAP/SET ▾ print, ONE large dark button, and the ● ANALOG ▿ print. */
 .tap-box {
-  background: linear-gradient(180deg, #d0d4dd 0%, #bcc1cd 100%);
+  border: 0.07cqw solid var(--panel-line);
   border-radius: 0.2cqw;
-  padding: 0.12cqw 0.18cqw;
+  padding: 0.14cqw 0.2cqw;
+  gap: 0.1cqw;
+}
+
+.tap-box .panel-button.tap-button {
+  min-width: 1.7cqw;
+  min-height: 0.95cqw;
+}
+
+.tap-box .tiny-led-row .legend {
+  font-size: 0.28cqw;
+}
+
+.tap-box .tiny-led-row .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
+}
+
+/* Round-LED type lists (Delay EFFECTS/FILTER): staggered two-column print
+   with the LEDs on the inner side (reference — the ◀▶ arrow-pair grids
+   belong only to the Mod 1/2, Amp Sim and Reverb selectors). */
+.led-word-cols {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.16cqw;
+}
+
+.led-word-col {
+  display: flex;
+  flex-direction: column;
   gap: 0.08cqw;
 }
 
-.tap-box .legend {
-  color: #232a38;
+/* The right column sits half a row lower, zigzagging like the panel print. */
+.led-word-col + .led-word-col {
+  padding-top: 0.19cqw;
 }
 
-.tap-box .legend.dim {
-  color: #4d5464;
+.led-word-col .tiny-led-row {
+  gap: 0.1cqw;
+}
+
+.led-word-col:first-child .tiny-led-row {
+  justify-content: flex-end;
+}
+
+.led-word-col .tiny-led-row .legend {
+  font-size: 0.24cqw;
+}
+
+.led-word-col .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
 }
 
 .delay-box .knob.small {
@@ -2794,6 +3094,64 @@ body {
 
 .effects-grid .panel-button .panel-button-cap {
   font-size: 0.28cqw;
+}
+
+/* Knob numeral arcs are dense here: print one notch smaller and widen the
+   inter-knob gaps so neighboring scales and legends never overlap. */
+.fx-box .knob-scale text {
+  font-size: 19px;
+}
+
+/* Mod 1/2 keep the reference's single row: cells shrink instead of wrapping
+   into the short grid track, the knob pair gets breathing room, and the
+   knob legends print at full width (overflowing their cell symmetrically,
+   like panel ink) instead of wrapping. */
+.mod1-box,
+.mod2-box {
+  column-gap: 0.14cqw;
+  flex-wrap: nowrap;
+}
+
+.mod1-box .knob-cell .legend,
+.mod2-box .knob-cell .legend {
+  white-space: nowrap;
+  max-width: none;
+}
+
+.mod1-box > .knob-cell + .knob-cell,
+.mod2-box > .knob-cell + .knob-cell {
+  margin-left: 0.58cqw;
+}
+
+.mod1-box > .variation-cell,
+.mod2-box > .variation-cell {
+  margin-left: 0.26cqw;
+}
+
+.mod1-box .variation-row .legend,
+.mod2-box .variation-row .legend {
+  font-size: 0.26cqw;
+}
+
+.amp-sim-box {
+  column-gap: 0.2cqw;
+}
+
+.amp-sim-box > .knob-cell + .knob-cell {
+  margin-left: 0.35cqw;
+}
+
+/* Keep the COMP ACTIVE print clear of the knob's numeral arc. */
+.comp-box .knob-cell > .tiny-led-row:first-child {
+  margin-bottom: 0.26cqw;
+}
+
+.comp-box .knob-cell > .tiny-led-row .legend {
+  font-size: 0.26cqw;
+}
+
+.delay-filter-cell .legend.dim {
+  white-space: nowrap;
 }
 
 .mod1-box {
@@ -2840,12 +3198,53 @@ body {
   gap: 0.06cqw;
 }
 
-/* Mod 1/2 rows are the shortest tracks: keep their ON label beside the
-   button instead of stacked so the box fits its grid row. */
+/* Mod 1/2 and Amp Sim ON: a vertical light rocker pinned at the box's right
+   edge with the ON ● print above it (reference). Absolute so the wrapping
+   flex row never pushes it out of the short grid tracks. */
+.mod1-box,
+.mod2-box {
+  padding-right: 1.6cqw;
+}
+
+.amp-sim-box {
+  padding-right: 0.7cqw;
+}
+
 .mod1-box .fx-on-cell,
-.mod2-box .fx-on-cell {
-  flex-direction: row;
-  gap: 0.1cqw;
+.mod2-box .fx-on-cell,
+.amp-sim-box .fx-on-cell {
+  gap: 0.08cqw;
+  position: absolute;
+  right: 0.22cqw;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.fx-box .panel-button.rocker.fx-on-rocker {
+  min-width: 0.6cqw;
+  min-height: 1.15cqw;
+}
+
+.fx-box .fx-on-cell .tiny-led-row .legend {
+  font-size: 0.24cqw;
+}
+
+.fx-box .fx-on-cell .tiny-led-row .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
+}
+
+/* Comp: ON legend + LED beside the dark button, GLOBAL print below, the
+   cluster sitting low in the box (reference). */
+.comp-on-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.14cqw;
+}
+
+.comp-box .fx-on-cell {
+  align-self: flex-end;
+  margin-bottom: 0.12cqw;
 }
 
 /* Morph destination indicator (manual p. 39): assigned controls get a green dot. */
@@ -3020,8 +3419,16 @@ body {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0.15; }
 }
-.led.flash[data-on='true'] {
-  animation: led-flash 0.5s steps(1) infinite;
+@media (prefers-reduced-motion: no-preference) {
+  .led.flash[data-on='true'] {
+    animation: led-flash 0.5s steps(1) infinite;
+  }
+}
+/* Reduced motion: the flash reads as a steady dimmed LED instead. */
+@media (prefers-reduced-motion: reduce) {
+  .led.flash[data-on='true'] {
+    opacity: 0.45;
+  }
 }
 
 /* Focused piano layer indicator (blinking hardware LED approximated as a

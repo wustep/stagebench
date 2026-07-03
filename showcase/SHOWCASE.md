@@ -1092,6 +1092,79 @@ A discrepancy sweep against fresh high-detail crops of the reference photo
 - Gates: typecheck, test (404/404), lint, build, verify:layout (12/12,
   after re-tightening the piano tabs and Mod 1/2 ON rows).
 
+### 29 — Workflow round: three-lens audit → nine implementation passes (2026-07-03)
+
+A multi-agent round: a parallel audit (manual features / reference-photo
+pixel diff / perf-UX code audit) fed nine sequential implementation agents,
+then orchestrator-side geometry corrections. Tests 404 → 436.
+
+**New honest functionality (manual-verified):**
+- **Osc Pitch** (p.28): osc-pitch-smp is functional — a latched Synth-OLED
+  dial mode (dial 1 = −24..+24 st, dial 2 = ±50 c) per focused layer,
+  snapshot-stored with old-snapshot backfill, applied as a detune offset on
+  every Analog source oscillator (FM modulator detunes with its carrier to
+  keep the ratio) and folded into the Samples playbackRate factor; live
+  retargeting on sounding voices; rendered proof (+12 st raises the
+  zero-crossing rate).
+- **NUM PAD** (p.44): Shift+Live Mode toggles two-digit program entry on
+  the PROGRAM buttons (pages 1-4 → numbers 11-48; '1–' pending readout;
+  clears on Shift/Exit and mode exit).
+- **Prog View / Preset Name** (p.42): prog-view cycles four display modes
+  (current / large name / full section-layer config / page list) and
+  Shift+Prog View toggles source-name lines; resets on program load.
+- **Layer Init** (p.43): Shift+Section Edit (or the printed LAYER INIT ▽
+  legend) opens an OLED init screen — PROGRAM 1-4 = All / Org AB /
+  Pno (focused) / Syn (focused), each one ordinary program-storable edit
+  reusing the existing defaults.
+- Smaller honest wirings: Shift+Waveform = Sound Init (p.37, the separate
+  button was not on the hardware), Shift+Tap/Set = Delay Analog,
+  Shift+Amp Envelope = velocity cycle, Shift+Piano Select = INFO (p.25);
+  the redundant sound-init / delay-analog / piano-info / layer-init /
+  rotary-morph buttons left the control inventory (MORPH is an indicator
+  LED per p.53, already truthfully bound to the rotary-speed morph).
+
+**Interaction & accessibility:**
+- Continuous controls: 200px full-range drag (was 120) with Shift =
+  quarter-speed fine adjust; scroll-wheel stepping (native non-passive
+  listener; spring-loaded stick skips the wheel — a tick has no release);
+  keyboard Enter/Space hold performs SOLO like a pointer hold.
+- aria-live scoped to engine/MIDI status only (pedal lines no longer
+  announce during play); focus rings floored at 2px; LED flash respects
+  prefers-reduced-motion; engine errors escape the collapsed minimal
+  chrome; the zoom dialog traps Tab and restores focus; the keybed DOM is
+  chromatic (CSS z-index stacks black keys); the INFO strip documents the
+  computer-keyboard note mapping.
+- Voice allocation cut (iteration 23's GC hitch): memoized drive curves
+  (~8KB/press), a voice free-list, numeric voice-map keys, shared filter
+  spec constants, hoisted per-press closures; noteOff stopped copying the
+  voice map per release. Rendered suite pins behavior unchanged.
+
+**Print fidelity (reference-photo pass):**
+- Organ: second drawbar register row (16′ 8′ 4′ 2′ II III IV · ∿–∿),
+  STR8 legend fix, B3 percussion LEDs; SUSTPED LEDs red; octave pairs abut.
+- Synth: vibrato box as the two LED columns (WHL/DLY/ON | A.T./PED), MODE
+  button between ANALOG/EXTERN, VELOCITY ▽ 1●2● encoding, POLY/PATTERN
+  print, LFO knobs side by side.
+- Effects: one TAP/SET button in an outlined box, round-LED delay/comp
+  selectors (arrows stay only where the panel prints arrows), vertical ON
+  rockers on Mod 1/2 and Amp Sim, thin-ring framed buttons, zero knob-scale
+  collisions at 1440.
+- Program: printed LED rows above blank caps across the top row and
+  PRESET LIBRARY (red title) / LIVE MODE clusters, CLEAR MORPH and SINGLE
+  LAYER between flanking rules, split-point LEDs, PROGRAM [LIST] on one
+  line, PAGE/CAT above its buttons, MON/COPY spelling, three-button rail.
+- User-directed geometry: rotary strip hugs its content (outline closes
+  under MORPH on bare red), top-row titles are fully-rounded pill lozenges
+  with SPLIT/MST CLK/TRANSP outline-free, MORPH ASSIGN closes under CLEAR
+  MORPH, the Program box gains air and sits higher, and the HANDMADE IN
+  SWEDEN print reads bottom-to-top anchored at the panel's bottom-right.
+- Orchestrator repairs after the fan-in: LFO box restructured to the
+  side-by-side knobs (fixing a synth-bottom overflow robust to the layout
+  harness's font metrics), Mod 1 variation row wraps when slack runs out,
+  top-row pill type sized to the narrow MST CLK box.
+
+Gates: typecheck, lint, build, verify:layout 12/12, tests 436/436.
+
 ### 28 — Program strip round 2 + centered side-to-side pitch stick (2026-07-03)
 
 - **Pitch stick centered, sliding side to side**: the wooden lever now rests

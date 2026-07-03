@@ -181,6 +181,19 @@ describe('synth — optional-scope rendered proof', () => {
     expect(highBandRatio(sawSub.left, 600, 0.1, 0.9)).toBeLessThan(highBandRatio(saw.left, 600, 0.1, 0.9))
   }, 240000)
 
+  it('Osc Pitch +12 st renders a higher zero-crossing rate than 0 (manual p. 28 Pitch and Fine Tune)', async () => {
+    const flat = await renderSynth(withWaveform('Saw'))
+    const up = await renderSynth((store) => {
+      withWaveform('Saw')(store)
+      store.setSynthOscPitchSemis(12)
+    })
+    expect(rms(flat.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    expect(rms(up.left, 0.05, 0.9)).toBeGreaterThan(0.001)
+    // +12 semitones doubles the fundamental — the waveform crosses zero
+    // roughly twice as often; 1.5x is a comfortable margin.
+    expect(zeroCrossingRate(up.left, 0.1, 0.9)).toBeGreaterThan(zeroCrossingRate(flat.left, 0.1, 0.9) * 1.5)
+  }, 240000)
+
   it('Samples-mode voice renders non-silent and spectrally distinct from Analog Saw, and the filter audibly darkens it', async () => {
     const analogSaw = await renderSynth(withWaveform('Saw'))
     const samplesVoice = await renderSynth((store) => {

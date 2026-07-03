@@ -396,3 +396,127 @@ describe('programs.navigation — buttons, pages, dial, list view', () => {
     expect(screen.getByTestId('oled-program-line').textContent).toBe('1.1')
   })
 })
+
+describe('programs.numpad — Shift + Live Mode two-digit selection (manual p. 44)', () => {
+  it('selects page.slot with two presses: first the page digit, then the slot', () => {
+    const store = new InstrumentStore()
+    store.toggleNumPad()
+    expect(store.getState().programs.numPad).toBe(true)
+    store.selectProgramButton(1) // digit 2 = page, held pending
+    expect(store.getState().programs.numPadPending).toBe(2)
+    expect(store.getState().programs.current).toBe(0) // nothing selected yet
+    store.selectProgramButton(4) // digit 5 = slot -> 2.5
+    expect(store.getState().programs.numPadPending).toBeNull()
+    expect(store.currentProgramLabel()).toBe('2.5')
+  })
+
+  it('ignores an invalid first digit — this bank has 4 pages, so 5-8 name no page', () => {
+    const store = new InstrumentStore()
+    store.toggleNumPad()
+    store.selectProgramButton(6) // digit 7: no page 7 in a 4-page bank
+    expect(store.getState().programs.numPadPending).toBeNull()
+    expect(store.getState().programs.current).toBe(0)
+    store.selectProgramButton(3) // digit 4 is the last valid page
+    expect(store.getState().programs.numPadPending).toBe(4)
+  })
+
+  it('clears the pending digit on Shift/Exit and on mode exit', () => {
+    const store = new InstrumentStore()
+    store.toggleNumPad()
+    store.selectProgramButton(0)
+    expect(store.getState().programs.numPadPending).toBe(1)
+    expect(store.clearNumPadPending()).toBe(true) // Shift/Exit path
+    expect(store.getState().programs.numPadPending).toBeNull()
+    expect(store.clearNumPadPending()).toBe(false) // nothing pending: no-op
+    store.selectProgramButton(2)
+    store.toggleNumPad() // leaving the mode drops the half-entered digit
+    expect(store.getState().programs.numPad).toBe(false)
+    expect(store.getState().programs.numPadPending).toBeNull()
+  })
+
+  it('Live programs stay directly selected with 1-8 regardless of Num Pad (manual p. 44)', () => {
+    const store = new InstrumentStore()
+    store.toggleNumPad()
+    store.toggleLiveMode()
+    store.selectProgramButton(5)
+    expect(store.currentProgramLabel()).toBe('L6')
+    expect(store.getState().programs.numPadPending).toBeNull()
+  })
+
+  it('panel: Shift + Live Mode toggles Num Pad and the readout shows the pending digit', () => {
+    renderApp()
+    const liveButton = screen.getByRole('button', { name: 'Live Mode' })
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(liveButton) // NUM PAD on — Live Mode itself must not toggle
+    expect(liveButton.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' })) // drop Shift
+    fireEvent.click(screen.getByRole('button', { name: 'Program 3' }))
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('3–')
+    fireEvent.click(screen.getByRole('button', { name: 'Program 2' }))
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('3.2')
+    // Shift/Exit clears a fresh pending digit instead of latching Shift.
+    fireEvent.click(screen.getByRole('button', { name: 'Program 1' }))
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('1–')
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('3.2')
+    // Plain Live Mode clicks keep working exactly as before.
+    fireEvent.click(liveButton)
+    expect(liveButton.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('L1')
+  })
+})
+
+describe('programs.progview — display view modes and Preset Name (manual p. 42)', () => {
+  it('cycles the four view modes from the store', () => {
+    const store = new InstrumentStore()
+    expect(store.getState().programs.progView).toBe(0)
+    store.cycleProgView()
+    expect(store.getState().programs.progView).toBe(1)
+    store.cycleProgView()
+    store.cycleProgView()
+    expect(store.getState().programs.progView).toBe(3)
+    store.cycleProgView()
+    expect(store.getState().programs.progView).toBe(0)
+  })
+
+  it('Preset Name toggles and resets when a program is loaded (manual p. 42)', () => {
+    const store = new InstrumentStore()
+    store.togglePresetName()
+    expect(store.getState().programs.presetName).toBe(true)
+    store.selectProgram(3)
+    expect(store.getState().programs.presetName).toBe(false)
+    store.togglePresetName()
+    store.toggleLiveMode() // switching banks loads a program too
+    expect(store.getState().programs.presetName).toBe(false)
+  })
+
+  it('panel: Prog View swaps the OLED lower rows per mode', () => {
+    renderApp()
+    const progViewButton = screen.getByRole('button', { name: 'Prog View' })
+    expect(screen.getByTestId('oled-piano-line')).toBeInTheDocument()
+    fireEvent.click(progViewButton) // mode 1: large name/number only
+    expect(screen.queryByTestId('oled-piano-line')).toBeNull()
+    expect(screen.getByTestId('oled-name-line').textContent).toBe('Royal Grand')
+    fireEvent.click(progViewButton) // mode 2: full configuration listing
+    expect(screen.getByTestId('oled-config-piano').textContent).toContain('A● Salamander Grand')
+    expect(screen.getByTestId('oled-config-organ').textContent).toContain('B3')
+    expect(screen.getByTestId('oled-config-synth').textContent).toContain('Saw')
+    fireEvent.click(progViewButton) // mode 3: the current page's 8 programs
+    expect(screen.getByTestId('oled-page-list-0').textContent).toContain('▸ 1.1 Royal Grand')
+    expect(screen.getByTestId('oled-page-list-7').textContent).toContain('1.8')
+    fireEvent.click(progViewButton) // back to mode 0
+    expect(screen.getByTestId('oled-piano-line')).toBeInTheDocument()
+  })
+
+  it('panel: PRESET NAME (Shift + Prog View) shows source names and resets on program load', () => {
+    renderApp()
+    expect(screen.getByTestId('oled-piano-line').textContent).toContain('A: Salamander Grand')
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Prog View' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' })) // drop Shift
+    expect(screen.getByTestId('oled-piano-line').textContent).toContain('A: Grand / Salamander Grand')
+    // Loading a program resets the Preset Name state (manual p. 42).
+    fireEvent.click(screen.getByRole('button', { name: 'Program 2' }))
+    expect(screen.getByTestId('oled-piano-line').textContent).not.toContain('Electric / ')
+  })
+})

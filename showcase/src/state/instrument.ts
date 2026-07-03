@@ -314,6 +314,14 @@ function defaultSynthVoice(): SynthVoiceState {
  *  set"). Extern is spec-excluded and never represented here. */
 export type SynthLayerMode = 'Analog' | 'Samples'
 
+/** Osc Pitch view (manual p. 28 "Pitch and Fine Tune"): per-layer transpose
+ *  in semitones (-24..+24) plus fine tune in cents (±50), edited via the
+ *  PITCH/SMP button's latched OLED dial mode (synthOscPitchEdit). */
+export interface SynthOscPitchState {
+  semis: number // -24..+24
+  cents: number // -50..+50
+}
+
 export interface SynthLayerState {
   enabled: boolean
   level: number // 0..127
@@ -324,6 +332,9 @@ export interface SynthLayerState {
    *  selects between the two sample sets"). */
   waveform: number
   oscCtrl: number // 0..127, displayed 0..10 with one decimal; no effect in Samples mode
+  /** Osc Pitch semitone/fine-tune offset (manual p. 28), applied to every
+   *  source oscillator (Analog) or via playbackRate (Samples). */
+  oscPitch: SynthOscPitchState
   ampEnvelope: SynthAmpEnvelopeState
   filter: SynthFilterState
   oscEnvelope: SynthOscEnvelopeState
@@ -536,6 +547,20 @@ export interface ProgramsState {
   undo: { slot: number; liveMode: boolean; snapshot: ProgramSnapshot } | null
   /** Numeric list view (Shift + Program dial, manual p. 41). */
   listView: boolean
+  /** NUM PAD mode (Shift + Live Mode, manual p. 44): PROGRAM 1-8 enter
+   *  two-digit page.slot numbers instead of direct slot selection. Not
+   *  program state. */
+  numPad: boolean
+  /** Pending Num Pad page digit (1-4) awaiting its slot digit, or null. */
+  numPadPending: number | null
+  /** PROG VIEW display mode (manual p. 42): 0 = default layout, 1 = large
+   *  name/number only, 2 = full program configuration, 3 = the current
+   *  page's eight programs as a list. Not program state. */
+  progView: 0 | 1 | 2 | 3
+  /** PRESET NAME (Shift + Prog View, manual p. 42): layer lines show the
+   *  underlying sound source; reset when a Program is loaded. Not program
+   *  state. */
+  presetName: boolean
 }
 
 export interface InstrumentState {
@@ -557,6 +582,9 @@ export interface InstrumentState {
   clockEdit: boolean
   /** Transpose dial-edit panel mode (dial = semitones). Not program state. */
   transposeEdit: boolean
+  /** LAYER INIT screen (Shift + Section Edit, manual p. 43): PROGRAM 1-4 act
+   *  as the four soft buttons (All / Org AB / Pno / Syn). Not program state. */
+  layerInitEdit: boolean
   /** Morph source being assigned (source button latched). Not program state. */
   morphArming: MorphSource | null
   /** AMP/FILTER/OSC ENVELOPE button latched: the three Synth OLED dials edit
@@ -569,8 +597,14 @@ export interface InstrumentState {
   modelListView: boolean
   /** Synth VIBRATO MENU button latched: the Synth OLED dials 1/2 edit the
    *  focused layer's vibrato Rate/Amount (spec voice.vibrato.menu) instead of
-   *  their normal roles. Mutually exclusive with synthEnvEdit. Not program state. */
+   *  their normal roles. Mutually exclusive with synthEnvEdit and
+   *  synthOscPitchEdit. Not program state. */
   synthVibratoEdit: boolean
+  /** Synth PITCH/SMP button latched (manual p. 28 "Osc Pitch" view): the
+   *  Synth OLED dials 1/2 edit the focused layer's Osc Pitch semitones /
+   *  Fine Tune cents instead of their normal roles. Mutually exclusive with
+   *  synthEnvEdit and synthVibratoEdit. Not program state. */
+  synthOscPitchEdit: boolean
   /** Live morph source positions (mod wheel, control pedal 0..127). Not program state. */
   morphValues: Record<MorphSource, number>
   /** When true (Group mode), effect edits apply to both piano layer chains. */
@@ -618,6 +652,7 @@ function defaultSynthLayer(enabled: boolean): SynthLayerState {
     zone: { from: 0, to: 3 },
     waveform: SYNTH_SAW_INDEX,
     oscCtrl: 64,
+    oscPitch: { semis: 0, cents: 0 },
     ampEnvelope: { attack: 0, decay: 127, release: 20, velocity: 0 },
     filter: {
       on: true,
@@ -634,6 +669,20 @@ function defaultSynthLayer(enabled: boolean): SynthLayerState {
     voice: defaultSynthVoice(),
     mode: 'Analog',
   }
+}
+
+/** The default Piano layer sound (the power-on layer A pose): first Grand
+ *  model, full level, no octave shift, full keyboard zone. LAYER INIT —
+ *  Pno (manual p. 43) resets the focused layer to this. */
+function defaultPianoLayer(enabled: boolean): PianoLayerState {
+  return { enabled, level: 100, octave: 0, type: 'Grand', model: 0, zone: { from: 0, to: 3 } }
+}
+
+/** Default B3 layer used by LAYER INIT — Org AB (manual p. 43: "Initializes
+ *  both Organ Layers to a B3 sound"): a stock 888000000 registration (the
+ *  same default the power-on layer B carries), vibrato off. */
+function initOrganLayer(enabled: boolean): OrganLayerState {
+  return { enabled, level: 100, octave: 0, zone: { from: 0, to: 3 }, model: 'B3', drawbars: [8, 8, 8, 0, 0, 0, 0, 0, 0], vibrato: false }
 }
 
 function defaultChain(): EffectChainState {
@@ -670,8 +719,8 @@ function baseInstrumentState(): InstrumentState {
       pstick: true,
     },
     layers: {
-      A: { enabled: true, level: 100, octave: 0, type: 'Grand', model: 0, zone: { from: 0, to: 3 } },
-      B: { enabled: false, level: 100, octave: 0, type: 'Electric', model: 0, zone: { from: 0, to: 3 } },
+      A: defaultPianoLayer(true),
+      B: { ...defaultPianoLayer(false), type: 'Electric' },
     },
     focusedLayer: 'A',
     split: {
@@ -692,10 +741,12 @@ function baseInstrumentState(): InstrumentState {
     splitEdit: null,
     clockEdit: false,
     transposeEdit: false,
+    layerInitEdit: false,
     morphArming: null,
     synthEnvEdit: null,
     modelListView: false,
     synthVibratoEdit: false,
+    synthOscPitchEdit: false,
     morphValues: { wheel: 0, pedal: 0 },
     organ: {
       // The section starts off (Piano is the power-on sound); its layer A is
@@ -749,6 +800,10 @@ function baseInstrumentState(): InstrumentState {
       naming: null,
       undo: null,
       listView: false,
+      numPad: false,
+      numPadPending: null,
+      progView: 0,
+      presetName: false,
     },
     lastEdit: '',
     pianoNotFound: null,
@@ -1076,7 +1131,7 @@ export class InstrumentStore {
   setClockEdit(on: boolean): void {
     if (on === this.state.clockEdit) return
     this.patch(
-      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null } : {}) },
+      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false } : {}) },
       on ? 'Mst Clk Edit — dial: BPM · PROG 1/2: delay/mod1 sync' : 'Mst Clk Edit closed',
     )
   }
@@ -1102,7 +1157,7 @@ export class InstrumentStore {
   setTransposeEdit(on: boolean): void {
     if (on === this.state.transposeEdit) return
     this.patch(
-      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null } : {}) },
+      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null, layerInitEdit: false } : {}) },
       on ? 'Transpose Edit — dial: -6…+6 st' : 'Transpose Edit closed',
     )
   }
@@ -1171,7 +1226,7 @@ export class InstrumentStore {
   setSplitEdit(on: boolean): void {
     if (on === !!this.state.splitEdit) return
     this.patch(
-      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false } : {}) },
+      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false, layerInitEdit: false } : {}) },
       on ? 'Split Edit — dial: position · PAGE: point · PROG 1/2: on/xfade' : 'Split Edit closed',
     )
   }
@@ -1215,6 +1270,98 @@ export class InstrumentStore {
     const current = this.state.split.points[edit.point].xf
     const xf = current === 0 ? 6 : current === 6 ? 12 : 0
     this.patchSplitPoint({ xf }, `Split ${SPLIT_POINT_NAMES[edit.point]} XFade ${xf === 0 ? 'Off' : `±${xf}`}`)
+  }
+
+  /* ----------------------------------------------------------- layer init -- */
+
+  /** LAYER INIT screen (Shift + Section Edit, manual p. 43), our latched
+   *  Program-OLED edit-mode adaptation of the hardware's soft-button menu:
+   *  PROGRAM 1-4 act as the All / Org AB / Pno / Syn soft buttons. Mutually
+   *  exclusive with the split/clock/transpose edit modes. Not program state. */
+  setLayerInitEdit(on: boolean): void {
+    if (on === this.state.layerInitEdit) return
+    this.patch(
+      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null } : {}) },
+      on ? 'Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn' : 'Layer Init closed',
+    )
+  }
+
+  /** LAYER INIT — All (manual p. 43): "Initializes the entire Program so
+   *  that only Piano A is active, with no effects turned on." Every
+   *  program-stored key returns to its power-on default (Piano A Grand on,
+   *  Organ/Synth sections off, all effect chains reset and off); one
+   *  ordinary program edit (dirty flag / Live auto-store apply). */
+  layerInitAll(): void {
+    this.patch({ ...snapshotOf(baseInstrumentState()), pianoNotFound: null }, 'Layer Init — All')
+  }
+
+  /** LAYER INIT — Org AB (manual p. 43): both Organ Layers to a default B3
+   *  registration with Layer A turned on, percussion/vibrato reset, the
+   *  shared Organ effect chain reset and off — except the Rotary Speaker,
+   *  which is On. SUSTPED/PSTICK and the section's on/off are performance
+   *  routing, not the layers' sound, and stay untouched. */
+  layerInitOrganAB(): void {
+    this.patch(
+      {
+        organ: {
+          ...this.state.organ,
+          focusedLayer: 'A',
+          layers: { A: initOrganLayer(true), B: initOrganLayer(false) },
+          percussion: { on: false, soft: false, fast: false, third: false, poly: false },
+          vibratoType: 'C3',
+          toRotary: true,
+        },
+        organChain: defaultChain(),
+      },
+      'Layer Init — Organ AB',
+    )
+  }
+
+  /** LAYER INIT — Pno (manual p. 43): the focused Piano layer to the default
+   *  Piano sound and parameters, its effect chain turned off and reset, and
+   *  Group-mode effects back to per-layer. The layer's on/off state is kept
+   *  (only Org AB documents an enable change). Piano parameters (KB Touch,
+   *  Timbre, Acoustics…) are section-shared in this model, so their reset is
+   *  section-wide — the closest truthful reading of "default parameters". */
+  layerInitPiano(): void {
+    const layer = this.state.focusedLayer
+    const layers = { ...this.state.layers, [layer]: defaultPianoLayer(this.state.layers[layer].enabled) }
+    this.patch(
+      {
+        layers,
+        piano: {
+          ...this.state.piano,
+          kbTouch: 0,
+          dynComp: 0,
+          timbre: 0,
+          unison: 0,
+          softRelease: false,
+          stringRes: false,
+          pedNoise: false,
+        },
+        chains: { ...this.state.chains, [layer]: defaultChain() },
+        fxGroupPiano: false,
+        pianoNotFound: null,
+      },
+      `Layer Init — Piano ${layer}`,
+    )
+  }
+
+  /** LAYER INIT — Syn (manual p. 43): the focused Synth layer to the init
+   *  synth (defaultSynthLayer — the full-layer superset of SOUND INIT, which
+   *  also resets level/octave/zone), its own effect chain turned off and
+   *  reset, and Group-mode effects back to per-layer. Enable state is kept. */
+  layerInitSynth(): void {
+    const layer = this.state.synth.focusedLayer
+    const layers = { ...this.state.synth.layers, [layer]: defaultSynthLayer(this.state.synth.layers[layer].enabled) }
+    this.patch(
+      {
+        synth: { ...this.state.synth, layers },
+        synthChains: { ...this.state.synthChains, [layer]: defaultChain() },
+        fxGroupSynth: false,
+      },
+      `Layer Init — Synth ${layer}`,
+    )
   }
 
   /** KB ZONE ◂ ▸ (Shift + Octave, manual p. 39): steps the focused layer
@@ -1407,7 +1554,8 @@ export class InstrumentStore {
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
-      programs: { ...programs, current: clamped, dirty: false, undo, naming: null },
+      // Loading a program resets the Preset Name display state (manual p. 42).
+      programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `${programLabel(clamped, programs.liveMode)} ${slot.name}`,
     })
     this.persistPrograms(this.state)
@@ -1417,11 +1565,54 @@ export class InstrumentStore {
   selectProgramButton(button: number): void {
     const programs = this.state.programs
     if (programs.liveMode) {
+      // Live programs are ALWAYS directly selected with 1-8, regardless of
+      // the Num Pad mode (manual p. 44).
       this.selectProgram(button)
+      return
+    }
+    if (programs.numPad) {
+      // Num Pad mode (manual p. 44): two-digit page.slot entry.
+      if (programs.numPadPending === null) {
+        // First digit = page. This bank is 4 pages × 8 slots (numbers 11-48);
+        // the manual's 11-88 range presumes the hardware's 8-page banks, so
+        // 5-8 name no page here and the press is ignored.
+        if (button <= 3) this.patchPrograms({ numPadPending: button + 1 }, `Num Pad ${button + 1}–`)
+        return
+      }
+      const page = programs.numPadPending
+      this.patchPrograms({ numPadPending: null })
+      this.selectProgram((page - 1) * 8 + button)
       return
     }
     const reference = programs.storePending ? programs.storePending.destination : programs.current
     this.selectProgram(Math.floor(reference / 8) * 8 + button)
+  }
+
+  /** NUM PAD (Shift + Live Mode, manual p. 44): toggles two-digit page.slot
+   *  entry on the PROGRAM 1-8 buttons. Not program state. */
+  toggleNumPad(): void {
+    const numPad = !this.state.programs.numPad
+    this.patchPrograms({ numPad, numPadPending: null }, `Num Pad ${numPad ? 'On' : 'Off'}`)
+  }
+
+  /** Shift/Exit clears a pending Num Pad page digit; true when one was pending. */
+  clearNumPadPending(): boolean {
+    if (this.state.programs.numPadPending === null) return false
+    this.patchPrograms({ numPadPending: null }, 'Num Pad entry cancelled')
+    return true
+  }
+
+  /** PROG VIEW (manual p. 42): cycles the four display view modes. */
+  cycleProgView(): void {
+    const progView = ((this.state.programs.progView + 1) % 4) as 0 | 1 | 2 | 3
+    this.patchPrograms({ progView }, `Prog View ${progView + 1}/4`)
+  }
+
+  /** PRESET NAME (Shift + Prog View, manual p. 42): layer lines show the
+   *  underlying sound source; the flag resets when a Program is loaded. */
+  togglePresetName(): void {
+    const presetName = !this.state.programs.presetName
+    this.patchPrograms({ presetName }, `Preset Name ${presetName ? 'On' : 'Off'}`)
   }
 
   /** PAGE ◂ ▸ — moves between the four bank pages; moves the naming cursor while naming. */
@@ -1591,6 +1782,10 @@ export class InstrumentStore {
         undo,
         lastBank: liveMode ? programs.current : programs.lastBank,
         lastLive: liveMode ? programs.lastLive : programs.current,
+        // Switching modes loads a program: Preset Name resets (manual p. 42)
+        // and any half-entered Num Pad digit is dropped.
+        presetName: false,
+        numPadPending: null,
       },
       lastEdit: `${liveMode ? 'Live Mode' : 'Program Mode'} — ${programLabel(target, liveMode)} ${slot.name}`,
     })
@@ -1818,6 +2013,7 @@ export class InstrumentStore {
       {
         waveform: defaults.waveform,
         oscCtrl: defaults.oscCtrl,
+        oscPitch: defaults.oscPitch,
         ampEnvelope: defaults.ampEnvelope,
         filter: defaults.filter,
         oscEnvelope: defaults.oscEnvelope,
@@ -1851,8 +2047,8 @@ export class InstrumentStore {
 
   /** AMP/FILTER/OSC ENVELOPE button: latches the synth OLED dials onto that
    *  envelope's A/D/R editing (manual p. 27: three dials share every menu).
-   *  Engaging an envelope edit closes the Vibrato Menu edit (mutually
-   *  exclusive dial-repurposing modes). */
+   *  Engaging an envelope edit closes the Vibrato Menu and Osc Pitch edits
+   *  (mutually exclusive dial-repurposing modes). */
   setSynthEnvEdit(edit: 'amp' | 'filter' | 'osc' | null): void {
     if (edit === this.state.synthEnvEdit) return
     const label =
@@ -1863,7 +2059,14 @@ export class InstrumentStore {
           : edit === 'osc'
             ? 'Synth Osc Envelope — dials: A · D · R'
             : 'Synth Envelope closed'
-    this.patch({ synthEnvEdit: edit, synthVibratoEdit: edit ? false : this.state.synthVibratoEdit }, label)
+    this.patch(
+      {
+        synthEnvEdit: edit,
+        synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
+        synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+      },
+      label,
+    )
   }
 
   /* --------------------------------------------------------- synth filter -- */
@@ -2096,9 +2299,49 @@ export class InstrumentStore {
   setSynthVibratoEdit(edit: boolean): void {
     if (edit === this.state.synthVibratoEdit) return
     this.patch(
-      { synthVibratoEdit: edit, synthEnvEdit: edit ? null : this.state.synthEnvEdit },
+      {
+        synthVibratoEdit: edit,
+        synthEnvEdit: edit ? null : this.state.synthEnvEdit,
+        synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+      },
       edit ? 'Synth Vibrato Menu — dials: Rate · Amount' : 'Synth Vibrato Menu closed',
     )
+  }
+
+  /* ---------------------------------------------------------- osc pitch -- */
+
+  /** PITCH/SMP button (manual p. 28 "Pitch and Fine Tune"): latches the
+   *  Synth OLED dials 1/2 onto Osc Pitch semitones / Fine Tune cents,
+   *  mirroring setSynthEnvEdit's dial-repurposing pattern. Mutually
+   *  exclusive with synthEnvEdit and synthVibratoEdit. */
+  setSynthOscPitchEdit(edit: boolean): void {
+    if (edit === this.state.synthOscPitchEdit) return
+    this.patch(
+      {
+        synthOscPitchEdit: edit,
+        synthEnvEdit: edit ? null : this.state.synthEnvEdit,
+        synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
+      },
+      edit ? 'Synth Osc Pitch — dials: Pitch · Fine Tune' : 'Synth Osc Pitch closed',
+    )
+  }
+
+  /** Osc Pitch semitones (manual p. 28: "Pitch can be set between -24 and
+   *  +24 semitones"), per focused layer. */
+  setSynthOscPitchSemis(semis: number): void {
+    const layer = this.state.synth.focusedLayer
+    const clamped = Math.max(-24, Math.min(24, Math.round(semis)))
+    const oscPitch = { ...this.state.synth.layers[layer].oscPitch, semis: clamped }
+    this.patchSynthLayer(layer, { oscPitch }, `Synth ${layer} Osc Pitch ${fmtSemitones(clamped)} st`)
+  }
+
+  /** Osc Pitch fine tune (manual p. 28: "Fine Tune has a range of ± 50
+   *  cents"), per focused layer. */
+  setSynthOscPitchCents(cents: number): void {
+    const layer = this.state.synth.focusedLayer
+    const clamped = Math.max(-50, Math.min(50, Math.round(cents)))
+    const oscPitch = { ...this.state.synth.layers[layer].oscPitch, cents: clamped }
+    this.patchSynthLayer(layer, { oscPitch }, `Synth ${layer} Fine Tune ${fmtSemitones(clamped)} c`)
   }
 
   /* --------------------------------------------------------- arpeggiator -- */
@@ -2366,6 +2609,7 @@ function normalizeSynthLayer(layer: Partial<SynthLayerState> | null | undefined)
     oscEnvelope: { ...defaults.oscEnvelope, ...layer?.oscEnvelope },
     lfo: { ...defaults.lfo, ...layer?.lfo },
     voice: { ...defaults.voice, ...layer?.voice },
+    oscPitch: { ...defaults.oscPitch, ...layer?.oscPitch },
   }
 }
 

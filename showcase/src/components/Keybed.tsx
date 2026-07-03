@@ -115,10 +115,11 @@ export function Keybed({ controller, instrument }: KeybedProps) {
         aria-label={`${VARIANT.keyboard.totalKeys}-key ${VARIANT.keyAction} keybed, E1 to E7`}
         data-testid="keybed"
       >
-        {KEYS.filter((k) => !k.isBlack).map((keyDef) => (
-          <KeyView key={keyDef.id} keyDef={keyDef} controller={controller} onPointerDownKey={onPointerDownKey} onPointerUpKey={onPointerUpKey} />
-        ))}
-        {KEYS.filter((k) => k.isBlack).map((keyDef) => (
+        {/* Chromatic DOM order (tab/focus order matches pitch order); black
+            keys stack above via .black-key's z-index — they stay absolutely
+            positioned by .key (never position:relative, see SHOWCASE.md
+            iteration 17). */}
+        {KEYS.map((keyDef) => (
           <KeyView key={keyDef.id} keyDef={keyDef} controller={controller} onPointerDownKey={onPointerDownKey} onPointerUpKey={onPointerUpKey} />
         ))}
         {split?.on &&

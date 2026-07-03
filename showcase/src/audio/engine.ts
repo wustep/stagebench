@@ -185,6 +185,36 @@ interface Voice {
   synthFilter: SynthVoiceFilter | null
 }
 
+/** Numeric voice-map key — section/layer/midi packed into one small integer
+ *  (midi is the raw 0..127 key number, never the octave-shifted pitch), so a
+ *  key press/release no longer builds a garbage key string (iteration 23
+ *  GC pass). */
+const SECTION_KEY_CODE: Record<SectionId, number> = { piano: 0, organ: 1, synth: 2 }
+const LAYER_KEY_CODE: Record<VoiceLayer, number> = { A: 0, B: 1, C: 2 }
+function voiceKey(section: SectionId, layer: VoiceLayer, midi: number): number {
+  return (SECTION_KEY_CODE[section] * 4 + LAYER_KEY_CODE[layer]) * 128 + midi
+}
+
+/** Free-list cap: pooled Voice objects hold no AudioNode references (cleanup
+ *  empties their arrays), so this only bounds retained plain-object count. */
+const VOICE_POOL_MAX = 64
+
+/** Static partial recipe for the labeled synthesized fallback voice
+ *  (hoisted from a per-press literal — iteration 23 GC pass). */
+const FALLBACK_VOICE_PARTIALS: ReadonlyArray<{ ratio: number; type: string; level: number; detune: number }> = [
+  { ratio: 1, type: 'triangle', level: 1, detune: 0 },
+  { ratio: 1, type: 'sine', level: 0.5, detune: 3 },
+  { ratio: 2, type: 'sine', level: 0.24, detune: -2 },
+  { ratio: 3.01, type: 'sine', level: 0.08, detune: 0 },
+]
+
+/** Left/right unison duplicate sides (hoisted from per-press literals). */
+const UNISON_SIDES = [-1, 1] as const
+
+/** Piano/Organ layer ids for the per-press noteOn loop (hoisted from a
+ *  per-call `['A', 'B'] as const` literal; panel-edit paths keep theirs). */
+const AB_LAYERS = ['A', 'B'] as const
+
 type InstrumentLoadStatus = 'loading' | 'ready' | 'error'
 
 export interface OrganChannel {
@@ -330,6 +360,13 @@ function midiToFrequency(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12)
 }
 
+/** Cents-depth-to-playbackRate-ratio translator scale for Samples-mode
+ *  pitch modulation (see the pitchScalers hookup in startSynthVoice).
+ *  Hoisted from a per-press closure (iteration 23 GC pass). */
+function centsToRateScale(baseRate: number): number {
+  return baseRate * (Math.pow(2, 1 / 1200) - 1)
+}
+
 /** Stops (if startable) and disconnects every node — used for the standing
  *  synth LFO's oscillator/buffer-source/gain nodes on full engine teardown
  *  (mirrors the equivalent helper in effects.ts for the effect LFOs). */
@@ -365,12 +402,32 @@ function biquadTypeFor(type: SynthFilterType): string {
  *  mapped hotter (qMultiplier 1.5x) for a self-oscillating-ladder character
  *  distinct from LP24's identical-Q pair; the optional LP+HP is a lowpass
  *  at the cutoff in series with a highpass fixed 2 octaves below it — a
- *  wider/shallower band emphasis than BP's single resonant stage. */
-function synthFilterStageSpecs(type: SynthFilterType): Array<{ type: string; qMultiplier: number; freqOctaveOffset: number }> {
-  if (type === 'LP24') return [{ type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }, { type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }]
-  if (type === 'LP M') return [{ type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }, { type: 'lowpass', qMultiplier: 1.5, freqOctaveOffset: 0 }]
-  if (type === 'LP+HP') return [{ type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 }, { type: 'highpass', qMultiplier: 1, freqOctaveOffset: -2 }]
-  return [{ type: biquadTypeFor(type), qMultiplier: 1, freqOctaveOffset: 0 }]
+ *  wider/shallower band emphasis than BP's single resonant stage.
+ *  Shared read-only constants (callers only iterate/index) so building a
+ *  filtered voice allocates no per-press spec arrays (iteration 23 GC pass). */
+interface SynthFilterStageSpec {
+  type: string
+  qMultiplier: number
+  freqOctaveOffset: number
+}
+const LP24_STAGES: SynthFilterStageSpec[] = [
+  { type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 },
+  { type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 },
+]
+const LP_M_STAGES: SynthFilterStageSpec[] = [
+  { type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 },
+  { type: 'lowpass', qMultiplier: 1.5, freqOctaveOffset: 0 },
+]
+const LP_HP_STAGES: SynthFilterStageSpec[] = [
+  { type: 'lowpass', qMultiplier: 1, freqOctaveOffset: 0 },
+  { type: 'highpass', qMultiplier: 1, freqOctaveOffset: -2 },
+]
+const SINGLE_STAGE: Record<string, SynthFilterStageSpec[]> = {}
+function synthFilterStageSpecs(type: SynthFilterType): SynthFilterStageSpec[] {
+  if (type === 'LP24') return LP24_STAGES
+  if (type === 'LP M') return LP_M_STAGES
+  if (type === 'LP+HP') return LP_HP_STAGES
+  return (SINGLE_STAGE[type] ??= [{ type: biquadTypeFor(type), qMultiplier: 1, freqOctaveOffset: 0 }])
 }
 
 /** LP M's fixed gentle drive waveshaper (tanh k=1.5): a declared ladder-
@@ -378,12 +435,17 @@ function synthFilterStageSpecs(type: SynthFilterType): Array<{ type: string; qMu
  *  active for this type (independent of the Drive knob's own stage), so LP M
  *  measurably differs from LP24 at identical freq/res/tracking settings. */
 const LP_M_DRIVE_K = 1.5
+/** Memoized: the curve is a constant, and rebuilding a 2048-float array on
+ *  every LP M key press was pure per-press garbage (iteration 23 GC pass). */
+let lpMDriveCurveCache: Float32Array | null = null
 function lpMDriveCurve(): Float32Array {
+  if (lpMDriveCurveCache) return lpMDriveCurveCache
   const curve = new Float32Array(2048)
   for (let i = 0; i < curve.length; i++) {
     const x = (i / (curve.length - 1)) * 2 - 1
     curve[i] = Math.tanh(x * LP_M_DRIVE_K) / Math.tanh(LP_M_DRIVE_K)
   }
+  lpMDriveCurveCache = curve
   return curve
 }
 
@@ -408,15 +470,21 @@ function synthFilterTrackingScale(tracking: 0 | 1 | 2 | 3, midi: number): number
 
 /** Drive stage curve (Off/1/2/3): the same tanh-saturation shape used by the
  *  rotary drive (createRotary in effects.ts), scaled 1..3 across the three
- *  active levels so higher settings clip harder. */
+ *  active levels so higher settings clip harder. Memoized per level — the
+ *  curve only depends on `drive`, and rebuilding a 2048-float array on every
+ *  driven key press was pure per-press garbage (iteration 23 GC pass). */
+const synthDriveCurveCache = new Map<number, Float32Array>()
 function synthDriveCurve(drive: 0 | 1 | 2 | 3): Float32Array | null {
   if (drive === 0) return null
+  const cached = synthDriveCurveCache.get(drive)
+  if (cached) return cached
   const k = 1 + drive * 3
   const curve = new Float32Array(2048)
   for (let i = 0; i < curve.length; i++) {
     const x = (i / (curve.length - 1)) * 2 - 1
     curve[i] = Math.tanh(x * k) / Math.tanh(k)
   }
+  synthDriveCurveCache.set(drive, curve)
   return curve
 }
 
@@ -456,13 +524,21 @@ export class PianoEngine {
   private synthChannels: Record<SynthLayerId, SynthChannel> | null = null
   private rotary: RotaryUnit | null = null
 
-  private voices = new Map<string, Voice>()
+  private voices = new Map<number, Voice>()
   private releasingVoices = new Set<Voice>()
+  /** Voice free-list (iteration 23 GC pass): cleanupVoice returns the JS
+   *  bookkeeping object here — with its sources/ownedNodes arrays emptied in
+   *  place — so sustained playing stops allocating one object plus two
+   *  arrays per key press. AudioNodes are never pooled or reused. */
+  private voicePool: Voice[] = []
   private sustainLevel = 0
   private softDown = false
   private sostenutoDown = false
   private pitchBend = 0
   private appliedBend: Record<SectionId, number> = { piano: 0, organ: 0, synth: 0 }
+  /** Osc Pitch offset (cents) last applied to each synth layer's sounding
+   *  voices — edits retarget live via the bend retarget path (applyBendToVoices). */
+  private appliedSynthPitch: Record<SynthLayerId, number> = { A: 0, B: 0, C: 0 }
   private seqCounter = 0
   private organClick: AudioBufferLike | null = null
   private organChiff: AudioBufferLike | null = null
@@ -1235,6 +1311,12 @@ export class PianoEngine {
       // Multi, Super and FM-H categories; Pure has no Osc Ctrl effect); the
       // filter's type/freq/res/tracking/drive retarget the same way.
       this.updateSynthVoiceLive(now)
+      // Osc Pitch edits (manual p. 28) retarget sounding voices immediately,
+      // reusing the bend retarget path — it recomputes every synth source's
+      // detune/playbackRate including the per-layer Osc Pitch offset.
+      if (SYNTH_LAYER_IDS.some((layer) => this.synthOscPitchCents(layer) !== this.appliedSynthPitch[layer])) {
+        this.applyBendToVoices('synth')
+      }
       // Each layer's standing LFO follows its waveform/rate/amount/mstClk.
       this.updateSynthLfos(now)
     }
@@ -1278,6 +1360,9 @@ export class PianoEngine {
       if (live) {
         const oscCtrl = layerState.oscCtrl
         const bend = this.effectiveBend('synth')
+        // Osc Ctrl retargets recompute the full detune: base spread + bend +
+        // the layer's Osc Pitch offset (manual p. 28).
+        const pitchCents = this.synthOscPitchCents(voice.layer as SynthLayerId)
         switch (live.kind) {
           case 'multi': {
             const cents = multiDetuneCents(oscCtrl)
@@ -1285,14 +1370,14 @@ export class PianoEngine {
             const step = count > 1 ? (2 * cents) / (count - 1) : 0
             live.detuned.forEach(({ source }, i) => {
               source.baseDetune = count > 1 ? -cents + step * i : 0
-              rampTo(source.node.detune, source.baseDetune + bend * 100, now)
+              rampTo(source.node.detune, source.baseDetune + bend * 100 + pitchCents, now)
             })
             break
           }
           case 'super': {
             live.detuned.forEach(({ source }, i) => {
               source.baseDetune = superDetuneCents(oscCtrl, i, live.detuned.length)
-              rampTo(source.node.detune, source.baseDetune + bend * 100, now)
+              rampTo(source.node.detune, source.baseDetune + bend * 100 + pitchCents, now)
             })
             break
           }
@@ -1426,7 +1511,7 @@ export class PianoEngine {
       }
     }
     const allowPercussion = state.organ.percussion.poly ? true : !organKeyAlreadyDown
-    for (const layer of ['A', 'B'] as const) {
+    for (const layer of AB_LAYERS) {
       // Keyboard zones (manual p. 39): a layer only sounds inside its
       // assigned zones; crossfades scale adjacent layers complementarily.
       if (state.layers[layer].enabled && state.piano.sectionOn) {
@@ -1487,14 +1572,15 @@ export class PianoEngine {
   private triggerSynthMonoVoice(layer: SynthLayerId, midi: number, velocity: number, zoneGain: number): void {
     const voiceState = this.state.synth.layers[layer].voice
     const previousMidi = this.synthSoundingMidi[layer]
-    const wasSounding = previousMidi !== null && this.voices.has(`synth:${layer}:${previousMidi}`)
+    const previousKey = previousMidi !== null ? voiceKey('synth', layer, previousMidi) : null
+    const wasSounding = previousKey !== null && this.voices.has(previousKey)
     if (voiceState.mode === 'Legato' && wasSounding) {
       this.glideSynthVoice(layer, previousMidi!, midi)
       this.synthSoundingMidi[layer] = midi
       return
     }
     // Mono (always retriggers), or Legato's first note (nothing sounding yet).
-    if (wasSounding) this.releaseVoice(this.voices.get(`synth:${layer}:${previousMidi}`)!, QUICK_RELEASE_SECONDS)
+    if (wasSounding) this.releaseVoice(this.voices.get(previousKey!)!, QUICK_RELEASE_SECONDS)
     this.startSynthVoice(layer, midi, velocity, zoneGain)
     this.synthSoundingMidi[layer] = midi
   }
@@ -1506,7 +1592,7 @@ export class PianoEngine {
   private glideSynthVoice(layer: SynthLayerId, fromMidi: number, toMidi: number): void {
     const context = this.context
     if (!context) return
-    const key = `synth:${layer}:${fromMidi}`
+    const key = voiceKey('synth', layer, fromMidi)
     const voice = this.voices.get(key)
     if (!voice) return
     const layerState = this.state.synth.layers[layer]
@@ -1522,7 +1608,7 @@ export class PianoEngine {
     }
     voice.midi = toMidi
     this.voices.delete(key)
-    this.voices.set(`synth:${layer}:${toMidi}`, voice)
+    this.voices.set(voiceKey('synth', layer, toMidi), voice)
   }
 
   /* ----------------------------------------------------- arpeggiator/gate -- */
@@ -1632,7 +1718,7 @@ export class PianoEngine {
       const midi = sequence[index]!
       const previous = this.arpSoundingMidi[layer]
       if (previous !== null && previous !== midi) {
-        const previousVoice = this.voices.get(`synth:${layer}:${previous}`)
+        const previousVoice = this.voices.get(voiceKey('synth', layer, previous))
         if (previousVoice) this.releaseVoice(previousVoice, QUICK_RELEASE_SECONDS)
       }
       const zoneGain = zoneGainFor(this.state.split, zone, midi)
@@ -1680,6 +1766,46 @@ export class PianoEngine {
     }
   }
 
+  /** Pops a recycled Voice bookkeeping object (or builds the first one) and
+   *  resets every field for a fresh key press; `gain` becomes the first owned
+   *  node, matching the old `[gain]` literal each start* function built. */
+  private acquireVoice(section: SectionId, layer: VoiceLayer, midi: number, gain: GainNodeLike): Voice {
+    const voice = this.voicePool.pop() ?? {
+      section,
+      layer,
+      midi,
+      seq: 0,
+      keyDown: true,
+      sustained: false,
+      sostenuto: false,
+      releasing: false,
+      synthFallback: false,
+      sources: [],
+      ownedNodes: [],
+      gain,
+      cleanupTimer: null,
+      organLive: null,
+      synthLive: null,
+      synthFilter: null,
+    }
+    voice.section = section
+    voice.layer = layer
+    voice.midi = midi
+    voice.seq = this.seqCounter++
+    voice.keyDown = true
+    voice.sustained = false
+    voice.sostenuto = false
+    voice.releasing = false
+    voice.synthFallback = false
+    voice.gain = gain
+    voice.cleanupTimer = null
+    voice.organLive = null
+    voice.synthLive = null
+    voice.synthFilter = null
+    voice.ownedNodes.push(gain)
+    return voice
+  }
+
   private startVoice(
     layer: LayerId,
     midi: number,
@@ -1689,7 +1815,7 @@ export class PianoEngine {
     zoneGain = 1,
   ): void {
     const context = this.context!
-    const key = `piano:${layer}:${midi}`
+    const key = voiceKey('piano', layer, midi)
     const existing = this.voices.get(key)
     if (existing) this.releaseVoice(existing, QUICK_RELEASE_SECONDS)
     this.stealPastCap('piano', layer)
@@ -1702,8 +1828,9 @@ export class PianoEngine {
     const now = context.currentTime
     const gain = context.createGain()
     gain.gain.setValueAtTime(0.0001, now)
-    const ownedNodes: AudioNodeLike[] = [gain]
-    const sources: VoiceSource[] = []
+    const voice = this.acquireVoice('piano', layer, midi, gain)
+    const ownedNodes = voice.ownedNodes
+    const sources = voice.sources
     let synthFallback = false
 
     const instrumentId = forceSynth ? null : selectedInstrumentId(layerState)
@@ -1725,24 +1852,7 @@ export class PianoEngine {
     // has no bundled model ("Piano not found") — nothing pretends to sound.
 
     gain.connect(bus)
-    const voice: Voice = {
-      section: 'piano',
-      layer,
-      midi,
-      seq: this.seqCounter++,
-      keyDown: true,
-      sustained: false,
-      sostenuto: false,
-      releasing: false,
-      synthFallback,
-      sources,
-      ownedNodes,
-      gain,
-      cleanupTimer: null,
-      organLive: null,
-      synthLive: null,
-      synthFilter: null,
-    }
+    voice.synthFallback = synthFallback
     this.voices.set(key, voice)
   }
 
@@ -1751,7 +1861,7 @@ export class PianoEngine {
   private startOrganVoice(layer: LayerId, midi: number, allowPercussion: boolean, zoneGain = 1): void {
     const context = this.context!
     const channel = this.organChannels![layer]
-    const key = `organ:${layer}:${midi}`
+    const key = voiceKey('organ', layer, midi)
     const existing = this.voices.get(key)
     if (existing) this.releaseVoice(existing, QUICK_RELEASE_SECONDS)
     this.stealPastCap('organ', layer)
@@ -1767,8 +1877,9 @@ export class PianoEngine {
     const gain = context.createGain()
     gain.gain.setValueAtTime(0.0001, now)
     gain.gain.exponentialRampToValueAtTime(Math.max(0.001, zoneGain), now + 0.004)
-    const ownedNodes: AudioNodeLike[] = [gain]
-    const sources: VoiceSource[] = []
+    const voice = this.acquireVoice('organ', layer, midi, gain)
+    const ownedNodes = voice.ownedNodes
+    const sources = voice.sources
 
     // Vox tone mix: partials feed dark (lowpassed) and bright paths that the
     // 9th drawbar crossfades (manual p. 21).
@@ -1862,24 +1973,7 @@ export class PianoEngine {
     }
 
     gain.connect(channel.voiceBus)
-    const voice: Voice = {
-      section: 'organ',
-      layer,
-      midi,
-      seq: this.seqCounter++,
-      keyDown: true,
-      sustained: false,
-      sostenuto: false,
-      releasing: false,
-      synthFallback: false,
-      sources,
-      ownedNodes,
-      gain,
-      cleanupTimer: null,
-      organLive: { model: layerState.model, partials, voxMix },
-      synthLive: null,
-      synthFilter: null,
-    }
+    voice.organLive = { model: layerState.model, partials, voxMix }
     this.voices.set(key, voice)
   }
 
@@ -1888,7 +1982,7 @@ export class PianoEngine {
   private startSynthVoice(layer: SynthLayerId, midi: number, velocity: number, zoneGain = 1, releasePrevious = true): Voice {
     const context = this.context!
     const channel = this.synthChannels![layer]
-    const key = `synth:${layer}:${midi}`
+    const key = voiceKey('synth', layer, midi)
     const existing = this.voices.get(key)
     if (existing && releasePrevious) this.releaseVoice(existing, QUICK_RELEASE_SECONDS)
     this.stealPastCap('synth', layer)
@@ -1898,6 +1992,12 @@ export class PianoEngine {
     const shifted = midi + layerState.octave * 12 + this.transposeOffset()
     const frequency = midiToFrequency(shifted)
     const bend = this.effectiveBend('synth')
+    // Osc Pitch (manual p. 28: -24..+24 st + ±50 c fine tune): a per-layer
+    // detune offset summed onto every source oscillator's detune (Analog) or
+    // folded into the playbackRate pitch factor (Samples/noise loop) — the
+    // same two paths the pitch bend rides, so live retargeting reuses
+    // applyBendToVoices.
+    const pitchCents = this.synthOscPitchCents(layer)
     const now = context.currentTime
 
     const envelope = layerState.ampEnvelope
@@ -1912,8 +2012,9 @@ export class PianoEngine {
     const decaySeconds = synthDecaySeconds(envelope.decay)
     if (decaySeconds !== null) gain.gain.setTargetAtTime(Math.max(0.0001, peak * 0.001), now + attackSeconds, decaySeconds)
 
-    const ownedNodes: AudioNodeLike[] = [gain]
-    const sources: VoiceSource[] = []
+    const voice = this.acquireVoice('synth', layer, midi, gain)
+    const ownedNodes = voice.ownedNodes
+    const sources = voice.sources
     let synthLive: SynthVoiceLive = null
     // Basic oscillator type unison duplicates re-play (spec: "reuse the
     // piano unison pattern" — a simplified single-oscillator stack per
@@ -1934,7 +2035,9 @@ export class PianoEngine {
         const source = context.createBufferSource()
         if (buffer) source.buffer = buffer
         const baseRate = Math.pow(2, (shifted - zone.rootMidi) / 12) * Math.pow(2, detuneCents / 1200)
-        source.playbackRate.value = baseRate * Math.pow(2, (bend * 100) / 1200)
+        // Osc Pitch rides the same playbackRate pitch factor as the bend
+        // (the manual's Samples-mode Pitch/Fine Tune, p. 28).
+        source.playbackRate.value = baseRate * Math.pow(2, (bend * 100 + pitchCents) / 1200)
         // Declared per-set level (spec-consistent with the piano sample
         // pattern's `spec.gain`): each recorded set carries its own gain so
         // the two sets sit at a comparable perceived level.
@@ -1958,7 +2061,7 @@ export class PianoEngine {
       unisonOscType = 'sawtooth' // unused in Samples mode; kept for type continuity below
       const unisonLevel = layerState.voice.unison
       if (unisonLevel > 0) {
-        for (const side of [-1, 1]) {
+        for (const side of UNISON_SIDES) {
           buildSampleVoice(side * (5 + unisonLevel * 6), side * (0.25 + unisonLevel * 0.18), 0.35 + unisonLevel * 0.08)
         }
       }
@@ -1991,6 +2094,10 @@ export class PianoEngine {
           const source = context.createBufferSource()
           source.buffer = this.getSynthNoiseLoop(context)
           source.loop = true
+          // The noise loop is a sample-kind source: bend/Osc Pitch shift its
+          // playbackRate (spectral tilt), matching applyBendToVoices'
+          // retarget formula for sounding voices.
+          source.playbackRate.value = Math.pow(2, (bend * 100 + pitchCents) / 1200)
           source.connect(gain)
           source.start(now)
           sources.push({ kind: 'sample', node: source, baseRate: 1 })
@@ -2003,7 +2110,7 @@ export class PianoEngine {
           else if (wave.name === 'Pulse 33') osc.setPeriodicWave(pulse33Wave(context))
           else osc.setPeriodicWave(pulse10Wave(context)) // Pulse 10
           osc.frequency.value = frequency
-          osc.detune.value = bend * 100
+          osc.detune.value = bend * 100 + pitchCents
           osc.connect(gain)
           osc.start(now)
           sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
@@ -2016,7 +2123,7 @@ export class PianoEngine {
         const osc = context.createOscillator()
         osc.setPeriodicWave(syncWave(context, square, oscCtrl))
         osc.frequency.value = frequency
-        osc.detune.value = bend * 100
+        osc.detune.value = bend * 100 + pitchCents
         oscCtrlGain!.connect(osc.detune)
         osc.connect(gain)
         osc.start(now)
@@ -2036,7 +2143,7 @@ export class PianoEngine {
           const octaveUp = eightVe && i === count - 1
           const baseDetune = octaveUp ? 0 : count > 1 ? -cents + step * i : 0
           osc.frequency.value = frequency * (octaveUp ? 2 : 1)
-          osc.detune.value = baseDetune + bend * 100
+          osc.detune.value = baseDetune + bend * 100 + pitchCents
           oscCtrlGain!.connect(osc.detune)
           const oscGain = context.createGain()
           oscGain.gain.value = octaveUp ? 0.5 : 1
@@ -2060,7 +2167,7 @@ export class PianoEngine {
           osc.type = square ? 'square' : 'sawtooth'
           const baseDetune = superDetuneCents(oscCtrl, i, count)
           osc.frequency.value = frequency
-          osc.detune.value = baseDetune + bend * 100
+          osc.detune.value = baseDetune + bend * 100 + pitchCents
           oscCtrlGain!.connect(osc.detune)
           const panner = context.createStereoPanner()
           panner.pan.value = count > 1 ? (i / (count - 1) - 0.5) * 1.6 : 0
@@ -2083,13 +2190,16 @@ export class PianoEngine {
         const carrier = context.createOscillator()
         carrier.type = 'sine'
         carrier.frequency.value = frequency
-        carrier.detune.value = bend * 100
+        carrier.detune.value = bend * 100 + pitchCents
         const modulator = context.createOscillator()
         modulator.type = 'sine'
         // FM-H's 'FM 2-op' uses a 1:1 (harmonic) ratio (algorithm A); FM-I's
         // 'FM 2-op B' uses the inharmonic 1.414 ratio instead (spec: "FM
         // Inharmonic algorithms") — otherwise identical 2-op FM structure.
         modulator.frequency.value = wave.category === 'FM-I' ? frequency * FM_INHARMONIC_RATIO : frequency
+        // The modulator detunes with the carrier so bend/Osc Pitch preserve
+        // the FM ratio — matching applyBendToVoices, which retargets both.
+        modulator.detune.value = bend * 100 + pitchCents
         const modGain = context.createGain()
         modGain.gain.value = fmModulationIndex(oscCtrl, frequency)
         modulator.connect(modGain)
@@ -2111,7 +2221,7 @@ export class PianoEngine {
         const main = context.createOscillator()
         main.type = mainType
         main.frequency.value = frequency
-        main.detune.value = bend * 100
+        main.detune.value = bend * 100 + pitchCents
         main.connect(gain)
         main.start(now)
         sources.push({ kind: 'synth', node: main, baseDetune: 0 })
@@ -2120,7 +2230,7 @@ export class PianoEngine {
         const sub = context.createOscillator()
         sub.type = 'square'
         sub.frequency.value = frequency / 2
-        sub.detune.value = bend * 100
+        sub.detune.value = bend * 100 + pitchCents
         const subGain = context.createGain()
         subGain.gain.value = subOscGain(oscCtrl)
         sub.connect(subGain)
@@ -2140,7 +2250,7 @@ export class PianoEngine {
         const osc = context.createOscillator()
         osc.setPeriodicWave(shapePulseWave(context, oscCtrl))
         osc.frequency.value = frequency
-        osc.detune.value = bend * 100
+        osc.detune.value = bend * 100 + pitchCents
         oscCtrlGain!.connect(osc.detune)
         osc.connect(gain)
         osc.start(now)
@@ -2159,7 +2269,7 @@ export class PianoEngine {
         const osc = context.createOscillator()
         osc.type = 'sine'
         osc.frequency.value = frequency
-        osc.detune.value = bend * 100
+        osc.detune.value = bend * 100 + pitchCents
         const driveGain = context.createGain()
         driveGain.gain.value = shapeFoldDriveGain(oscCtrl)
         const shaper = context.createWaveShaper()
@@ -2181,7 +2291,7 @@ export class PianoEngine {
         const osc = context.createOscillator()
         osc.setPeriodicWave(wave.name === 'Wave Formant' ? waveFormantWave(context) : waveOrganWave(context))
         osc.frequency.value = frequency
-        osc.detune.value = bend * 100
+        osc.detune.value = bend * 100 + pitchCents
         osc.connect(gain)
         osc.start(now)
         sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
@@ -2197,12 +2307,12 @@ export class PianoEngine {
       // still applies once.
       const unisonLevel = layerState.voice.unison
       if (unisonLevel > 0) {
-        for (const side of [-1, 1]) {
+        for (const side of UNISON_SIDES) {
           const osc = context.createOscillator()
           osc.type = unisonOscType
           osc.frequency.value = frequency
           const baseDetune = side * (5 + unisonLevel * 6)
-          osc.detune.value = baseDetune + bend * 100
+          osc.detune.value = baseDetune + bend * 100 + pitchCents
           const panner = context.createStereoPanner()
           panner.pan.value = side * (0.25 + unisonLevel * 0.18)
           const unisonGain = context.createGain()
@@ -2224,12 +2334,18 @@ export class PianoEngine {
     // category param the LFO's Osc Ctrl destination and Osc Ctrl live-
     // retargeting use; no effect in Samples mode), bipolar around 64 = 0.
     const oscEnv = layerState.oscEnvelope
-    const oscillatorNodes = sources.filter((s): s is VoiceSource & { kind: 'synth' } => s.kind === 'synth').map((s) => s.node)
-    const sampleNodes = sources.filter((s): s is VoiceSource & { kind: 'sample' } => s.kind === 'sample').map((s) => s.node)
+    // One pass over sources, shared with the LFO/vibrato hookup below —
+    // replaces four per-press filter/map array chains (iteration 23 GC pass).
+    const oscillatorNodes: OscillatorNodeLike[] = []
+    const sampleVoiceSources: Array<VoiceSource & { kind: 'sample' }> = []
+    for (const source of sources) {
+      if (source.kind === 'synth') oscillatorNodes.push(source.node)
+      else sampleVoiceSources.push(source)
+    }
     const isSamplesMode = layerState.mode === 'Samples'
     const oscEnvTarget: AudioParamLike | AudioParamLike[] | null = oscEnv.toPitch
       ? isSamplesMode
-        ? sampleNodes.map((source) => source.playbackRate)
+        ? sampleVoiceSources.map((source) => source.node.playbackRate)
         : oscillatorNodes.map((osc) => osc.detune)
       : isSamplesMode
         ? null // Osc Ctrl has no effect in Samples mode
@@ -2317,14 +2433,11 @@ export class PianoEngine {
     // translator keeps the SAME depth gain meaningful for a ratio param
     // instead of dropping the destination, per the spec's practicality
     // allowance for Samples-mode Osc Pitch).
-    const voiceOscillators = sources.filter((s): s is VoiceSource & { kind: 'synth' } => s.kind === 'synth').map((s) => s.node)
-    const sampleVoiceSources = sources.filter((s): s is VoiceSource & { kind: 'sample' } => s.kind === 'sample')
     // Cents-depth-to-playbackRate-ratio translator: one small fixed-gain
     // node per sample source, input fed by the LFO/vibrato depth gain,
     // output summed onto that source's playbackRate — keeps the SAME
     // cents-shaped depth gains (updateSynthLfos/vibratoDepth) meaningful for
     // a ratio param instead of dropping the destination in Samples mode.
-    const centsToRateScale = (baseRate: number): number => baseRate * (Math.pow(2, 1 / 1200) - 1)
     const pitchScalers: GainNodeLike[] = sampleVoiceSources.map(({ node, baseRate }) => {
       const scaler = context.createGain()
       scaler.gain.value = centsToRateScale(baseRate)
@@ -2333,7 +2446,7 @@ export class PianoEngine {
       return scaler
     })
     this.connectSynthLfoDestination(channel, layerState.lfo.destination, {
-      oscillators: voiceOscillators,
+      oscillators: oscillatorNodes,
       filters: synthFilter?.filters ?? [],
       oscCtrlParam: isSamplesMode ? null : (synthLive?.oscCtrlParam ?? null),
       pitchScalers: isSamplesMode ? pitchScalers : [],
@@ -2358,28 +2471,12 @@ export class PianoEngine {
     }
     ownedNodes.push(vibratoRamp)
     channel.vibrato.depth.connect(vibratoRamp)
-    for (const osc of voiceOscillators) vibratoRamp.connect(osc.detune)
+    for (const osc of oscillatorNodes) vibratoRamp.connect(osc.detune)
     for (const scaler of pitchScalers) vibratoRamp.connect(scaler)
 
     filterOut.connect(channel.voiceBus)
-    const voice: Voice = {
-      section: 'synth',
-      layer,
-      midi,
-      seq: this.seqCounter++,
-      keyDown: true,
-      sustained: false,
-      sostenuto: false,
-      releasing: false,
-      synthFallback: false,
-      sources,
-      ownedNodes,
-      gain,
-      cleanupTimer: null,
-      organLive: null,
-      synthLive,
-      synthFilter,
-    }
+    voice.synthLive = synthLive
+    voice.synthFilter = synthFilter
     this.voices.set(key, voice)
     return voice
   }
@@ -2503,7 +2600,7 @@ export class PianoEngine {
       const buffer = this.sampleCache.get(mainZone.file)
       if (buffer) {
         const baseRate = Math.pow(2, (midi - mainZone.rootMidi) / 12)
-        for (const side of [-1, 1]) {
+        for (const side of UNISON_SIDES) {
           const source = context.createBufferSource()
           source.buffer = buffer
           source.playbackRate.value = baseRate * bendFactor
@@ -2551,13 +2648,7 @@ export class PianoEngine {
       /* voice runs unfiltered */
     }
 
-    const partials: Array<{ ratio: number; type: string; level: number; detune: number }> = [
-      { ratio: 1, type: 'triangle', level: 1, detune: 0 },
-      { ratio: 1, type: 'sine', level: 0.5, detune: 3 },
-      { ratio: 2, type: 'sine', level: 0.24, detune: -2 },
-      { ratio: 3.01, type: 'sine', level: 0.08, detune: 0 },
-    ]
-    for (const partial of partials) {
+    for (const partial of FALLBACK_VOICE_PARTIALS) {
       const osc = context.createOscillator()
       osc.type = partial.type
       osc.frequency.value = frequency * partial.ratio
@@ -2575,7 +2666,10 @@ export class PianoEngine {
 
   noteOff(midi: number): void {
     this.synthKeyUp(midi)
-    for (const voice of [...this.voices.values()]) {
+    // Direct Map iteration (no copy array per key release): the loop body
+    // only flags voices or releases them, and releaseVoice deletes entries —
+    // never inserts — which is safe during Map iteration.
+    for (const voice of this.voices.values()) {
       if (voice.midi !== midi) continue
       voice.keyDown = false
       if (voice.sostenuto) continue
@@ -2777,22 +2871,35 @@ export class PianoEngine {
     return this.state.transpose.on ? this.state.transpose.semitones : 0
   }
 
+  /** Per-layer Osc Pitch offset in cents (manual p. 28: -24..+24 semitones
+   *  plus ±50 cents fine tune) — Synth section only. */
+  private synthOscPitchCents(layer: SynthLayerId): number {
+    const oscPitch = this.state.synth.layers[layer].oscPitch
+    return oscPitch.semis * 100 + oscPitch.cents
+  }
+
   private applyBendToVoices(section: SectionId): void {
     const context = this.context
     if (!context) return
     const bend = this.effectiveBend(section)
     this.appliedBend[section] = bend
+    if (section === 'synth') {
+      for (const layer of SYNTH_LAYER_IDS) this.appliedSynthPitch[layer] = this.synthOscPitchCents(layer)
+    }
     const now = context.currentTime
-    const factor = Math.pow(2, bend / 12)
     const apply = (voice: Voice) => {
       if (voice.section !== section) return
+      // Synth voices carry their layer's Osc Pitch offset on top of the bend
+      // (manual p. 28); piano/organ voices have no such offset.
+      const pitchCents = section === 'synth' ? this.synthOscPitchCents(voice.layer as SynthLayerId) : 0
+      const factor = Math.pow(2, (bend * 100 + pitchCents) / 1200)
       for (const source of voice.sources) {
         if (source.kind === 'sample') {
           source.node.playbackRate.cancelScheduledValues(now)
           source.node.playbackRate.setTargetAtTime(source.baseRate * factor, now, 0.015)
         } else {
           source.node.detune.cancelScheduledValues(now)
-          source.node.detune.setTargetAtTime(source.baseDetune + bend * 100, now, 0.015)
+          source.node.detune.setTargetAtTime(source.baseDetune + bend * 100 + pitchCents, now, 0.015)
         }
       }
     }
@@ -2822,7 +2929,7 @@ export class PianoEngine {
   private releaseVoice(voice: Voice, releaseSeconds: number): void {
     if (voice.releasing) return
     voice.releasing = true
-    this.voices.delete(`${voice.section}:${voice.layer}:${voice.midi}`)
+    this.voices.delete(voiceKey(voice.section, voice.layer, voice.midi))
     this.releasingVoices.add(voice)
     const context = this.context
     if (context) {
@@ -2845,6 +2952,10 @@ export class PianoEngine {
   }
 
   private cleanupVoice(voice: Voice): void {
+    // Every cleanup path goes through releaseVoice (which adds the voice to
+    // releasingVoices); a voice absent from the set was already cleaned —
+    // and possibly recycled — so touching it again would corrupt the pool.
+    if (!this.releasingVoices.has(voice)) return
     if (voice.cleanupTimer !== null) {
       this.boundary.timers.clearTimeout(voice.cleanupTimer)
       voice.cleanupTimer = null
@@ -2864,6 +2975,15 @@ export class PianoEngine {
       }
     }
     this.releasingVoices.delete(voice)
+    // Free-list recycle: empty the arrays in place and drop every AudioNode
+    // reference so pooled bookkeeping objects never pin graph nodes.
+    voice.sources.length = 0
+    voice.ownedNodes.length = 0
+    voice.organLive = null
+    voice.synthLive = null
+    voice.synthFilter = null
+    voice.gain = null as unknown as GainNodeLike
+    if (this.voicePool.length < VOICE_POOL_MAX) this.voicePool.push(voice)
   }
 
   /**
@@ -2950,6 +3070,7 @@ export class PianoEngine {
       this.synthChannels = null
     }
     this.stopArp()
+    this.voicePool.length = 0
     this.synthHeld = { A: [], B: [], C: [] }
     this.synthSoundingMidi = { A: null, B: null, C: null }
     this.rotary?.dispose()

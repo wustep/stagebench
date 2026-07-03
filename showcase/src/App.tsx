@@ -250,6 +250,16 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   // Unmount cleanup: stop every owned voice and release the audio graph.
   useEffect(() => () => controller.dispose(), [controller])
 
+  // Engine failures must stay visible even with the info strip collapsed:
+  // in minimal chrome a degraded (error/fallback) engine line renders
+  // directly in the always-visible strip instead of the hidden info block.
+  const engineDegraded = engineStatus.status === 'error' || engineStatus.status === 'fallback'
+  const engineStatusLine = (
+    <span data-testid="engine-status" data-status={engineStatus.status} aria-live="polite">
+      <b>Piano:</b> {engineStatus.message}
+    </span>
+  )
+
   return (
     <main className="stage-app">
       <div
@@ -291,7 +301,6 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       )}
       <footer
         className={`status-strip ${chrome === 'minimal' ? 'chrome-minimal' : ''}`}
-        aria-live="polite"
         data-testid="status-strip"
       >
         <span className="chrome-essentials">
@@ -328,11 +337,10 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             ⓘ INFO
           </button>
         </span>
+        {chrome === 'minimal' && engineDegraded && engineStatusLine}
         <span className="chrome-info">
-          <span data-testid="engine-status" data-status={engineStatus.status}>
-            <b>Piano:</b> {engineStatus.message}
-          </span>
-          <span data-testid="midi-status" data-status={midiStatus.status}>
+          {(chrome !== 'minimal' || !engineDegraded) && engineStatusLine}
+          <span data-testid="midi-status" data-status={midiStatus.status} aria-live="polite">
             <b>MIDI:</b> {midiStatus.message}
           </span>
           <span data-testid="pedal-status">
@@ -344,13 +352,18 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               CTRL PEDAL {controlPedal} (CC11 · Control Pedal morph source)
             </span>
           </span>
+          <span data-testid="keymap-help">
+            <b>Keyboard:</b> A S D F G H J K L ; play C4–E5 and W E T Y U O P the sharps between them (physical key
+            positions, layout-independent) · Space/Z/X are the sustain/soft/sostenuto pedals
+          </span>
           <span className="status-note">
             Functional: keybed, pedals, all Piano and Organ sections (all six organ models including B3 Bass and Pipe
             2), the complete Synth section (Analog and Samples modes, all optional oscillator categories and
             filters), Layer Effects (including each synth layer's own effect chain and the organ layers' shared
-            chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, and section zoom. Visual-only by
-            spec exclusion: Synth Mode's Extern position, the preset-library buttons, the Prog View/Section
-            Edit/Layer Init/Mon·Copy menus, Morph A.T. (no browser aftertouch), and the Organ preset button.
+            chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, Layer Init (Shift + Section Edit),
+            and section zoom. Visual-only by spec exclusion: Synth Mode's Extern position, the preset-library
+            buttons, Section Edit's plain press and the Mon·Copy menu, Morph A.T. (no browser aftertouch), and the
+            Organ preset button.
           </span>
         </span>
       </footer>

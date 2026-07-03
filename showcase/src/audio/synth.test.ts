@@ -1,5 +1,7 @@
+import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator, FakeWaveShaper } from '../test/fakes'
+import { renderApp } from '../test/renderApp'
 import { InstrumentStore, SYNTH_WAVEFORMS } from '../state/instrument'
 import { SYNTH_SAMPLE_SETS } from './library'
 import { PianoEngine } from './engine'
@@ -357,6 +359,8 @@ describe('synth.sound-init — optional scope', () => {
     store.cycleSynthLfoWaveform()
     store.cycleSynthVoiceMode()
     store.cycleSynthLayerMode() // Analog -> Samples
+    store.setSynthOscPitchSemis(7)
+    store.setSynthOscPitchCents(-25)
 
     store.synthSoundInit()
     const layer = store.getState().synth.layers.A
@@ -367,6 +371,7 @@ describe('synth.sound-init — optional scope', () => {
     // Reset to init defaults.
     expect(SYNTH_WAVEFORMS[layer.waveform]!.name).toBe('Saw')
     expect(layer.oscCtrl).toBe(64)
+    expect(layer.oscPitch).toEqual({ semis: 0, cents: 0 })
     expect(layer.ampEnvelope.attack).toBe(0)
     expect(layer.filter.type).toBe('LP24')
     expect(layer.oscEnvelope.toPitch).toBe(false)
@@ -374,6 +379,111 @@ describe('synth.sound-init — optional scope', () => {
     expect(layer.voice.mode).toBe('Poly')
     expect(layer.mode).toBe('Analog')
     expect(store.getState().lastEdit).toMatch(/Sound Init — Synth A/)
+  })
+
+  it('SOUND INIT is Shift + Waveform Select on the panel (one physical button, manual p. 37)', () => {
+    renderApp()
+    const waveformButton = screen.getByRole('button', { name: 'Waveform Select' })
+    const before = screen.getByTestId('oled-synth-name-line').textContent
+    // Plain press: category cycle — the OLED waveform name changes.
+    fireEvent.click(waveformButton)
+    expect(screen.getByTestId('oled-synth-name-line').textContent).not.toBe(before)
+    // Shift + press: SOUND INIT resets the layer's sound to the init Saw.
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(waveformButton)
+    expect(screen.getByTestId('oled-synth-name-line').textContent).toBe('Saw')
+  })
+})
+
+describe('synth.osc-pitch — manual p. 28 Pitch and Fine Tune', () => {
+  it('PITCH/SMP latches the OLED dial mode: dial 1 edits semitones, dial 2 fine-tune cents', () => {
+    renderApp()
+    const pitchButton = screen.getByRole('button', { name: 'Oscillator Pitch/Sample' })
+    fireEvent.click(pitchButton)
+    expect(screen.getByTestId('oled-synth-osc-pitch-line').textContent).toMatch(/OSC PITCH \+0 st · \+0 c/)
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Synth Display Dial 1' }), { key: 'End' })
+    expect(screen.getByTestId('oled-synth-osc-pitch-line').textContent).toMatch(/\+24 st/)
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Synth Display Dial 2' }), { key: 'Home' })
+    expect(screen.getByTestId('oled-synth-osc-pitch-line').textContent).toMatch(/-50 c/)
+    // Closing the mode returns the OLED to its normal waveform view.
+    fireEvent.click(pitchButton)
+    expect(screen.queryByTestId('oled-synth-osc-pitch-line')).toBeNull()
+    expect(screen.getByTestId('oled-synth-ctrl-line')).toBeInTheDocument()
+  })
+
+  it('the Osc Pitch edit mode and the envelope/vibrato edit modes are mutually exclusive', () => {
+    const store = new InstrumentStore()
+    store.setSynthOscPitchEdit(true)
+    store.setSynthEnvEdit('amp')
+    expect(store.getState().synthOscPitchEdit).toBe(false) // envelope edit closes it
+    store.setSynthOscPitchEdit(true)
+    expect(store.getState().synthEnvEdit).toBe(null) // and vice versa
+    store.setSynthVibratoEdit(true)
+    expect(store.getState().synthOscPitchEdit).toBe(false) // vibrato menu closes it
+    store.setSynthOscPitchEdit(true)
+    expect(store.getState().synthVibratoEdit).toBe(false)
+  })
+
+  it('oscPitch detune reaches every source oscillator and retargets live on a sounding voice', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    selectWaveform(store, 'Saw')
+    store.setSynthOscPitchSemis(12)
+    store.setSynthOscPitchCents(25)
+    const oscs = newOscillators(context, () => engine.noteOn(60, 0.8))
+    expect(oscs).toHaveLength(1)
+    expect(oscs[0]!.detune.value).toBeCloseTo(1225, 5) // +12 st + 25 c
+    // Editing while the note sounds retargets immediately (the bend
+    // retarget path recomputes detune including the Osc Pitch offset).
+    store.setSynthOscPitchSemis(-24)
+    expect(oscs[0]!.detune.value).toBeCloseTo(-2400 + 25, 5)
+    engine.noteOff(60)
+  })
+
+  it('Samples mode folds oscPitch into the playbackRate pitch factor (+12 st doubles the rate)', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.cycleSynthLayerMode() // Analog -> Samples
+    const before = context.bufferSources().length
+    engine.noteOn(60, 0.8)
+    const flat = context.bufferSources().slice(before)[0]!
+    const flatRate = flat.playbackRate.value
+    engine.noteOff(60)
+
+    store.setSynthOscPitchSemis(12)
+    const before2 = context.bufferSources().length
+    engine.noteOn(60, 0.8)
+    const shifted = context.bufferSources().slice(before2)[0]!
+    expect(shifted.playbackRate.value).toBeCloseTo(flatRate * 2, 5)
+    engine.noteOff(60)
+  })
+
+  it('backfills oscPitch on persisted synth layers written before the field existed', () => {
+    const first = new InstrumentStore()
+    const stripOscPitch = (slot: { name: string; snapshot: unknown }) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as {
+        synth?: { layers: Record<string, Record<string, unknown>> }
+      }
+      if (snapshot.synth) for (const layer of Object.values(snapshot.synth.layers)) delete layer.oscPitch
+      return { name: slot.name, snapshot }
+    }
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({
+        version: 1,
+        bank: first.getState().programs.bank.map(stripOscPitch),
+        live: first.getState().programs.live.map(stripOscPitch),
+        liveMode: false,
+        current: 0,
+      }),
+    })
+    const restored = new InstrumentStore(storage)
+    expect(restored.getState().synth.layers.A.oscPitch).toEqual({ semis: 0, cents: 0 })
+    // Navigating to another slot spreads a stored snapshot over canonical
+    // state — it must also tolerate the missing nested key.
+    expect(() => restored.selectProgram(7)).not.toThrow()
+    expect(restored.getState().synth.layers.C.oscPitch).toEqual({ semis: 0, cents: 0 })
   })
 })
 

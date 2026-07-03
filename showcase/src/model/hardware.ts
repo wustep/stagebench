@@ -15,8 +15,12 @@ import type { SectionId } from './variant'
  * accessible presentation state but has no audio effect, matching spec
  * exclusions: Synth Mode's Extern position (the button cycles only between
  * the two real modes and never lands there), the preset-library buttons,
- * the Prog View/Section Edit/Layer Init/Mon·Copy menus, Morph A.T. (no
- * browser aftertouch), and the Organ preset button.
+ * the Mon·Copy menu, Morph A.T. (no browser aftertouch), and the Organ
+ * preset button. Prog View is functional: it cycles the Program display's
+ * four view modes (manual p. 42). Section Edit is functional through its
+ * Shift pairing only — LAYER INIT (manual p. 43) opens the four-soft-button
+ * init screen on the Program OLED, while the plain press truthfully does
+ * nothing (the hold/sticky Section Edit mode is not modeled).
  */
 export type ControlType = 'knob' | 'encoder' | 'button' | 'fader' | 'drawbar' | 'wheel' | 'stick'
 
@@ -105,7 +109,6 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'piano-dyn-comp',
   'piano-timbre',
   'piano-type',
-  'piano-info',
   'piano-model',
   'piano-octave-down',
   'piano-octave-up',
@@ -115,11 +118,15 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'shift',
   'store',
   'store-as',
+  'prog-view',
   'program-dial',
   'page-left',
   'page-right',
   'live-mode',
   'solo-undo',
+  // LAYER INIT = Shift + Section Edit (manual p. 43): the button's Shift
+  // pairing opens the init screen; its plain press is truthfully inert.
+  'section-edit',
   'layer-scene',
   'split-onset',
   'mstclk-tap',
@@ -169,15 +176,16 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'synth-unison',
   'vibrato-mode',
   'vibrato-menu',
+  'osc-pitch-smp',
   'arp-run',
   'arp-mode',
   'arp-rate',
   'arp-range',
   'kb-hold',
   'fx-focus-synth',
-  // Optional scope: Sound Init and Synth Mode (Analog <-> Samples; Extern
-  // stays spec-excluded and unreachable from this button).
-  'sound-init',
+  // Optional scope: Synth Mode (Analog <-> Samples; Extern stays
+  // spec-excluded and unreachable from this button). Sound Init has no
+  // button of its own: it is Shift + Waveform Select (manual p. 37).
   'synth-mode',
   // Layer Effects section
   'effects-on',
@@ -203,7 +211,6 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'delay-variation',
   'delay-feedback',
   'delay-tap',
-  'delay-analog',
   'delay-filter',
   'delay-mix',
   'delay-on',
@@ -227,7 +234,10 @@ const toggle = (id: string, label: string, group?: string): ControlSeed => ({ id
 const push = (id: string, label: string, group?: string): ControlSeed => ({ id, group, type: 'button', label, latching: false })
 
 export const DRAWBAR_FOOTAGES = ['16′', '5⅓′', '8′', '4′', '2⅔′', '2′', '1⅗′', '1⅓′', '1′'] as const
-export const DRAWBAR_LEGENDS = ['BASS16', 'STR16', 'FLUTE8', 'OBOE8', 'TRMP8', 'STRB', 'FLUTE4', 'STR4', '2⅔–1'] as const
+export const DRAWBAR_LEGENDS = ['BASS16', 'STR16', 'FLUTE8', 'OBOE8', 'TRMP8', 'STR8', 'FLUTE4', 'STR4', '2⅔–1'] as const
+/** Second dim register row printed under each drawbar name (reference photo):
+ *  blank under STR4, a sine-span glyph under the last column. */
+export const DRAWBAR_REGISTERS = ['16′', '8′', '4′', '2′', 'II', 'III', 'IV', '', '∿–∿'] as const
 /** Initial visual registration pose, loosely matching the reference photo. */
 export const DRAWBAR_INITIAL = [3, 0, 8, 2, 5, 1, 4, 0, 6] as const
 
@@ -242,7 +252,8 @@ const performanceControls = section('performance', [
   toggle('rotary-source', 'Rotary Organ Source', 'Rotary Speaker'),
   toggle('rotary-stop-mode', 'Rotary Stop Mode', 'Rotary Speaker'),
   toggle('rotary-speed', 'Rotary Speed Slow Fast', 'Rotary Speaker'),
-  push('rotary-morph', 'Rotary Morph', 'Rotary Speaker'),
+  // No MORPH button: the hardware's MORPH is an indicator LED, lit while a
+  // morph source is assigned to the rotary speed (manual p. 53).
 ])
 
 const organControls = section('organ', [
@@ -278,8 +289,9 @@ const pianoControls = section('piano', [
   push('piano-kb-touch', 'KB Touch Select'),
   push('piano-dyn-comp', 'Dynamic Compression Select'),
   push('piano-timbre', 'Piano Timbre Select', 'Timbre'),
+  // One physical Piano Select button; INFO is its Shift pairing (manual
+  // p. 25: "Pressing INFO (Shift + Piano Select)"), printed under the cap.
   push('piano-type', 'Piano Type Select', 'Piano Select'),
-  push('piano-info', 'Piano Info', 'Piano Select'),
   encoder('piano-model', 'Piano Model Dial', 'Piano Select'),
   push('piano-octave-down', 'Piano Octave Shift Down'),
   push('piano-octave-up', 'Piano Octave Shift Up'),
@@ -306,8 +318,11 @@ const programControls = section('program', [
   toggle('layer-scene', 'Layer Scene II'),
   ...PROGRAM_BUTTON_LEGENDS.map((legend, i) => push(`program-${i + 1}`, `Program ${i + 1}`, 'Program')),
   push('solo-undo', 'Solo/Undo'),
+  // ONE physical button (reference photo): LAYER INIT is its Shift pairing
+  // (manual p. 43, printed as the ▽ shift-legend below the cap). The plain
+  // press stays truthfully inert — the hardware's hold/sticky Section Edit
+  // mode is not modeled.
   push('section-edit', 'Section Edit'),
-  push('layer-init', 'Layer Init'),
   push('mon-copy', 'Monitor/Copy Paste'),
   toggle('shift', 'Shift/Exit'),
 ])
@@ -326,8 +341,9 @@ const synthControls = section('synth', [
   { ...knob('glide', 'Glide', 'Voice'), initial: 0 },
   push('vibrato-mode', 'Synth Vibrato Mode', 'Vibrato'),
   push('vibrato-menu', 'Synth Vibrato Menu', 'Vibrato'),
+  // ONE physical red-framed button: WAVEFORM select on press, SOUND INIT on
+  // Shift + press (manual p. 37: "SOUND INIT (Shift+Waveform)").
   push('waveform-select', 'Waveform Select'),
-  push('sound-init', 'Sound Init'),
   push('lfo-waveform', 'LFO Waveform', 'LFO'),
   knob('lfo-rate', 'LFO Rate/Time', 'LFO'),
   { ...knob('lfo-mod-amt', 'LFO Mod Amount', 'LFO'), initial: 0 },
@@ -382,8 +398,9 @@ const effectsControls = section('effects', [
   knob('delay-tempo', 'Delay Tempo', 'Delay'),
   push('delay-variation', 'Delay Effects Variation', 'Delay'),
   knob('delay-feedback', 'Delay Feedback', 'Delay'),
+  // ONE physical TAP/SET button (reference photo): tap tempo on press,
+  // ANALOG mode on Shift + press (the ▿-marked '● ANALOG ▿' panel print).
   push('delay-tap', 'Delay Tap/Set', 'Delay'),
-  toggle('delay-analog', 'Delay Analog Mode', 'Delay'),
   push('delay-filter', 'Delay Feedback Filter', 'Delay'),
   knob('delay-mix', 'Delay Dry/Wet', 'Delay'),
   toggle('delay-on', 'Delay On', 'Delay'),
