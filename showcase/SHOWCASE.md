@@ -795,3 +795,26 @@ Fable-side review fixes after the workflow's feature landings:
   30 blacks, zero misplaced (all inside the keybed at 0.61 height), first
   key E1, last key E7, first black F#1, last black D#7 — plus a full-page
   screenshot showing the correct 2-3 grouping.
+
+### 18 — Computed-layout regression harness (2026-07-02)
+
+The black-key incident showed the jsdom gates are structurally blind to
+computed CSS layout. New `pnpm verify:layout` (scripts/verify-layout.mjs,
+playwright-core against the built artifact, self-served via vite preview):
+
+- Keybed geometry from real layout, not the model: 43+30 keys, E1..E7 ends,
+  every black key straddling its two white neighbours inside the keybed,
+  black-height fraction within 0.57..0.65 of the spec's 0.61.
+- Per-section text-overflow audit at 1440x900 (printed title straddles,
+  round-control overhangs and deliberate OLED ellipsis clipping excluded),
+  group-box collision audit, effects boxes fitting their grid tracks, and
+  no horizontal page scroll.
+- Narrow 390x844 retention: all 73 keys inside the chassis, six sections
+  rendered, no horizontal scroll. Zero console errors on load.
+- First runs immediately caught two leftovers (the filter FREQ knob
+  overflowing its legend-width flex cell — now sized with its siblings —
+  and flagged the OLED's deliberate ellipsis before the audit learned to
+  exempt intentional clipping). 12/12 checks green; runs in ~6s.
+- Deliberately a separate script rather than a fifth package gate: it needs
+  a real browser, and the benchmark contract requires the four package
+  gates to run deterministically without devices.
