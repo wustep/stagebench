@@ -745,14 +745,29 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         <div className="program-mid">
           <div className="program-mid-left">
             <span className="store-cluster">
-              <span className="tiny-led-row">
-                <Led color="red" on={!!programs.storePending} className={programs.storePending ? 'flash' : ''} />
-                <Legend>STORE</Legend>
+              <span className="store-main">
+                <span className="tiny-led-row">
+                  <Led color="red" on={!!programs.storePending} className={programs.storePending ? 'flash' : ''} />
+                  <Legend>STORE</Legend>
+                </span>
+                <PanelButton store={store} id="store" className="red small" />
+                {/* Blank cap; STORE AS… / PAGE NAME are printed on the panel
+                    beneath it (reference). */}
+                <PanelButton store={store} id="store-as" className="dark tiny" />
+                <Legend>STORE AS…</Legend>
+                <Legend className="dim">PAGE NAME</Legend>
               </span>
-              <PanelButton store={store} id="store" className="red small" />
-              <PanelButton store={store} id="store-as" className="dark tiny">
-                STORE AS…
-              </PanelButton>
+              {/* Printed MIDI / EXTERN indicators beside Store (reference). */}
+              <span className="store-side" aria-hidden="true">
+                <span className="tiny-led-row">
+                  <Led color="green" />
+                  <Legend>MIDI</Legend>
+                </span>
+                <span className="tiny-led-row">
+                  <Led color="red" />
+                  <Legend>EXTERN</Legend>
+                </span>
+              </span>
             </span>
             <div className="program-dial-block">
               <Encoder store={store} id="program-dial" className="large" />
@@ -802,6 +817,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               </div>
               <Legend className="dim">SINGLE LAYER ▾</Legend>
             </GroupBox>
+            <div className="display-block">
             <Oled
               section="program"
               lines={[
@@ -826,6 +842,14 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                 </span>,
               ]}
             />
+            {/* Display bezel tick marks under the OLED (reference). */}
+            <span className="oled-ticks" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
+            </div>
             <GroupBox title="Program" className="program-grid-box">
               <div className="program-grid">
                 {PROGRAM_BUTTON_LEGENDS.map((legend, i) => (
@@ -851,24 +875,33 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
             <span className="rail-cell">
               <Legend>PROG VIEW</Legend>
               <PanelButton store={store} id="prog-view" className="dark tiny" />
+              <Legend className="dim">PRESET NAME</Legend>
             </span>
-            <span className="rail-cell">
-              <Legend>SOLO</Legend>
-              <PanelButton store={store} id="solo-undo" className="dark tiny" />
-              <Legend className="dim">UNDO</Legend>
-            </span>
-            <span className="rail-cell">
-              <Legend>SECTION EDIT ⇕</Legend>
-              <PanelButton store={store} id="section-edit" className="dark tiny" />
-            </span>
-            <span className="rail-cell">
-              <Legend>LAYER INIT</Legend>
-              <PanelButton store={store} id="layer-init" className="dark tiny" />
-            </span>
-            <span className="rail-cell">
-              <Legend>MON|COPY</Legend>
-              <PanelButton store={store} id="mon-copy" className="dark tiny" />
-              <Legend className="dim">PASTE ⇕</Legend>
+            {/* Reference: SOLO through PASTE share one outlined box; the SOLO
+                LED truthfully lights while a discarded edit is recoverable
+                (the button performs the single-level SOLO UNDO). */}
+            <span className="rail-box">
+              <span className="rail-cell">
+                <span className="tiny-led-row">
+                  <Led color="yellow" on={programs.undo !== null} />
+                  <Legend>SOLO</Legend>
+                </span>
+                <PanelButton store={store} id="solo-undo" className="dark tiny" />
+                <Legend className="dim">UNDO</Legend>
+              </span>
+              <span className="rail-cell">
+                <Legend>SECTION EDIT ⇕</Legend>
+                <PanelButton store={store} id="section-edit" className="dark tiny" />
+              </span>
+              <span className="rail-cell">
+                <Legend>LAYER INIT</Legend>
+                <PanelButton store={store} id="layer-init" className="dark tiny" />
+              </span>
+              <span className="rail-cell">
+                <Legend>MON|COPY</Legend>
+                <PanelButton store={store} id="mon-copy" className="dark tiny" />
+                <Legend className="dim">PASTE ⇕</Legend>
+              </span>
             </span>
             <span className="shift-cluster">
               <Legend>SHIFT</Legend>

@@ -1092,6 +1092,26 @@ A discrepancy sweep against fresh high-detail crops of the reference photo
 - Gates: typecheck, test (404/404), lint, build, verify:layout (12/12,
   after re-tightening the piano tabs and Mod 1/2 ON rows).
 
+### 28 — Program strip round 2 + centered side-to-side pitch stick (2026-07-03)
+
+- **Pitch stick centered, sliding side to side**: the wooden lever now rests
+  centered in its landscape slot and `translateX`-slides left/right with the
+  bend (right = up, spring back to center) instead of tilting — matching the
+  hardware's motion seen from above.
+- **Store cluster completed to the reference print**: STORE LED + red
+  button, a blank dark cap with STORE AS… / PAGE NAME printed beneath it
+  (the labels were on the cap before), and the MIDI / EXTERN indicator LEDs
+  beside the button. The cluster wraps its indicator column under the
+  buttons when print-size flooring leaves no side-by-side slack at 1440.
+- **Display block**: the Program OLED absorbs the strip's spare height up to
+  a cap (no more bare red band, without the display swallowing the column),
+  with the reference's four bezel tick marks attached beneath it; remaining
+  slack spreads between the center clusters.
+- **Right rail**: PRESET NAME printed under PROG VIEW; SOLO → PASTE now
+  share the reference's outlined box, and the SOLO LED truthfully lights
+  while a discarded edit is recoverable by SOLO UNDO (programs.undo).
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404.
+
 ### 27 — Perf-zone geometry, program spacing, and a functional sweep (2026-07-03)
 
 User-directed corrections plus a live functional audit:

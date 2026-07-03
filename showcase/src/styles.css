@@ -1054,7 +1054,8 @@ body {
 
 .pitch-stick-lever {
   position: absolute;
-  left: 7%;
+  /* Centered at rest; the bend slides it left/right within the slot. */
+  left: 21%;
   top: 22%;
   width: 58%;
   height: 56%;
@@ -1063,8 +1064,6 @@ body {
   box-shadow:
     0 0.2cqw 0.3cqw rgba(0, 0, 0, 0.55),
     inset 0 0.08cqw 0.1cqw rgba(255, 245, 225, 0.5);
-  /* Pivots at its right end (toward the slot center), like the hardware. */
-  transform-origin: 92% 50%;
 }
 
 /* Focus visibility for all decorative controls */
@@ -1973,11 +1972,12 @@ body {
 
 .program-mid-left {
   flex: none;
-  width: 24%;
+  width: 26%;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.15cqw;
+  min-width: 0;
 }
 
 .program-mid-left .mode-block {
@@ -1991,14 +1991,90 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.12cqw;
+  /* Any slack beyond the display's cap spreads between the clusters
+     instead of pooling as one bare red band. */
+  justify-content: space-between;
 }
 
 .store-cluster {
   display: flex;
+  /* The MIDI/EXTERN column sits beside Store when it fits and wraps under
+     it when rounding leaves no slack (the print floors at tiny sizes). */
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.12cqw;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.store-main {
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.1cqw;
+  flex: none;
 }
+
+.store-main .legend {
+  font-size: 0.26cqw;
+  white-space: nowrap;
+}
+
+/* MIDI / EXTERN indicator column beside Store (reference). */
+.store-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14cqw;
+  flex: none;
+}
+
+.store-side .legend {
+  font-size: 0.22cqw;
+}
+
+.store-side .led {
+  width: 0.28cqw;
+  height: 0.28cqw;
+}
+
+/* The display and its bezel ticks travel as one block. */
+.display-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1cqw;
+  min-height: 0;
+  flex: 1;
+  max-height: 6.4cqw;
+}
+
+/* Display bezel tick marks between the OLED and the Program box. */
+.oled-ticks {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 1.2cqw;
+  flex: none;
+}
+
+.oled-ticks i {
+  width: 0.09cqw;
+  height: 0.28cqw;
+  border-radius: 0.05cqw;
+  background: #232024;
+}
+
+/* Reference: SOLO through PASTE share one outlined box on the rail. */
+.rail-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.32cqw;
+  border: 0.07cqw solid var(--panel-line);
+  border-radius: 0.3cqw;
+  padding: 0.22cqw 0.12cqw;
+  align-self: stretch;
+}
+
 
 .preset-box {
   padding: 0.32cqw 0.15cqw 0.1cqw;
@@ -2026,7 +2102,10 @@ body {
 
 .deck-section[data-section='program'] .oled {
   min-height: 2.5cqw;
-  flex: none;
+  /* The display absorbs most of the strip's spare height (reference: it is
+     the dominant middle element) without swallowing the whole column. */
+  flex: 1;
+  max-height: 6cqw;
   padding: 0.2cqw 0.3cqw;
   font-size: 0.44cqw;
   line-height: 1.2;

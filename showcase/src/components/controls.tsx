@@ -186,10 +186,12 @@ export const Wheel = memo(function Wheel({ store, id, className }: ContinuousPro
 
 export const PitchStick = memo(function PitchStick({ store, id, className }: ContinuousProps) {
   const { value, min, range, sliderProps } = useContinuous(store, id)
-  const tilt = ((value - min) / range - 0.5) * -36
+  // The stick rests centered in its slot and SLIDES side to side with the
+  // bend (right = up), like the hardware seen from above.
+  const travel = ((value - min) / range - 0.5) * 60
   return (
     <div {...sliderProps} className={`pitch-stick ${className ?? ''}`}>
-      <div className="pitch-stick-lever" style={{ transform: `rotate(${tilt}deg)` }} />
+      <div className="pitch-stick-lever" style={{ transform: `translateX(${travel}%)` }} />
     </div>
   )
 })
