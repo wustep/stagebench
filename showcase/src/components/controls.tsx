@@ -24,7 +24,7 @@ function useContinuous(store: PresentationStore, id: string) {
   const min = control.min ?? 0
   const max = control.max ?? 127
   const range = max - min
-  const dragState = useRef<{ pointerId: number; startY: number; startValue: number } | null>(null)
+  const dragState = useRef<{ pointerId: number; startX: number; startY: number; startValue: number } | null>(null)
 
   const onKeyDown = (event: ReactKeyboardEvent) => {
     let next: number | null = null
@@ -44,16 +44,23 @@ function useContinuous(store: PresentationStore, id: string) {
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.currentTarget.focus()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    dragState.current = { pointerId: event.pointerId, startY: event.clientY, startValue: value }
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // A pointer can be gone by the time capture is requested (touch
+      // cancellation, synthetic events); the drag still tracks via move events.
+    }
+    dragState.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startValue: value }
   }
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragState.current
     if (!drag || drag.pointerId !== event.pointerId) return
-    let deltaY = drag.startY - event.clientY
+    let delta = drag.startY - event.clientY
     // Drawbars are pulled out (toward the player, i.e. downward) to increase.
-    if (control.type === 'drawbar') deltaY = -deltaY
-    store.setValue(id, drag.startValue + (deltaY / 120) * range)
+    if (control.type === 'drawbar') delta = -delta
+    // The pitch stick moves SIDE TO SIDE on the hardware (right = bend up).
+    if (control.type === 'stick') delta = event.clientX - drag.startX
+    store.setValue(id, drag.startValue + (delta / 120) * range)
   }
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (dragState.current?.pointerId === event.pointerId) dragState.current = null
@@ -67,7 +74,7 @@ function useContinuous(store: PresentationStore, id: string) {
     'aria-valuemin': min,
     'aria-valuemax': max,
     'aria-valuenow': value,
-    'aria-orientation': 'vertical' as const,
+    'aria-orientation': (control.type === 'stick' ? 'horizontal' : 'vertical') as 'horizontal' | 'vertical',
     'data-control-id': id,
     'data-decorative': control.decorative ? 'true' : 'false',
     'data-morphed': morphTag ?? undefined,

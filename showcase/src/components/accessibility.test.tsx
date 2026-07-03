@@ -27,7 +27,7 @@ describe('accessibility.controls', () => {
     }
   })
 
-  it('continuous controls expose value min/max/now and vertical orientation', () => {
+  it('continuous controls expose value min/max/now and orientation', () => {
     renderApp()
     // Dial 2 truthfully reads out the power-on Saw waveform's list position
     // (not 0) — same derived-value pattern as the piano model dial below.
@@ -39,7 +39,9 @@ describe('accessibility.controls', () => {
       if (!derivedValue.has(control.id)) {
         expect(element.getAttribute('aria-valuenow'), control.id).toBe(String(control.initial ?? 0))
       }
-      expect(element.getAttribute('aria-orientation'), control.id).toBe('vertical')
+      // The pitch stick moves side to side like the hardware; everything
+      // else (knobs, faders, drawbars, wheel) operates vertically.
+      expect(element.getAttribute('aria-orientation'), control.id).toBe(control.type === 'stick' ? 'horizontal' : 'vertical')
     }
   })
 

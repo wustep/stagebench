@@ -183,6 +183,9 @@ function LayerFaderColumn({
 
 export function PerformanceSection({ store, instrument }: BoundSectionProps) {
   const state = useInstrumentState(instrument)
+  // The MORPH indicator lights while a morph source is assigned to the
+  // rotary speed destination (the strip's only morphable parameter).
+  const rotarySpeedMorphed = useSyncExternalStore(store.subscribe, () => store.morphTag('rotary-speed') !== null)
   const pianoRouted =
     !state.allFxOff &&
     (['A', 'B'] as const).some((layer) => state.chains[layer].ampEq.on && state.chains[layer].ampEq.type === 'To Rotary')
@@ -244,7 +247,7 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
           </span>
           <PanelButton store={store} id="rotary-speed" className="dark small" />
           <span className="rotary-led-row">
-            <Led color="yellow" on={false} />
+            <Led color="yellow" on={rotarySpeedMorphed} />
             <Legend>MORPH</Legend>
           </span>
           <PanelButton store={store} id="rotary-morph" className="dark small" />

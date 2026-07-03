@@ -62,11 +62,12 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     fireEvent.keyDown(wheel, { key: 'ArrowUp' })
     expect(Number(wheel.getAttribute('aria-valuenow'))).toBeGreaterThan(0)
 
+    // The pitch stick moves SIDE TO SIDE like the hardware: right = bend up.
     const stick = screen.getByRole('slider', { name: 'Pitch Stick' })
-    fireEvent.pointerDown(stick, { pointerId: 9, clientY: 50 })
-    fireEvent.pointerMove(stick, { pointerId: 9, clientY: 10 })
+    fireEvent.pointerDown(stick, { pointerId: 9, clientX: 50, clientY: 50 })
+    fireEvent.pointerMove(stick, { pointerId: 9, clientX: 90, clientY: 50 })
     expect(Number(stick.getAttribute('aria-valuenow'))).toBeGreaterThan(0)
-    fireEvent.pointerUp(stick, { pointerId: 9, clientY: 10 })
+    fireEvent.pointerUp(stick, { pointerId: 9, clientX: 90, clientY: 50 })
     expect(stick).toHaveAttribute('aria-valuenow', '0')
   })
 

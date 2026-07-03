@@ -1092,6 +1092,42 @@ A discrepancy sweep against fresh high-detail crops of the reference photo
 - Gates: typecheck, test (404/404), lint, build, verify:layout (12/12,
   after re-tightening the piano tabs and Mod 1/2 ON rows).
 
+### 27 — Perf-zone geometry, program spacing, and a functional sweep (2026-07-03)
+
+User-directed corrections plus a live functional audit:
+
+- **Pitch stick moves side to side, like the hardware**: the slot is now a
+  landscape black recess (tilted ~-12°) with the wooden stick lying
+  horizontally in its left portion, and the DRAG AXIS is horizontal too —
+  `useContinuous` maps `stick`-type controls to clientX (right = bend up,
+  spring return unchanged), `aria-orientation` is `horizontal`, cursor
+  `ew-resize`. The decorative-controls drag test and the accessibility
+  orientation pin evolved truthfully with it.
+- **Mod wheel leans up-and-to-the-left** (was tilted the wrong way).
+- **Rotary Speaker strip sits on the red chassis** with a light outline and
+  its light title tab (was a dark slate panel fill).
+- **Branding enlarged and repositioned**: the Comfortaa logotype up to
+  1.18cqw with HAMMER ACTION 73 letter-spaced to span it, lifted off the
+  plate edge (overflow-checked at 1440 — the first spacing attempt tripped
+  `no-text-overflows-desktop` and was tightened).
+- **Program strip dead space closed**: the OLED now absorbs the strip's
+  spare height (`flex: 1`), so the bare red band between the display and
+  the PROGRAM box is gone.
+- **Functional sweep** (driven in the live browser, zero console errors):
+  vib/chorus cycle lights the exact scanner position on the new matrix;
+  program select, Shift/Shift-2 cross-latching, Mod 1 variation arrows,
+  Delay ON, rotary speed, knob/drawbar keyboard operation, timbre rocker,
+  key press → voice, master-clock tap + dial edit (300 BPM clamp), split
+  editor via Shift+Split (closes on Shift drop), morph capture on
+  delay-mix (assign → indicator dot → live wheel interpolation → clear),
+  arp run, Live Mode (L1), on-screen sustain + control pedal, and the
+  section-zoom overlay open/close. Two real fixes came out of it: the
+  rotary **MORPH LED** now truthfully lights while a morph source is
+  assigned to rotary speed (was hardwired unlit in iteration 26's rework),
+  and `setPointerCapture` is guarded so a pointer that disappears before
+  capture (touch cancellation, synthetic events) can't throw mid-gesture.
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404.
+
 ### 26 — Panel-print fidelity: knob scales, LED segments, selector arrows, OLED (2026-07-03)
 
 Crop-by-crop audit against reference/nord-stage-4-73.jpg (per-section element
