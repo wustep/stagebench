@@ -5,6 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { readJson, writeJson } from '../bench/lib/shared.mjs'
 import { createRun, loadRun, markSealed, recordTelemetry, registerEvaluation, registryEntry, reindexRegistry, statusSummary } from '../bench/lib/run/store.mjs'
+import { exportRun, __internals as exportInternals } from '../bench/lib/run/export.mjs'
 import { importWorkspace, startPhase } from '../bench/lib/run/workspace.mjs'
 import { REQUIRED_FEATURES, runChecks, verifyPhase } from '../bench/lib/run/verify.mjs'
 import { loadRubric } from '../bench/lib/eval/evaluate.mjs'
@@ -224,4 +225,89 @@ test('implementation manifest validation rejects dishonest or malformed declarat
   assert.throws(() => validateImplementationManifest({ version: 1, phase: 2, audio: { strategy: 'x', sampleSources: [] } }, 1), /phase must be 1/)
   assert.throws(() => validateImplementationManifest({ version: 1, phase: 1, audio: { strategy: '', sampleSources: [] } }, 1), /strategy/)
   assert.throws(() => validateImplementationManifest({ version: 1, phase: 1, audio: { strategy: 'x', sampleSources: [{ name: 'a', source: 'b' }] } }, 1), /license/)
+})
+
+// Parse a store-only ZIP's central directory into { name -> { data, crc } }.
+function readZip(buffer) {
+  const eocdSignature = 0x06054b50
+  let eocd = buffer.length - 22
+  while (eocd >= 0 && buffer.readUInt32LE(eocd) !== eocdSignature) eocd -= 1
+  assert.ok(eocd >= 0, 'ZIP end-of-central-directory record must exist')
+  const total = buffer.readUInt16LE(eocd + 10)
+  let pointer = buffer.readUInt32LE(eocd + 16)
+  const entries = {}
+  for (let i = 0; i < total; i += 1) {
+    assert.equal(buffer.readUInt32LE(pointer), 0x02014b50, 'central directory header signature')
+    const crc = buffer.readUInt32LE(pointer + 16)
+    const size = buffer.readUInt32LE(pointer + 24)
+    const nameLength = buffer.readUInt16LE(pointer + 28)
+    const extraLength = buffer.readUInt16LE(pointer + 30)
+    const commentLength = buffer.readUInt16LE(pointer + 32)
+    const localOffset = buffer.readUInt32LE(pointer + 42)
+    const name = buffer.toString('utf8', pointer + 46, pointer + 46 + nameLength)
+    // Read the stored (uncompressed) bytes straight after the local header.
+    const localNameLength = buffer.readUInt16LE(localOffset + 26)
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28)
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength
+    entries[name] = { data: buffer.subarray(dataStart, dataStart + size), crc }
+    pointer += 46 + nameLength + extraLength + commentLength
+  }
+  return entries
+}
+
+test('export bundles run artifacts into a valid ZIP and never includes reference material', () => {
+  const root = fixtureRoot()
+  try {
+    // A minimal run on disk with run.json plus an evaluations report.
+    const runId = 'export-fixture'
+    const runDir = path.join(root, 'runs', runId)
+    fs.mkdirSync(path.join(runDir, 'evaluations'), { recursive: true })
+    writeJson(path.join(runDir, 'run.json'), {
+      schemaVersion: 4, id: runId, model: 'export-model', title: 'Export Fixture',
+      protocol: { version: '3.1.0' }, status: 'complete', startedAt: '2026-07-02T00:00:00.000Z',
+      updatedAt: '2026-07-02T00:00:00.000Z', stages: [{ number: 1, status: 'complete' }],
+    })
+    fs.writeFileSync(path.join(runDir, 'evaluations', 'report.md'), '# Report\n')
+    // Published report + preview.
+    fs.mkdirSync(path.join(root, 'public', 'reports', runId), { recursive: true })
+    fs.writeFileSync(path.join(root, 'public', 'reports', runId, 'index.html'), '<html>report</html>')
+    fs.mkdirSync(path.join(root, 'public', 'previews', runId), { recursive: true })
+    fs.writeFileSync(path.join(root, 'public', 'previews', runId, 'index.html'), '<html>preview</html>')
+    // Copyrighted reference material that must never enter the bundle.
+    fs.mkdirSync(path.join(root, 'reference'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'reference', 'manual.pdf'), 'SECRET COPYRIGHTED MANUAL')
+
+    const result = exportRun(root, runId, { out: `runs/${runId}/${runId}.zip` })
+    const zip = readZip(fs.readFileSync(path.join(root, result.output)))
+    const names = Object.keys(zip)
+
+    // Required contents are present under the run-id prefix.
+    assert.ok(names.includes(`${runId}/run.json`), 'run.json is bundled')
+    assert.ok(names.includes(`${runId}/evaluations/report.md`), 'evaluations are bundled')
+    assert.ok(names.includes(`${runId}/report/index.html`), 'static report is bundled')
+    assert.ok(names.includes(`${runId}/preview/index.html`), 'preview build is bundled')
+    assert.ok(names.includes(`${runId}/manifest.json`), 'manifest is bundled')
+
+    // No reference/ material and no bytes matching the decoy manual anywhere.
+    assert.ok(!names.some((name) => /reference/i.test(name) || /manual\.pdf$/i.test(name)), 'no reference paths')
+    for (const { data } of Object.values(zip)) {
+      assert.ok(!data.includes(Buffer.from('SECRET COPYRIGHTED MANUAL')), 'no copyrighted bytes leak in')
+    }
+
+    // Stored entries carry a correct CRC-32 so the archive is not corrupt.
+    for (const { data, crc } of Object.values(zip)) {
+      assert.equal(exportInternals.crc32(data), crc, 'stored entry CRC matches')
+    }
+
+    // Manifest records identity and protocol version.
+    const manifest = JSON.parse(zip[`${runId}/manifest.json`].data.toString())
+    assert.equal(manifest.runId, runId)
+    assert.equal(manifest.protocolVersion, '3.1.0')
+    assert.ok(typeof manifest.exportedAt === 'string')
+
+    // An unknown run id fails loudly rather than producing an empty archive.
+    assert.throws(() => exportRun(root, 'no-such-run'), /Unknown run/)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })

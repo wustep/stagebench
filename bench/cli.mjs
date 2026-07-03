@@ -27,6 +27,7 @@ import {
   statusSummary,
 } from './lib/run/store.mjs'
 import { importWorkspace, removeWorkspace, runInContainer, startPhase } from './lib/run/workspace.mjs'
+import { exportRun } from './lib/run/export.mjs'
 import { runChecks, verifyPhase } from './lib/run/verify.mjs'
 import { captureEvidence, serveDirectory } from './lib/run/capture.mjs'
 import { collectImplementationDetails } from './lib/implementation-details.mjs'
@@ -43,6 +44,7 @@ const COMMANDS = {
   telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal)',
   score: 'score <run-id> [--phase N] — write the assessment template, or register a filled one',
   status: 'status <run-id> — show run state, telemetry, and the next command',
+  export: 'export <run-id> [--out <path>] — bundle run.json, evaluations, report, and preview into a ZIP',
   showcase: 'Check, build, and publish showcase/ to public/previews/showcase',
   reindex: 'Regenerate src/data/runs.json from runs/*/run.json',
   fetch: 'Download the Nord manual and product photos into ./reference [--force] [--timeout <ms>]',
@@ -258,6 +260,9 @@ try {
         telemetry: run.telemetry ?? null,
         stages: run.stages.map(({ number, status, evaluation, telemetry }) => ({ number, status, score: evaluation?.score ?? null, telemetry: telemetry ?? null })),
       }
+    } else if (command === 'export') {
+      if (!id) throw new Error('export requires a run id')
+      result = exportRun(root, id, { out: options.out })
     } else if (command === 'showcase') {
       // The showcase is not a run: it iterates on the best sealed artifact
       // beyond the benchmark rules, but must still pass its own four gates
