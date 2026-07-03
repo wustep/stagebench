@@ -12,8 +12,9 @@
   --key-white: #dcdcdc;
   --legend: #e6e2da;
   --legend-dim: #b9bdc6;
-  --oled-bg: #050f0d;
-  --oled-ink: #9fe8d8;
+  /* Reference displays: pale blue-white pixels on near-black. */
+  --oled-bg: #05080c;
+  --oled-ink: #c8dfee;
   font-family: 'Helvetica Neue', Arial, system-ui, sans-serif;
   color: #26221f;
   background: #e9e6e1;
@@ -73,6 +74,7 @@ body {
 }
 
 .control-deck {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -82,6 +84,21 @@ body {
      content width. */
   padding: 0.35cqw 4.6cqw 0.4cqw 0.3cqw;
   gap: 0.25cqw;
+}
+
+/* "HANDMADE IN SWEDEN..." vertical print on the bare red right margin. */
+.made-in {
+  position: absolute;
+  top: 50%;
+  right: 1.6cqw;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  font-size: 0.3cqw;
+  font-weight: 600;
+  letter-spacing: 0.06cqw;
+  color: rgba(240, 226, 226, 0.75);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .keys-block {
@@ -422,16 +439,226 @@ body {
   gap: 0.09cqw;
 }
 
+/* Reference: ladder LEDs are wide rectangular segments, not round dots. */
 .led-ladder .led {
-  width: 0.26cqw;
-  height: 0.26cqw;
-  border-radius: 0.08cqw;
+  width: 0.42cqw;
+  height: 0.17cqw;
+  border-radius: 0.05cqw;
 }
 
 /* Morph assignment range indicator (manual p. 39): LEDs spanning the
    assigned start->end range render dimmed instead of fully on/off. */
 .led-ladder .led[data-range='true'] {
   opacity: 0.5;
+}
+
+/* Triangular selector LEDs (reference: the Organ Model, Piano Select,
+   Vib/Chorus and effect-type grids all use small arrow-shaped indicators). */
+.led.led-tri-left,
+.led.led-tri-right,
+.led.led-tri-up,
+.led.led-tri-down {
+  border-radius: 0;
+  width: 0.32cqw;
+  height: 0.3cqw;
+}
+
+.led.led-tri-left {
+  clip-path: polygon(100% 0, 100% 100%, 0 50%);
+}
+
+.led.led-tri-right {
+  clip-path: polygon(0 0, 0 100%, 100% 50%);
+}
+
+.led.led-tri-up {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.led.led-tri-down {
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+/* The Organ Model / Piano Select grids' central LED pairs are the same
+   arrows: first points at the left label, second at the right. */
+.model-led-grid .led,
+.type-led-grid .led {
+  border-radius: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 50%);
+}
+
+.model-led-grid .led + .led,
+.type-led-grid .led + .led {
+  clip-path: polygon(0 0, 0 100%, 100% 50%);
+}
+
+/* Reference-style effect type selector: two label columns around a central
+   pair of triangular LEDs per row. */
+.sel-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.09cqw;
+  align-self: stretch;
+}
+
+.sel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.14cqw;
+}
+
+.sel-leds {
+  display: inline-flex;
+  gap: 0.09cqw;
+  flex: none;
+}
+
+.sel-row .legend {
+  font-size: 0.3cqw;
+  white-space: nowrap;
+}
+
+.sel-row .sel-left {
+  flex: 1;
+  text-align: right;
+}
+
+.sel-row .sel-right {
+  flex: 1;
+  text-align: left;
+}
+
+/* Variation button + printed bracket legend share one compact row. */
+.variation-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.14cqw;
+  min-width: 0;
+}
+
+.variation-row .panel-button.tiny {
+  min-width: 1.05cqw;
+  min-height: 0.6cqw;
+}
+
+.variation-row .legend {
+  white-space: nowrap;
+}
+
+/* Compact selector grids inside the effect boxes (short grid tracks). */
+.fx-box .sel-grid {
+  gap: 0.04cqw;
+}
+
+.fx-box .sel-row {
+  gap: 0.1cqw;
+}
+
+.fx-box .sel-row .legend {
+  font-size: 0.24cqw;
+}
+
+.fx-box .sel-leds .led {
+  width: 0.26cqw;
+  height: 0.24cqw;
+}
+
+/* Boxed right-column labels, as printed (A-WAH / TO ROTARY / LP FILTER). */
+.sel-tag {
+  border-radius: 0.1cqw;
+  padding: 0 0.1cqw;
+}
+
+.sel-tag-gray {
+  background: #b9bfcc;
+  color: #1c2230;
+}
+
+.sel-tag-red {
+  background: #8f1f27;
+  color: #f2d8da;
+}
+
+/* BRIGHT/DARK cluster and the type grid share one row (reference layout). */
+.reverb-top-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.16cqw;
+  min-width: 0;
+}
+
+.reverb-top-row .panel-button.tiny {
+  min-width: 0.85cqw;
+  min-height: 0.55cqw;
+}
+
+/* Reverb BRIGHT/DARK: stacked LED legends beside their own dark button.
+   Compact, so the box keeps fitting its grid track. */
+.reverb-tone {
+  display: flex;
+  align-items: center;
+  gap: 0.14cqw;
+}
+
+.reverb-tone-leds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.04cqw;
+}
+
+.reverb-tone .legend {
+  font-size: 0.24cqw;
+}
+
+.reverb-box .sel-grid {
+  gap: 0.03cqw;
+}
+
+.reverb-box .sel-row .legend {
+  font-size: 0.22cqw;
+}
+
+.reverb-box .variation-cell {
+  gap: 0.04cqw;
+}
+
+.reverb-box .variation-row .legend {
+  max-width: none;
+}
+
+/* Vib/Chorus: selector button left of the 2x3 scanner-position LED matrix. */
+.vib-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.16cqw;
+  min-width: 0;
+}
+
+.vib-select-row .panel-button {
+  min-width: 1.05cqw;
+}
+
+.vib-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 0.06cqw;
+}
+
+.vib-matrix-row {
+  display: flex;
+  gap: 0.18cqw;
+  justify-content: center;
+}
+
+.vib-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05cqw;
+}
+
+.vib-cell .legend {
+  font-size: 0.28cqw;
 }
 
 /* Buttons */
@@ -642,6 +869,40 @@ body {
   background: #e8e5df;
 }
 
+/* Printed tick/numeral arc around a knob (reference: nearly every panel
+   knob wears one). Pure print — never intercepts the pointer, and it
+   overflows the knob's layout box like ink on the panel. */
+.knob-scale {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--legend);
+}
+
+.knob-scale line {
+  stroke: currentColor;
+  stroke-width: 4.5;
+  opacity: 0.8;
+}
+
+.knob-scale text {
+  fill: currentColor;
+  font-size: 23px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* Dark print on the light panels (synth Mode/LFO/Oscillators/Filter/Amp). */
+.mode-box .knob-scale,
+.lfo-box .knob-scale,
+.osc-box .knob-scale,
+.filter-box .knob-scale,
+.amp-box .knob-scale {
+  color: #232a38;
+}
+
 /* Faders */
 
 .fader {
@@ -684,7 +945,7 @@ body {
 
 .drawbar {
   position: relative;
-  width: 0.8cqw;
+  width: 0.62cqw;
   height: 100%;
   min-height: 3.6cqw;
   flex: none;
@@ -818,9 +1079,9 @@ body {
 
 .oled {
   background: var(--oled-bg);
-  border: 0.14cqw solid #101a17;
+  border: 0.14cqw solid #0e1218;
   border-radius: 0.2cqw;
-  box-shadow: inset 0 0 0.6cqw rgba(0, 0, 0, 0.9), 0 0 0.3cqw rgba(60, 220, 190, 0.12);
+  box-shadow: inset 0 0 0.6cqw rgba(0, 0, 0, 0.9), 0 0 0.3cqw rgba(150, 200, 240, 0.1);
   color: var(--oled-ink);
   padding: 0.25cqw 0.35cqw;
   font-size: 0.5cqw;
@@ -836,11 +1097,11 @@ body {
 
 .oled .oled-name {
   font-size: 0.78cqw;
-  color: #dffef4;
+  color: #eaf5fd;
 }
 
 .oled .oled-dim {
-  color: #549e8e;
+  color: #6e87a0;
 }
 
 .oled .oled-program {
@@ -848,7 +1109,7 @@ body {
 }
 
 .oled .oled-slot {
-  color: #7ecdbb;
+  color: #9dbdd6;
   font-size: 0.44cqw;
 }
 
@@ -856,7 +1117,17 @@ body {
   display: flex;
   gap: 0.5cqw;
   font-size: 0.4cqw;
-  color: #549e8e;
+  color: #6e87a0;
+}
+
+/* Reference: the display's soft-dial captions (TYPE / CAT / WAVE, ATTACK /
+   DECAY / RELEASE...) are inverted pills. */
+.oled .oled-menu b {
+  background: var(--oled-ink);
+  color: #0a0f14;
+  border-radius: 0.08cqw;
+  padding: 0 0.14cqw;
+  font-weight: 700;
 }
 
 /* The Synth OLED is much narrower than the Program OLED; size its type to
@@ -864,6 +1135,20 @@ body {
    legend-truncation-desktop). */
 .oled[data-oled-section='synth'] {
   font-size: 0.42cqw;
+}
+
+/* Reference: the Synth display's top caption (OSC WAVEFORM) is a full-width
+   inverted band. */
+.oled[data-oled-section='synth'] .oled-line:first-child {
+  background: rgba(200, 223, 238, 0.88);
+  margin: -0.25cqw -0.35cqw 0.1cqw;
+  padding: 0.02cqw 0.35cqw;
+  text-align: center;
+}
+
+.oled[data-oled-section='synth'] .oled-line:first-child .oled-dim {
+  color: #0a0f14;
+  font-weight: 700;
 }
 
 .oled[data-oled-section='synth'] .oled-name {
@@ -1016,6 +1301,11 @@ body {
   gap: 0.15cqw;
 }
 
+/* Room for the Drive knob's printed 0-10 arc. */
+.rotary-strip > .knob.small {
+  margin: 0.42cqw 0 0.34cqw;
+}
+
 /* ---------------------------------------------------------------- organ -- */
 
 .organ-body {
@@ -1128,6 +1418,19 @@ body {
   display: flex;
   gap: 0.3cqw;
   align-items: stretch;
+  min-width: 0;
+}
+
+/* Three separate outlined boxes; smaller titles so ORGAN MODEL / VIB/CHORUS
+   / B3 PERCUSSION never run together across the gaps. */
+.organ-groups .group-box {
+  flex: 1;
+  min-width: 0;
+}
+
+.organ-groups .group-box-title {
+  font-size: 0.36cqw;
+  letter-spacing: 0.03cqw;
 }
 
 .model-led-grid {
@@ -1149,7 +1452,8 @@ body {
 
 .perc-grid {
   display: flex;
-  gap: 0.25cqw;
+  gap: 0.12cqw;
+  min-width: 0;
 }
 
 .perc-cell {
@@ -1157,16 +1461,21 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.08cqw;
+  min-width: 0;
 }
 
 .perc-cell .legend {
-  font-size: 0.32cqw;
+  font-size: 0.28cqw;
+}
+
+.perc-cell .panel-button.tiny {
+  min-width: 1cqw;
 }
 
 .perc-on {
   display: inline-flex;
   align-items: center;
-  gap: 0.2cqw;
+  gap: 0.14cqw;
 }
 
 .drawbar-bank {
@@ -1196,11 +1505,44 @@ body {
   min-height: 0;
   display: flex;
   align-items: stretch;
-  gap: 0.08cqw;
+  gap: 0.05cqw;
+}
+
+/* Reference: each drawbar's LED ladder sits in a light-outlined frame with
+   the 1-8 amount numerals printed beside the segments. Slim enough that all
+   nine columns keep fitting the bank. */
+.drawbar-scale {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0.06cqw;
+  padding: 0.12cqw 0.07cqw;
+  border: 0.06cqw solid var(--panel-line);
+  border-radius: 0.14cqw;
+  background: rgba(205, 211, 224, 0.16);
+}
+
+.drawbar-scale .led {
+  width: 0.28cqw;
+  height: 0.15cqw;
+}
+
+.drawbar-scale-nums {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.24cqw;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--legend);
+  font-style: normal;
+}
+
+.drawbar-scale-nums i {
+  font-style: normal;
 }
 
 .drawbar-ladder {
-  padding: 0.1cqw 0;
+  padding: 0;
 }
 
 .drawbar-footage {
@@ -1317,8 +1659,22 @@ body {
   min-height: 0.62cqw;
 }
 
-.timbre-box {
-  padding-top: 0.45cqw;
+/* Reference: TIMBRE is a tall dark rocker LEFT of the printed label column
+   (no enclosing box on the panel). */
+.timbre-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.18cqw;
+}
+
+.panel-button.rocker.timbre-rocker {
+  min-width: 0.75cqw;
+  min-height: 1.75cqw;
+  background: linear-gradient(180deg, #2e3136 0%, #17191d 55%, #0c0d0f 100%);
+}
+
+.timbre-title {
+  font-size: 0.32cqw;
 }
 
 .timbre-leds {
@@ -2222,9 +2578,15 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-evenly;
-  gap: 0.08cqw 0.18cqw;
-  padding: 0.32cqw 0.12cqw 0.08cqw;
+  gap: 0.08cqw 0.12cqw;
+  padding: 0.32cqw 0.1cqw 0.08cqw;
   min-height: 0;
+}
+
+/* Mod 1/2 pack two knob cells + the selector on one row of a short track. */
+.mod1-box .knob-cell .legend,
+.mod2-box .knob-cell .legend {
+  font-size: 0.26cqw;
 }
 
 .reverb-box .variation-cell .legend {

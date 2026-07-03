@@ -208,7 +208,7 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
         <div className="perf-right">
           <div className="perf-master">
             <Legend>MASTER LEVEL</Legend>
-            <Knob store={store} id="perf-master-level" className="large" />
+            <Knob store={store} id="perf-master-level" className="large" scale="none" />
           </div>
           <div className="rotary-strip">
           <span className="rotary-title">
@@ -226,16 +226,16 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
             <Led color="yellow" on={state.organ.toRotary} />
             <Legend>ORGAN</Legend>
           </span>
-          <PanelButton store={store} id="rotary-source" className="pill small">
-            CLOSE MIC ▿
-          </PanelButton>
+          {/* Reference: blank tan cap with CLOSE MIC printed on the panel
+              beneath it; MORPH is an LED legend under the blank speed button. */}
+          <PanelButton store={store} id="rotary-source" className="pill small blank" />
+          <Legend className="dim">CLOSE MIC ▿</Legend>
           <span className="rotary-led-row">
             <Led color="yellow" on={state.rotary.speed === 'stop'} />
             <Legend>STOP MODE</Legend>
           </span>
-          <PanelButton store={store} id="rotary-stop-mode" className="dark small">
-            ANGLE
-          </PanelButton>
+          <PanelButton store={store} id="rotary-stop-mode" className="dark small" />
+          <Legend>ANGLE</Legend>
           <span className="rotary-led-row">
             <Led color="green" on={state.rotary.speed === 'slow'} />
             <Legend>SLOW</Legend>
@@ -243,9 +243,11 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
             <Legend>FAST</Legend>
           </span>
           <PanelButton store={store} id="rotary-speed" className="dark small" />
-          <PanelButton store={store} id="rotary-morph" className="dark small">
-            MORPH
-          </PanelButton>
+          <span className="rotary-led-row">
+            <Led color="yellow" on={false} />
+            <Legend>MORPH</Legend>
+          </span>
+          <PanelButton store={store} id="rotary-morph" className="dark small" />
           </div>
         </div>
       </div>
@@ -264,7 +266,16 @@ function DrawbarColumn({ store, index }: { store: PresentationStore; index: numb
     <div className="drawbar-column">
       <Legend className="drawbar-name">{DRAWBAR_LEGENDS[index]}</Legend>
       <div className="drawbar-row">
-        <LedLadder count={8} lit={value} color="red" fill="down" className="drawbar-ladder" rangeLit={range ?? undefined} />
+        {/* Reference: each LED ladder sits in a light-outlined frame with the
+            1-8 amount numerals printed beside the segments. */}
+        <span className="drawbar-scale" aria-hidden="true">
+          <span className="drawbar-scale-nums">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+              <i key={n}>{n}</i>
+            ))}
+          </span>
+          <LedLadder count={8} lit={value} color="red" fill="down" className="drawbar-ladder" rangeLit={range ?? undefined} />
+        </span>
         <Drawbar store={store} id={id} className={`cap-${color}`} />
       </div>
       <Legend className="drawbar-footage">{DRAWBAR_FOOTAGES[index]}</Legend>
@@ -276,7 +287,6 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
   const state = useInstrumentState(instrument)
   const organ = state.organ
   const focused = organ.layers[organ.focusedLayer]
-  const vibLevel = Number(organ.vibratoType[1]) // 1..3 lights the C/V pair LED
   return (
     <SectionShell id="organ">
       <div className="plate">
@@ -351,26 +361,35 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <PanelButton store={store} id="organ-model" className="dark small" />
               </GroupBox>
               <GroupBox title="Vib/Chorus" className="organ-vib">
-                <div className="model-led-grid" aria-hidden="true">
-                  <span>
-                    <Led color="red" on={vibLevel === 1} />
-                    <Legend>C1 V1</Legend>
-                  </span>
-                  <span>
-                    <Led color="red" on={vibLevel === 2} />
-                    <Legend>C2 V2</Legend>
-                  </span>
-                  <span>
-                    <Led color="red" on={vibLevel === 3} />
-                    <Legend>C3 V3</Legend>
-                  </span>
+                {/* Reference layout: selector button LEFT of a 2x3 LED matrix
+                    labeled C2 V3 C3 over V2 C1 V1 (each LED lights for its
+                    exact scanner position). */}
+                <div className="vib-select-row">
+                  <PanelButton store={store} id="organ-vib-select" className="dark small" />
+                  <div className="vib-matrix" aria-hidden="true">
+                    <span className="vib-matrix-row">
+                      {(['C2', 'V3', 'C3'] as const).map((pos) => (
+                        <span key={pos} className="vib-cell">
+                          <Legend>{pos}</Legend>
+                          <Led color="red" on={organ.vibratoType === pos} className="led-tri-up" />
+                        </span>
+                      ))}
+                    </span>
+                    <span className="vib-matrix-row">
+                      {(['V2', 'C1', 'V1'] as const).map((pos) => (
+                        <span key={pos} className="vib-cell">
+                          <Led color="red" on={organ.vibratoType === pos} className="led-tri-down" />
+                          <Legend>{pos}</Legend>
+                        </span>
+                      ))}
+                    </span>
+                  </div>
                 </div>
-                <PanelButton store={store} id="organ-vib-select" className="dark small" />
-                <span className="tiny-led-row">
+                <span className="perc-on">
                   <Led color="green" on={focused.vibrato} />
                   <Legend>ON</Legend>
+                  <PanelButton store={store} id="organ-vib-on" className="pill small" led="green" />
                 </span>
-                <PanelButton store={store} id="organ-vib-on" className="pill small" led="green" />
               </GroupBox>
               <GroupBox title="B3 Percussion" className="organ-perc">
                 <div className="perc-grid">
@@ -458,8 +477,12 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
               <Led color="yellow" on={state.piano.pstick} />
               <Legend>PSTICK</Legend>
             </span>
-            <GroupBox title="Timbre" className="timbre-box">
+            {/* Reference: TIMBRE is a tall dark rocker LEFT of the printed
+                label column — no enclosing box on the panel. */}
+            <div className="timbre-cluster" role="group" aria-label="Timbre">
+              <PanelButton store={store} id="piano-timbre" className="rocker timbre-rocker" />
               <div className="timbre-leds" aria-hidden="true">
+                <Legend className="timbre-title">TIMBRE</Legend>
                 <span>
                   <Legend>BRIGHT</Legend>
                   <Led color="red" on={timbre === 'Bright'} />
@@ -475,8 +498,7 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
                   <Legend className="dim">DYNO2</Legend>
                 </span>
               </div>
-              <PanelButton store={store} id="piano-timbre" className="rocker" />
-            </GroupBox>
+            </div>
             <span className="octave-row">
               <Legend>◂ OCTAVE SHIFT ▸</Legend>
               <span className="octave-buttons">
@@ -1164,7 +1186,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     </Legend>
                   </span>
                   <span className="knob-cell">
-                    <Knob store={store} id="osc-env-amt" className="small" />
+                    <Knob store={store} id="osc-env-amt" className="small" scale={['-10', null, '-5', '0', '5', null, '10']} />
                     <Legend>ENV AMT</Legend>
                   </span>
                 </span>
@@ -1242,6 +1264,34 @@ function synthCategoryLabel(category: string): string {
 }
 
 /* -------------------------------------------------------------- Effects -- */
+
+/** Reference-style effect type selector: two label columns with a central
+ *  pair of triangular LED arrows per row (like the Organ Model / Piano Select
+ *  grids). `on` names the lit side; `rightTag` boxes the right label the way
+ *  the panel prints A-WAH / TO ROTARY / LP FILTER. */
+interface SelectorRow {
+  left?: string
+  right?: string
+  on?: 'left' | 'right' | null
+  rightTag?: 'gray' | 'red'
+}
+
+function SelectorLedGrid({ rows }: { rows: SelectorRow[] }) {
+  return (
+    <span className="sel-grid" aria-hidden="true">
+      {rows.map((row, i) => (
+        <span key={i} className="sel-row">
+          <Legend className="sel-left">{row.left ?? ''}</Legend>
+          <span className="sel-leds">
+            <Led color="red" on={row.on === 'left'} className="led-tri-left" />
+            <Led color="red" on={row.on === 'right'} className="led-tri-right" />
+          </span>
+          <Legend className={`sel-right ${row.rightTag ? `sel-tag sel-tag-${row.rightTag}` : ''}`}>{row.right ?? ''}</Legend>
+        </span>
+      ))}
+    </span>
+  )
+}
 
 function TokenRow({ tokens, active }: { tokens: string[]; active?: string }) {
   return (
@@ -1330,11 +1380,23 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>AMOUNT</Legend>
               </span>
               <span className="variation-cell">
-                <TokenRow tokens={['RM', 'TREM', 'A-PAN']} active={mod1Token(chain.mod1.type, 0)} />
-                <TokenRow tokens={['A-WAH', 'WAH', 'PUMP']} active={mod1Token(chain.mod1.type, 1)} />
-                <PanelButton store={store} id="mod1-variation" className="dark tiny">
-                  VARIATION <i>PED</i> ▿
-                </PanelButton>
+                <SelectorLedGrid
+                  rows={selectorRows(
+                    [
+                      ['RM', 'A-WAH', 'gray'],
+                      ['TREM', 'WAH', 'gray'],
+                      ['A-PAN', 'PUMP', 'gray'],
+                    ],
+                    MOD1_POS,
+                    chain.mod1.type,
+                  )}
+                />
+                <span className="variation-row">
+                  <PanelButton store={store} id="mod1-variation" className="dark tiny" />
+                  <Legend className="dim">
+                    VARIATION <i>PED</i> ▿
+                  </Legend>
+                </span>
               </span>
               <span className="fx-on-cell">
                 <Legend>ON</Legend>
@@ -1352,9 +1414,16 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="variation-cell delay-effects-cell">
                 <Legend className="dim">EFFECTS</Legend>
-                <TokenRow
-                  tokens={['CHOR', 'VIBE', 'ENS', 'FLAM', 'SPACE']}
-                  active={delayEffectToken(chain.delay.effect)}
+                <SelectorLedGrid
+                  rows={selectorRows(
+                    [
+                      ['CHOR', 'FLAM'],
+                      ['VIBE', 'SPACE'],
+                      ['ENS', undefined],
+                    ],
+                    DELAY_EFFECT_POS,
+                    chain.delay.effect,
+                  )}
                 />
                 <PanelButton store={store} id="delay-variation" className="dark tiny" />
                 <Legend className="dim">VARIATION ▿</Legend>
@@ -1375,7 +1444,16 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="variation-cell delay-filter-cell">
                 <Legend className="dim">FILTER</Legend>
-                <TokenRow tokens={['HP', 'BP', 'LP']} active={delayFilterToken(chain.delay.filter)} />
+                <SelectorLedGrid
+                  rows={selectorRows(
+                    [
+                      ['HP', 'BP'],
+                      ['LP', undefined],
+                    ],
+                    DELAY_FILTER_POS,
+                    chain.delay.filter,
+                  )}
+                />
                 <PanelButton store={store} id="delay-filter" className="dark tiny" />
                 <Legend className="dim">PING PONG ▿</Legend>
               </span>
@@ -1395,11 +1473,21 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>AMOUNT</Legend>
               </span>
               <span className="variation-cell">
-                <TokenRow tokens={['CHOR', 'FLANG', 'PHAS']} active={mod2Token(chain.mod2.type, 0)} />
-                <TokenRow tokens={['VIBE', 'ENS', 'SPIN']} active={mod2Token(chain.mod2.type, 1)} />
-                <PanelButton store={store} id="mod2-variation" className="dark tiny">
-                  VARIATION ▿
-                </PanelButton>
+                <SelectorLedGrid
+                  rows={selectorRows(
+                    [
+                      ['CHOR', 'VIBE'],
+                      ['FLANG', 'ENS'],
+                      ['PHAS', 'SPIN'],
+                    ],
+                    MOD2_POS,
+                    chain.mod2.type,
+                  )}
+                />
+                <span className="variation-row">
+                  <PanelButton store={store} id="mod2-variation" className="dark tiny" />
+                  <Legend className="dim">VARIATION ▿</Legend>
+                </span>
               </span>
               <span className="fx-on-cell">
                 <Legend>ON</Legend>
@@ -1424,26 +1512,36 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>DRIVE</Legend>
               </span>
               <span className="knob-cell">
-                <Knob store={store} id="amp-freq" className="small" />
+                <Knob store={store} id="amp-freq" className="small" scale={['200', '250', '400', '600', '1K', '2K', '4K', '6K', '8K']} />
                 <Legend>FREQ <i className="dim">MID</i></Legend>
               </span>
               <span className="variation-cell">
-                <TokenRow tokens={['SMALL', 'JC', 'TWIN']} active={ampToken(chain.ampEq.type, 0)} />
-                <TokenRow tokens={['TO ROTARY', 'LP', 'HP FILTER']} active={ampToken(chain.ampEq.type, 1)} />
-                <PanelButton store={store} id="amp-variation" className="dark tiny">
-                  VARIATION ▿
-                </PanelButton>
+                <SelectorLedGrid
+                  rows={selectorRows(
+                    [
+                      ['SMALL', 'TO ROTARY', 'red'],
+                      ['JC', 'LP FILTER', 'gray'],
+                      ['TWIN', 'HP FILTER', 'gray'],
+                    ],
+                    AMP_POS,
+                    chain.ampEq.type,
+                  )}
+                />
+                <span className="variation-row">
+                  <PanelButton store={store} id="amp-variation" className="dark tiny" />
+                  <Legend className="dim">VARIATION ▿</Legend>
+                </span>
               </span>
               <span className="knob-cell">
-                <Knob store={store} id="eq-bass" className="small" />
+                <Knob store={store} id="eq-bass" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
                 <Legend>BASS</Legend>
               </span>
               <span className="knob-cell">
-                <Knob store={store} id="eq-mid" className="small" />
+                <Knob store={store} id="eq-mid" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
                 <Legend>MID <i className="dim">▿</i></Legend>
               </span>
               <span className="knob-cell">
-                <Knob store={store} id="eq-treble" className="small" />
+                <Knob store={store} id="eq-treble" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
                 <Legend>TREBLE</Legend>
               </span>
               <span className="fx-on-cell">
@@ -1453,16 +1551,38 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             </GroupBox>
             <GroupBox title="Reverb" className="fx-box reverb-box">
               <span className="variation-cell">
-                <PanelButton store={store} id="reverb-bright" className="dark tiny" led="yellow">
-                  BRIGHT DARK
-                </PanelButton>
-                <TokenRow
-                  tokens={['ROOM', 'STAGE', 'BOOTH', 'HALL', 'SPRING', 'CATH']}
-                  active={reverbToken(chain.reverb.type)}
-                />
-                <PanelButton store={store} id="reverb-variation" className="dark tiny">
-                  VAR|CHORALE ▿
-                </PanelButton>
+                {/* Reference: BRIGHT / DARK LED legends + their dark button
+                    sit LEFT of the type selector grid. */}
+                <span className="reverb-top-row">
+                  <span className="reverb-tone">
+                    <span className="reverb-tone-leds" aria-hidden="true">
+                      <span className="tiny-led-row">
+                        <Led color="red" on={chain.reverb.bright} />
+                        <Legend>BRIGHT</Legend>
+                      </span>
+                      <span className="tiny-led-row">
+                        <Led color="red" on={!chain.reverb.bright} />
+                        <Legend>DARK</Legend>
+                      </span>
+                    </span>
+                    <PanelButton store={store} id="reverb-bright" className="dark tiny" />
+                  </span>
+                  <SelectorLedGrid
+                    rows={selectorRows(
+                      [
+                        ['ROOM', 'STAGE'],
+                        ['BOOTH', 'HALL'],
+                        ['SPRING', 'CATH'],
+                      ],
+                      REVERB_POS,
+                      chain.reverb.type,
+                    )}
+                  />
+                </span>
+                <span className="variation-row">
+                  <PanelButton store={store} id="reverb-variation" className="dark tiny" />
+                  <Legend className="dim">VAR|CHORALE ▿</Legend>
+                </span>
               </span>
               <span className="knob-cell">
                 <Knob store={store} id="reverb-mix" className="small" />
@@ -1481,57 +1601,71 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
   )
 }
 
-/* ----------------------------------------------- effect type LED tokens -- */
+/* ---------------------------------------- effect type selector positions -- */
 
-function mod1Token(type: string, row: 0 | 1): string | undefined {
-  const map: Record<string, [number, string]> = {
-    'Ring Mod': [0, 'RM'],
-    Tremolo: [0, 'TREM'],
-    'A-Pan': [0, 'A-PAN'],
-    'A-Wah': [1, 'A-WAH'],
-    Wah: [1, 'WAH'],
-    Pump: [1, 'PUMP'],
-  }
-  const entry = map[type]
-  return entry && entry[0] === row ? entry[1] : undefined
+/** Row index + lit side for each canonical type, matching the panel print. */
+type SelectorPos = Record<string, [number, 'left' | 'right']>
+
+const MOD1_POS: SelectorPos = {
+  'Ring Mod': [0, 'left'],
+  'A-Wah': [0, 'right'],
+  Tremolo: [1, 'left'],
+  Wah: [1, 'right'],
+  'A-Pan': [2, 'left'],
+  Pump: [2, 'right'],
 }
 
-function mod2Token(type: string, row: 0 | 1): string | undefined {
-  const map: Record<string, [number, string]> = {
-    Chorus: [0, 'CHOR'],
-    Flanger: [0, 'FLANG'],
-    Phaser: [0, 'PHAS'],
-    Vibe: [1, 'VIBE'],
-    Ensemble: [1, 'ENS'],
-    Spin: [1, 'SPIN'],
-  }
-  const entry = map[type]
-  return entry && entry[0] === row ? entry[1] : undefined
+const MOD2_POS: SelectorPos = {
+  Chorus: [0, 'left'],
+  Vibe: [0, 'right'],
+  Flanger: [1, 'left'],
+  Ensemble: [1, 'right'],
+  Phaser: [2, 'left'],
+  Spin: [2, 'right'],
 }
 
-function ampToken(type: string, row: 0 | 1): string | undefined {
-  const map: Record<string, [number, string]> = {
-    Small: [0, 'SMALL'],
-    JC: [0, 'JC'],
-    Twin: [0, 'TWIN'],
-    'To Rotary': [1, 'TO ROTARY'],
-    'LP24 Filter': [1, 'LP'],
-    'HP24 Filter': [1, 'HP FILTER'],
-  }
-  const entry = map[type]
-  return entry && entry[0] === row ? entry[1] : undefined
+const AMP_POS: SelectorPos = {
+  Small: [0, 'left'],
+  'To Rotary': [0, 'right'],
+  JC: [1, 'left'],
+  'LP24 Filter': [1, 'right'],
+  Twin: [2, 'left'],
+  'HP24 Filter': [2, 'right'],
 }
 
-function delayEffectToken(effect: string): string | undefined {
-  const map: Record<string, string> = { Chorus: 'CHOR', Vibe: 'VIBE', Ensemble: 'ENS', Flam: 'FLAM', Space: 'SPACE' }
-  return map[effect]
+const DELAY_EFFECT_POS: SelectorPos = {
+  Chorus: [0, 'left'],
+  Flam: [0, 'right'],
+  Vibe: [1, 'left'],
+  Space: [1, 'right'],
+  Ensemble: [2, 'left'],
 }
 
-function delayFilterToken(filter: string): string | undefined {
-  const map: Record<string, string> = { 'High Pass': 'HP', 'Band Pass': 'BP', 'Low Pass': 'LP' }
-  return map[filter]
+const DELAY_FILTER_POS: SelectorPos = {
+  'High Pass': [0, 'left'],
+  'Band Pass': [0, 'right'],
+  'Low Pass': [1, 'left'],
 }
 
-function reverbToken(type: string): string {
-  return type === 'Cathedral' ? 'CATH' : type.toUpperCase()
+const REVERB_POS: SelectorPos = {
+  Room: [0, 'left'],
+  Stage: [0, 'right'],
+  Booth: [1, 'left'],
+  Hall: [1, 'right'],
+  Spring: [2, 'left'],
+  Cathedral: [2, 'right'],
+}
+
+function selectorRows(
+  labels: [string | undefined, string | undefined, ('gray' | 'red')?][],
+  positions: SelectorPos,
+  active: string,
+): SelectorRow[] {
+  const pos = positions[active]
+  return labels.map(([left, right, rightTag], i) => ({
+    left,
+    right,
+    rightTag,
+    on: pos && pos[0] === i ? pos[1] : null,
+  }))
 }

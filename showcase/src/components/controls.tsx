@@ -80,11 +80,49 @@ function useContinuous(store: PresentationStore, id: string) {
   return { control, value, min, max, range, sliderProps }
 }
 
-export const Knob = memo(function Knob({ store, id, className }: ContinuousProps) {
+const SCALE_TEN = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+
+/** Printed arc scale around a knob (reference: nearly every panel knob wears
+ *  a 0-10 numeral arc; EQ knobs are bipolar and the Amp Sim/EQ freq knob is
+ *  labeled in Hz). Decorative print only — it never intercepts the pointer. */
+function KnobScaleArc({ labels }: { labels: (string | null)[] }) {
+  const last = labels.length - 1
+  // The svg box matches the knob box (so it never adds scroll size to its
+  // flex cell); the print draws OUTSIDE the viewBox with overflow visible.
+  return (
+    <svg className="knob-scale" viewBox="0 0 100 100" aria-hidden="true">
+      {labels.map((label, i) => {
+        const angle = ((-135 + (270 * i) / last) * Math.PI) / 180
+        const sin = Math.sin(angle)
+        const cos = Math.cos(angle)
+        return (
+          <g key={i}>
+            <line x1={50 + sin * 54} y1={50 - cos * 54} x2={50 + sin * 62} y2={50 - cos * 62} />
+            {label ? (
+              <text x={50 + sin * 80} y={50 - cos * 80}>
+                {label}
+              </text>
+            ) : null}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+export interface KnobProps extends ContinuousProps {
+  /** Printed scale: the default 0-10 arc, a custom label list (null = bare
+   *  tick), or none (the reference's Master Level knob has no scale). */
+  scale?: 'ten' | 'none' | (string | null)[]
+}
+
+export const Knob = memo(function Knob({ store, id, className, scale = 'ten' }: KnobProps) {
   const { value, min, range, sliderProps } = useContinuous(store, id)
   const angle = -135 + ((value - min) / range) * 270
+  const labels = scale === 'none' ? null : scale === 'ten' ? SCALE_TEN : scale
   return (
     <div {...sliderProps} className={`knob ${className ?? ''}`}>
+      {labels && <KnobScaleArc labels={labels} />}
       <div className="knob-cap" style={{ transform: `rotate(${angle}deg)` }}>
         <div className="knob-index" />
       </div>

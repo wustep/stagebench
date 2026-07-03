@@ -1092,6 +1092,55 @@ A discrepancy sweep against fresh high-detail crops of the reference photo
 - Gates: typecheck, test (404/404), lint, build, verify:layout (12/12,
   after re-tightening the piano tabs and Mod 1/2 ON rows).
 
+### 26 — Panel-print fidelity: knob scales, LED segments, selector arrows, OLED (2026-07-03)
+
+Crop-by-crop audit against reference/nord-stage-4-73.jpg (per-section element
+screenshots vs matching photo crops), closing the largest remaining print
+gaps. Visual-only — no control behavior changed; 404/404 tests untouched.
+
+- **Printed knob scales**: `Knob` gained a decorative `scale` prop rendering
+  the reference's tick/numeral arc around every knob (default 0-10; bipolar
+  ±15 for Bass/Mid/Treble, ±10 for Osc Env Amt, the Hz ladder 200…8K for the
+  Amp Sim/EQ freq knob; Master Level stays bare like the photo). The SVG
+  matches the knob's own box and paints outside its viewBox, so it adds no
+  scroll size to any flex cell; dark print on the light synth boxes.
+- **LED ladders are rectangular segments** (photo: wide bars, not dots), and
+  every drawbar ladder now sits in a light-outlined frame with the printed
+  1-8 amount numerals — slim enough that all nine columns still fit.
+- **Effect type selectors match the panel print**: Mod 1/2, Amp Sim/EQ,
+  Delay Effects/Filter and Reverb replaced their one-line text token lists
+  with the reference's two-column label grids around central triangular LED
+  arrows (`SelectorLedGrid`), including the boxed A-WAH/WAH/PUMP and red
+  TO ROTARY / LP FILTER / HP FILTER tags. The Organ Model and Piano Select
+  grids' round LEDs became the same left/right arrows. Reverb's BRIGHT DARK
+  cap-label button became the photo's stacked BRIGHT/DARK LED legends beside
+  a blank button, left of the type grid.
+- **OLED restyle**: pale blue-white pixels on black (was green), inverted
+  full-width header band on the Synth display (OSC WAVEFORM / VIBRATO /
+  envelope titles) and inverted soft-dial caption pills (TYPE/CAT/LAYER,
+  ATTACK/DECAY/RELEASE…), matching the photo's display chrome.
+- **Organ**: the three group boxes stopped visually merging ("ORGAN
+  MOD VIB/CHORUS B3 PERCUSSION" read as one truncated title) — smaller
+  titles, real gaps; Vib/Chorus rebuilt to the reference's selector-button-
+  left + 2x3 scanner matrix (C2 V3 C3 / V2 C1 V1, exact-position LEDs,
+  up/down triangles).
+- **Piano**: TIMBRE became the photo's tall dark rocker left of the label
+  column (was a boxed panel with a gray cap), which also cleared the
+  SUSTPED/PSTICK label collision.
+- **Performance zone**: CLOSE MIC ▿ and MORPH moved off the button caps to
+  printed legends (blank tan/dark caps like the hardware); Drive knob wears
+  its 0-10 arc with room to breathe.
+- **"HANDMADE IN SWEDEN BY CLAVIA DMI AB v2.0 Rev.B"** vertical print on the
+  bare red right margin.
+- verify-layout hardened alongside: SVG internals (the scale arcs) are
+  exempt from the text-overflow audit only when a knob's text is exactly its
+  scale numerals; Mod 1/Reverb re-packed (compact selector fonts, inline
+  variation rows) so every effects box fits its grid track again.
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404 (one
+  rendered-audio test flaked red on a single full-suite run and passed on
+  two consecutive re-runs — the pre-existing load-dependent offline-render
+  flake documented in iterations 9/6, untouched by this visual-only pass).
+
 ### 25 — Program strip: box palette corrections and header alignment (2026-07-03)
 
 User-directed corrections to the previous pass: VOICE, VIBRATO,

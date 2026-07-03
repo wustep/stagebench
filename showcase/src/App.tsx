@@ -269,6 +269,10 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               <ProgramSection store={store} instrument={instrument} engine={engine} />
               <SynthSection store={store} instrument={instrument} onZoom={() => setZoomedSection('synth')} />
               <EffectsSection store={store} instrument={instrument} onZoom={() => setZoomedSection('effects')} />
+              {/* Vertical print on the bare red right margin (reference photo). */}
+              <span className="made-in" aria-hidden="true">
+                HANDMADE IN SWEDEN BY CLAVIA DMI AB&ensp;v2.0 Rev.B
+              </span>
             </div>
           </div>
           <div className="keys-block" data-testid="keys-block" style={{ height: '46%' }}>

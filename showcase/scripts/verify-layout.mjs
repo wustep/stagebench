@@ -118,6 +118,9 @@ try {
     for (const id of ['performance', 'organ', 'piano', 'program', 'synth', 'effects']) {
       const section = document.querySelector(`[data-section="${id}"]`)
       section.querySelectorAll('*').forEach((el) => {
+        // SVG internals (the knobs' printed scale arcs) paint with
+        // overflow visible by design and have no scroll box to audit.
+        if (!(el instanceof HTMLElement)) return
         if (el.scrollWidth <= el.clientWidth + 3 && el.scrollHeight <= el.clientHeight + 3) return
         const cls = el.className.toString()
         // Printed panel titles deliberately straddle their boxes; round knob
@@ -126,7 +129,11 @@ try {
           el.classList.contains('group-box') ||
           el.classList.contains('plate') ||
           /synth-(body|main|top)|arp-column|voice-vibrato-row|effects-(body|grid)|keybed/.test(cls) ||
-          (/knob|encoder|wheel|stick/.test(cls) && !el.textContent.trim()) ||
+          // Knob caps overhang bare; the printed tick/numeral arc (.knob-scale)
+          // paints outside its own box without adding scroll size, so a knob
+          // whose textContent is only its scale numerals is panel print.
+          (/knob|encoder|wheel|stick/.test(cls) &&
+            (!el.textContent.trim() || el.textContent.trim() === (el.querySelector(':scope > .knob-scale')?.textContent ?? '').trim())) ||
           // Deliberate display clipping (OLED lines ellipsize like real hardware).
           getComputedStyle(el).textOverflow === 'ellipsis'
         if (!benign) out.overflows.push(`${id}: ${el.tagName}.${cls.slice(0, 30)} [${(el.textContent || '').slice(0, 24)}]`)
