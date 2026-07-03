@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import runsData from './data/runs.json'
+import protocol from './data/protocol.json'
 import {
   clearViewerUrl,
   createViewerUrl,
@@ -54,10 +55,13 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
 }
 
 const runs = (runsData as RawRunEntry[]).map(normalizeRunEntry)
-const phaseNames = ['Surface + Piano', 'Pianos + FX', 'Complete System']
+// Phase display names come from the phase manifest via src/data/protocol.json
+// (generated at reindex time); legacy/v2 mappings live there too because the
+// current spec has no data for those retired protocol layouts.
+const phaseNames = protocol.phaseNames
+const v2PhaseNames = protocol.v2PhaseNames
+const legacyPhaseNames = protocol.legacyPhaseNames
 const knobAngles = [-86, -22, 43]
-const v2PhaseNames = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
-const legacyPhaseNames = ['Visual', 'Piano', 'Complete']
 const noteOffsets = [0, 2, 4, 5, 7, 9, 11]
 const noteNames = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
 const sharpNotes = new Set(['C', 'D', 'F', 'G', 'A'])

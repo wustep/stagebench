@@ -9,10 +9,35 @@ import { hashTree, loadProtocol, readJson, selectedPhases, writeJson } from '../
 export function pathsFor(root) {
   return {
     registry: path.join(root, 'src', 'data', 'runs.json'),
+    protocol: path.join(root, 'src', 'data', 'protocol.json'),
     runs: path.join(root, 'runs'),
     previews: path.join(root, 'public', 'previews'),
     reports: path.join(root, 'public', 'reports'),
   }
+}
+
+// Phase display names for protocol versions the spec file does not describe.
+// The active protocol's names are derived from specs/benchmark-phases.json
+// (shortTitle), but pre-3.x legacy runs used earlier phase layouts that no
+// longer exist in the spec, so their names are pinned here explicitly.
+const LEGACY_PHASE_NAMES = ['Visual', 'Piano', 'Complete']
+const V2_PHASE_NAMES = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
+
+// Generate src/data/protocol.json so the gallery derives current phase names
+// from the single source of truth (the phase manifest) at reindex time,
+// instead of hardcoding them alongside the runtime constants in App.tsx.
+export function protocolConstants(root) {
+  const { value: manifest } = loadProtocol(root)
+  return {
+    version: manifest.version,
+    phaseNames: manifest.phases.map((phase) => phase.shortTitle ?? phase.title),
+    legacyPhaseNames: LEGACY_PHASE_NAMES,
+    v2PhaseNames: V2_PHASE_NAMES,
+  }
+}
+
+function writeProtocolConstants(root) {
+  writeJson(pathsFor(root).protocol, protocolConstants(root))
 }
 
 export function stageDirFor(root, id, phase) {
@@ -312,6 +337,7 @@ export async function reindexRegistry(root) {
 
   entries.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)) || a.id.localeCompare(b.id))
   writeJson(locations.registry, entries)
+  writeProtocolConstants(root)
   writeReindexCache(root, nextCache)
   return { count: entries.length, ids: entries.map((run) => run.id), registry: locations.registry }
 }
