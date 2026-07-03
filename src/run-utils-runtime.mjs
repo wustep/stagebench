@@ -22,13 +22,24 @@ export function getLatestPhase(run) {
   return getAvailablePhases(run).at(-1)
 }
 
+const RUN_ID_PATTERN = /^[a-z0-9-]+$/
+
 export function parseViewerSearch(search, runs) {
   const params = new URLSearchParams(search)
-  const run = runs.find((candidate) => candidate.id === params.get('run'))
+
+  // Reject malformed run ids before touching the registry; a garbage id can
+  // never match a real run, so treat it as no viewer rather than undefined.
+  const runId = params.get('run')
+  if (!runId || !RUN_ID_PATTERN.test(runId)) return null
+  const run = runs.find((candidate) => candidate.id === runId)
   if (!run) return null
 
-  const requestedPhase = Number(params.get('phase'))
-  const phase = [1, 2, 3, 4].includes(requestedPhase) && getPreviewPath(run, requestedPhase)
+  // phase must be an integer in the valid range; anything else (floats,
+  // out-of-range, non-numeric) falls back to the latest available phase.
+  const rawPhase = params.get('phase')
+  const requestedPhase = Number(rawPhase)
+  const validPhase = rawPhase !== null && Number.isInteger(requestedPhase) && [1, 2, 3, 4].includes(requestedPhase)
+  const phase = validPhase && getPreviewPath(run, requestedPhase)
     ? requestedPhase
     : getLatestPhase(run)
 

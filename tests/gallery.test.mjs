@@ -84,3 +84,20 @@ test('viewer URLs deep-link to a run and phase with a latest-phase fallback', ()
   assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=3`, [pianoOnly]), { run: pianoOnly, phase: 2 })
   assert.equal(clearViewerUrl(linked.href).href, 'http://127.0.0.1:5173/')
 })
+
+test('viewer search validates run ids and phase shape, falling back on garbage', () => {
+  // Malformed run ids never match a real run and return null (no viewer).
+  assert.equal(parseViewerSearch('?run=Piano%20Only&phase=1', [pianoOnly]), null)
+  assert.equal(parseViewerSearch('?run=../etc/passwd&phase=1', [pianoOnly]), null)
+  assert.equal(parseViewerSearch('?run=PIANO-ONLY&phase=1', [pianoOnly]), null)
+  assert.equal(parseViewerSearch('?phase=1', [pianoOnly]), null)
+
+  // Non-integer, out-of-range, or non-numeric phases fall back to the latest.
+  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=1.5`, [pianoOnly]), { run: pianoOnly, phase: 2 })
+  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=abc`, [pianoOnly]), { run: pianoOnly, phase: 2 })
+  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=99`, [pianoOnly]), { run: pianoOnly, phase: 2 })
+  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=0`, [pianoOnly]), { run: pianoOnly, phase: 2 })
+
+  // A valid in-range phase is still honored.
+  assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=1`, [pianoOnly]), { run: pianoOnly, phase: 1 })
+})
