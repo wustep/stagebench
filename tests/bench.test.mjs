@@ -71,7 +71,7 @@ function writePassingCandidate(root, candidate) {
   fs.writeFileSync(path.join(candidate, 'evidence', 'stage1-visual-audit.md'), 'Measured and exercised the fixture candidate.')
 }
 
-test('a run flows new → start → seal → score with sealed digests and a scored registry entry', () => {
+test('a run flows new → start → seal → score with sealed digests and a scored registry entry', async () => {
   const root = fixtureRoot()
   try {
     const created = createRun(root, { model: 'Fixture Model', provider: 'fixture', target: '1' }, new Date('2026-01-01T00:00:00.000Z'))
@@ -169,7 +169,7 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     assert.match(markdown, /\*\*75\/100\*\*/)
 
     // reindex: uniform projection for the gallery
-    const indexed = reindexRegistry(root)
+    const indexed = await reindexRegistry(root)
     assert.equal(indexed.count, 1)
     const entry = readJson(path.join(root, 'src', 'data', 'runs.json'))[0]
     assert.equal(entry.legacy, false)

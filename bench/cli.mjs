@@ -119,7 +119,7 @@ async function seal(root, id, options) {
   const usage = telemetryFromFlags(options)
   if (Object.keys(usage).length > 0) recordTelemetry(root, id, phase, usage)
   removeWorkspace(root, id, phase)
-  reindexRegistry(root)
+  await reindexRegistry(root)
   const sealed = loadRun(root, id)
   return {
     id,
@@ -150,7 +150,7 @@ function writeReports(root, run) {
   return `/reports/${run.id}/index.html`
 }
 
-function score(root, id, options) {
+async function score(root, id, options) {
   const run = loadRun(root, id)
   const rubric = loadRubric()
   const phase = options.phase
@@ -209,7 +209,7 @@ function score(root, id, options) {
   const aggregate = { ...aggregateStageEvaluations(rubric, summaries), reportPath: `/reports/${id}/index.html` }
   registerEvaluation(root, id, phase, stageSummary, aggregate)
   writeReports(root, loadRun(root, id))
-  reindexRegistry(root)
+  await reindexRegistry(root)
   return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, evaluationPath, report: aggregate.reportPath }
 }
 
@@ -233,7 +233,7 @@ try {
     if (command === 'new') {
       preflight(root, options.variant)
       result = createRun(root, options)
-      reindexRegistry(root)
+      await reindexRegistry(root)
       result = { id: result.id, targetPhase: result.targetPhase, selectedPhases: result.selectedPhases, next: `pnpm bench start ${result.id}` }
     } else if (command === 'start') {
       result = startPhase(root, id)
@@ -248,9 +248,9 @@ try {
     } else if (command === 'telemetry') {
       if (!options.phase) throw new Error('--phase is required')
       result = recordTelemetry(root, id, options.phase, telemetryFromFlags(options))
-      reindexRegistry(root)
+      await reindexRegistry(root)
     } else if (command === 'score') {
-      result = score(root, id, options)
+      result = await score(root, id, options)
     } else if (command === 'status') {
       const run = loadRun(root, id)
       result = {
@@ -273,7 +273,7 @@ try {
       fs.cpSync(path.join(showcaseDir, 'dist'), destination, { recursive: true })
       result = { published: '/previews/showcase/index.html', checks: checks.map(({ id, passed }) => ({ id, passed })) }
     } else if (command === 'reindex') {
-      result = reindexRegistry(root)
+      result = await reindexRegistry(root)
     } else if (command === 'fetch') {
       result = await fetchReference(root, { force: options.force === 'true' })
       if (result.failed > 0) process.exitCode = 1

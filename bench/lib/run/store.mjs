@@ -255,16 +255,64 @@ export function registryEntry(run) {
   }
 }
 
-export function reindexRegistry(root) {
+// Cache the projected entry for each run.json keyed by mtime, so an unchanged
+// run is neither read nor re-projected on the next reindex. Lives under the
+// gitignored node_modules so it never enters the tree; a stale or missing
+// cache only costs a full read (it never changes the output).
+function reindexCachePath(root) {
+  return path.join(root, 'node_modules', '.cache', 'stagebench-reindex.json')
+}
+
+function readReindexCache(root) {
+  try {
+    return JSON.parse(fs.readFileSync(reindexCachePath(root), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+function writeReindexCache(root, cache) {
+  try {
+    const cachePath = reindexCachePath(root)
+    fs.mkdirSync(path.dirname(cachePath), { recursive: true })
+    fs.writeFileSync(cachePath, JSON.stringify(cache))
+  } catch {
+    // A cache write failure is non-fatal; the next reindex just re-reads.
+  }
+}
+
+export async function reindexRegistry(root) {
   const locations = pathsFor(root)
-  const entries = fs.existsSync(locations.runs)
-    ? fs.readdirSync(locations.runs, { withFileTypes: true }).filter((entry) => entry.isDirectory()).flatMap((entry) => {
-      const runPath = path.join(locations.runs, entry.name, 'run.json')
-      return fs.existsSync(runPath) ? [registryEntry(readJson(runPath))] : []
-    })
-    : []
+  const cache = readReindexCache(root)
+  const nextCache = {}
+  let entries = []
+
+  if (fs.existsSync(locations.runs)) {
+    const directories = (await fs.promises.readdir(locations.runs, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+    entries = (await Promise.all(directories.map(async (dir) => {
+      const runPath = path.join(locations.runs, dir.name, 'run.json')
+      let stat
+      try {
+        stat = await fs.promises.stat(runPath)
+      } catch {
+        return null // No run.json in this directory.
+      }
+      const key = path.relative(root, runPath).split(path.sep).join('/')
+      const cached = cache[key]
+      if (cached && cached.mtimeMs === stat.mtimeMs) {
+        nextCache[key] = cached
+        return cached.entry
+      }
+      const entry = registryEntry(JSON.parse(await fs.promises.readFile(runPath, 'utf8')))
+      nextCache[key] = { mtimeMs: stat.mtimeMs, entry }
+      return entry
+    }))).filter((entry) => entry !== null)
+  }
+
   entries.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)) || a.id.localeCompare(b.id))
   writeJson(locations.registry, entries)
+  writeReindexCache(root, nextCache)
   return { count: entries.length, ids: entries.map((run) => run.id), registry: locations.registry }
 }
 
