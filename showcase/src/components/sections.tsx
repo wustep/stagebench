@@ -2,8 +2,21 @@ import { useSyncExternalStore, type ReactNode } from 'react'
 import { DRAWBAR_FOOTAGES, DRAWBAR_LEGENDS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
 import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
-import { usePresentationValue } from '../state/presentation'
-import { timbreListFor, useInstrumentState, type InstrumentStore } from '../state/instrument'
+import { usePresentationMorphRange, usePresentationValue } from '../state/presentation'
+import {
+  programLabel,
+  splitBoundaries,
+  SPLIT_POINT_NAMES,
+  SPLIT_POSITION_NAMES,
+  SPLIT_POSITIONS,
+  SYNTH_FILTER_TYPES,
+  SYNTH_WAVEFORMS,
+  timbreListFor,
+  useInstrumentState,
+  type InstrumentState,
+  type InstrumentStore,
+  type SectionKey,
+} from '../state/instrument'
 import { instrumentsOfType } from '../audio/library'
 import type { EngineStatusInfo, PianoEngine } from '../audio/engine'
 import {
@@ -27,12 +40,37 @@ interface SectionProps {
 
 interface BoundSectionProps extends SectionProps {
   instrument: InstrumentStore
+  /** Opens the section-zoom overlay for this section (narrow-legend-legibility). */
+  onZoom?: () => void
 }
 
 function useEngineInfo(engine: PianoEngine): EngineStatusInfo {
   return useSyncExternalStore(
     (listener) => engine.subscribe(listener),
     () => engine.getStatus(),
+  )
+}
+
+/** KB ZONE LED row: available zones from the split, lit for the focused layer's range. */
+function ZoneLeds({ state, section }: { state: InstrumentState; section: SectionKey }) {
+  const zoneCount = splitBoundaries(state.split).length + 1
+  const zone =
+    section === 'piano'
+      ? state.layers[state.focusedLayer].zone
+      : section === 'synth'
+        ? state.synth.layers[state.synth.focusedLayer].zone
+        : state.organ.layers[state.organ.focusedLayer].zone
+  const from = Math.min(zone.from, zoneCount - 1)
+  const to = Math.min(zone.to, zoneCount - 1)
+  return (
+    <span className="kb-zone" aria-hidden="true">
+      <Legend>◂ KB ZONE ▸</Legend>
+      <span className="zone-leds">
+        {[0, 1, 2, 3].map((i) => (
+          <Led key={i} color="green" on={i < zoneCount && i >= from && i <= to} />
+        ))}
+      </span>
+    </span>
   )
 }
 
@@ -55,18 +93,18 @@ function SectionHeader({
   store,
   onId,
   fxFocusLit = false,
+  onZoom,
 }: {
   title: string
   store: PresentationStore
   onId: string
   fxFocusLit?: boolean
+  /** Opens the section-zoom overlay (narrow-viewport legend legibility). */
+  onZoom?: () => void
 }) {
   return (
     <div className="plate-header">
-      <span className="plate-title">
-        {title}
-        <span className="plate-subtitle">SECTION</span>
-      </span>
+      <PlateTitle title={title} onZoom={onZoom} subtitle="SECTION" />
       <span className="fx-focus">
         <Led color="yellow" on={fxFocusLit} />
         <Legend>FX FOCUS</Legend>
@@ -77,6 +115,25 @@ function SectionHeader({
         <Legend className="dim">SOLO ▾</Legend>
       </span>
     </div>
+  )
+}
+
+/** The plate-title area doubles as the section-inspect/zoom affordance
+ *  (narrow-legend-legibility): always present and focusable, but primarily
+ *  useful at narrow viewports where the panel legends render sub-pixel. */
+function PlateTitle({ title, onZoom, subtitle }: { title: string; onZoom?: () => void; subtitle?: string }) {
+  const inner = (
+    <>
+      {title}
+      {subtitle && <span className="plate-subtitle">{subtitle}</span>}
+    </>
+  )
+  if (!onZoom) return <span className="plate-title">{inner}</span>
+  const titleCase = title.charAt(0) + title.slice(1).toLowerCase()
+  return (
+    <button type="button" className="plate-title plate-title-button" onClick={onZoom} aria-label={`Inspect ${titleCase} section`}>
+      {inner}
+    </button>
   )
 }
 
@@ -94,10 +151,11 @@ function LayerFaderColumn({
   focused?: boolean
 }) {
   const level = usePresentationValue(store, faderId)
+  const range = usePresentationMorphRange(store, faderId, 9)
   return (
     <div className="layer-column" data-focused={focused ? 'true' : undefined}>
       <div className="layer-fader-row">
-        <LedLadder count={9} lit={Math.round((level / 127) * 9)} />
+        <LedLadder count={9} lit={Math.round((level / 127) * 9)} rangeLit={range ?? undefined} />
         <Fader store={store} id={faderId} />
       </div>
       <Legend className="layer-letter">
@@ -114,9 +172,11 @@ function LayerFaderColumn({
 
 export function PerformanceSection({ store, instrument }: BoundSectionProps) {
   const state = useInstrumentState(instrument)
-  const anyRouted =
+  const pianoRouted =
     !state.allFxOff &&
     (['A', 'B'] as const).some((layer) => state.chains[layer].ampEq.on && state.chains[layer].ampEq.type === 'To Rotary')
+  const organRouted = state.organ.toRotary && state.organ.sectionOn
+  const anyRouted = pianoRouted || organRouted
   return (
     <SectionShell id="performance">
       <div className="perf-layout">
@@ -152,7 +212,7 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
           <Knob store={store} id="rotary-drive" className="small" />
           <Legend>DRIVE</Legend>
           <span className="rotary-led-row">
-            <Led color="yellow" />
+            <Led color="yellow" on={state.organ.toRotary} />
             <Legend>ORGAN</Legend>
           </span>
           <PanelButton store={store} id="rotary-source" className="pill small">
@@ -186,12 +246,13 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
 function DrawbarColumn({ store, index }: { store: PresentationStore; index: number }) {
   const id = `organ-drawbar-${index + 1}`
   const value = usePresentationValue(store, id)
+  const range = usePresentationMorphRange(store, id, 8)
   const color = [0, 1].includes(index) ? 'brown' : [2, 3, 5, 8].includes(index) ? 'white' : 'black'
   return (
     <div className="drawbar-column">
       <Legend className="drawbar-name">{DRAWBAR_LEGENDS[index]}</Legend>
       <div className="drawbar-row">
-        <LedLadder count={8} lit={value} color="red" fill="down" className="drawbar-ladder" />
+        <LedLadder count={8} lit={value} color="red" fill="down" className="drawbar-ladder" rangeLit={range ?? undefined} />
         <Drawbar store={store} id={id} className={`cap-${color}`} />
       </div>
       <Legend className="drawbar-footage">{DRAWBAR_FOOTAGES[index]}</Legend>
@@ -199,21 +260,37 @@ function DrawbarColumn({ store, index }: { store: PresentationStore; index: numb
   )
 }
 
-export function OrganSection({ store }: SectionProps) {
+export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
+  const state = useInstrumentState(instrument)
+  const organ = state.organ
+  const focused = organ.layers[organ.focusedLayer]
+  const vibLevel = Number(organ.vibratoType[1]) // 1..3 lights the C/V pair LED
   return (
     <SectionShell id="organ">
       <div className="plate">
-        <SectionHeader title="ORGAN" store={store} onId="organ-on" />
+        <SectionHeader title="ORGAN" store={store} onId="organ-on" fxFocusLit={state.fxSection === 'organ'} onZoom={onZoom} />
         <div className="organ-body">
           <div className="levels-column">
             <div className="layer-pair">
-              <LayerFaderColumn store={store} faderId="organ-level-a" buttonId="organ-layer-a" letter="A" />
-              <LayerFaderColumn store={store} faderId="organ-level-b" buttonId="organ-layer-b" letter="B" />
+              <LayerFaderColumn
+                store={store}
+                faderId="organ-level-a"
+                buttonId="organ-layer-a"
+                letter="A"
+                focused={organ.focusedLayer === 'A'}
+              />
+              <LayerFaderColumn
+                store={store}
+                faderId="organ-level-b"
+                buttonId="organ-layer-b"
+                letter="B"
+                focused={organ.focusedLayer === 'B'}
+              />
             </div>
             <span className="tiny-led-row">
-              <Led color="yellow" />
+              <Led color="yellow" on={organ.sustped} />
               <Legend>SUSTPED</Legend>
-              <Led color="yellow" />
+              <Led color="yellow" on={organ.pstick} />
               <Legend>PSTICK</Legend>
             </span>
             <PanelButton store={store} id="organ-preset" className="dark small">
@@ -227,15 +304,7 @@ export function OrganSection({ store }: SectionProps) {
                 <PanelButton store={store} id="organ-octave-up" className="dark tiny" />
               </span>
             </span>
-            <span className="kb-zone" aria-hidden="true">
-              <Legend>◂ KB ZONE ▸</Legend>
-              <span className="zone-leds">
-                <Led color="green" on />
-                <Led color="green" />
-                <Led color="green" />
-                <Led color="green" />
-              </span>
-            </span>
+            <ZoneLeds state={state} section="organ" />
           </div>
           <div className="organ-main">
             <div className="organ-groups">
@@ -243,20 +312,20 @@ export function OrganSection({ store }: SectionProps) {
                 <div className="model-led-grid" aria-hidden="true">
                   <span>
                     <Legend>FARF</Legend>
-                    <Led color="red" />
-                    <Led color="red" />
+                    <Led color="red" on={focused.model === 'Farf'} />
+                    <Led color="red" on={focused.model === 'Pipe1'} />
                     <Legend>PIPE1</Legend>
                   </span>
                   <span>
                     <Legend>VOX</Legend>
-                    <Led color="red" />
-                    <Led color="red" />
+                    <Led color="red" on={focused.model === 'Vox'} />
+                    <Led color="red" on={focused.model === 'Pipe2'} />
                     <Legend>PIPE2</Legend>
                   </span>
                   <span>
                     <Legend>B3</Legend>
-                    <Led color="red" on />
-                    <Led color="red" />
+                    <Led color="red" on={focused.model === 'B3'} />
+                    <Led color="red" on={focused.model === 'B3Bass'} />
                     <Legend>B3 BASS</Legend>
                   </span>
                 </div>
@@ -265,21 +334,21 @@ export function OrganSection({ store }: SectionProps) {
               <GroupBox title="Vib/Chorus" className="organ-vib">
                 <div className="model-led-grid" aria-hidden="true">
                   <span>
-                    <Led color="red" />
+                    <Led color="red" on={vibLevel === 1} />
                     <Legend>C1 V1</Legend>
                   </span>
                   <span>
-                    <Led color="red" />
+                    <Led color="red" on={vibLevel === 2} />
                     <Legend>C2 V2</Legend>
                   </span>
                   <span>
-                    <Led color="red" />
+                    <Led color="red" on={vibLevel === 3} />
                     <Legend>C3 V3</Legend>
                   </span>
                 </div>
                 <PanelButton store={store} id="organ-vib-select" className="dark small" />
                 <span className="tiny-led-row">
-                  <Led color="green" />
+                  <Led color="green" on={focused.vibrato} />
                   <Legend>ON</Legend>
                 </span>
                 <PanelButton store={store} id="organ-vib-on" className="pill small" led="green" />
@@ -303,6 +372,7 @@ export function OrganSection({ store }: SectionProps) {
                   </span>
                 </div>
                 <span className="perc-on">
+                  <Led color="yellow" on={organ.percussion.poly} />
                   <Legend className="dim">POLY ▿</Legend>
                   <Legend>ON</Legend>
                   <PanelButton store={store} id="organ-perc-on" className="pill small" led="green" />
@@ -323,7 +393,7 @@ export function OrganSection({ store }: SectionProps) {
 
 /* ---------------------------------------------------------------- Piano -- */
 
-export function PianoSection({ store, instrument, engine }: BoundSectionProps & { engine: PianoEngine }) {
+export function PianoSection({ store, instrument, engine, onZoom }: BoundSectionProps & { engine: PianoEngine }) {
   const state = useInstrumentState(instrument)
   useEngineInfo(engine) // re-render on load-status changes for the SUSTPED/selection feedback
   const focused = state.layers[state.focusedLayer]
@@ -337,7 +407,7 @@ export function PianoSection({ store, instrument, engine }: BoundSectionProps & 
   return (
     <SectionShell id="piano">
       <div className="plate">
-        <SectionHeader title="PIANO" store={store} onId="piano-on" fxFocusLit />
+        <SectionHeader title="PIANO" store={store} onId="piano-on" fxFocusLit={state.fxSection === 'piano'} onZoom={onZoom} />
         <div className="piano-body">
           <div className="levels-column">
             <div className="layer-pair">
@@ -388,15 +458,7 @@ export function PianoSection({ store, instrument, engine }: BoundSectionProps & 
                 <PanelButton store={store} id="piano-octave-up" className="dark tiny" />
               </span>
             </span>
-            <span className="kb-zone" aria-hidden="true">
-              <Legend>◂ KB ZONE ▸</Legend>
-              <span className="zone-leds">
-                <Led color="green" on />
-                <Led color="green" />
-                <Led color="green" />
-                <Led color="green" />
-              </span>
-            </span>
+            <ZoneLeds state={state} section="piano" />
           </div>
           <div className="piano-main">
             <div className="piano-groups">
@@ -516,6 +578,72 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         : engineInfo.status === 'loading'
           ? 'Loading samples…'
           : ''
+
+  const programs = state.programs
+  const activeBank = programs.liveMode ? programs.live : programs.bank
+  const reference = programs.storePending ? programs.storePending.destination : programs.current
+  const currentSlot = activeBank[programs.current]!
+  const naming = programs.naming
+  const programReadout = `${programLabel(programs.current, programs.liveMode)}${programs.dirty ? ' E' : ''}${
+    programs.storePending ? ` ▸ STORE ${programLabel(reference, programs.liveMode)}?` : ''
+  }`
+  const nameLine = naming ? (
+    <b className="oled-name" data-testid="oled-name-line">
+      {naming.name
+        .padEnd(naming.cursor + 1, ' ')
+        .split('')
+        .map((char, i) => (i === naming.cursor ? <u key={i}>{char}</u> : <span key={i}>{char}</span>))}
+    </b>
+  ) : (
+    <b className="oled-name" data-testid="oled-name-line">
+      {programs.storePending ? programs.storePending.captured.name : currentSlot.name}
+    </b>
+  )
+  const chainForFocused = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
+  const clockRows = state.clockEdit
+    ? [
+        <span key="ck1" className="oled-slot" data-testid="oled-clock-line">
+          ♩ MST CLK {state.masterClock.bpm} BPM — DELAY {chainForFocused.delay.mstClk ? '●' : '○'} · MOD1{' '}
+          {chainForFocused.mod1.mstClk ? '●' : '○'}
+        </span>,
+        <span key="ck2" className="oled-slot">
+          dial: BPM · TAP: 4+ taps · PROG 1/2: sync
+        </span>,
+      ]
+    : null
+  const transposeRows = state.transposeEdit
+    ? [
+        <span key="tr1" className="oled-slot" data-testid="oled-transpose-line">
+          ± TRANSPOSE {state.transpose.on ? 'ON' : 'OFF'} {state.transpose.semitones >= 0 ? '+' : ''}
+          {state.transpose.semitones} st
+        </span>,
+        <span key="tr2" className="oled-slot">
+          dial: −6…+6 · TRANSP: on/off
+        </span>,
+      ]
+    : null
+  const splitEdit = state.splitEdit
+  const splitRows = splitEdit
+    ? (() => {
+        const point = state.split.points[splitEdit.point]
+        const positionIndex = SPLIT_POSITIONS.indexOf(point.note)
+        return [
+          <span key="se1" className="oled-slot" data-testid="oled-split-line">
+            ⇅ SPLIT {state.split.on ? 'ON' : 'OFF'} — {SPLIT_POINT_NAMES[splitEdit.point]} {point.active ? '●' : '○'}{' '}
+            {SPLIT_POSITION_NAMES[positionIndex] ?? '—'} · XF {point.xf === 0 ? 'Off' : `±${point.xf}`}
+          </span>,
+          <span key="se2" className="oled-slot">
+            dial: position · PAGE: point · PROG 1/2: on/xfade
+          </span>,
+        ]
+      })()
+    : null
+  const listStart = Math.max(0, Math.min(reference - 1, activeBank.length - 2))
+  const listRows = [listStart, listStart + 1].map((i) => (
+    <span key={i} className="oled-slot" data-testid={`oled-list-${i}`}>
+      {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode)} {activeBank[i]!.name}
+    </span>
+  ))
   return (
     <SectionShell id="program">
       <div className="program-layout">
@@ -556,7 +684,10 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         <div className="program-mid">
           <div className="program-mid-left">
             <span className="store-cluster">
-              <Legend>STORE</Legend>
+              <span className="tiny-led-row">
+                <Led color="red" on={!!programs.storePending} className={programs.storePending ? 'flash' : ''} />
+                <Legend>STORE</Legend>
+              </span>
               <PanelButton store={store} id="store" className="red small" />
               <PanelButton store={store} id="store-as" className="dark tiny">
                 STORE AS…
@@ -599,14 +730,21 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
             <Oled
               section="program"
               lines={[
-                <span key="p" className="oled-program">A:11</span>,
-                <b key="n" className="oled-name">Nord Stage 4</b>,
-                <span key="piano" className="oled-slot" data-testid="oled-piano-line">
-                  ▤ {pianoLine}
-                </span>,
-                <span key="status" className="oled-slot" data-testid="oled-status-line">
-                  {statusLine || '〜 Piano · FX ready'}
-                </span>,
+                <span key="p" className="oled-program" data-testid="oled-program-line">{programReadout}</span>,
+                <span key="n">{nameLine}</span>,
+                ...(splitRows ??
+                  clockRows ??
+                  transposeRows ??
+                  (programs.listView
+                    ? listRows
+                    : [
+                      <span key="piano" className="oled-slot" data-testid="oled-piano-line">
+                        ▤ {pianoLine}
+                      </span>,
+                      <span key="status" className="oled-slot" data-testid="oled-status-line">
+                        {statusLine || '〜 Piano · FX ready'}
+                      </span>,
+                    ])),
                 <span key="edit" className="oled-slot oled-edit" data-testid="oled-edit-line">
                   {state.lastEdit || '◫ —'}
                 </span>,
@@ -633,7 +771,11 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
             {PROGRAM_BUTTON_LEGENDS.map((legend, i) => (
               <span key={legend} className="program-cell">
                 <span className="prog-num" aria-hidden="true">
-                  <Led color="red" on={i === 0} />
+                  <Led
+                    color="red"
+                    on={reference % 8 === i}
+                    className={programs.storePending && reference % 8 === i ? 'flash' : ''}
+                  />
                   {i + 1}
                 </span>
                 <PanelButton store={store} id={`program-${i + 1}`} className="dark tiny" />
@@ -671,39 +813,75 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
 
 /* ---------------------------------------------------------------- Synth -- */
 
-export function SynthSection({ store }: SectionProps) {
+export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
+  const state = useInstrumentState(instrument)
+  const synth = state.synth
+  const focused = synth.layers[synth.focusedLayer]
+  const wave = SYNTH_WAVEFORMS[focused.waveform] ?? SYNTH_WAVEFORMS[0]!
+  const envelope = focused.ampEnvelope
+  const filter = focused.filter
+  const oscEnvelope = focused.oscEnvelope
+  const lfo = focused.lfo
+  // The three OLED dials edit whichever envelope's A/D/R is currently
+  // latched (manual p. 27: one shared dial trio for every menu).
+  const editedEnvelope =
+    state.synthEnvEdit === 'amp'
+      ? { label: 'AMP ENVELOPE', ...envelope }
+      : state.synthEnvEdit === 'filter'
+        ? { label: 'FILTER ENVELOPE', ...filter.envelope }
+        : state.synthEnvEdit === 'osc'
+          ? { label: 'OSC ENVELOPE', ...oscEnvelope }
+          : null
   return (
     <SectionShell id="synth">
       <div className="plate">
-        <SectionHeader title="SYNTH" store={store} onId="synth-on" />
+        <SectionHeader title="SYNTH" store={store} onId="synth-on" onZoom={onZoom} />
         <div className="synth-body">
           <div className="levels-column">
             <div className="layer-pair triple">
-              <LayerFaderColumn store={store} faderId="synth-level-a" buttonId="synth-layer-a" letter="A" />
-              <LayerFaderColumn store={store} faderId="synth-level-b" buttonId="synth-layer-b" letter="B" />
-              <LayerFaderColumn store={store} faderId="synth-level-c" buttonId="synth-layer-c" letter="C" />
+              <LayerFaderColumn
+                store={store}
+                faderId="synth-level-a"
+                buttonId="synth-layer-a"
+                letter="A"
+                focused={synth.focusedLayer === 'A'}
+              />
+              <LayerFaderColumn
+                store={store}
+                faderId="synth-level-b"
+                buttonId="synth-layer-b"
+                letter="B"
+                focused={synth.focusedLayer === 'B'}
+              />
+              <LayerFaderColumn
+                store={store}
+                faderId="synth-level-c"
+                buttonId="synth-layer-c"
+                letter="C"
+                focused={synth.focusedLayer === 'C'}
+              />
             </div>
             <span className="tiny-led-row">
-              <Led color="red" />
+              <Led color="yellow" on={synth.sustped} />
               <Legend>SUSTPED</Legend>
-              <Led color="yellow" />
+              <Led color="yellow" on={synth.pstick} />
               <Legend>PSTICK/RNG ▿</Legend>
             </span>
             <span className="hold-row">
               <span className="hold-cell">
-                <span className="tiny-led-row">
-                  <Led color="red" />
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Led color="red" on={state.kbHold} />
                   <Legend>KB HOLD</Legend>
                 </span>
                 <PanelButton store={store} id="kb-hold" className="dark tiny" />
                 <Legend className="dim">EXCLUDE ▿</Legend>
               </span>
               <span className="hold-cell">
-                <span className="tiny-led-row">
+                <span className="tiny-led-row" aria-hidden="true">
                   <Legend>ARP RUN</Legend>
                 </span>
                 <PanelButton store={store} id="arp-run" className="red tiny" />
-                <Legend className="dim">KB SYNC ▿</Legend>
+                <Legend className={`dim ${synth.arp.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
               </span>
             </span>
             <span className="octave-row">
@@ -713,54 +891,85 @@ export function SynthSection({ store }: SectionProps) {
                 <PanelButton store={store} id="synth-octave-up" className="dark tiny" />
               </span>
             </span>
-            <span className="kb-zone" aria-hidden="true">
-              <Legend>◂ KB ZONE ▸</Legend>
-              <span className="zone-leds">
-                <Led color="green" on />
-                <Led color="green" on />
-                <Led color="green" />
-              </span>
-            </span>
+            <ZoneLeds state={state} section="synth" />
           </div>
           <div className="synth-main">
             <div className="synth-top">
               <div className="synth-display-block">
                 <Oled
                   section="synth"
-                  lines={[
-                    <span key="t" className="oled-dim">OSC WAVEFORM</span>,
-                    <b key="w" className="oled-name">Super Saw</b>,
-                    <span key="d">DETUNE: 3.4</span>,
-                    <span key="m" className="oled-menu">
-                      <span>ANALOG <b>TYPE</b></span>
-                      <span>SUPER <b>CAT</b></span>
-                      <span>1(S) <b>WAVE</b></span>
-                    </span>,
-                  ]}
+                  lines={
+                    editedEnvelope
+                      ? [
+                          <span key="t" className="oled-dim">
+                            {editedEnvelope.label}
+                          </span>,
+                          <b key="w" className="oled-name" data-testid="oled-synth-name-line">
+                            {wave.name}
+                          </b>,
+                          <span key="adr" data-testid="oled-synth-envelope-line">
+                            A {editedEnvelope.attack} · D {editedEnvelope.decay === 127 ? 'HOLD' : editedEnvelope.decay} · R{' '}
+                            {editedEnvelope.release}
+                          </span>,
+                          <span key="m" className="oled-menu">
+                            <span>
+                              {editedEnvelope.attack} <b>ATTACK</b>
+                            </span>
+                            <span>
+                              {editedEnvelope.decay === 127 ? 'HOLD' : editedEnvelope.decay} <b>DECAY</b>
+                            </span>
+                            <span>
+                              {editedEnvelope.release} <b>RELEASE</b>
+                            </span>
+                          </span>,
+                        ]
+                      : [
+                          <span key="t" className="oled-dim">
+                            OSC WAVEFORM
+                          </span>,
+                          <b key="w" className="oled-name" data-testid="oled-synth-name-line">
+                            {wave.name}
+                          </b>,
+                          <span key="d" data-testid="oled-synth-ctrl-line">
+                            OSC CTRL: {(focused.oscCtrl / 12.7).toFixed(1)}
+                          </span>,
+                          <span key="m" className="oled-menu">
+                            <span>
+                              ANALOG <b>TYPE</b>
+                            </span>
+                            <span>
+                              {wave.category.toUpperCase()} <b>CAT</b>
+                            </span>
+                            <span>
+                              {synth.focusedLayer} <b>LAYER</b>
+                            </span>
+                          </span>,
+                        ]
+                  }
                 />
                 <div className="synth-dials">
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-1" className="small" />
-                    <Legend className="dim">INFO</Legend>
+                    <Legend className="dim">{editedEnvelope ? 'ATTACK' : 'INFO'}</Legend>
                   </span>
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-2" className="small" />
-                    <Legend className="dim">LIST</Legend>
+                    <Legend className="dim">{editedEnvelope ? 'DECAY' : 'WAVE'}</Legend>
                   </span>
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-3" className="small" />
-                    <Legend className="dim">LIST</Legend>
+                    <Legend className="dim">{editedEnvelope ? 'RELEASE' : 'LFO DEST'}</Legend>
                   </span>
                 </div>
               </div>
               <div className="mode-column">
                 <GroupBox title="Mode" className="mode-box">
                   <span className="tiny-led-row">
-                    <Led color="yellow" on />
+                    <Led color="yellow" />
                     <Legend>SAMPLES</Legend>
                   </span>
                   <span className="tiny-led-row">
-                    <Led color="red" />
+                    <Led color="red" on />
                     <Legend>ANALOG</Legend>
                   </span>
                   <span className="tiny-led-row">
@@ -783,20 +992,20 @@ export function SynthSection({ store }: SectionProps) {
                     <span className="knob-cell">
                       <Knob store={store} id="arp-rate" className="small" />
                       <Legend>RATE/<wbr />TIME</Legend>
-                      <Legend className="dim red-tag">◂ MST CLK</Legend>
+                      <Legend className={`dim red-tag ${synth.arp.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
                     </span>
                     <span className="arp-mode-cell">
-                      <span className="tiny-led-row">
-                        <Legend>POLY ▾</Legend>
-                        <Led color="green" />
+                      <span className="tiny-led-row" aria-hidden="true">
+                        <Legend>{synth.arp.mode === 'Poly' ? 'POLY ▾' : synth.arp.mode}</Legend>
+                        <Led color="green" on={synth.arp.mode === 'Gate'} />
                         <Legend>GATE</Legend>
                       </span>
                       <PanelButton store={store} id="arp-mode" className="dark tiny" led="green" />
-                      <Legend className="dim">PATTERN ▿</Legend>
+                      <Legend className="dim">{synth.arp.direction} ▿</Legend>
                     </span>
                     <span className="knob-cell">
                       <Knob store={store} id="arp-range" className="small" />
-                      <Legend>RANGE ENV</Legend>
+                      <Legend>{synth.arp.mode === 'Gate' ? 'HARDNESS' : 'RANGE'} ENV</Legend>
                     </span>
                     <span className="arp-mode-cell">
                       <PanelButton store={store} id="arp-menu" className="red tiny">
@@ -808,15 +1017,16 @@ export function SynthSection({ store }: SectionProps) {
                 </GroupBox>
                 <div className="voice-vibrato-row">
                   <GroupBox title="Voice" className="voice-box">
-                    <span className="tiny-led-row">
-                      <Led color="red" />
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Led color="red" on={focused.voice.mode === 'Mono'} />
                       <Legend>MONO</Legend>
                     </span>
-                    <span className="tiny-led-row">
-                      <Led color="red" />
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Led color="red" on={focused.voice.mode === 'Legato'} />
                       <Legend>LEGATO</Legend>
                     </span>
                     <PanelButton store={store} id="voice-mode" className="dark tiny" />
+                    <Legend className="dim">PRI {focused.voice.priority} ▿</Legend>
                     <span className="knob-cell">
                       <Knob store={store} id="glide" className="small" />
                       <Legend>GLIDE</Legend>
@@ -824,11 +1034,11 @@ export function SynthSection({ store }: SectionProps) {
                     </span>
                   </GroupBox>
                   <GroupBox title="Vibrato" className="vibrato-box">
-                    <span className="tiny-led-row">
+                    <span className="tiny-led-row" aria-hidden="true">
                       <Legend>WHL DLY A.T. PED</Legend>
                     </span>
                     <PanelButton store={store} id="vibrato-mode" className="dark tiny" led="green">
-                      ON
+                      {focused.voice.vibrato === 'Off' ? 'OFF' : focused.voice.vibrato.toUpperCase()}
                     </PanelButton>
                     <PanelButton store={store} id="vibrato-menu" className="red tiny">
                       MENU
@@ -839,14 +1049,18 @@ export function SynthSection({ store }: SectionProps) {
             </div>
             <div className="synth-bottom">
               <GroupBox title="LFO" className="lfo-box">
-                <PanelButton store={store} id="lfo-waveform" className="dark tiny" led="green">
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Led color="green" on={lfo.destination !== null} />
+                  <Legend>{lfo.waveform.toUpperCase()}</Legend>
+                </span>
+                <PanelButton store={store} id="lfo-waveform" className="dark tiny">
                   WAVEFORM
                 </PanelButton>
-                <Legend className="dim">GROUP ▿</Legend>
+                <Legend className="dim">{lfo.destination ?? 'OFF'} ▿</Legend>
                 <span className="knob-cell">
                   <Knob store={store} id="lfo-rate" className="small" />
                   <Legend>RATE/<wbr />TIME</Legend>
-                  <Legend className="dim red-tag">◂ MST CLK</Legend>
+                  <Legend className={`dim red-tag ${lfo.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
                 </span>
                 <span className="knob-cell">
                   <Knob store={store} id="lfo-mod-amt" className="small" />
@@ -859,15 +1073,19 @@ export function SynthSection({ store }: SectionProps) {
                   <PanelButton store={store} id="osc-pitch-smp" className="red tiny">
                     PITCH/SMP
                   </PanelButton>
-                  <PanelButton store={store} id="osc-envelope" className="red tiny">
+                  <PanelButton store={store} id="osc-envelope" className="red tiny" led="red">
                     ENVELOPE
                   </PanelButton>
                 </span>
-                <Legend className="dim">ENV TO PITCH ▿ · VELOCITY ▿</Legend>
+                <Legend className={`dim ${oscEnvelope.toPitch ? 'lit' : ''}`}>
+                  ENV TO PITCH {oscEnvelope.toPitch ? '●' : '○'} · VELOCITY {oscEnvelope.velocity ? '●' : '○'}
+                </Legend>
                 <span className="knob-pair">
                   <span className="knob-cell">
                     <Knob store={store} id="osc-ctrl" />
-                    <Legend>OSC CTRL</Legend>
+                    <Legend>
+                      OSC CTRL <b>{(focused.oscCtrl / 12.7).toFixed(1)}</b>
+                    </Legend>
                   </span>
                   <span className="knob-cell">
                     <Knob store={store} id="osc-env-amt" className="small" />
@@ -880,11 +1098,14 @@ export function SynthSection({ store }: SectionProps) {
                   <PanelButton store={store} id="filter-type" className="red tiny">
                     TYPE
                   </PanelButton>
-                  <PanelButton store={store} id="filter-envelope" className="red tiny">
+                  <PanelButton store={store} id="filter-envelope" className="red tiny" led="red">
                     ENVELOPE
                   </PanelButton>
                 </span>
-                <Legend className="dim">GROUP ▿ · VELOCITY ▿</Legend>
+                <TokenRow tokens={[...SYNTH_FILTER_TYPES]} active={filter.type} />
+                <Legend className="dim">
+                  TRACK {['OFF', '1/3', '2/3', '1'][filter.tracking]} ▿ · DRIVE {['OFF', '1', '2', '3'][filter.drive]} ▿
+                </Legend>
                 <span className="knob-pair">
                   <span className="knob-cell">
                     <Knob store={store} id="filter-freq" />
@@ -906,20 +1127,25 @@ export function SynthSection({ store }: SectionProps) {
               </GroupBox>
               <div className="amp-unison-column">
                 <GroupBox title="Amp" className="amp-box">
-                  <PanelButton store={store} id="amp-envelope" className="red tiny">
+                  <PanelButton store={store} id="amp-envelope" className="red tiny" led="red">
                     ENVELOPE
                   </PanelButton>
-                  <Legend className="dim">VELOCITY ▿</Legend>
+                  <span className="tiny-led-row" aria-hidden="true">
+                    <Legend>VEL</Legend>
+                    <Led color="red" on={envelope.velocity >= 1} />
+                    <Legend>{envelope.velocity}</Legend>
+                  </span>
                 </GroupBox>
                 <GroupBox title="Unison" className="unison-box">
                   <span className="tiny-led-row" aria-hidden="true">
                     <Legend>2</Legend>
-                    <Led color="red" />
+                    <Led color="red" on={focused.voice.unison === 2} />
                     <Legend>3</Legend>
+                    <Led color="red" on={focused.voice.unison === 3} />
                   </span>
                   <span className="tiny-led-row" aria-hidden="true">
                     <Legend>1</Legend>
-                    <Led color="red" />
+                    <Led color="red" on={focused.voice.unison === 1} />
                   </span>
                   <PanelButton store={store} id="synth-unison" className="dark tiny" />
                 </GroupBox>
@@ -947,14 +1173,14 @@ function TokenRow({ tokens, active }: { tokens: string[]; active?: string }) {
   )
 }
 
-export function EffectsSection({ store, instrument }: BoundSectionProps) {
+export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps) {
   const state = useInstrumentState(instrument)
-  const chain = state.chains[state.focusedLayer]
+  const chain = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
   return (
     <SectionShell id="effects">
       <div className="plate">
         <div className="plate-header">
-          <span className="plate-title">LAYER EFFECTS</span>
+          <PlateTitle title="LAYER EFFECTS" onZoom={onZoom} />
           <span className="on-cluster">
             <Legend>ON</Legend>
             <PanelButton store={store} id="effects-on" className="pill" led="green" />
@@ -966,9 +1192,9 @@ export function EffectsSection({ store, instrument }: BoundSectionProps) {
             <span className="focus-cell">
               <Legend>ORGAN</Legend>
               <span className="tiny-led-row" aria-hidden="true">
-                <Led color="green" />
+                <Led color="green" on={state.fxSection === 'organ' && state.organ.layers.A.enabled} />
                 <Legend>A</Legend>
-                <Led color="green" />
+                <Led color="green" on={state.fxSection === 'organ' && state.organ.layers.B.enabled} />
                 <Legend>B</Legend>
               </span>
               <PanelButton store={store} id="all-fx-off" className="dark tiny">
@@ -978,9 +1204,9 @@ export function EffectsSection({ store, instrument }: BoundSectionProps) {
             <span className="focus-cell">
               <Legend>PIANO</Legend>
               <span className="tiny-led-row" aria-hidden="true">
-                <Led color="green" on={state.focusedLayer === 'A' || state.fxGroupPiano} />
+                <Led color="green" on={state.fxSection === 'piano' && (state.focusedLayer === 'A' || state.fxGroupPiano)} />
                 <Legend>A</Legend>
-                <Led color="green" on={state.focusedLayer === 'B' || state.fxGroupPiano} />
+                <Led color="green" on={state.fxSection === 'piano' && (state.focusedLayer === 'B' || state.fxGroupPiano)} />
                 <Legend>B</Legend>
               </span>
               <PanelButton store={store} id="fx-focus-piano" className="dark tiny">
@@ -1007,7 +1233,7 @@ export function EffectsSection({ store, instrument }: BoundSectionProps) {
               <span className="knob-cell">
                 <Knob store={store} id="mod1-rate" className="small" />
                 <Legend>RATE <i className="dim">SENS</i></Legend>
-                <Legend className="dim red-tag">◂ MST CLK</Legend>
+                <Legend className={`dim red-tag ${chain.mod1.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
               </span>
               <span className="knob-cell">
                 <Knob store={store} id="mod1-amount" className="small" />
@@ -1030,7 +1256,7 @@ export function EffectsSection({ store, instrument }: BoundSectionProps) {
               <span className="knob-cell">
                 <Knob store={store} id="delay-tempo" className="small" />
                 <Legend>TEMPO</Legend>
-                <Legend className="dim red-tag">◂ MST CLK</Legend>
+                <Legend className={`dim red-tag ${chain.delay.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
               </span>
               <span className="variation-cell">
                 <TokenRow

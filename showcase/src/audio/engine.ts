@@ -5,11 +5,13 @@ import type {
   AudioBufferSourceNodeLike,
   AudioContextLike,
   AudioNodeLike,
+  AudioParamLike,
   BiquadFilterNodeLike,
   DynamicsCompressorNodeLike,
   GainNodeLike,
   OscillatorNodeLike,
   SampleData,
+  WaveShaperNodeLike,
 } from './boundaries'
 import {
   getInstrument,
@@ -25,17 +27,38 @@ import {
   createMod2,
   createReverb,
   createRotary,
+  createScanner,
   type EffectUnit,
   type RotaryUnit,
+  type ScannerState,
 } from './effects'
+import { drawbarPartialGain, ORGAN_MODEL_RECIPES } from './organ-models'
+import {
+  fmModulationIndex,
+  multiDetuneCents,
+  oscCtrlActiveFor,
+  pulse10Wave,
+  pulse33Wave,
+  superDetuneCents,
+  syncPeakHarmonic,
+  syncWave,
+} from './synth-oscillators'
 import {
   initialInstrumentState,
   mappings,
+  SYNTH_LAYER_IDS,
+  SYNTH_WAVEFORMS,
   selectedInstrumentId,
   timbreListFor,
+  zoneGainFor,
   type EffectChainState,
   type InstrumentState,
   type LayerId,
+  type OrganModelId,
+  type SynthLayerId,
+  type SynthFilterType,
+  type SynthLfoDestination,
+  type SynthLfoWaveform,
 } from '../state/instrument'
 
 /**
@@ -64,8 +87,60 @@ type VoiceSource =
   | { kind: 'sample'; node: AudioBufferSourceNodeLike; baseRate: number }
   | { kind: 'synth'; node: OscillatorNodeLike; baseDetune: number }
 
+export type SectionId = 'piano' | 'organ' | 'synth'
+/** A layer id valid for the section it's paired with: A/B for piano and
+ *  organ, A/B/C for synth (spec: three synth layers). */
+export type VoiceLayer = LayerId | SynthLayerId
+
+/** Live-updatable organ voice references: applyState retargets these gains
+ *  when drawbars move while the note sounds (spec: drawbar movement changes
+ *  the audible spectrum immediately). */
+interface OrganVoiceLive {
+  model: OrganModelId
+  partials: Array<{ drawbar: number; level: number; gain: GainNodeLike }>
+  voxMix: { dark: GainNodeLike; bright: GainNodeLike } | null
+}
+
+/** A detuned oscillator voice source retargeted live by Osc Ctrl: `source`
+ *  is the same VoiceSource entry pitch-bend retargeting uses, so both stay
+ *  consistent when its stored baseDetune is updated in place. */
+interface LiveDetunedSource {
+  source: VoiceSource & { kind: 'synth' }
+}
+
+/** Live-updatable synth voice references: applyState retargets these params
+ *  when Osc Ctrl moves while the note sounds (spec knobs.oscCtrlKnob is
+ *  "modulatable" — here it's simply live). Only the categories whose Osc
+ *  Ctrl retargets a sounding voice populate a variant. Every variant also
+ *  carries `oscCtrlParam`: a real AudioParam the LFO's "Osc Ctrl" destination
+ *  and the non-toPitch oscillator envelope modulate at audio rate. FM-H uses
+ *  its true modulation-index gain directly; the other three categories have
+ *  no single linear AudioParam for their JS-computed Osc Ctrl math, so they
+ *  share a declared-approximation gain summed into each oscillator's detune
+ *  (a real, audible, audio-rate connection — not the literal per-category
+ *  mechanism, honestly noted here and in IMPLEMENTATION_DETAILS.json). */
+type SynthVoiceLive =
+  | { kind: 'multi'; detuned: LiveDetunedSource[]; oscCtrlParam: AudioParamLike }
+  | { kind: 'super'; detuned: LiveDetunedSource[]; oscCtrlParam: AudioParamLike }
+  | { kind: 'fm'; modGain: AudioParamLike; carrierFrequency: number; oscCtrlParam: AudioParamLike }
+  | { kind: 'sync'; square: boolean; oscillator: OscillatorNodeLike; peak: number; oscCtrlParam: AudioParamLike }
+  | null
+
+/** Per-voice filter + drive stage (synth only): the source mix (`gain`)
+ *  feeds `driveShaper` (bypassed at drive 0) into one or two cascaded biquad
+ *  filters (LP24 = two lowpass stages in series; LP12/HP/BP = one stage),
+ *  whose output replaces `gain` as the node that connects onward to the
+ *  voice bus. `envBaseHz` is the keyboard-tracked base cutoff the filter
+ *  envelope ramps away from and back to. */
+interface SynthVoiceFilter {
+  driveShaper: WaveShaperNodeLike
+  filters: BiquadFilterNodeLike[]
+  envBaseHz: number
+}
+
 interface Voice {
-  layer: LayerId
+  section: SectionId
+  layer: VoiceLayer
   midi: number
   seq: number
   keyDown: boolean
@@ -77,9 +152,93 @@ interface Voice {
   ownedNodes: AudioNodeLike[]
   gain: GainNodeLike
   cleanupTimer: number | null
+  organLive: OrganVoiceLive | null
+  synthLive: SynthVoiceLive
+  synthFilter: SynthVoiceFilter | null
 }
 
 type InstrumentLoadStatus = 'loading' | 'ready' | 'error'
+
+export interface OrganChannel {
+  voiceBus: GainNodeLike
+  scanner: EffectUnit<ScannerState>
+  levelGain: GainNodeLike
+}
+
+/** One standing LFO per synth layer (spec lfo): built alongside the layer's
+ *  channel and always running; its depth gain is (re)connected to the
+ *  destination param of every sounding voice of that layer as voices start
+ *  or the destination/waveform/rate changes (manual p. 34: no destination
+ *  LED lit means off but the settings are kept — depth simply goes to 0).
+ *  Triangle/Saw Up/Square come from `osc` (its native type switches);
+ *  Saw Down is `osc` through an inverting gain; S&H is a separate looping
+ *  stepped-random buffer source. A per-source select gain mutes the two
+ *  inactive sources so switching waveform never needs to reconnect the
+ *  live `depth` fan-out mid-note. */
+export interface SynthLfoUnit {
+  osc: OscillatorNodeLike
+  /** Inverting stage for Saw Down (native oscillator has no descending-ramp
+   *  type without gain inversion); its select gain mutes it otherwise. */
+  invert: GainNodeLike
+  invertSelect: GainNodeLike
+  oscSelect: GainNodeLike
+  /** S&H stepped-random source (Sample & Hold has no native oscillator type). */
+  sh: AudioBufferSourceNodeLike
+  shSelect: GainNodeLike
+  depth: GainNodeLike
+  waveform: SynthLfoWaveform
+}
+
+/** Fixed 5.5 Hz pitch LFO for the layer's Vibrato (spec voice.vibrato menu:
+ *  "Rate 2.0-8.0 Hz" — fixed here per the brief; only Amount is panel-
+ *  editable). `depth`'s gain follows On (fixed vibratoAmount) or Wheel (the
+ *  live mod-wheel position) and connects to each sounding voice's source
+ *  detune params at voice build, mirroring the standing LFO's connect-at-
+ *  build pattern. */
+export interface SynthVibratoUnit {
+  osc: OscillatorNodeLike
+  depth: GainNodeLike
+}
+
+/** Synth layer path (per-layer effect chain arrives with a later Synth
+ *  iteration). Voices enter the bus, the level gain gates enabled/section-on
+ *  audibility, feed the layer's own effect chain (spec: three independent
+ *  synth chains), whose output's toMaster/toRotary sends mirror a Piano
+ *  layer's routing (Amp unit "To Rotary" mode). */
+export interface SynthChannel {
+  voiceBus: GainNodeLike
+  levelGain: GainNodeLike
+  units: {
+    mod1: EffectUnit<EffectChainState['mod1']>
+    mod2: EffectUnit<EffectChainState['mod2']>
+    delay: EffectUnit<EffectChainState['delay']>
+    ampEq: EffectUnit<EffectChainState['ampEq']>
+    comp: EffectUnit<EffectChainState['comp']>
+    reverb: EffectUnit<EffectChainState['reverb']>
+  }
+  toMaster: GainNodeLike
+  toRotary: GainNodeLike
+  lfo: SynthLfoUnit
+  vibrato: SynthVibratoUnit
+}
+
+/** The single effect chain shared by both Organ layers (manual p. 18: "Both
+ *  Organ Layers share the same effects chain"). Each layer's levelGain feeds
+ *  this chain's input; its output fans out to the shared master/rotary
+ *  sends, mirroring the per-layer LayerChannel routing. */
+export interface OrganSharedChain {
+  input: GainNodeLike
+  units: {
+    mod1: EffectUnit<EffectChainState['mod1']>
+    mod2: EffectUnit<EffectChainState['mod2']>
+    delay: EffectUnit<EffectChainState['delay']>
+    ampEq: EffectUnit<EffectChainState['ampEq']>
+    comp: EffectUnit<EffectChainState['comp']>
+    reverb: EffectUnit<EffectChainState['reverb']>
+  }
+  toMaster: GainNodeLike
+  toRotary: GainNodeLike
+}
 
 export interface LayerChannel {
   voiceBus: GainNodeLike
@@ -104,15 +263,128 @@ export interface LayerChannel {
 
 export const MAX_POLYPHONY = 24
 const RELEASE_SECONDS = 0.18
+const ORGAN_RELEASE_SECONDS = 0.02
 const HALF_PEDAL_RELEASE_SECONDS = 0.85
 const QUICK_RELEASE_SECONDS = 0.03
 const PANIC_RELEASE_SECONDS = 0.008
 const CLEANUP_GRACE_MS = 80
 const SUSTAIN_DOWN = 0.85
 const SUSTAIN_LIFT = 0.2
+/** Per-partial scale so a full nine-drawbar registration stays headroom-safe. */
+const ORGAN_PARTIAL_LEVEL = 0.075
+/** Per-oscillator headroom scale for the synth voice (up to a 7-osc Super stack). */
+const SYNTH_OSC_LEVEL = 0.13
+/** Amp-envelope velocity-level "floor" — the peak gain at velocity 0, ramping
+ *  up to the full peak at velocity 1 (Off/1/2/3 — spec envelopes.amplifier).
+ *  Off (0) ignores played velocity entirely (handled separately); 1 is a
+ *  shallow response, 3 the deepest (soft notes near-silent, hard notes full). */
+const SYNTH_VELOCITY_FLOOR = [1, 0.7, 0.35, 0.05] as const
+
+/** decay=127 holds at the attack peak (manual p. 33 "sustain mode"); otherwise
+ *  0..126 maps to a short..long time constant for setTargetAtTime decay. */
+function synthDecaySeconds(decay: number): number | null {
+  if (decay >= 127) return null
+  return 0.005 + Math.pow(decay / 126, 2) * 3
+}
+
+/** 0..127 -> 0.01..4s exponential release mapping for synth voices. */
+function synthReleaseSeconds(release: number): number {
+  return 0.01 * Math.pow(400, release / 127)
+}
+
+/** 0..127 -> 0.001..2s exponential attack mapping for synth voices. */
+function synthAttackSeconds(attack: number): number {
+  return 0.001 + Math.pow(attack / 127, 2) * 2
+}
 
 function midiToFrequency(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12)
+}
+
+/** Stops (if startable) and disconnects every node — used for the standing
+ *  synth LFO's oscillator/buffer-source/gain nodes on full engine teardown
+ *  (mirrors the equivalent helper in effects.ts for the effect LFOs). */
+function stopAndDisconnect(nodes: AudioNodeLike[]): void {
+  for (const node of nodes) {
+    try {
+      ;(node as OscillatorNodeLike).stop?.(0)
+    } catch {
+      /* not startable or already stopped */
+    }
+    try {
+      node.disconnect()
+    } catch {
+      /* detached */
+    }
+  }
+}
+
+/** Native BiquadFilterNode type per filter type (LP24 cascades two lowpass
+ *  stages — see synthFilterStageCount). */
+function biquadTypeFor(type: SynthFilterType): string {
+  if (type === 'HP') return 'highpass'
+  if (type === 'BP') return 'bandpass'
+  return 'lowpass' // LP12, LP24
+}
+
+/** LP24 is two cascaded LP12 stages (spec filter.requiredTypes: "LP12, LP24
+ *  ... " — 24 dB/oct = two 12 dB/oct stages in series); every other type is
+ *  a single stage. */
+function synthFilterStageCount(type: SynthFilterType): number {
+  return type === 'LP24' ? 2 : 1
+}
+
+/** 0..127 -> 40..16000 Hz cutoff, reusing the shared filterFreqHz mapping. */
+function synthFilterFreqHz(freq: number): number {
+  return mappings.filterFreqHz(freq)
+}
+
+/** 0..127 -> 0.5..18 biquad Q (resonance): a gentle low end rising to a
+ *  clearly self-resonant peak at 127. */
+function synthFilterQ(res: number): number {
+  return 0.5 + Math.pow(res / 127, 2) * 17.5
+}
+
+/** Keyboard tracking scales the base cutoff by the note's distance from
+ *  middle C, at Off/1-3/2-3/1 fractions of a full octave-per-octave track
+ *  (spec filter.keyboardTracking). */
+function synthFilterTrackingScale(tracking: 0 | 1 | 2 | 3, midi: number): number {
+  const fraction = tracking / 3
+  return Math.pow(2, (fraction * (midi - 60)) / 12)
+}
+
+/** Drive stage curve (Off/1/2/3): the same tanh-saturation shape used by the
+ *  rotary drive (createRotary in effects.ts), scaled 1..3 across the three
+ *  active levels so higher settings clip harder. */
+function synthDriveCurve(drive: 0 | 1 | 2 | 3): Float32Array | null {
+  if (drive === 0) return null
+  const k = 1 + drive * 3
+  const curve = new Float32Array(2048)
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1
+    curve[i] = Math.tanh(x * k) / Math.tanh(k)
+  }
+  return curve
+}
+
+/** Filter-envelope peak cutoff: envAmount (0..127, 64 = 0) sweeps the base
+ *  cutoff up to +4 octaves above `base`, clamped to the base at 64 and below
+ *  base is never swept downward (spec: "Env Amt" is the filter envelope's
+ *  depth, not a bipolar control on the real hardware). */
+function synthFilterEnvPeakHz(baseHz: number, envAmount: number): number {
+  const depth = Math.max(0, (envAmount - 64) / 63) * 4
+  return Math.min(20000, baseHz * Math.pow(2, depth))
+}
+
+/** Oscillator-envelope bipolar pitch amount (64 = 0) -> ±12 semitones -> cents. */
+function oscEnvPitchCents(amount: number): number {
+  return ((amount - 64) / 63) * 12 * 100
+}
+
+/** Oscillator-envelope bipolar Osc Ctrl amount (64 = 0) -> a ±0.5 (0..127
+ *  scale) live-target offset the same shape as the LFO's Osc Ctrl depth. */
+function oscEnvCtrlOffset(amount: number): number {
+  return ((amount - 64) / 63) * 63.5
 }
 
 export interface EngineOptions {
@@ -126,6 +398,9 @@ export class PianoEngine {
   private masterGain: GainNodeLike | null = null
   private limiter: DynamicsCompressorNodeLike | null = null
   private channels: Record<LayerId, LayerChannel> | null = null
+  private organChannels: Record<LayerId, OrganChannel> | null = null
+  private organChain: OrganSharedChain | null = null
+  private synthChannels: Record<SynthLayerId, SynthChannel> | null = null
   private rotary: RotaryUnit | null = null
 
   private voices = new Map<string, Voice>()
@@ -134,8 +409,32 @@ export class PianoEngine {
   private softDown = false
   private sostenutoDown = false
   private pitchBend = 0
-  private appliedBend = 0
+  private appliedBend: Record<SectionId, number> = { piano: 0, organ: 0, synth: 0 }
   private seqCounter = 0
+  private organClick: AudioBufferLike | null = null
+  private organChiff: AudioBufferLike | null = null
+  private synthNoiseLoop: AudioBufferLike | null = null
+  /** Shared stepped-random buffer for every layer's LFO S&H waveform. */
+  private synthShBuffer: AudioBufferLike | null = null
+
+  /** Per-layer held-note stack (spec voice.priority / arpeggiatorGate): the
+   *  physically (or KB-HOLD-latched) held notes, oldest first. Drives note
+   *  priority in Mono/Legato and — when the section-level arp is running —
+   *  the arpeggiator's note set (shared across every enabled synth layer). */
+  private synthHeld: Record<SynthLayerId, number[]> = { A: [], B: [], C: [] }
+  /** Per-layer sounding voice midi in Mono/Legato mode (null = none sounding). */
+  private synthSoundingMidi: Record<SynthLayerId, number | null> = { A: null, B: null, C: null }
+  /** Arp scheduler: null while ARP RUN is off. */
+  private arpTimer: number | null = null
+  private arpStepIndex = 0
+  /** Arp-mode's one sounding note per layer (so each step releases the
+   *  previous note before sounding the next — Poly mode ignores this and
+   *  retriggers every held note in place each step, per spec). */
+  private arpSoundingMidi: Record<SynthLayerId, number | null> = { A: null, B: null, C: null }
+  /** Deterministic xorshift RNG state for Random direction, reseeded each
+   *  run-start (spec: "deterministic xorshift seeded per run-start"). */
+  private arpRngState = 0
+  private arpRunning = false
 
   private state: InstrumentState = initialInstrumentState()
   private detachStore: (() => void) | null = null
@@ -235,6 +534,9 @@ export class PianoEngine {
       this.rotary = createRotary(context)
       this.rotary.output.connect(master)
       this.channels = { A: this.buildChannel(context), B: this.buildChannel(context) }
+      // Organ channels (with their always-running scanner LFOs) are built
+      // lazily on first Organ-section use — a piano-only session never pays
+      // for them (see ensureOrganChannels, called from applyState).
       // OfflineAudioContext (offline render tests) rejects resume() before
       // startRendering; a live context resumes on this first gesture.
       if (context.state === 'suspended') void Promise.resolve(context.resume()).catch(() => undefined)
@@ -328,6 +630,185 @@ export class PianoEngine {
     toRotary.connect(this.rotary!.input)
 
     return { voiceBus, timbreBass, timbreTreble, dynComp, dynMakeup, levelGain, resSend, resConvolver, units, toMaster, toRotary }
+  }
+
+  /** Builds the organ layer paths and the shared organ effect chain on first
+   *  use (organ section switched on). */
+  private ensureOrganChannels(): void {
+    if (this.organChannels || !this.context || !this.masterGain || !this.rotary || !this.channels) return
+    this.organChain = this.buildOrganSharedChain(this.context)
+    this.organChannels = {
+      A: this.buildOrganChannel(this.context, this.organChain),
+      B: this.buildOrganChannel(this.context, this.organChain),
+    }
+  }
+
+  /** Organ layer path: voices → vib/chorus scanner → level → shared chain input. */
+  private buildOrganChannel(context: AudioContextLike, chain: OrganSharedChain): OrganChannel {
+    const voiceBus = context.createGain()
+    const scanner = createScanner(context)
+    const levelGain = context.createGain()
+    voiceBus.connect(scanner.input)
+    scanner.output.connect(levelGain)
+    levelGain.connect(chain.input)
+    return { voiceBus, scanner, levelGain }
+  }
+
+  /** The single effect chain shared by both Organ layers (manual p. 18),
+   *  wired identically to a piano LayerChannel's chain: Mod 1 → Mod 2 →
+   *  Delay → Amp/EQ → Comp → Reverb, then to master or the shared rotary. */
+  private buildOrganSharedChain(context: AudioContextLike): OrganSharedChain {
+    const input = context.createGain()
+    const units = {
+      mod1: createMod1(context),
+      mod2: createMod2(context),
+      delay: createDelay(context),
+      ampEq: createAmpEq(context),
+      comp: createComp(context),
+      reverb: createReverb(context),
+    }
+    input.connect(units.mod1.input)
+    units.mod1.output.connect(units.mod2.input)
+    units.mod2.output.connect(units.delay.input)
+    units.delay.output.connect(units.ampEq.input)
+    units.ampEq.output.connect(units.comp.input)
+    units.comp.output.connect(units.reverb.input)
+
+    const toMaster = context.createGain()
+    const toRotary = context.createGain()
+    toRotary.gain.value = 0.0001
+    units.reverb.output.connect(toMaster)
+    units.reverb.output.connect(toRotary)
+    toMaster.connect(this.masterGain!)
+    toRotary.connect(this.rotary!.input)
+
+    return { input, units, toMaster, toRotary }
+  }
+
+  /** Builds the three synth layer paths on first use (synth section switched
+   *  on). Straight to master — the per-layer effect chain arrives with a
+   *  later Synth iteration. */
+  private ensureSynthChannels(): void {
+    if (this.synthChannels || !this.context || !this.masterGain) return
+    this.synthChannels = {
+      A: this.buildSynthChannel(this.context),
+      B: this.buildSynthChannel(this.context),
+      C: this.buildSynthChannel(this.context),
+    }
+  }
+
+  private buildSynthChannel(context: AudioContextLike): SynthChannel {
+    const voiceBus = context.createGain()
+    const levelGain = context.createGain()
+    const units = {
+      mod1: createMod1(context),
+      mod2: createMod2(context),
+      delay: createDelay(context),
+      ampEq: createAmpEq(context),
+      comp: createComp(context),
+      reverb: createReverb(context),
+    }
+    voiceBus.connect(levelGain)
+    levelGain.connect(units.mod1.input)
+    units.mod1.output.connect(units.mod2.input)
+    units.mod2.output.connect(units.delay.input)
+    units.delay.output.connect(units.ampEq.input)
+    units.ampEq.output.connect(units.comp.input)
+    units.comp.output.connect(units.reverb.input)
+
+    const toMaster = context.createGain()
+    const toRotary = context.createGain()
+    toRotary.gain.value = 0.0001
+    units.reverb.output.connect(toMaster)
+    units.reverb.output.connect(toRotary)
+    toMaster.connect(this.masterGain!)
+    toRotary.connect(this.rotary!.input)
+
+    return { voiceBus, levelGain, units, toMaster, toRotary, lfo: this.buildSynthLfo(context), vibrato: this.buildSynthVibrato(context) }
+  }
+
+  /** Fixed-rate (5.5 Hz) per-layer vibrato pitch LFO (spec voice.vibrato):
+   *  always running once the layer's channel exists; its depth gain
+   *  connects to every sounding voice's source detune params at voice build,
+   *  same connect-at-build convention as the standing modulation LFO. */
+  private buildSynthVibrato(context: AudioContextLike): SynthVibratoUnit {
+    const osc = context.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = 5.5
+    const depth = context.createGain()
+    depth.gain.value = 0
+    osc.connect(depth)
+    osc.start(0)
+    return { osc, depth }
+  }
+
+  /** One always-running standing LFO per synth layer (spec lfo): built once
+   *  and never torn down until the section itself is (mirrors the always-on
+   *  Mod 1/2 LFO oscillators in effects.ts). `depth`'s gain gets connected to
+   *  each sounding voice's destination param at voice build and disconnected
+   *  from released voices' nodes as they clean up (the disconnect happens
+   *  implicitly: releasing a voice's owned nodes tears down that connection). */
+  private buildSynthLfo(context: AudioContextLike): SynthLfoUnit {
+    const osc = context.createOscillator()
+    osc.type = 'triangle'
+    osc.frequency.value = mappings.lfoRateHz(64)
+    const invert = context.createGain()
+    invert.gain.value = -1
+    osc.connect(invert)
+    // S&H: a looping stepped-random buffer (a real oscillator has no
+    // sample-and-hold type) — built once per LFO at a fixed step rate, then
+    // its playbackRate is scaled to follow the Rate knob (see updateSynthLfos).
+    const sh = context.createBufferSource()
+    sh.buffer = this.getSynthShBuffer(context)
+    sh.loop = true
+    sh.playbackRate.value = 1
+    sh.start(0)
+    // Select gains mute the two inactive sources so a waveform change never
+    // reconnects the live depth fan-out mid-note (Triangle/Saw Up/Square all
+    // read `osc` directly; Saw Down reads `invert`; S&H reads `sh`).
+    const oscSelect = context.createGain()
+    oscSelect.gain.value = 1
+    const invertSelect = context.createGain()
+    invertSelect.gain.value = 0
+    const shSelect = context.createGain()
+    shSelect.gain.value = 0
+    const depth = context.createGain()
+    depth.gain.value = 0
+    osc.connect(oscSelect)
+    invert.connect(invertSelect)
+    sh.connect(shSelect)
+    oscSelect.connect(depth)
+    invertSelect.connect(depth)
+    shSelect.connect(depth)
+    osc.start(0)
+    return { osc, invert, invertSelect, oscSelect, sh, shSelect, depth, waveform: 'Triangle' }
+  }
+
+  /** Generated looping stepped-random buffer (xorshift; declared generated)
+   *  for the LFO's Sample & Hold waveform: one held random value per step,
+   *  16 steps/second at playbackRate 1 — scaled by the Rate knob so faster
+   *  settings step faster. */
+  private getSynthShBuffer(context: AudioContextLike): AudioBufferLike {
+    if (!this.synthShBuffer) {
+      const rate = context.sampleRate
+      const stepsPerSecond = 16
+      const totalSteps = 64
+      const samplesPerStep = Math.max(1, Math.floor(rate / stepsPerSecond))
+      const length = totalSteps * samplesPerStep
+      const buffer = context.createBuffer(1, length, rate)
+      const data = buffer.getChannelData(0)
+      let seed = 0x9e3779b9
+      for (let step = 0; step < totalSteps; step++) {
+        seed ^= seed << 13
+        seed ^= seed >>> 17
+        seed ^= seed << 5
+        seed >>>= 0
+        const value = seed / 0xffffffff - 0.5
+        for (let i = 0; i < samplesPerStep; i++) data[step * samplesPerStep + i] = value
+      }
+      this.synthShBuffer = buffer
+    }
+    return this.synthShBuffer
   }
 
   private makeResonanceImpulse(context: AudioContextLike): AudioBufferLike {
@@ -516,20 +997,26 @@ export class PianoEngine {
     const state = this.state
     rampTo(this.masterGain.gain, mappings.levelToGain(state.masterVolume) * 0.9, now)
 
-    // SUSTPED off: the damper is no longer routed here — release anything it held.
-    if (!state.piano.sustped) {
-      for (const voice of [...this.voices.values()]) {
-        if (voice.sustained && !voice.keyDown && !voice.sostenuto) {
-          voice.sustained = false
-          this.releaseVoice(voice, this.releaseSecondsFor(voice.layer))
-        }
+    // SUSTPED off: the damper is no longer routed to that section — release
+    // anything it was holding there.
+    for (const voice of [...this.voices.values()]) {
+      if (this.sectionSustped(voice.section)) continue
+      if (voice.sustained && !voice.keyDown && !voice.sostenuto) {
+        voice.sustained = false
+        this.releaseVoice(voice, this.releaseSecondsFor(voice))
       }
     }
     // PSTICK toggles re-route the pitch stick on sounding voices immediately.
-    if (this.effectiveBend() !== this.appliedBend) this.applyBendToVoices()
+    for (const section of ['piano', 'organ', 'synth'] as const) {
+      if (this.effectiveBend(section) !== this.appliedBend[section]) this.applyBendToVoices(section)
+    }
 
     if (!this.channels || !this.rotary) return
     this.rotary.update(state.rotary, now)
+
+    // Master-clock sync (manual p. 40): quarter-note delay time, one-LFO-cycle-per-beat Mod 1.
+    const syncedDelayTempo = mappings.msToDelayTempo(60000 / state.masterClock.bpm)
+    const syncedMod1Rate = mappings.hzToLfoRate(state.masterClock.bpm / 60)
 
     for (const layer of ['A', 'B'] as const) {
       const channel = this.channels[layer]
@@ -555,14 +1042,16 @@ export class PianoEngine {
       }
 
       // Resonance send follows String Res + damper state (as routed by SUSTPED).
-      const resActive = state.piano.stringRes && this.effectiveSustainLevel() >= SUSTAIN_LIFT
+      const resActive = state.piano.stringRes && this.effectiveSustainLevel('piano') >= SUSTAIN_LIFT
       rampTo(channel.resSend.gain, resActive ? 0.4 : 0.0001, now)
 
       // Ordered effect chain (families process real audio; allFxOff bypasses everything).
       const fxOn = !state.allFxOff
-      channel.units.mod1.update(chain.mod1, fxOn && chain.mod1.on, now)
+      const mod1State = chain.mod1.mstClk ? { ...chain.mod1, rate: syncedMod1Rate } : chain.mod1
+      channel.units.mod1.update(mod1State, fxOn && chain.mod1.on, now)
       channel.units.mod2.update(chain.mod2, fxOn && chain.mod2.on, now)
-      channel.units.delay.update(chain.delay, fxOn && chain.delay.on, now)
+      const delayState = chain.delay.mstClk ? { ...chain.delay, tempo: syncedDelayTempo } : chain.delay
+      channel.units.delay.update(delayState, fxOn && chain.delay.on, now)
       channel.units.ampEq.update(chain.ampEq, fxOn && chain.ampEq.on, now)
       channel.units.comp.update(chain.comp, fxOn && chain.comp.on, now)
       channel.units.reverb.update(chain.reverb, fxOn && chain.reverb.on, now)
@@ -572,6 +1061,204 @@ export class PianoEngine {
       const routed = fxOn && chain.ampEq.on && chain.ampEq.type === 'To Rotary'
       rampTo(channel.toRotary.gain, routed ? 1 : 0.0001, now)
       rampTo(channel.toMaster.gain, routed ? 0.0001 : 1, now)
+    }
+
+    // Organ section: per-layer level + scanner feed the single shared effect
+    // chain (manual p. 18: "Both Organ Layers share the same effects chain"),
+    // whose output then follows the same rotary/master routing pattern as a
+    // piano layer.
+    if (state.organ.sectionOn) this.ensureOrganChannels()
+    if (this.organChannels) {
+      for (const layer of ['A', 'B'] as const) {
+        const channel = this.organChannels[layer]
+        const layerState = state.organ.layers[layer]
+        const audible = layerState.enabled && state.organ.sectionOn
+        rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
+        channel.scanner.update({ type: state.organ.vibratoType }, layerState.vibrato, now)
+      }
+      // Drawbar moves retune sounding organ voices immediately.
+      this.updateOrganVoiceGains(now)
+
+      const organChain = this.organChain!
+      const organFxState = state.organChain
+      const organFxOn = !state.allFxOff
+      const organMod1State = organFxState.mod1.mstClk ? { ...organFxState.mod1, rate: syncedMod1Rate } : organFxState.mod1
+      organChain.units.mod1.update(organMod1State, organFxOn && organFxState.mod1.on, now)
+      organChain.units.mod2.update(organFxState.mod2, organFxOn && organFxState.mod2.on, now)
+      const organDelayState = organFxState.delay.mstClk
+        ? { ...organFxState.delay, tempo: syncedDelayTempo }
+        : organFxState.delay
+      organChain.units.delay.update(organDelayState, organFxOn && organFxState.delay.on, now)
+      organChain.units.ampEq.update(organFxState.ampEq, organFxOn && organFxState.ampEq.on, now)
+      organChain.units.comp.update(organFxState.comp, organFxOn && organFxState.comp.on, now)
+      organChain.units.reverb.update(organFxState.reverb, organFxOn && organFxState.reverb.on, now)
+
+      // Routing: the ORGAN button in the Rotary group (manual p. 53) OR the
+      // shared chain's Amp unit in "To Rotary" mode sends the organ through
+      // the single rotary instance, post-reverb.
+      const ampToRotary = organFxOn && organFxState.ampEq.on && organFxState.ampEq.type === 'To Rotary'
+      const routed = state.organ.toRotary || ampToRotary
+      rampTo(organChain.toRotary.gain, routed ? 1 : 0.0001, now)
+      rampTo(organChain.toMaster.gain, routed ? 0.0001 : 1, now)
+    }
+
+    // Synth section: three layers, each with its own independent effect
+    // chain (spec: "their own effect chains" — unlike Organ's shared chain).
+    if (state.synth.sectionOn) this.ensureSynthChannels()
+    if (this.synthChannels) {
+      const fxOn = !state.allFxOff
+      for (const layer of SYNTH_LAYER_IDS) {
+        const channel = this.synthChannels[layer]
+        const layerState = state.synth.layers[layer]
+        const audible = layerState.enabled && state.synth.sectionOn
+        rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
+
+        const synthChain = state.synthChains[layer]
+        const mod1State = synthChain.mod1.mstClk ? { ...synthChain.mod1, rate: syncedMod1Rate } : synthChain.mod1
+        channel.units.mod1.update(mod1State, fxOn && synthChain.mod1.on, now)
+        channel.units.mod2.update(synthChain.mod2, fxOn && synthChain.mod2.on, now)
+        const delayState = synthChain.delay.mstClk ? { ...synthChain.delay, tempo: syncedDelayTempo } : synthChain.delay
+        channel.units.delay.update(delayState, fxOn && synthChain.delay.on, now)
+        channel.units.ampEq.update(synthChain.ampEq, fxOn && synthChain.ampEq.on, now)
+        channel.units.comp.update(synthChain.comp, fxOn && synthChain.comp.on, now)
+        channel.units.reverb.update(synthChain.reverb, fxOn && synthChain.reverb.on, now)
+
+        // Routing: the layer's Amp unit in "To Rotary" mode sends it through
+        // the single rotary instance, post-reverb (mirrors a Piano layer).
+        const routed = fxOn && synthChain.ampEq.on && synthChain.ampEq.type === 'To Rotary'
+        rampTo(channel.toRotary.gain, routed ? 1 : 0.0001, now)
+        rampTo(channel.toMaster.gain, routed ? 0.0001 : 1, now)
+
+        // Vibrato depth: On = fixed vibratoAmount; Wheel = live mod-wheel
+        // position (spec voice.vibrato); Off = 0. ±40 cents at full depth.
+        const voice = layerState.voice
+        const vibratoDepth =
+          voice.vibrato === 'On' ? (voice.vibratoAmount / 127) * 40 : voice.vibrato === 'Wheel' ? (state.morphValues.wheel / 127) * 40 : 0
+        rampTo(channel.vibrato.depth.gain, vibratoDepth, now)
+      }
+      // Osc Ctrl moves retarget sounding synth voices immediately (Sync,
+      // Multi, Super and FM-H categories; Pure has no Osc Ctrl effect); the
+      // filter's type/freq/res/tracking/drive retarget the same way.
+      this.updateSynthVoiceLive(now)
+      // Each layer's standing LFO follows its waveform/rate/amount/mstClk.
+      this.updateSynthLfos(now)
+    }
+    // Arpeggiator/gate (spec arpeggiatorGate): a deterministic scheduler
+    // driven by the injected timer boundary, started/stopped by ARP RUN.
+    this.syncArpScheduler(now)
+  }
+
+  /** Retargets every sounding organ voice's partial gains from the live
+   *  drawbar state (and the Vox tone-mix crossfade). */
+  private updateOrganVoiceGains(now: number): void {
+    const apply = (voice: Voice) => {
+      const live = voice.organLive
+      if (!live) return
+      const layerState = this.state.organ.layers[voice.layer as LayerId]
+      const recipe = ORGAN_MODEL_RECIPES[live.model]
+      for (const partial of live.partials) {
+        const value = layerState.drawbars[partial.drawbar] ?? 0
+        rampTo(partial.gain.gain, Math.max(0.0001, drawbarPartialGain(recipe, value) * partial.level), now)
+      }
+      if (live.voxMix) {
+        const mix = (layerState.drawbars[8] ?? 0) / 8
+        rampTo(live.voxMix.dark.gain, Math.max(0.0001, 1 - mix), now)
+        rampTo(live.voxMix.bright.gain, Math.max(0.0001, mix), now)
+      }
+    }
+    for (const voice of this.voices.values()) apply(voice)
+    for (const voice of this.releasingVoices) apply(voice)
+  }
+
+  /** Retargets Osc Ctrl-dependent params on sounding synth voices (Multi
+   *  detune, Super detune/width, FM index, Sync's periodic-wave peak) and the
+   *  filter's type/frequency/resonance/tracking/drive. */
+  private updateSynthVoiceLive(now: number): void {
+    const context = this.context
+    if (!context) return
+    const apply = (voice: Voice) => {
+      if (voice.section !== 'synth') return
+      const layerState = this.state.synth.layers[voice.layer as SynthLayerId]
+      const live = voice.synthLive
+      if (live) {
+        const oscCtrl = layerState.oscCtrl
+        const bend = this.effectiveBend('synth')
+        switch (live.kind) {
+          case 'multi': {
+            const cents = multiDetuneCents(oscCtrl)
+            const count = live.detuned.length
+            const step = count > 1 ? (2 * cents) / (count - 1) : 0
+            live.detuned.forEach(({ source }, i) => {
+              source.baseDetune = count > 1 ? -cents + step * i : 0
+              rampTo(source.node.detune, source.baseDetune + bend * 100, now)
+            })
+            break
+          }
+          case 'super': {
+            live.detuned.forEach(({ source }, i) => {
+              source.baseDetune = superDetuneCents(oscCtrl, i, live.detuned.length)
+              rampTo(source.node.detune, source.baseDetune + bend * 100, now)
+            })
+            break
+          }
+          case 'fm': {
+            rampTo(live.modGain, fmModulationIndex(oscCtrl, live.carrierFrequency), now)
+            break
+          }
+          case 'sync': {
+            const peak = syncPeakHarmonic(oscCtrl)
+            if (peak !== live.peak) {
+              live.peak = peak
+              live.oscillator.setPeriodicWave(syncWave(context, live.square, oscCtrl))
+            }
+            break
+          }
+        }
+      }
+      const filter = voice.synthFilter
+      if (filter) {
+        const filterState = layerState.filter
+        filter.driveShaper.curve = synthDriveCurve(filterState.drive)
+        const baseHz = synthFilterFreqHz(filterState.freq) * synthFilterTrackingScale(filterState.tracking, voice.midi)
+        filter.envBaseHz = baseHz
+        const q = synthFilterQ(filterState.res)
+        for (const biquad of filter.filters) {
+          biquad.type = biquadTypeFor(filterState.type)
+          rampTo(biquad.frequency, baseHz, now)
+          rampTo(biquad.Q, q, now)
+        }
+      }
+    }
+    for (const voice of this.voices.values()) apply(voice)
+    for (const voice of this.releasingVoices) apply(voice)
+  }
+
+  /** Updates every synth layer's standing LFO (waveform/rate/amount/master-
+   *  clock substitution) and reconnects sounding voices whose destination
+   *  just changed. */
+  private updateSynthLfos(now: number): void {
+    if (!this.synthChannels) return
+    for (const layer of SYNTH_LAYER_IDS) {
+      const channel = this.synthChannels[layer]
+      const layerState = this.state.synth.layers[layer]
+      const lfo = layerState.lfo
+      if (lfo.waveform !== channel.lfo.waveform) {
+        channel.lfo.waveform = lfo.waveform
+        channel.lfo.osc.type = lfo.waveform === 'Square' ? 'square' : lfo.waveform === 'Saw Up' || lfo.waveform === 'Saw Down' ? 'sawtooth' : 'triangle'
+        const usesInvert = lfo.waveform === 'Saw Down'
+        const usesSh = lfo.waveform === 'S&H'
+        rampTo(channel.lfo.oscSelect.gain, usesInvert || usesSh ? 0 : 1, now)
+        rampTo(channel.lfo.invertSelect.gain, usesInvert ? 1 : 0, now)
+        rampTo(channel.lfo.shSelect.gain, usesSh ? 1 : 0, now)
+      }
+      const rateHz = lfo.mstClk ? mappings.hzToLfoRate(this.state.masterClock.bpm / 60) : lfo.rate
+      const frequencyHz = mappings.lfoRateHz(rateHz)
+      rampTo(channel.lfo.osc.frequency, frequencyHz, now)
+      // S&H steps at a fixed 16 Hz base rate; scale playbackRate so faster
+      // Rate settings step faster, matching the oscillator waveforms' feel.
+      rampTo(channel.lfo.sh.playbackRate, frequencyHz / mappings.lfoRateHz(64), now)
+      const depth = (lfo.amount / 127) * (lfo.destination === 'Filter Freq' ? 4000 : lfo.destination === 'Osc Pitch' ? 60 : 40)
+      rampTo(channel.lfo.depth.gain, lfo.destination ? depth : 0, now)
     }
   }
 
@@ -589,9 +1276,9 @@ export class PianoEngine {
     return this.voices.size
   }
 
-  layerVoiceCount(layer: LayerId): number {
+  layerVoiceCount(layer: VoiceLayer, section: SectionId = 'piano'): number {
     let count = 0
-    for (const voice of this.voices.values()) if (voice.layer === layer) count++
+    for (const voice of this.voices.values()) if (voice.layer === layer && voice.section === section) count++
     return count
   }
 
@@ -610,30 +1297,288 @@ export class PianoEngine {
       return
     }
     const state = this.state
+    // B3 percussion is single-triggered (manual p. 20): it sounds only when
+    // no other organ key is held at the moment this key goes down — unless
+    // Percussion POLY is on (Shift + Percussion Volume, manual p. 20), which
+    // lets every new key retrigger its own percussion partial.
+    let organKeyAlreadyDown = false
+    for (const voice of this.voices.values()) {
+      if (voice.section === 'organ' && voice.keyDown) {
+        organKeyAlreadyDown = true
+        break
+      }
+    }
+    const allowPercussion = state.organ.percussion.poly ? true : !organKeyAlreadyDown
     for (const layer of ['A', 'B'] as const) {
-      if (!state.layers[layer].enabled || !state.piano.sectionOn) continue
-      const channel = this.channels[layer]
-      this.startVoice(layer, midi, clamped, channel.voiceBus, false)
+      // Keyboard zones (manual p. 39): a layer only sounds inside its
+      // assigned zones; crossfades scale adjacent layers complementarily.
+      if (state.layers[layer].enabled && state.piano.sectionOn) {
+        const zoneGain = zoneGainFor(state.split, state.layers[layer].zone, midi)
+        if (zoneGain > 0.005) this.startVoice(layer, midi, clamped, this.channels[layer].voiceBus, false, zoneGain)
+      }
+      if (this.organChannels && state.organ.sectionOn && state.organ.layers[layer].enabled) {
+        const zoneGain = zoneGainFor(state.split, state.organ.layers[layer].zone, midi)
+        if (zoneGain > 0.005) this.startOrganVoice(layer, midi, allowPercussion, zoneGain)
+      }
+    }
+    if (this.synthChannels && state.synth.sectionOn) {
+      for (const layer of SYNTH_LAYER_IDS) {
+        if (!state.synth.layers[layer].enabled) continue
+        const zoneGain = zoneGainFor(state.split, state.synth.layers[layer].zone, midi)
+        if (zoneGain > 0.005) this.synthKeyDown(layer, midi, clamped, zoneGain)
+      }
     }
   }
 
-  private startVoice(layer: LayerId, midi: number, velocity: number, bus: AudioNodeLike, forceSynth: boolean): void {
-    const context = this.context!
-    const key = `${layer}:${midi}`
-    const existing = this.voices.get(key)
-    if (existing) this.releaseVoice(existing, QUICK_RELEASE_SECONDS)
-    // Deterministic per-layer voice stealing: drop the oldest held voice past the cap.
-    while (this.layerVoiceCount(layer) >= MAX_POLYPHONY) {
+  /**
+   * One synth layer's key-down (spec voice): tracks the held-note stack
+   * (also the arpeggiator's shared note source), then — unless the section
+   * arp is running, which sounds notes itself on its own schedule instead of
+   * directly — dispatches per voice mode: Poly starts an independent voice
+   * per note; Mono always retriggers the single sounding voice to the new
+   * note (releasing whichever note it was on); Legato retriggers only when
+   * no note was already held (a fresh attack) and otherwise glides the
+   * already-sounding voice to the new frequency without a new envelope.
+   * Priority (Low/High, Mono/Legato only): while a note is held, an
+   * incoming lower/higher note only takes over the sounding voice if it
+   * wins per the setting; losing incoming notes still join the held stack
+   * so releasing the winner correctly returns to the next-priority note.
+   */
+  private synthKeyDown(layer: SynthLayerId, midi: number, velocity: number, zoneGain: number): void {
+    const held = this.synthHeld[layer]
+    const alreadyHeld = held.includes(midi)
+    if (!alreadyHeld) held.push(midi)
+    if (this.state.synth.arp.run) return // the arp scheduler sounds notes itself
+
+    const voiceState = this.state.synth.layers[layer].voice
+    if (voiceState.mode === 'Poly') {
+      this.startSynthVoice(layer, midi, velocity, zoneGain)
+      return
+    }
+
+    // Mono/Legato: priority decides whether this new note actually takes
+    // over the sounding voice (Off always takes over — last note wins).
+    const currentlySounding = this.synthSoundingMidi[layer]
+    if (voiceState.priority !== 'Off' && currentlySounding !== null && alreadyHeld === false) {
+      const wins = voiceState.priority === 'Low' ? midi < currentlySounding : midi > currentlySounding
+      if (!wins) return // joins the held stack but does not sound
+    }
+    this.triggerSynthMonoVoice(layer, midi, velocity, zoneGain)
+  }
+
+  /** Starts or glides the single Mono/Legato sounding voice to `midi`. */
+  private triggerSynthMonoVoice(layer: SynthLayerId, midi: number, velocity: number, zoneGain: number): void {
+    const voiceState = this.state.synth.layers[layer].voice
+    const previousMidi = this.synthSoundingMidi[layer]
+    const wasSounding = previousMidi !== null && this.voices.has(`synth:${layer}:${previousMidi}`)
+    if (voiceState.mode === 'Legato' && wasSounding) {
+      this.glideSynthVoice(layer, previousMidi!, midi)
+      this.synthSoundingMidi[layer] = midi
+      return
+    }
+    // Mono (always retriggers), or Legato's first note (nothing sounding yet).
+    if (wasSounding) this.releaseVoice(this.voices.get(`synth:${layer}:${previousMidi}`)!, QUICK_RELEASE_SECONDS)
+    this.startSynthVoice(layer, midi, velocity, zoneGain)
+    this.synthSoundingMidi[layer] = midi
+  }
+
+  /** Legato glide (spec voice.glide): retargets the sounding voice's source
+   *  frequencies to the new note via setTargetAtTime — a constant-rate
+   *  portamento, no envelope retrigger — and renames its voice-map key to
+   *  the new midi so a later noteOff/noteOn addresses it correctly. */
+  private glideSynthVoice(layer: SynthLayerId, fromMidi: number, toMidi: number): void {
+    const context = this.context
+    if (!context) return
+    const key = `synth:${layer}:${fromMidi}`
+    const voice = this.voices.get(key)
+    if (!voice) return
+    const layerState = this.state.synth.layers[layer]
+    const shifted = toMidi + layerState.octave * 12 + this.transposeOffset()
+    const targetFrequency = midiToFrequency(shifted)
+    const timeConstant = mappings.glideTimeConstant(layerState.voice.glide)
+    const now = context.currentTime
+    for (const source of voice.sources) {
+      if (source.kind !== 'synth') continue
+      // FM-H's modulator tracks the carrier 1:1 (algorithm A); every source
+      // here (including unison duplicates) glides at the same rate.
+      source.node.frequency.setTargetAtTime(targetFrequency, now, timeConstant)
+    }
+    voice.midi = toMidi
+    this.voices.delete(key)
+    this.voices.set(`synth:${layer}:${toMidi}`, voice)
+  }
+
+  /* ----------------------------------------------------- arpeggiator/gate -- */
+
+  /** Called every applyState tick: starts/stops the scheduler chain to match
+   *  ARP RUN, without resetting an already-running chain (rate/mode/etc.
+   *  changes are picked up live by each scheduled step reading fresh state). */
+  private syncArpScheduler(now: number): void {
+    const run = this.state.synth.sectionOn && this.state.synth.arp.run
+    if (run && !this.arpRunning) this.startArp()
+    else if (!run && this.arpRunning) this.stopArp()
+    void now
+  }
+
+  private startArp(): void {
+    this.arpRunning = true
+    this.arpStepIndex = 0
+    this.arpSoundingMidi = { A: null, B: null, C: null }
+    // Deterministic xorshift RNG, reseeded per run-start (spec determinism).
+    this.arpRngState = 0x2f6e2b1
+    this.scheduleArpStep(0)
+  }
+
+  private stopArp(): void {
+    this.arpRunning = false
+    if (this.arpTimer !== null) {
+      this.boundary.timers.clearTimeout(this.arpTimer)
+      this.arpTimer = null
+    }
+    // Panic (Off) clears the arp's own sounding note as well as the held
+    // set it was cycling through, matching the spec's "Panic/hold-off clears".
+    this.arpSoundingMidi = { A: null, B: null, C: null }
+  }
+
+  private nextArpRandom(): number {
+    let seed = this.arpRngState
+    seed ^= seed << 13
+    seed ^= seed >>> 17
+    seed ^= seed << 5
+    seed >>>= 0
+    this.arpRngState = seed
+    return seed / 0xffffffff
+  }
+
+  private arpStepMs(): number {
+    const arp = this.state.synth.arp
+    const bpm = arp.mstClk ? this.state.masterClock.bpm : mappings.arpRateBpm(arp.rate)
+    return 60000 / Math.max(1, bpm)
+  }
+
+  /** The expanded note sequence for Arp mode at the current range/direction
+   *  (spec: "sound the next held note per direction expanded over range
+   *  octaves"). Poly/Gate modes read the held set directly instead. */
+  private arpSequenceFor(held: number[]): number[] {
+    const arp = this.state.synth.arp
+    const sorted = [...held].sort((a, b) => a - b)
+    const expanded: number[] = []
+    for (let octave = 0; octave < arp.range; octave++) {
+      for (const midi of sorted) expanded.push(midi + octave * 12)
+    }
+    if (arp.direction === 'Up') return expanded
+    if (arp.direction === 'Down') return [...expanded].reverse()
+    if (arp.direction === 'UpDown') {
+      // A palindrome without repeating the two turnaround notes.
+      const down = [...expanded].reverse()
+      return expanded.length > 1 ? [...expanded, ...down.slice(1, -1)] : expanded
+    }
+    return expanded // Random: order is drawn fresh at each step below.
+  }
+
+  private scheduleArpStep(delayMs: number): void {
+    this.arpTimer = this.boundary.timers.setTimeout(() => this.runArpStep(), delayMs)
+  }
+
+  private runArpStep(): void {
+    if (!this.arpRunning) return
+    const arp = this.state.synth.arp
+    // The arp's note source is every enabled synth layer's held set combined
+    // (a layer with no held notes simply contributes nothing this step).
+    const heldByLayer = SYNTH_LAYER_IDS.filter((layer) => this.state.synth.layers[layer].enabled && this.synthHeld[layer].length > 0)
+    if (heldByLayer.length === 0 || !this.synthChannels) {
+      this.scheduleArpStep(this.arpStepMs())
+      return
+    }
+    for (const layer of heldByLayer) {
+      const held = this.synthHeld[layer]
+      const layerState = this.state.synth.layers[layer]
+      const zone = layerState.zone
+      if (arp.mode === 'Gate') {
+        this.arpGateStep(layer)
+        continue
+      }
+      if (arp.mode === 'Poly') {
+        for (const midi of held) {
+          const zoneGain = zoneGainFor(this.state.split, zone, midi)
+          if (zoneGain > 0.005) this.startSynthVoice(layer, midi, 0.8, zoneGain)
+        }
+        continue
+      }
+      // Arp mode: step through the direction-expanded sequence, one note
+      // sounding at a time — release whatever this layer's arp was
+      // sounding, then start the next step's note via the normal voice
+      // path so zones/sustain stay consistent.
+      const sequence = this.arpSequenceFor(held)
+      if (sequence.length === 0) continue
+      const index = arp.direction === 'Random' ? Math.floor(this.nextArpRandom() * sequence.length) : this.arpStepIndex % sequence.length
+      const midi = sequence[index]!
+      const previous = this.arpSoundingMidi[layer]
+      if (previous !== null && previous !== midi) {
+        const previousVoice = this.voices.get(`synth:${layer}:${previous}`)
+        if (previousVoice) this.releaseVoice(previousVoice, QUICK_RELEASE_SECONDS)
+      }
+      const zoneGain = zoneGainFor(this.state.split, zone, midi)
+      if (zoneGain > 0.005) {
+        this.startSynthVoice(layer, midi, 0.8, zoneGain)
+        this.arpSoundingMidi[layer] = midi
+      }
+    }
+    this.arpStepIndex++
+    this.scheduleArpStep(this.arpStepMs())
+  }
+
+  /** Gate mode (spec: "do not retrigger — modulate the sounding synth voice
+   *  gains with a gate envelope whose hardness comes from the range knob's
+   *  repurposed value"): pulses every currently-sounding voice of the layer
+   *  between full and a hardness-scaled floor, without starting new voices. */
+  private arpGateStep(layer: SynthLayerId): void {
+    const context = this.context
+    if (!context) return
+    const arp = this.state.synth.arp
+    const now = context.currentTime
+    const stepSeconds = this.arpStepMs() / 1000
+    const hardness = arp.range / 4 // range 1..4 repurposed as gate hardness
+    const floor = Math.max(0.0001, 1 - hardness) // harder = deeper gate dips
+    const onFraction = 0.5 + hardness * 0.3 // harder = shorter, punchier gate-on
+    for (const voice of this.voices.values()) {
+      if (voice.section !== 'synth' || voice.layer !== layer) continue
+      const peak = voice.gain.gain.value
+      voice.gain.gain.cancelScheduledValues(now)
+      voice.gain.gain.setValueAtTime(peak, now)
+      voice.gain.gain.setTargetAtTime(peak * floor, now, stepSeconds * 0.08)
+      voice.gain.gain.setTargetAtTime(peak, now + stepSeconds * onFraction, stepSeconds * 0.08)
+    }
+  }
+
+  /** Deterministic per-section, per-layer voice stealing: drop the oldest held voice past the cap. */
+  private stealPastCap(section: SectionId, layer: VoiceLayer): void {
+    while (this.layerVoiceCount(layer, section) >= MAX_POLYPHONY) {
       let oldest: Voice | null = null
       for (const voice of this.voices.values()) {
-        if (voice.layer === layer && (!oldest || voice.seq < oldest.seq)) oldest = voice
+        if (voice.section === section && voice.layer === layer && (!oldest || voice.seq < oldest.seq)) oldest = voice
       }
       if (!oldest) break
       this.releaseVoice(oldest, QUICK_RELEASE_SECONDS)
     }
+  }
+
+  private startVoice(
+    layer: LayerId,
+    midi: number,
+    velocity: number,
+    bus: AudioNodeLike,
+    forceSynth: boolean,
+    zoneGain = 1,
+  ): void {
+    const context = this.context!
+    const key = `piano:${layer}:${midi}`
+    const existing = this.voices.get(key)
+    if (existing) this.releaseVoice(existing, QUICK_RELEASE_SECONDS)
+    this.stealPastCap('piano', layer)
 
     const layerState = this.state.layers[layer]
-    const shifted = midi + (forceSynth ? 0 : layerState.octave * 12)
+    const shifted = midi + (forceSynth ? 0 : layerState.octave * 12) + this.transposeOffset()
     const touched = applyTouchCurve(velocity, this.state.piano.kbTouch)
     const soft = this.softDown ? 0.72 : 1
 
@@ -651,12 +1596,12 @@ export class PianoEngine {
 
     if (spec && loaded) {
       this.buildSampleSources(spec, shifted, touched * soft, gain, ownedNodes, sources)
-      const peak = (0.1 + 0.8 * Math.pow(touched, 1.3)) * soft
+      const peak = (0.1 + 0.8 * Math.pow(touched, 1.3)) * soft * zoneGain
       gain.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), now + 0.004)
     } else if (failed || forceSynth) {
       // Labeled synthesized fallback (primary sample failure or minimal path).
       synthFallback = true
-      this.buildSynthSources(shifted, touched * soft, gain, ownedNodes, sources, now)
+      this.buildSynthSources(shifted, touched * soft, gain, ownedNodes, sources, now, zoneGain)
     }
     // Otherwise the voice is tracked but silent: either the instrument is
     // still loading (status truthfully reports loading) or the selected type
@@ -664,6 +1609,7 @@ export class PianoEngine {
 
     gain.connect(bus)
     const voice: Voice = {
+      section: 'piano',
       layer,
       midi,
       seq: this.seqCounter++,
@@ -676,8 +1622,506 @@ export class PianoEngine {
       ownedNodes,
       gain,
       cleanupTimer: null,
+      organLive: null,
+      synthLive: null,
+      synthFilter: null,
     }
     this.voices.set(key, voice)
+  }
+
+  /* --------------------------------------------------------- organ voices -- */
+
+  private startOrganVoice(layer: LayerId, midi: number, allowPercussion: boolean, zoneGain = 1): void {
+    const context = this.context!
+    const channel = this.organChannels![layer]
+    const key = `organ:${layer}:${midi}`
+    const existing = this.voices.get(key)
+    if (existing) this.releaseVoice(existing, QUICK_RELEASE_SECONDS)
+    this.stealPastCap('organ', layer)
+
+    const layerState = this.state.organ.layers[layer]
+    const recipe = ORGAN_MODEL_RECIPES[layerState.model]
+    const fundamental = midiToFrequency(midi + layerState.octave * 12 + this.transposeOffset())
+    const bend = this.effectiveBend('organ')
+    const now = context.currentTime
+
+    // Organs are not velocity sensitive: a fixed fast attack, no touch curve.
+    // Zone crossfades still scale the voice (manual p. 39).
+    const gain = context.createGain()
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.001, zoneGain), now + 0.004)
+    const ownedNodes: AudioNodeLike[] = [gain]
+    const sources: VoiceSource[] = []
+
+    // Vox tone mix: partials feed dark (lowpassed) and bright paths that the
+    // 9th drawbar crossfades (manual p. 21).
+    let entry: AudioNodeLike = gain
+    let voxMix: OrganVoiceLive['voxMix'] = null
+    if (recipe.voxToneMix) {
+      const bus = context.createGain()
+      const darkFilter = context.createBiquadFilter()
+      darkFilter.type = 'lowpass'
+      darkFilter.frequency.value = 1100
+      darkFilter.Q.value = 0.5
+      const dark = context.createGain()
+      const bright = context.createGain()
+      const mix = (layerState.drawbars[8] ?? 0) / 8
+      dark.gain.value = Math.max(0.0001, 1 - mix)
+      bright.gain.value = Math.max(0.0001, mix)
+      bus.connect(darkFilter)
+      darkFilter.connect(dark)
+      dark.connect(gain)
+      bus.connect(bright)
+      bright.connect(gain)
+      ownedNodes.push(bus, darkFilter, dark, bright)
+      entry = bus
+      voxMix = { dark, bright }
+    }
+
+    const partials: OrganVoiceLive['partials'] = []
+    const frequencyCap = Math.min(9000, context.sampleRate * 0.45)
+    for (const partial of recipe.partials) {
+      const frequency = fundamental * partial.ratio
+      if (frequency > frequencyCap) continue // top tonewheels are simply absent
+      const osc = context.createOscillator()
+      osc.type = partial.wave
+      osc.frequency.value = frequency
+      const baseDetune = partial.detune ?? 0
+      osc.detune.value = baseDetune + bend * 100
+      const level = partial.level * ORGAN_PARTIAL_LEVEL
+      const partialGain = context.createGain()
+      partialGain.gain.value = Math.max(
+        0.0001,
+        drawbarPartialGain(recipe, layerState.drawbars[partial.drawbar] ?? 0) * level,
+      )
+      osc.connect(partialGain)
+      partialGain.connect(entry)
+      osc.start(now)
+      ownedNodes.push(partialGain)
+      sources.push({ kind: 'synth', node: osc, baseDetune })
+      partials.push({ drawbar: partial.drawbar, level, gain: partialGain })
+    }
+
+    // B3 percussion: a single decaying 2nd/3rd-harmonic partial (manual p. 20).
+    const percussion = this.state.organ.percussion
+    if (recipe.percussion && percussion.on && allowPercussion) {
+      const osc = context.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = Math.min(frequencyCap, fundamental * (percussion.third ? 3 : 2))
+      osc.detune.value = bend * 100
+      const peak = percussion.soft ? 0.09 : 0.2
+      const decay = percussion.fast ? 0.09 : 0.28
+      const percGain = context.createGain()
+      percGain.gain.setValueAtTime(peak, now)
+      percGain.gain.setTargetAtTime(0.0001, now + 0.004, decay)
+      osc.connect(percGain)
+      percGain.connect(gain)
+      osc.start(now)
+      try {
+        osc.stop(now + decay * 5 + 0.2)
+      } catch {
+        /* stays until voice cleanup */
+      }
+      ownedNodes.push(percGain)
+      sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
+    }
+
+    // Attack transient: B3 key click or pipe chiff (generated, declared).
+    if (recipe.click) {
+      const source = context.createBufferSource()
+      source.buffer = recipe.click === 'b3' ? this.getOrganClick(context) : this.getOrganChiff(context)
+      const filter = context.createBiquadFilter()
+      filter.type = 'bandpass'
+      filter.frequency.value = recipe.click === 'b3' ? 2600 : Math.min(6000, fundamental * 3)
+      filter.Q.value = 1
+      const clickGain = context.createGain()
+      clickGain.gain.value = recipe.click === 'b3' ? 0.06 : 0.1
+      source.connect(filter)
+      filter.connect(clickGain)
+      clickGain.connect(gain)
+      source.start(now)
+      ownedNodes.push(filter, clickGain)
+      sources.push({ kind: 'sample', node: source, baseRate: 1 })
+    }
+
+    gain.connect(channel.voiceBus)
+    const voice: Voice = {
+      section: 'organ',
+      layer,
+      midi,
+      seq: this.seqCounter++,
+      keyDown: true,
+      sustained: false,
+      sostenuto: false,
+      releasing: false,
+      synthFallback: false,
+      sources,
+      ownedNodes,
+      gain,
+      cleanupTimer: null,
+      organLive: { model: layerState.model, partials, voxMix },
+      synthLive: null,
+      synthFilter: null,
+    }
+    this.voices.set(key, voice)
+  }
+
+  /* -------------------------------------------------------- synth voices -- */
+
+  private startSynthVoice(layer: SynthLayerId, midi: number, velocity: number, zoneGain = 1, releasePrevious = true): Voice {
+    const context = this.context!
+    const channel = this.synthChannels![layer]
+    const key = `synth:${layer}:${midi}`
+    const existing = this.voices.get(key)
+    if (existing && releasePrevious) this.releaseVoice(existing, QUICK_RELEASE_SECONDS)
+    this.stealPastCap('synth', layer)
+
+    const layerState = this.state.synth.layers[layer]
+    const wave = SYNTH_WAVEFORMS[layerState.waveform] ?? SYNTH_WAVEFORMS[0]!
+    const shifted = midi + layerState.octave * 12 + this.transposeOffset()
+    const frequency = midiToFrequency(shifted)
+    const bend = this.effectiveBend('synth')
+    const now = context.currentTime
+
+    const envelope = layerState.ampEnvelope
+    const floor = SYNTH_VELOCITY_FLOOR[envelope.velocity]
+    const velocityShaped = envelope.velocity === 0 ? 1 : floor + (1 - floor) * velocity
+    const peak = Math.max(0.0005, SYNTH_OSC_LEVEL * velocityShaped * zoneGain)
+    const attackSeconds = Math.max(0.001, synthAttackSeconds(envelope.attack))
+
+    const gain = context.createGain()
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(peak, now + attackSeconds)
+    const decaySeconds = synthDecaySeconds(envelope.decay)
+    if (decaySeconds !== null) gain.gain.setTargetAtTime(Math.max(0.0001, peak * 0.001), now + attackSeconds, decaySeconds)
+
+    const ownedNodes: AudioNodeLike[] = [gain]
+    const sources: VoiceSource[] = []
+    let synthLive: SynthVoiceLive = null
+    // Basic oscillator type unison duplicates re-play (spec: "reuse the
+    // piano unison pattern" — a simplified single-oscillator stack per
+    // duplicate, not a full per-category rebuild).
+    let unisonOscType = 'sawtooth'
+
+    const oscCtrlActive = oscCtrlActiveFor(wave.category)
+    const oscCtrl = oscCtrlActive ? layerState.oscCtrl : 0
+
+    // Sync/Multi/Super get a real, audio-rate "Osc Ctrl live target" gain
+    // that sums into their oscillator(s)' detune as an additive offset — a
+    // declared approximation (their Osc Ctrl math is JS-computed, not a
+    // single linear AudioParam) that still gives the oscillator envelope's
+    // non-toPitch mode and the LFO's "Osc Ctrl" destination a real, audible
+    // connection. FM-H needs no such gain: its modulation-index gain IS
+    // already that live target, connected directly below.
+    let oscCtrlGain: GainNodeLike | null = null
+    if (oscCtrlActive && wave.category !== 'FM-H') {
+      oscCtrlGain = context.createGain()
+      oscCtrlGain.gain.value = 0
+      ownedNodes.push(oscCtrlGain)
+    }
+
+    switch (wave.category) {
+      case 'Pure': {
+        if (wave.name === 'White Noise') {
+          const source = context.createBufferSource()
+          source.buffer = this.getSynthNoiseLoop(context)
+          source.loop = true
+          source.connect(gain)
+          source.start(now)
+          sources.push({ kind: 'sample', node: source, baseRate: 1 })
+        } else {
+          const osc = context.createOscillator()
+          if (wave.name === 'Sine') osc.type = 'sine'
+          else if (wave.name === 'Triangle') osc.type = 'triangle'
+          else if (wave.name === 'Saw') osc.type = 'sawtooth'
+          else if (wave.name === 'Square') osc.type = 'square'
+          else if (wave.name === 'Pulse 33') osc.setPeriodicWave(pulse33Wave(context))
+          else osc.setPeriodicWave(pulse10Wave(context)) // Pulse 10
+          osc.frequency.value = frequency
+          osc.detune.value = bend * 100
+          osc.connect(gain)
+          osc.start(now)
+          sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
+          unisonOscType = osc.type
+        }
+        break
+      }
+      case 'Sync': {
+        const square = wave.name === 'Sync Square'
+        const osc = context.createOscillator()
+        osc.setPeriodicWave(syncWave(context, square, oscCtrl))
+        osc.frequency.value = frequency
+        osc.detune.value = bend * 100
+        oscCtrlGain!.connect(osc.detune)
+        osc.connect(gain)
+        osc.start(now)
+        sources.push({ kind: 'synth', node: osc, baseDetune: 0 })
+        synthLive = { kind: 'sync', square, oscillator: osc, peak: syncPeakHarmonic(oscCtrl), oscCtrlParam: oscCtrlGain!.gain }
+        break
+      }
+      case 'Multi': {
+        const eightVe = wave.name === 'Multi Saw 8ve'
+        const count = eightVe ? 4 : 3
+        const cents = multiDetuneCents(oscCtrl)
+        const step = (2 * cents) / (count - 1)
+        const detuned: LiveDetunedSource[] = []
+        for (let i = 0; i < count; i++) {
+          const osc = context.createOscillator()
+          osc.type = 'sawtooth'
+          const octaveUp = eightVe && i === count - 1
+          const baseDetune = octaveUp ? 0 : count > 1 ? -cents + step * i : 0
+          osc.frequency.value = frequency * (octaveUp ? 2 : 1)
+          osc.detune.value = baseDetune + bend * 100
+          oscCtrlGain!.connect(osc.detune)
+          const oscGain = context.createGain()
+          oscGain.gain.value = octaveUp ? 0.5 : 1
+          osc.connect(oscGain)
+          oscGain.connect(gain)
+          osc.start(now)
+          ownedNodes.push(oscGain)
+          const source: VoiceSource & { kind: 'synth' } = { kind: 'synth', node: osc, baseDetune }
+          sources.push(source)
+          if (!octaveUp) detuned.push({ source })
+        }
+        synthLive = { kind: 'multi', detuned, oscCtrlParam: oscCtrlGain!.gain }
+        break
+      }
+      case 'Super': {
+        const square = wave.name === 'Super Square'
+        const count = 7
+        const detuned: LiveDetunedSource[] = []
+        for (let i = 0; i < count; i++) {
+          const osc = context.createOscillator()
+          osc.type = square ? 'square' : 'sawtooth'
+          const baseDetune = superDetuneCents(oscCtrl, i, count)
+          osc.frequency.value = frequency
+          osc.detune.value = baseDetune + bend * 100
+          oscCtrlGain!.connect(osc.detune)
+          const panner = context.createStereoPanner()
+          panner.pan.value = count > 1 ? (i / (count - 1) - 0.5) * 1.6 : 0
+          const oscGain = context.createGain()
+          oscGain.gain.value = 1 / count
+          osc.connect(oscGain)
+          oscGain.connect(panner)
+          panner.connect(gain)
+          osc.start(now)
+          ownedNodes.push(oscGain, panner)
+          const source: VoiceSource & { kind: 'synth' } = { kind: 'synth', node: osc, baseDetune }
+          sources.push(source)
+          detuned.push({ source })
+        }
+        synthLive = { kind: 'super', detuned, oscCtrlParam: oscCtrlGain!.gain }
+        break
+      }
+      case 'FM-H': {
+        const carrier = context.createOscillator()
+        carrier.type = 'sine'
+        carrier.frequency.value = frequency
+        carrier.detune.value = bend * 100
+        const modulator = context.createOscillator()
+        modulator.type = 'sine'
+        modulator.frequency.value = frequency // 1:1 ratio (algorithm A)
+        const modGain = context.createGain()
+        modGain.gain.value = fmModulationIndex(oscCtrl, frequency)
+        modulator.connect(modGain)
+        modGain.connect(carrier.frequency)
+        carrier.connect(gain)
+        modulator.start(now)
+        carrier.start(now)
+        ownedNodes.push(modGain)
+        sources.push({ kind: 'synth', node: carrier, baseDetune: 0 })
+        sources.push({ kind: 'synth', node: modulator, baseDetune: 0 })
+        synthLive = { kind: 'fm', modGain: modGain.gain, carrierFrequency: frequency, oscCtrlParam: modGain.gain }
+        break
+      }
+    }
+
+    // Unison (spec voice.unisonLevels): detuned duplicate source stacks,
+    // reusing the piano unison pattern (buildSampleSources) scaled by level
+    // 1..3 — each duplicate re-plays the layer's fundamental waveform at a
+    // small detune, panned to opposite sides, feeding the same voice `gain`
+    // so the shared envelope/filter/LFO/vibrato stage still applies once.
+    const unisonLevel = layerState.voice.unison
+    if (unisonLevel > 0) {
+      for (const side of [-1, 1]) {
+        const osc = context.createOscillator()
+        osc.type = unisonOscType
+        osc.frequency.value = frequency
+        const baseDetune = side * (5 + unisonLevel * 6)
+        osc.detune.value = baseDetune + bend * 100
+        const panner = context.createStereoPanner()
+        panner.pan.value = side * (0.25 + unisonLevel * 0.18)
+        const unisonGain = context.createGain()
+        unisonGain.gain.value = 0.35 + unisonLevel * 0.08
+        osc.connect(unisonGain)
+        unisonGain.connect(panner)
+        panner.connect(gain)
+        osc.start(now)
+        ownedNodes.push(unisonGain, panner)
+        sources.push({ kind: 'synth', node: osc, baseDetune })
+      }
+    }
+
+    // Oscillator envelope (spec envelopes.oscillator): schedules pitch
+    // retarget (toPitch: every source oscillator's detune) or the live Osc
+    // Ctrl target (the same per-category param the LFO's Osc Ctrl
+    // destination and Osc Ctrl live-retargeting use), bipolar around 64 = 0.
+    const oscEnv = layerState.oscEnvelope
+    const oscillatorNodes = sources.filter((s): s is VoiceSource & { kind: 'synth' } => s.kind === 'synth').map((s) => s.node)
+    const oscEnvTarget: AudioParamLike | AudioParamLike[] | null = oscEnv.toPitch
+      ? oscillatorNodes.map((osc) => osc.detune)
+      : (synthLive?.oscCtrlParam ?? null)
+    if (oscEnvTarget) {
+      const oscAttack = Math.max(0.001, synthAttackSeconds(oscEnv.attack))
+      const oscFloor = oscEnv.velocity ? 0.05 + 0.95 * velocity : 1
+      const target = oscEnv.toPitch ? oscEnvPitchCents(oscEnv.amount) : oscEnvCtrlOffset(oscEnv.amount)
+      const peakOffset = target * oscFloor
+      if (Math.abs(peakOffset) > 0.0001) {
+        const oscDecaySeconds = synthDecaySeconds(oscEnv.decay)
+        for (const param of Array.isArray(oscEnvTarget) ? oscEnvTarget : [oscEnvTarget]) {
+          param.setValueAtTime(param.value, now)
+          param.linearRampToValueAtTime(param.value + peakOffset, now + oscAttack)
+          if (oscDecaySeconds !== null) param.setTargetAtTime(param.value, now + oscAttack, oscDecaySeconds)
+        }
+      }
+    }
+
+    // Filter + drive stage: the source mix (`gain`) feeds the drive
+    // waveshaper (bypassed at drive 0) into one or two cascaded biquad
+    // filter stages (LP24), whose output — not `gain` — connects onward.
+    const filterState = layerState.filter
+    let filterOut: AudioNodeLike = gain
+    let synthFilter: SynthVoiceFilter | null = null
+    if (filterState.on) {
+      const driveShaper = context.createWaveShaper()
+      driveShaper.curve = synthDriveCurve(filterState.drive)
+      const baseHz = synthFilterFreqHz(filterState.freq) * synthFilterTrackingScale(filterState.tracking, midi)
+      const stageCount = synthFilterStageCount(filterState.type)
+      const filters: BiquadFilterNodeLike[] = []
+      let node: AudioNodeLike = driveShaper
+      for (let i = 0; i < stageCount; i++) {
+        const biquad = context.createBiquadFilter()
+        biquad.type = biquadTypeFor(filterState.type)
+        biquad.Q.value = synthFilterQ(filterState.res)
+        biquad.frequency.value = baseHz
+        node.connect(biquad)
+        node = biquad
+        filters.push(biquad)
+      }
+      gain.connect(driveShaper)
+      ownedNodes.push(driveShaper, ...filters)
+      filterOut = node
+      synthFilter = { driveShaper, filters, envBaseHz: baseHz }
+
+      // Filter envelope (spec envelopes.filter): ramps cutoff from the base
+      // toward the envAmount-scaled peak and back (decay=127 holds at the
+      // peak, matching the shared sustain-mode convention).
+      const filterEnv = filterState.envelope
+      const filterAttack = Math.max(0.001, synthAttackSeconds(filterEnv.attack))
+      const envFloor = filterEnv.velocity ? 0.05 + 0.95 * velocity : 1
+      const peakHz = baseHz + (synthFilterEnvPeakHz(baseHz, filterState.envAmount) - baseHz) * envFloor
+      if (Math.abs(peakHz - baseHz) > 0.5) {
+        for (const biquad of filters) {
+          biquad.frequency.setValueAtTime(baseHz, now)
+          biquad.frequency.linearRampToValueAtTime(peakHz, now + filterAttack)
+          const filterDecaySeconds = synthDecaySeconds(filterEnv.decay)
+          if (filterDecaySeconds !== null) biquad.frequency.setTargetAtTime(baseHz, now + filterAttack, filterDecaySeconds)
+        }
+      }
+    }
+
+    // LFO: the layer's one standing LFO connects its depth gain to this
+    // voice's destination param, chosen by the current destination setting.
+    const voiceOscillators = sources.filter((s): s is VoiceSource & { kind: 'synth' } => s.kind === 'synth').map((s) => s.node)
+    this.connectSynthLfoDestination(channel, layerState.lfo.destination, {
+      oscillators: voiceOscillators,
+      filters: synthFilter?.filters ?? [],
+      oscCtrlParam: synthLive?.oscCtrlParam ?? null,
+    })
+    // Vibrato (spec voice.vibrato): the layer's fixed-rate pitch LFO connects
+    // to every source's detune at voice build, same connect-at-build pattern.
+    for (const osc of voiceOscillators) channel.vibrato.depth.connect(osc.detune)
+
+    filterOut.connect(channel.voiceBus)
+    const voice: Voice = {
+      section: 'synth',
+      layer,
+      midi,
+      seq: this.seqCounter++,
+      keyDown: true,
+      sustained: false,
+      sostenuto: false,
+      releasing: false,
+      synthFallback: false,
+      sources,
+      ownedNodes,
+      gain,
+      cleanupTimer: null,
+      organLive: null,
+      synthLive,
+      synthFilter,
+    }
+    this.voices.set(key, voice)
+    return voice
+  }
+
+  /**
+   * Connects the layer's standing LFO depth gain to this voice's real
+   * destination param at voice build (spec lfo: "connect at voice build" —
+   * the destination only re-routes future voices, matching the manual's
+   * "no destination LED lit means off but settings are kept"): Osc Pitch
+   * connects to every source oscillator's detune; Filter Freq to every
+   * filter stage's frequency; Osc Ctrl to the category's live target param
+   * (FM-H's true modulation-index gain, or the declared-approximation gain
+   * the other three categories sum into their oscillator(s)' detune). A
+   * Pure waveform has no Osc Ctrl target and a filter-off voice has no
+   * Filter Freq target, so those combinations are silent no-ops.
+   */
+  private connectSynthLfoDestination(
+    channel: SynthChannel,
+    destination: SynthLfoDestination | null,
+    targets: { oscillators: OscillatorNodeLike[]; filters: BiquadFilterNodeLike[]; oscCtrlParam: AudioParamLike | null },
+  ): void {
+    if (destination === 'Osc Pitch') {
+      for (const osc of targets.oscillators) channel.lfo.depth.connect(osc.detune)
+    } else if (destination === 'Filter Freq') {
+      for (const filter of targets.filters) channel.lfo.depth.connect(filter.frequency)
+    } else if (destination === 'Osc Ctrl' && targets.oscCtrlParam) {
+      channel.lfo.depth.connect(targets.oscCtrlParam)
+    }
+  }
+
+  /** Generated looping white-noise buffer (xorshift; declared generated) for
+   *  the Pure "White Noise" waveform. */
+  private getSynthNoiseLoop(context: AudioContextLike): AudioBufferLike {
+    if (!this.synthNoiseLoop) {
+      const rate = context.sampleRate
+      const length = Math.max(1, Math.floor(2 * rate))
+      const buffer = context.createBuffer(1, length, rate)
+      const data = buffer.getChannelData(0)
+      let seed = 0x51ede1
+      for (let i = 0; i < length; i++) {
+        seed ^= seed << 13
+        seed ^= seed >>> 17
+        seed ^= seed << 5
+        seed >>>= 0
+        data[i] = seed / 0xffffffff - 0.5
+      }
+      this.synthNoiseLoop = buffer
+    }
+    return this.synthNoiseLoop
+  }
+
+  /** Generated B3 key-click transient (contact-bounce approximation, declared generated). */
+  private getOrganClick(context: AudioContextLike): AudioBufferLike {
+    if (!this.organClick) this.organClick = makeNoiseBurst(context, 0.008, 90, 0x5eed01)
+    return this.organClick
+  }
+
+  /** Generated pipe chiff transient (breath attack approximation, declared generated). */
+  private getOrganChiff(context: AudioContextLike): AudioBufferLike {
+    if (!this.organChiff) this.organChiff = makeNoiseBurst(context, 0.045, 35, 0x5eed02)
+    return this.organChiff
   }
 
   private buildSampleSources(
@@ -691,7 +2135,7 @@ export class PianoEngine {
     const context = this.context!
     const zones = nearestZones(spec, midi)
     const layerGains = velocityLayerGains(spec.velocityLayers, velocity)
-    const bendFactor = Math.pow(2, this.effectiveBend() / 12)
+    const bendFactor = Math.pow(2, this.effectiveBend('piano') / 12)
 
     let entry: AudioNodeLike = voiceGain
     if (spec.velocityLayers <= 1) {
@@ -759,10 +2203,11 @@ export class PianoEngine {
     ownedNodes: AudioNodeLike[],
     sources: VoiceSource[],
     now: number,
+    zoneGain = 1,
   ): void {
     const context = this.context!
     const frequency = midiToFrequency(midi)
-    const peak = 0.04 + 0.32 * Math.pow(velocity, 1.5)
+    const peak = (0.04 + 0.32 * Math.pow(velocity, 1.5)) * zoneGain
     voiceGain.gain.exponentialRampToValueAtTime(peak, now + 0.004)
     voiceGain.gain.setTargetAtTime(peak * 0.12, now + 0.004, 0.35 + 1.4 / Math.sqrt(Math.max(1, midi - 20)))
 
@@ -790,7 +2235,7 @@ export class PianoEngine {
       osc.type = partial.type
       osc.frequency.value = frequency * partial.ratio
       const baseDetune = partial.detune
-      osc.detune.value = baseDetune + this.effectiveBend() * 100
+      osc.detune.value = baseDetune + this.effectiveBend('piano') * 100
       const partialGain = context.createGain()
       partialGain.gain.value = partial.level
       osc.connect(partialGain)
@@ -802,32 +2247,80 @@ export class PianoEngine {
   }
 
   noteOff(midi: number): void {
-    const sustain = this.effectiveSustainLevel()
+    this.synthKeyUp(midi)
     for (const voice of [...this.voices.values()]) {
       if (voice.midi !== midi) continue
       voice.keyDown = false
       if (voice.sostenuto) continue
+      const sustain = this.effectiveSustainLevel(voice.section)
       if (sustain >= SUSTAIN_DOWN) {
         voice.sustained = true
         continue
       }
-      if (sustain >= SUSTAIN_LIFT) {
+      // Half-pedaling is a damper behavior: it lengthens piano releases only.
+      if (voice.section === 'piano' && sustain >= SUSTAIN_LIFT) {
         this.releaseVoice(voice, HALF_PEDAL_RELEASE_SECONDS)
         continue
       }
-      this.releaseVoice(voice, this.releaseSecondsFor(voice.layer))
+      this.releaseVoice(voice, this.releaseSecondsFor(voice))
     }
   }
 
-  /** Soft Release lengthens damping — except for Clav-type sounds (manual p. 25). */
-  private releaseSecondsFor(layer: LayerId): number {
-    const soft = this.state.piano.softRelease && this.state.layers[layer].type !== 'Clav'
+  /**
+   * Removes `midi` from every synth layer's held-note stack (unless KB HOLD
+   * is on, in which case physical key-up never removes it — manual p. 36:
+   * "notes keep sounding... after keys are lifted"). For Mono/Legato with
+   * priority, releasing the currently-sounding note returns to the next
+   * most-recently-held note per the priority setting.
+   */
+  private synthKeyUp(midi: number): void {
+    if (this.state.kbHold) return
+    for (const layer of SYNTH_LAYER_IDS) {
+      const held = this.synthHeld[layer]
+      const index = held.indexOf(midi)
+      if (index < 0) continue
+      held.splice(index, 1)
+      if (this.state.synth.arp.run) continue // the arp scheduler owns release timing
+      if (this.synthSoundingMidi[layer] !== midi) continue // this key wasn't the sounding voice
+      const voiceState = this.state.synth.layers[layer].voice
+      if (held.length === 0) {
+        this.synthSoundingMidi[layer] = null
+        continue
+      }
+      // Return to the highest/lowest remaining held note per priority (Off:
+      // the most recently held note, i.e. standard last-note-priority release).
+      const next =
+        voiceState.priority === 'Low'
+          ? Math.min(...held)
+          : voiceState.priority === 'High'
+            ? Math.max(...held)
+            : held[held.length - 1]!
+      const velocity = 0.8 // a return-to-held retrigger has no fresh key velocity to reuse
+      const zoneGain = zoneGainFor(this.state.split, this.state.synth.layers[layer].zone, next)
+      this.triggerSynthMonoVoice(layer, next, velocity, zoneGain)
+    }
+  }
+
+  /** Piano: Soft Release lengthens damping — except for Clav-type sounds
+   *  (manual p. 25). Organ voices stop with a short declick ramp only. Synth
+   *  voices release per the layer's amp envelope Release value. */
+  private releaseSecondsFor(voice: Voice): number {
+    if (voice.section === 'organ') return ORGAN_RELEASE_SECONDS
+    if (voice.section === 'synth') return synthReleaseSeconds(this.state.synth.layers[voice.layer as SynthLayerId].ampEnvelope.release)
+    const soft = this.state.piano.softRelease && this.state.layers[voice.layer as LayerId].type !== 'Clav'
     return soft ? RELEASE_SECONDS * 1.9 : RELEASE_SECONDS
   }
 
-  /** Sustain as the Piano section sees it: zero while SUSTPED routing is off (manual p. 23). */
-  private effectiveSustainLevel(): number {
-    return this.state.piano.sustped ? this.sustainLevel : 0
+  /** SUSTPED routes the sustain pedal per section (manual p. 18/23). */
+  private sectionSustped(section: SectionId): boolean {
+    if (section === 'piano') return this.state.piano.sustped
+    if (section === 'synth') return this.state.synth.sustped
+    return this.state.organ.sustped
+  }
+
+  /** Sustain as a section sees it: zero while its SUSTPED routing is off. */
+  private effectiveSustainLevel(section: SectionId): number {
+    return this.sectionSustped(section) ? this.sustainLevel : 0
   }
 
   /* -------------------------------------------------------------- pedals -- */
@@ -842,7 +2335,8 @@ export class PianoEngine {
       for (const voice of [...this.voices.values()]) {
         if (voice.sustained && !voice.keyDown && !voice.sostenuto) {
           voice.sustained = false
-          this.releaseVoice(voice, level >= SUSTAIN_LIFT ? HALF_PEDAL_RELEASE_SECONDS : this.releaseSecondsFor(voice.layer))
+          const halfPedal = voice.section === 'piano' && level >= SUSTAIN_LIFT
+          this.releaseVoice(voice, halfPedal ? HALF_PEDAL_RELEASE_SECONDS : this.releaseSecondsFor(voice))
         }
       }
     }
@@ -871,8 +2365,8 @@ export class PianoEngine {
         if (!voice.sostenuto) continue
         voice.sostenuto = false
         if (!voice.keyDown) {
-          if (this.effectiveSustainLevel() >= SUSTAIN_DOWN) voice.sustained = true
-          else this.releaseVoice(voice, this.releaseSecondsFor(voice.layer))
+          if (this.effectiveSustainLevel(voice.section) >= SUSTAIN_DOWN) voice.sustained = true
+          else this.releaseVoice(voice, this.releaseSecondsFor(voice))
         }
       }
     }
@@ -934,27 +2428,37 @@ export class PianoEngine {
     }
   }
 
-  /** Pitch stick: bends sounding Piano voices (spec: ±2 semitones) while PSTICK routing is on. */
+  /** Pitch stick: bends sounding voices (spec: ±2 semitones) in each section
+   *  whose PSTICK routing is on. */
   setPitchBend(semitones: number): void {
     const clamped = Math.max(-2, Math.min(2, semitones))
     if (this.pitchBend === clamped) return
     this.pitchBend = clamped
-    this.applyBendToVoices()
+    this.applyBendToVoices('piano')
+    this.applyBendToVoices('organ')
+    this.applyBendToVoices('synth')
   }
 
-  /** Bend the section hears: zero while PSTICK routing is off (manual p. 23). */
-  private effectiveBend(): number {
-    return this.state.piano.pstick ? this.pitchBend : 0
+  /** Bend a section hears: zero while its PSTICK routing is off (manual p. 18/23). */
+  private effectiveBend(section: SectionId): number {
+    const routed = section === 'piano' ? this.state.piano.pstick : section === 'synth' ? this.state.synth.pstick : this.state.organ.pstick
+    return routed ? this.pitchBend : 0
   }
 
-  private applyBendToVoices(): void {
+  /** Program transpose (manual p. 40): shifts sounding pitch, never zone routing. */
+  private transposeOffset(): number {
+    return this.state.transpose.on ? this.state.transpose.semitones : 0
+  }
+
+  private applyBendToVoices(section: SectionId): void {
     const context = this.context
     if (!context) return
-    const bend = this.effectiveBend()
-    this.appliedBend = bend
+    const bend = this.effectiveBend(section)
+    this.appliedBend[section] = bend
     const now = context.currentTime
     const factor = Math.pow(2, bend / 12)
     const apply = (voice: Voice) => {
+      if (voice.section !== section) return
       for (const source of voice.sources) {
         if (source.kind === 'sample') {
           source.node.playbackRate.cancelScheduledValues(now)
@@ -978,6 +2482,12 @@ export class PianoEngine {
   allNotesOff(reason: AllNotesOffReason): void {
     this.sustainLevel = 0
     this.sostenutoDown = false
+    // Panic (and KB HOLD's own "hold-off clears" spec note) drops every
+    // synth layer's held-note set, ending arp/priority/mono retention.
+    if (reason === 'panic') {
+      this.synthHeld = { A: [], B: [], C: [] }
+      this.synthSoundingMidi = { A: null, B: null, C: null }
+    }
     const releaseSeconds = reason === 'panic' ? PANIC_RELEASE_SECONDS : QUICK_RELEASE_SECONDS
     for (const voice of [...this.voices.values()]) this.releaseVoice(voice, releaseSeconds)
   }
@@ -985,7 +2495,7 @@ export class PianoEngine {
   private releaseVoice(voice: Voice, releaseSeconds: number): void {
     if (voice.releasing) return
     voice.releasing = true
-    this.voices.delete(`${voice.layer}:${voice.midi}`)
+    this.voices.delete(`${voice.section}:${voice.layer}:${voice.midi}`)
     this.releasingVoices.add(voice)
     const context = this.context
     if (context) {
@@ -1062,6 +2572,59 @@ export class PianoEngine {
       }
       this.channels = null
     }
+    if (this.organChannels) {
+      for (const layer of ['A', 'B'] as const) {
+        const channel = this.organChannels[layer]
+        channel.scanner.dispose()
+        for (const node of [channel.voiceBus, channel.levelGain]) {
+          try {
+            node.disconnect()
+          } catch {
+            /* detached */
+          }
+        }
+      }
+      this.organChannels = null
+    }
+    if (this.organChain) {
+      for (const unit of Object.values(this.organChain.units)) unit.dispose()
+      for (const node of [this.organChain.input, this.organChain.toMaster, this.organChain.toRotary]) {
+        try {
+          node.disconnect()
+        } catch {
+          /* detached */
+        }
+      }
+      this.organChain = null
+    }
+    if (this.synthChannels) {
+      for (const layer of SYNTH_LAYER_IDS) {
+        const channel = this.synthChannels[layer]
+        stopAndDisconnect([
+          channel.lfo.osc,
+          channel.lfo.sh,
+          channel.lfo.invert,
+          channel.lfo.oscSelect,
+          channel.lfo.invertSelect,
+          channel.lfo.shSelect,
+          channel.lfo.depth,
+          channel.vibrato.osc,
+          channel.vibrato.depth,
+        ])
+        for (const unit of Object.values(channel.units)) unit.dispose()
+        for (const node of [channel.voiceBus, channel.levelGain, channel.toMaster, channel.toRotary]) {
+          try {
+            node.disconnect()
+          } catch {
+            /* detached */
+          }
+        }
+      }
+      this.synthChannels = null
+    }
+    this.stopArp()
+    this.synthHeld = { A: [], B: [], C: [] }
+    this.synthSoundingMidi = { A: null, B: null, C: null }
     this.rotary?.dispose()
     this.rotary = null
     try {
@@ -1082,6 +2645,10 @@ export class PianoEngine {
     this.instrumentStatus.clear()
     this.instrumentError.clear()
     this.pedalThump = null
+    this.organClick = null
+    this.organChiff = null
+    this.synthNoiseLoop = null
+    this.synthShBuffer = null
     this.reducedPath = false
     this.detachStore?.()
     this.detachStore = null
@@ -1099,6 +2666,12 @@ export class PianoEngine {
     limiter: DynamicsCompressorNodeLike | null
     rotary: RotaryUnit | null
     channels: Record<LayerId, LayerChannel> | null
+    organChannels: Record<LayerId, OrganChannel> | null
+    /** The shared Organ effect chain's units and master/rotary sends (manual p. 18). */
+    organChainUnits: OrganSharedChain['units'] | null
+    organChainToMaster: GainNodeLike | null
+    organChainToRotary: GainNodeLike | null
+    synthChannels: Record<SynthLayerId, SynthChannel> | null
   } {
     return {
       context: this.context,
@@ -1106,11 +2679,33 @@ export class PianoEngine {
       limiter: this.limiter,
       rotary: this.rotary,
       channels: this.channels,
+      organChannels: this.organChannels,
+      organChainUnits: this.organChain?.units ?? null,
+      organChainToMaster: this.organChain?.toMaster ?? null,
+      organChainToRotary: this.organChain?.toRotary ?? null,
+      synthChannels: this.synthChannels,
     }
   }
 }
 
 /* ------------------------------------------------------------- helpers -- */
+
+/** Deterministic exponentially-decaying noise burst (xorshift; declared generated). */
+function makeNoiseBurst(context: AudioContextLike, seconds: number, decayRate: number, seedStart: number): AudioBufferLike {
+  const rate = context.sampleRate
+  const length = Math.max(1, Math.floor(seconds * rate))
+  const buffer = context.createBuffer(1, length, rate)
+  const data = buffer.getChannelData(0)
+  let seed = seedStart
+  for (let i = 0; i < length; i++) {
+    seed ^= seed << 13
+    seed ^= seed >>> 17
+    seed ^= seed << 5
+    seed >>>= 0
+    data[i] = (seed / 0xffffffff - 0.5) * Math.exp((-i / rate) * decayRate)
+  }
+  return buffer
+}
 
 function isThenable<T>(value: T | Promise<T>): value is Promise<T> {
   return typeof (value as { then?: unknown } | null)?.then === 'function'

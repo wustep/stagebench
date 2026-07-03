@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   realAssetBoundary,
   realAudioBoundary,
   realMidiBoundary,
+  realStorageBoundary,
   type AssetBoundary,
   type AudioBoundary,
   type MidiBoundary,
+  type StorageBoundary,
 } from './audio/boundaries'
 import { PianoEngine, type EngineStatusInfo } from './audio/engine'
 import { InstrumentController } from './input/controller'
@@ -20,14 +22,20 @@ import {
   ProgramSection,
   SynthSection,
 } from './components/sections'
+import { SectionZoomOverlay } from './components/section-zoom'
 import { PresentationStore } from './state/presentation'
 import { InstrumentStore } from './state/instrument'
 import { VARIANT } from './model/variant'
+
+/** Sections that offer the inspect/zoom affordance (those with a plate-title). */
+type ZoomableSectionId = 'organ' | 'piano' | 'synth' | 'effects'
+const ZOOM_TITLES: Record<ZoomableSectionId, string> = { organ: 'Organ', piano: 'Piano', synth: 'Synth', effects: 'Layer Effects' }
 
 export interface AppProps {
   audioBoundary?: AudioBoundary
   midiBoundary?: MidiBoundary
   assetBoundary?: AssetBoundary
+  storageBoundary?: StorageBoundary
   panelClock?: () => number
 }
 
@@ -52,6 +60,10 @@ function usePedals(controller: InstrumentController): { sustain: boolean; sosten
   return { sustain, sostenuto, soft }
 }
 
+function useControlPedal(instrument: InstrumentStore): number {
+  return useSyncExternalStore(instrument.subscribe, () => instrument.getState().morphValues.pedal)
+}
+
 declare global {
   interface Window {
     /** Diagnostics hook for browser-based signal verification only. */
@@ -59,9 +71,10 @@ declare global {
   }
 }
 
-export default function App({ audioBoundary, midiBoundary, assetBoundary, panelClock }: AppProps = {}) {
+export default function App({ audioBoundary, midiBoundary, assetBoundary, storageBoundary, panelClock }: AppProps = {}) {
   const system = useMemo(() => {
-    const instrument = new InstrumentStore()
+    const storage = storageBoundary ?? realStorageBoundary()
+    const instrument = new InstrumentStore(storage)
     const engine = new PianoEngine(audioBoundary ?? realAudioBoundary(), {
       assets: assetBoundary ?? realAssetBoundary(),
     })
@@ -73,10 +86,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, panelC
       setSustain: (value) => controller.setSustain(value),
       setSostenuto: (down) => controller.setSostenuto(down),
       setSoft: (down) => controller.setSoft(down),
+      setControlPedal: (value) => instrument.setMorphSource('pedal', value * 127),
       onDisconnectCleanup: () => controller.allNotesOff('midi-disconnect'),
     })
     const store = new PresentationStore({ instrument, controller, now: panelClock })
-    return { engine, controller, midi, store, instrument }
+    return { engine, controller, midi, store, instrument, storage }
     // The instrument system is created once per mounted app.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -85,6 +99,32 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, panelC
   const engineStatus = useEngineStatus(engine)
   const midiStatus = useMidiStatus(midi)
   const pedals = usePedals(controller)
+  const controlPedal = useControlPedal(instrument)
+
+  // Section-inspect/zoom overlay (narrow-legend-legibility): additive and
+  // opt-in — the default deck layout never changes, only this state gates
+  // an extra portaled overlay rendering the same section again, larger.
+  const [zoomedSection, setZoomedSection] = useState<ZoomableSectionId | null>(null)
+
+  const [chrome, setChrome] = useState<'minimal' | 'full'>(() => {
+    try {
+      const raw = system.storage.load('stagebench.ui.v1')
+      if (raw) {
+        const parsed = JSON.parse(raw) as { chrome?: string }
+        if (parsed.chrome === 'full') return 'full'
+      }
+    } catch {
+      /* unreadable preference: fall through to the default */
+    }
+    return 'minimal'
+  })
+  const toggleChrome = () => {
+    setChrome((current) => {
+      const next = current === 'minimal' ? 'full' : 'minimal'
+      system.storage.save('stagebench.ui.v1', JSON.stringify({ chrome: next }))
+      return next
+    })
+  }
 
   // (Re)attach canonical state on every mount: unmount cleanup disposes the
   // engine and detaches its store subscription, and StrictMode's simulated
@@ -208,27 +248,33 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, panelC
             <div className="top-rail" aria-hidden="true" />
             <div className="control-deck" data-testid="control-deck">
               <PerformanceSection store={store} instrument={instrument} />
-              <OrganSection store={store} />
-              <PianoSection store={store} instrument={instrument} engine={engine} />
+              <OrganSection store={store} instrument={instrument} onZoom={() => setZoomedSection('organ')} />
+              <PianoSection store={store} instrument={instrument} engine={engine} onZoom={() => setZoomedSection('piano')} />
               <ProgramSection store={store} instrument={instrument} engine={engine} />
-              <SynthSection store={store} />
-              <EffectsSection store={store} instrument={instrument} />
+              <SynthSection store={store} instrument={instrument} onZoom={() => setZoomedSection('synth')} />
+              <EffectsSection store={store} instrument={instrument} onZoom={() => setZoomedSection('effects')} />
             </div>
           </div>
           <div className="keys-block" data-testid="keys-block" style={{ height: '46%' }}>
-            <Keybed controller={controller} />
+            <Keybed controller={controller} instrument={instrument} />
             <div className="bottom-rail" aria-hidden="true" />
           </div>
         </div>
       </div>
-      <footer className="status-strip" aria-live="polite">
-        <span data-testid="engine-status" data-status={engineStatus.status}>
-          <b>Piano:</b> {engineStatus.message}
-        </span>
-        <span data-testid="midi-status" data-status={midiStatus.status}>
-          <b>MIDI:</b> {midiStatus.message}
-        </span>
-        <span data-testid="pedal-status">
+      {zoomedSection && (
+        <SectionZoomOverlay title={ZOOM_TITLES[zoomedSection]} onClose={() => setZoomedSection(null)}>
+          {zoomedSection === 'organ' && <OrganSection store={store} instrument={instrument} />}
+          {zoomedSection === 'piano' && <PianoSection store={store} instrument={instrument} engine={engine} />}
+          {zoomedSection === 'synth' && <SynthSection store={store} instrument={instrument} />}
+          {zoomedSection === 'effects' && <EffectsSection store={store} instrument={instrument} />}
+        </SectionZoomOverlay>
+      )}
+      <footer
+        className={`status-strip ${chrome === 'minimal' ? 'chrome-minimal' : ''}`}
+        aria-live="polite"
+        data-testid="status-strip"
+      >
+        <span className="chrome-essentials">
           <button
             type="button"
             className="sustain-pedal"
@@ -239,13 +285,53 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, panelC
           >
             SUSTAIN PEDAL
           </button>
-          <b>Pedals:</b> sustain {pedals.sustain ? 'down' : 'up'} (pedal latches / Space / CC64 half-pedal) · sostenuto{' '}
-          {pedals.sostenuto ? 'down' : 'up'} (X / CC66) · soft {pedals.soft ? 'down' : 'up'} (Z / CC67)
+          <label className="ctrl-pedal">
+            CTRL PEDAL
+            <input
+              type="range"
+              min={0}
+              max={127}
+              value={controlPedal}
+              aria-label="Control Pedal"
+              data-testid="ctrl-pedal"
+              onChange={(event) => instrument.setMorphSource('pedal', Number(event.target.value))}
+            />
+          </label>
+          <button
+            type="button"
+            className="chrome-toggle"
+            data-testid="chrome-toggle"
+            aria-pressed={chrome === 'full'}
+            aria-label="Show panel info"
+            onClick={toggleChrome}
+          >
+            ⓘ INFO
+          </button>
         </span>
-        <span className="status-note">
-          Functional this phase: keybed, pedals, Piano section (all six types), Layer Effects, Rotary, Master Level,
-          pitch stick, Panic, and Shift+Layer A/B for SUSTPED/PSTICK routing. Organ, Synth and the remaining Program
-          controls are visual-only until Phase 3.
+        <span className="chrome-info">
+          <span data-testid="engine-status" data-status={engineStatus.status}>
+            <b>Piano:</b> {engineStatus.message}
+          </span>
+          <span data-testid="midi-status" data-status={midiStatus.status}>
+            <b>MIDI:</b> {midiStatus.message}
+          </span>
+          <span data-testid="pedal-status">
+            <b>Pedals:</b> sustain {pedals.sustain ? 'down' : 'up'} (pedal latches / Space / CC64 half-pedal) · sostenuto{' '}
+            {pedals.sostenuto ? 'down' : 'up'} (X / CC66) · soft {pedals.soft ? 'down' : 'up'} (Z / CC67)
+          </span>
+          <span data-testid="ctrl-pedal-status">
+            <span>
+              CTRL PEDAL {controlPedal} (CC11 · Control Pedal morph source)
+            </span>
+          </span>
+          <span className="status-note">
+            Functional: keybed, pedals, all Piano and Organ sections (all six organ models including B3 Bass and Pipe
+            2), the complete Synth section, Layer Effects (including each synth layer's own effect chain and the
+            organ layers' shared chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, and section
+            zoom. Visual-only by spec exclusion: Synth Mode's Extern/Samples positions, the preset-library buttons,
+            the Prog View/Section Edit/Layer Init/Mon·Copy menus, Morph A.T. (no browser aftertouch), and the Organ
+            preset button.
+          </span>
         </span>
       </footer>
     </main>

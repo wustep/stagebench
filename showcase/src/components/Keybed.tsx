@@ -1,10 +1,21 @@
 import { memo, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { InstrumentController } from '../input/controller'
+import type { InstrumentStore, SplitState } from '../state/instrument'
 import { KEYS, WHITE_KEY_COUNT, type KeyDef } from '../model/keys'
 import { VARIANT } from '../model/variant'
 
 interface KeybedProps {
   controller: InstrumentController
+  /** When provided, active split points render as markers above the keys (manual p. 39). */
+  instrument?: InstrumentStore
+}
+
+const noSubscribe = () => () => {}
+
+function useSplitState(instrument: InstrumentStore | undefined): SplitState | null {
+  return useSyncExternalStore(instrument ? instrument.subscribe : noSubscribe, () =>
+    instrument ? instrument.getState().split : null,
+  )
 }
 
 const DEFAULT_POINTER_VELOCITY = 0.8
@@ -68,9 +79,10 @@ const KeyView = memo(function KeyView({ keyDef, controller, onPointerDownKey, on
  * so independent touches drive independent notes through the shared
  * controller lifecycle.
  */
-export function Keybed({ controller }: KeybedProps) {
+export function Keybed({ controller, instrument }: KeybedProps) {
   // pointerId -> midi ownership map; one pointer owns at most one note.
   const pointerNotes = useRef(new Map<number, number>())
+  const split = useSplitState(instrument)
 
   const onPointerDownKey = (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => {
     event.preventDefault()
@@ -109,6 +121,22 @@ export function Keybed({ controller }: KeybedProps) {
         {KEYS.filter((k) => k.isBlack).map((keyDef) => (
           <KeyView key={keyDef.id} keyDef={keyDef} controller={controller} onPointerDownKey={onPointerDownKey} onPointerUpKey={onPointerUpKey} />
         ))}
+        {split?.on &&
+          split.points
+            .filter((point) => point.active)
+            .map((point) => {
+              const key = KEYS.find((k) => k.midi === point.note)
+              if (!key) return null
+              return (
+                <span
+                  key={point.note}
+                  className="split-marker"
+                  data-split-note={point.note}
+                  style={{ left: `${key.x * (100 / WHITE_KEY_COUNT)}%` }}
+                  aria-hidden="true"
+                />
+              )
+            })}
       </div>
       <div className="end-cheek right" aria-hidden="true" />
     </div>

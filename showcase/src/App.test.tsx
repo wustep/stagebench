@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import App from './App'
 import { renderApp } from './test/renderApp'
-import { fakeAssetBoundary, fakeAudioBoundary, fakeMidiBoundary, FakeGain, FakeMidiAccess } from './test/fakes'
+import { fakeAssetBoundary, fakeAudioBoundary, fakeMidiBoundary, fakeStorageBoundary, FakeGain, FakeMidiAccess } from './test/fakes'
 
 // Inherited starter smoke test, updated to the replaced Phase 1 surface
 // (the starter explicitly instructs replacing its placeholder markup).
@@ -31,6 +31,7 @@ describe('candidate application', () => {
           audioBoundary={setup.boundary}
           midiBoundary={fakeMidiBoundary(new FakeMidiAccess())}
           assetBoundary={fakeAssetBoundary()}
+          storageBoundary={fakeStorageBoundary()}
         />
       </StrictMode>,
     )

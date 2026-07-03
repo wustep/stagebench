@@ -1,4 +1,4 @@
-import { memo, useRef, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { memo, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { getControl } from '../model/hardware'
 import { PresentationStore, usePresentationToggle, usePresentationValue } from '../state/presentation'
 
@@ -19,6 +19,8 @@ interface ContinuousProps {
 function useContinuous(store: PresentationStore, id: string) {
   const control = getControl(id)
   const value = usePresentationValue(store, id)
+  // Morph destination indicator (manual p. 39): sources assigned to this control.
+  const morphTag = useSyncExternalStore(store.subscribe, () => store.morphTag(id))
   const min = control.min ?? 0
   const max = control.max ?? 127
   const range = max - min
@@ -68,6 +70,7 @@ function useContinuous(store: PresentationStore, id: string) {
     'aria-orientation': 'vertical' as const,
     'data-control-id': id,
     'data-decorative': control.decorative ? 'true' : 'false',
+    'data-morphed': morphTag ?? undefined,
     onKeyDown,
     onPointerDown,
     onPointerMove,
@@ -187,6 +190,7 @@ export function LedLadder({
   lit = 0,
   color = 'green',
   fill = 'up',
+  rangeLit,
   className,
 }: {
   count?: number
@@ -194,13 +198,28 @@ export function LedLadder({
   color?: 'green' | 'red'
   /** 'up' lights from the bottom (level meters); 'down' from the top (drawbar amount). */
   fill?: 'up' | 'down'
+  /** Morph assignment range (manual p. 39 indicator nicety): LEDs between
+   *  `from`/`to` (inclusive, 0-indexed from the ladder's lit end) render at a
+   *  dim "range" state instead of fully on/off. */
+  rangeLit?: { from: number; to: number }
   className?: string
 }) {
+  const rangeFrom = rangeLit ? Math.min(rangeLit.from, rangeLit.to) : null
+  const rangeTo = rangeLit ? Math.max(rangeLit.from, rangeLit.to) : null
   return (
     <span className={`led-ladder ${className ?? ''}`} aria-hidden="true">
-      {Array.from({ length: count }, (_, i) => (
-        <span key={i} className={`led led-${color}`} data-on={(fill === 'up' ? i >= count - lit : i < lit) ? 'true' : 'false'} />
-      ))}
+      {Array.from({ length: count }, (_, i) => {
+        const position = fill === 'up' ? count - 1 - i : i
+        const inRange = rangeFrom !== null && rangeTo !== null && position >= rangeFrom && position <= rangeTo
+        return (
+          <span
+            key={i}
+            className={`led led-${color}`}
+            data-on={(fill === 'up' ? i >= count - lit : i < lit) ? 'true' : 'false'}
+            data-range={inRange ? 'true' : undefined}
+          />
+        )
+      })}
     </span>
   )
 }

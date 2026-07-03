@@ -13,32 +13,89 @@ describe('visual.control-inventory — normalized hardware model', () => {
     }
   })
 
-  it('declares the truthful Phase 2 functional/decorative split', () => {
-    // Functional: Piano section, Layer Effects, Rotary, Master Level, pitch
-    // stick, Panic and the Shift modifier. Everything else (Organ, Synth,
-    // remaining Program/Morph controls, mod wheel) stays decorative until
-    // its engine exists in Phase 3 — no control pretends to work.
+  it('declares the truthful functional/decorative split', () => {
+    // Functional: Piano section, Organ section, Layer Effects, Rotary,
+    // Master Level, pitch stick, Panic, Shift, the Programs cluster, and now
+    // the complete Synth section (sources, filters/envelopes/LFO, voice
+    // modes, and the arpeggiator/gate — Part 3). Everything else stays
+    // decorative until its engine exists — no control pretends to work.
     for (const control of HARDWARE_CONTROLS) {
       const functional = FUNCTIONAL_CONTROL_IDS.has(control.id)
       expect(control.decorative, control.id).toBe(!functional)
     }
-    // Every Piano-section and Effects-section control is functional now,
-    // except the Synth FX-focus group button: there is no Synth engine or
-    // Synth chain yet, so focusing it would pretend — it stays decorative.
-    for (const control of HARDWARE_CONTROLS.filter((c) => c.section === 'piano' || c.section === 'effects')) {
-      if (control.id === 'fx-focus-synth') continue
+    // Every Piano-, Organ- and Effects-section control is functional now,
+    // including the Synth FX-focus group button (each synth layer now has
+    // its own effect chain to focus). Only the Organ preset button stays
+    // truthfully decorative (preset library is spec-excluded benchmark-wide).
+    for (const control of HARDWARE_CONTROLS.filter(
+      (c) => c.section === 'piano' || c.section === 'organ' || c.section === 'effects',
+    )) {
+      if (control.id === 'organ-preset') continue
       expect(control.decorative, control.id).toBe(false)
     }
-    expect(getControl('fx-focus-synth').decorative).toBe(true)
-    // Organ and Synth sections remain fully decorative (Phase 3 scope).
-    for (const control of HARDWARE_CONTROLS.filter((c) => c.section === 'organ' || c.section === 'synth')) {
-      expect(control.decorative, control.id).toBe(true)
+    expect(getControl('fx-focus-synth').decorative).toBe(false)
+    expect(getControl('organ-preset').decorative).toBe(true)
+    // Synth scope: section on/off, three layers (level/enable/octave),
+    // waveform selection (category button + dial 2), Osc Ctrl and the
+    // Amp/Filter/Osc Envelope buttons (plus dials 1/2/3 while one is the
+    // edit target), the filter (type/tracking/drive/on/freq/res/env amt),
+    // the oscillator envelope (amount + Env To Pitch), the LFO
+    // (waveform/rate/mod amt/destination via dial 3/clock sync), voice
+    // modes (mode/priority/glide/unison/vibrato) and the arpeggiator/gate
+    // (run/mode/direction/rate/range/hold via KB Hold) are all functional
+    // now. Only Synth Mode's Extern/Samples positions stay spec-excluded.
+    const synthFunctional = new Set([
+      'synth-on',
+      'synth-level-a',
+      'synth-level-b',
+      'synth-level-c',
+      'synth-layer-a',
+      'synth-layer-b',
+      'synth-layer-c',
+      'synth-octave-down',
+      'synth-octave-up',
+      'waveform-select',
+      'synth-dial-1',
+      'synth-dial-2',
+      'synth-dial-3',
+      'osc-ctrl',
+      'amp-envelope',
+      'filter-type',
+      'filter-envelope',
+      'filter-on',
+      'filter-freq',
+      'filter-res',
+      'filter-env-amt',
+      'osc-envelope',
+      'osc-env-amt',
+      'lfo-waveform',
+      'lfo-rate',
+      'lfo-mod-amt',
+      'voice-mode',
+      'glide',
+      'synth-unison',
+      'vibrato-mode',
+      'arp-run',
+      'arp-mode',
+      'arp-rate',
+      'arp-range',
+      'kb-hold',
+    ])
+    for (const control of HARDWARE_CONTROLS.filter((c) => c.section === 'synth')) {
+      expect(control.decorative, control.id).toBe(!synthFunctional.has(control.id))
     }
     expect(getControl('panic').decorative).toBe(false)
     expect(getControl('perf-master-level').decorative).toBe(false)
-    expect(getControl('store').decorative).toBe(true)
-    expect(getControl('live-mode').decorative).toBe(true)
-    expect(getControl('perf-mod-wheel').decorative).toBe(true)
+    // The Programs cluster (32 slots + 8 Live, store flows, navigation),
+    // Layer Scenes and Split are functional; morphs, presets and the
+    // spec-excluded menus remain decorative.
+    for (const id of ['store', 'store-as', 'program-dial', 'page-left', 'page-right', 'live-mode', 'solo-undo', 'program-1', 'program-8', 'layer-scene', 'split-onset', 'mstclk-tap', 'transpose-onset', 'morph-wheel', 'morph-ctrlped', 'perf-mod-wheel']) {
+      expect(getControl(id).decorative, id).toBe(false)
+    }
+    // morph-at stays decorative: aftertouch is spec-excluded (no browser aftertouch).
+    for (const id of ['morph-at', 'preset-piano', 'prog-view', 'section-edit', 'layer-init', 'mon-copy']) {
+      expect(getControl(id).decorative, id).toBe(true)
+    }
   })
 
   it('orders the six sections with the measured width fractions', () => {

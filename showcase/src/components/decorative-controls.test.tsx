@@ -112,13 +112,15 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     expect(getContext()).toBeNull()
   })
 
-  it('DECORATIVE panel controls do not silence or alter playing keybed voices', () => {
+  it('Other-section panel controls do not silence or alter playing Piano keybed voices', () => {
     const { getContext } = renderApp()
     fireEvent.pointerDown(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })
     const context = getContext()!
     const sourceCount = context.bufferSources().length
     expect(sourceCount).toBeGreaterThan(0)
 
+    // Organ, Store and Synth Layer A are all functional now, but none of
+    // them touch the Piano section's already-sounding buffer sources.
     fireEvent.click(screen.getByRole('button', { name: 'Organ Section On' }))
     fireEvent.keyDown(screen.getByRole('slider', { name: 'Drawbar 3 (8′)' }), { key: 'End' })
     fireEvent.click(screen.getByRole('button', { name: 'Store' }))
@@ -140,13 +142,16 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
   })
 
   it('the OLED content does not react to decorative program controls', () => {
+    // Program buttons, Store and the dial belong to the functional Programs
+    // cluster now — the still-decorative controls are the morph/preset/menu scope.
     renderApp()
     const oled = screen.getByTestId('oled-program')
     const before = oled.textContent
-    fireEvent.click(screen.getByRole('button', { name: 'Program 2' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Store' }))
-    const dial = screen.getByRole('slider', { name: 'Program Dial' })
-    fireEvent.keyDown(dial, { key: 'ArrowUp' })
+    fireEvent.click(screen.getByRole('button', { name: 'Morph Assign Aftertouch' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Prog View' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Preset Library Piano' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Section Edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Layer Init' }))
     expect(oled.textContent).toBe(before)
   })
 })

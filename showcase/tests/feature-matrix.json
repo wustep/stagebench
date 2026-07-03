@@ -16,7 +16,7 @@
     {
       "id": "visual.control-inventory",
       "tests": ["src/model/hardware.test.ts", "src/components/surface.test.tsx"],
-      "notes": "Normalized hardware model with unique stable IDs; nine organ drawbars; primary OLEDs only in Program and Synth; truthful Phase 2 functional/decorative split (Piano/effects/rotary/master/Panic functional; Organ/Synth/Program decorative)."
+      "notes": "Normalized hardware model with unique stable IDs; nine organ drawbars; primary OLEDs only in Program and Synth; truthful functional/decorative split (Piano/Organ/effects/rotary/master/Panic/Programs functional; the complete Synth section — sources/layers, filter/envelopes/LFO, voice modes and the arpeggiator/gate — is functional too; only Synth Mode's Extern/Samples positions and the Organ preset button stay decorative)."
     },
     {
       "id": "interaction.keys",
@@ -26,7 +26,7 @@
     {
       "id": "interaction.decorative-controls",
       "tests": ["src/components/decorative-controls.test.tsx"],
-      "notes": "Still-decorative Organ/Synth/Program controls move by pointer and keyboard, update only presentation state, never create an AudioContext and never alter voices; functional controls are marked data-decorative=false and their canonical writes are tested separately."
+      "notes": "Still-decorative Synth Mode Extern/Samples positions and the Organ preset button move by pointer and keyboard, update only presentation state, never create an AudioContext and never alter voices; functional controls are marked data-decorative=false and their canonical writes are tested separately."
     },
     {
       "id": "accessibility.controls",
@@ -61,7 +61,7 @@
     {
       "id": "piano.instrument-library",
       "tests": ["src/audio/library.test.ts", "src/audio/render-library.test.ts"],
-      "notes": "Six bundled recorded sample sets — one per selectable type (Salamander Grand CC BY 3.0; GM Honky-tonk, Electric Piano 1, Clavinet, Electric Piano 2 and Vibraphone from the MIT MIDI-JS Soundfonts collection) — all files on disk and offline, 30 roots x 3 recorded velocity layers on the grand and 19 roots each elsewhere; rendered-audio tests prove all six are audibly distinct and the fallback is synthesized and labeled."
+      "notes": "All six selectable piano types now bundle a recorded model — Grand (Salamander CC BY 3.0), Upright/Electric/Digital/Clav/Misc from the MIT MIDI-JS Soundfonts collection (Honky-tonk, Electric Piano 1, Electric Piano 2, Clavinet, Vibraphone) — all files on disk and offline, 30 roots x 3 recorded velocity layers on the grand and 19 roots x 1 layer elsewhere; rendered-audio tests prove all six are audibly distinct and the fallback is synthesized and labeled."
     },
     {
       "id": "piano.layers",
@@ -71,17 +71,87 @@
     {
       "id": "piano.velocity-controls",
       "tests": ["src/audio/piano-controls.test.ts", "src/audio/render-piano-controls.test.ts"],
-      "notes": "KB Touch curves, timbre voicings (acoustic + electric Dyno), dynamic compression, unison, soft release, string resonance, master volume, pitch-stick bend and Panic all write canonical state, update panel LEDs/displays, and measurably change real offline-rendered audio."
+      "notes": "KB Touch curves, timbre voicings (acoustic + electric Dyno), dynamic compression, unison, soft release (disabled for Clav per manual p. 25), string resonance, master volume, pitch-stick bend and Panic all write canonical state, update panel LEDs/displays, and measurably change real offline-rendered audio."
     },
     {
       "id": "piano.pedals",
       "tests": ["src/audio/pedals.test.ts", "src/audio/render-piano-controls.test.ts", "src/input/midi.test.ts"],
-      "notes": "Full sustain from the on-screen latching pedal control, Space and MIDI CC64 (continuous half-pedaling, longer damping, truthful approximation); SUSTPED/PSTICK section routing via Shift + Layer A/B per manual p. 23, including a SUSTPED-off state; Soft Release disabled for Clav per manual p. 25; sostenuto capture semantics (CC66/KeyX), soft pedal level/timbre reduction (CC67/KeyZ), pedal-noise thump (declared generated), pedal reset on Panic."
+      "notes": "Full sustain from the on-screen latching pedal control, Space and MIDI CC64 (continuous half-pedaling, longer damping, truthful approximation); SUSTPED/PSTICK section routing via Shift + Layer A/B per manual p. 23, including a SUSTPED-off state; sostenuto capture semantics (CC66/KeyX), soft pedal level/timbre reduction (CC67/KeyZ), pedal-noise thump (declared generated), pedal reset on Panic."
     },
     {
       "id": "piano.fallback",
       "tests": ["src/audio/fallback.test.ts", "src/audio/render-library.test.ts"],
       "notes": "Total and partial sample failure enter a labeled synthesized fallback that stays playable and never reports ready; all six types bundle a model, so the missing-model state (flashing type LED, truthful display report) is reached through load failure, and recovering the selection restores recorded samples."
+    },
+    {
+      "id": "programs.roundtrip",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "Showcase extension: storing and re-loading any of the 32 slots round-trips all supported piano/organ/effects/routing state; Master Level is excluded per spec; the dirty E flag is truthful and edits are discarded on program change."
+    },
+    {
+      "id": "programs.store-live",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "Showcase extension: STORE captures the edited sound and auditions the destination on navigation, confirms on a second STORE press, Shift/Exit aborts and restores the edited sound at the origin; STORE AS opens naming (dial picks the character, PAGE moves the cursor); Live Mode auto-stores every edit instantly (no E flag) and Store copies content between Live and bank slots by toggling LIVE MODE during the destination step."
+    },
+    {
+      "id": "programs.undo-cancel",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "SOLO UNDO restores a single discarded edit once after a program change; aborting a pending Store (Shift/Exit) restores the edited sound at the origin program."
+    },
+    {
+      "id": "programs.navigation",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "Showcase extension: 8 program buttons within 4 pages, page buttons, dial browsing of all 32 slots, Shift+dial numeric list view, Live Mode bank switch with LED and L-slot readout; 12 distinct factory programs ship (piano, organ, layered and effected setups, plus a split demo — Bass & Tines — and three synth demos — Super Saw Pad, FM Keys, Gate Pulse)."
+    },
+    {
+      "id": "morph.assignments",
+      "tests": ["src/state/morph.test.ts"],
+      "notes": "Showcase extension: Wheel and Control Pedal morph sources (A.T. is spec-excluded). Latch a source button, move destinations to capture start→end (opposite directions supported); moving the mod wheel, the on-screen Control Pedal or MIDI CC11 interpolates every assigned destination without marking the program edited; zeroing removes one assignment, Shift+source clears the source; assigned controls show a green indicator; assignments are program state. LED ladders (layer faders and organ drawbars) now show the assigned morph range as a dim half-opacity LED span between the captured start→end (manual p. 39 indicator nicety), resolving the same layer/chain context the capture path used; unassigned controls show no range LEDs."
+    },
+    {
+      "id": "system.clock-transpose",
+      "tests": ["src/state/clock-transpose.test.ts", "src/audio/render-clock-transpose.test.ts"],
+      "notes": "Showcase extension: MST CLK TAP/SET derives BPM from 4+ tapped intervals (fewer taps prompt to keep tapping); Shift opens a dial-edit mode sweeping 30–300 BPM with PROG 1/2 toggling the focused chain's Delay/Mod 1 sync flags; TRANSPOSE ON/SET toggles ±6-semitone shift with the same Shift dial-edit pattern; both are program state and change the actual rendered pitch/tempo-synced rate."
+    },
+    {
+      "id": "splits.zones",
+      "tests": ["src/state/scenes-splits.test.ts", "src/audio/render-splits.test.ts"],
+      "notes": "Showcase extension: SPLIT ON/SET toggles a single Mid split at C4; Shift+Split opens a panel split editor (dial picks among 11 documented positions, PAGE selects Low/Mid/High, PROG 1 toggles the point, PROG 2 cycles the crossfade Off/±6/±12); up to 4 zones from the active points, every layer carries a contiguous KB ZONE assignment stepped with Shift+Octave; the engine routes notes per zone with complementary crossfades at boundaries and a hard split switches exactly at the point."
+    },
+    {
+      "id": "scenes.switching",
+      "tests": ["src/state/scenes-splits.test.ts"],
+      "notes": "Showcase extension: Layer Scenes I/II swap the piano/organ layer-enable configuration while every sound parameter stays shared; the LAYER SCENE II LED shows the active scene; scene configs round-trip through Store."
+    },
+    {
+      "id": "organ.engine",
+      "tests": ["src/audio/organ.test.ts", "src/audio/render-organ.test.ts", "src/audio/organ-chain.test.ts", "src/audio/render-organ-chain.test.ts"],
+      "notes": "Showcase extension beyond the sealed Phase 2 scope: two organ layers with enable/focus/level/octave, section on/off, short declick releases, node cleanup, velocity invariance, per-section SUSTPED/PSTICK routing, one shared AudioContext/master path."
+    },
+    {
+      "id": "organ.models-drawbars",
+      "tests": ["src/audio/organ.test.ts", "src/audio/render-organ.test.ts"],
+      "notes": "Showcase extension: B3/Vox/Farf/Pipe 1 generated digital models rendered audibly distinct (pairwise similarity < 0.8); nine drawbars drive the live spectrum (including mid-note pulls); Farf drawbars act as register switches; B3 percussion (single-trigger, soft/fast/third, and POLY via Shift + Percussion Volume for legato retriggering), key click, and the C1-C3/V1-V3 scanner with per-layer on/off all measurably change rendered audio. Two spec-optional models round out the 6-model cycle: B3 Bass (B3's tonewheel/click limited to the 16'+8' drawbars only, no percussion) and Pipe 2 (Pipe 1's ranks/chiff with a brighter principal registration — triangle low ranks, boosted/wider-detuned upper ranks); both LEDs are lit in the model grid and audibly verified (B3 Bass non-silent with only its two drawbars voiced; Pipe 2 vs Pipe 1 similarity < 0.9)."
+    },
+    {
+      "id": "organ.rotary",
+      "tests": ["src/audio/organ.test.ts", "src/audio/render-organ.test.ts"],
+      "notes": "Showcase extension: the Rotary strip's ORGAN source button crossfades the shared organ effect chain output into the single rotary instance and lights the strip LED; rendered proof that fast rotary modulates the organ's output and stop nearly does not."
+    },
+    {
+      "id": "ui.section-zoom",
+      "tests": ["src/components/section-zoom.test.tsx"],
+      "notes": "Showcase extension closing the oldest open issue (SHOWCASE.md iteration 1, narrow-legend-legibility): each plate-title with a title bar (Organ, Piano, Synth, Layer Effects) is also a real button (\"Inspect <Section> section\") that opens a role=\"dialog\" overlay, portaled under .stage-app so the default control-deck DOM/geometry never changes (chassis regression tests still pass). The overlay renders the exact same section component again inside a fresh wide container-query context, so every cqw-sized legend/control recomputes larger in absolute pixels while staying real and operable (same canonical stores). Escape or the close button dismisses; initial focus traps on the close button."
+    },
+    {
+      "id": "synth.sources",
+      "tests": ["src/audio/synth.test.ts", "src/audio/render-synth.test.ts"],
+      "notes": "Showcase extension: the Synth section (three layers A/B/C, each with its own effect chain) with the Analog waveform list, category-correct Osc Ctrl per waveform family, and the full filter/envelope graph feeding real oscillators; rendered tests prove waveform families are audibly distinct and Osc Ctrl measurably changes the spectrum."
+    },
+    {
+      "id": "synth.filter-envelopes",
+      "tests": ["src/audio/synth-filter.test.ts", "src/audio/render-synth2.test.ts"],
+      "notes": "Showcase extension: the filter (type/freq/res/envelope amount) and all three envelopes (amp/filter/osc) drive real audible shaping — rendered tests show filter sweep brightness, envelope-driven amplitude contour, and osc-envelope pitch sweep."
     },
     {
       "id": "effects.graph",
@@ -96,26 +166,27 @@
     {
       "id": "effects.processing",
       "tests": ["src/audio/render-effects.test.ts"],
-      "notes": "Mod 1 (tremolo depth, auto-pan width), Mod 2 (phaser/chorus), Delay (repeats, feedback length, loop filtering), Amp/EQ (mid band ±15 dB, drive saturation, LP24), Compressor (dynamic range), Reverb (tail, dry/wet), Rotary (slow/fast rate, routing) all measurably change real offline-rendered audio; All FX Off matches dry; limiter bounds full-polyphony peaks."
+      "notes": "Rendered-audio proof that each of the six units (Mod 1, Mod 2, Delay, Amp Sim/EQ, Comp, Reverb) measurably changes the signal when engaged, and that bypass restores it."
     },
     {
       "id": "regression.phase1",
-      "tests": [
-        "src/model/keys.test.ts",
-        "src/components/keybed.test.tsx",
-        "src/components/surface.test.tsx",
-        "src/model/hardware.test.ts",
-        "src/components/decorative-controls.test.tsx",
-        "src/components/accessibility.test.tsx",
-        "src/components/chassis.test.tsx",
-        "src/audio/note-lifecycle.test.ts",
-        "src/input/inputs.test.tsx",
-        "src/input/midi.test.ts",
-        "src/audio/sustain-polyphony.test.ts",
-        "src/audio/status-cleanup.test.ts",
-        "src/App.test.tsx"
-      ],
-      "notes": "Every Phase 1 test file is retained and green; assertions evolved only where Phase 2 makes controls truthfully functional (documented in each file), never by deleting a behavior check."
+      "tests": ["src/components/chassis.test.tsx", "src/components/surface.test.tsx", "src/model/hardware.test.ts"],
+      "notes": "The sealed Phase 1 surface (layout, control inventory, chassis geometry) still passes untouched by every later showcase extension."
+    },
+    {
+      "id": "synth.voice-modes",
+      "tests": ["src/audio/synth-voice.test.ts", "src/audio/render-synth3.test.ts"],
+      "notes": "Part 3 of the Synth engine, voice half (spec: nord-stage-4.synth.json voice): per-layer voice.mode (Poly/Mono/Legato), priority (Off/Low/High), glide (0..127, constant-rate portamento via setTargetAtTime), unison (Off/1/2/3, detuned duplicate oscillator pairs reusing the piano unison pattern), and vibrato (Off/On/Wheel, a fixed 5.5 Hz per-layer pitch LFO whose depth is vibratoAmount or the live mod-wheel position). Mono always retriggers the single sounding voice's envelope on a new note; Legato reuses the sounding voice and glides its oscillator frequencies in place (no envelope retrigger, no new nodes) when notes overlap; priority Low/High makes the lower/higher of two held notes win the sounding voice while the loser waits on a held-note stack, and releasing the winner returns to the next-priority held note. VOICE MODE (Shift = priority), GLIDE, SYNTH UNISON and VIBRATO MODE are now functional. Rendered tests prove a Legato glide slides pitch continuously (zero-crossing rate rises across the glide) rather than stepping."
+    },
+    {
+      "id": "synth.arp-gate",
+      "tests": ["src/audio/synth-voice.test.ts", "src/audio/render-synth3.test.ts"],
+      "notes": "Part 3 of the Synth engine, arpeggiator half (spec: nord-stage-4.synth.json arpeggiatorGate): a section-level scheduler on the injected timer boundary (self-rescheduling setTimeout chain, cleared on ARP RUN off/dispose), rate 0..127 -> 30..300 quarter-note BPM or the master clock when synced (Shift + ARP RUN). Arp mode steps through the held-note set expanded over 1..4 octaves (RANGE) in Up/Down/Up-Down/Random order (Shift + ARP MODE), Random drawn from a deterministic xorshift RNG reseeded on every run-start; Poly mode retriggers every held note each step; Gate mode does not retrigger at all — it pulses the sounding voices' gain between full and a hardness floor (RANGE knob repurposed) with no new voices. KB HOLD keeps the held-note set (and the arp's cycle through it) alive after physical key-up; Panic and ARP RUN off clear it. Every step plays through the normal startSynthVoice path so zones and sustain stay consistent. ARP RUN, ARP MODE, ARP RATE, ARP RANGE and KB HOLD are now functional. Because the offline render harness's timer boundary is a no-op (voice-cleanup GC only), the rendered proof drives the exact onset sequence the scheduler produces through the same voice path at two different BPMs and shows a different onset count in the same window — the fake-level tests exercise the real scheduler class directly via injectable ManualTimers."
+    },
+    {
+      "id": "system.integration",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "A program capturing every functional engine — Piano, Organ, all three Synth layers (each with its own independent effect chain now, spec: \"their own effect chains\"), splits, scenes, morphs, the arpeggiator/gate and KB Hold — round-trips completely through Store/reload, and the restored state drives a real note through the engine without falling back."
     }
   ]
 }

@@ -87,10 +87,23 @@ body {
 }
 
 .bottom-rail {
+  position: relative;
   height: 6.5%;
   flex: none;
   background: linear-gradient(180deg, #4a141c 0%, var(--chassis-deep) 45%, #6d1e28 100%);
   box-shadow: inset 0 0.15cqw 0.2cqw rgba(0, 0, 0, 0.5);
+}
+
+.bottom-rail::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18%;
+  background: #0d0b0a;
+  box-shadow: inset 0 0.05cqw 0 rgba(255, 255, 255, 0.06);
+  pointer-events: none;
 }
 
 /* ------------------------------------------------------------- keybed -- */
@@ -117,7 +130,7 @@ body {
   position: relative;
   flex: 1;
   background: #1a1414;
-  box-shadow: inset 0 0.35cqw 0.45cqw rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0.55cqw 0.55cqw rgba(0, 0, 0, 0.62);
 }
 
 .key {
@@ -133,8 +146,8 @@ body {
 
 .white-key {
   height: 100%;
-  background: linear-gradient(180deg, #c9c7c2 0%, var(--key-white) 8%, #efeeea 55%, #e4e2dd 88%, #b9b7b2 97%, #8f8d89 100%);
-  border-left: 1px solid rgba(30, 26, 24, 0.55);
+  background: linear-gradient(180deg, #d8d8d5 0%, #f2f2ef 5%, #f6f6f3 55%, #f1f1ee 90%, #d9d8d4 96%, #b9b8b4 100%);
+  border-left: 1px solid rgba(40, 36, 32, 0.4);
   border-radius: 0 0 0.14cqw 0.14cqw;
   box-shadow: inset 0 -0.35cqw 0.3cqw rgba(0, 0, 0, 0.12);
 }
@@ -144,26 +157,49 @@ body {
 }
 
 .white-key[data-pressed='true'] {
-  background: linear-gradient(180deg, #b4b2ad 0%, #cfcdc8 12%, #dedcd7 60%, #cccac5 100%);
+  background: linear-gradient(180deg, #bcbcb9 0%, #d3d3d0 5%, #d6d6d3 55%, #d2d2cf 90%, #bdbcb9 96%, #a0a09c 100%);
   box-shadow: inset 0 0.25cqw 0.4cqw rgba(0, 0, 0, 0.28);
   transform: translateY(1.5%);
 }
 
 .black-key {
+  /* Keys are absolutely positioned by the key model (.key) — the ::after
+     nose anchors to that same absolute box; never override the position. */
   height: 61%;
   z-index: 2;
-  background: linear-gradient(180deg, #2a2a2a 0%, var(--key-black) 20%, #000 78%, #262626 92%, #3c3c3c 100%);
+  background: linear-gradient(180deg, #2b2b2b 0%, #111 25%, #0a0a0a 78%, #070707 100%);
   border-radius: 0 0 0.16cqw 0.16cqw;
   box-shadow:
     0 0.2cqw 0.25cqw rgba(0, 0, 0, 0.55),
-    inset 0.12cqw 0 0.1cqw rgba(255, 255, 255, 0.08),
-    inset -0.12cqw 0 0.1cqw rgba(255, 255, 255, 0.05);
+    inset 0.12cqw 0 0.1cqw rgba(255, 255, 255, 0.1),
+    inset -0.12cqw 0 0.1cqw rgba(255, 255, 255, 0.1);
+}
+
+/* Beveled front nose: blends up from the slab tone so it reads as the same
+   object (reference photo: a subtle glossy tip, not a detached blob). */
+.black-key::after {
+  content: '';
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 0;
+  height: 10%;
+  border-radius: 0 0 22% 22% / 0 0 42% 42%;
+  background: linear-gradient(180deg, rgba(13, 13, 13, 0) 0%, #191919 35%, #303030 70%, #1c1c1c 100%);
+  box-shadow:
+    inset 0.05cqw 0 0.05cqw rgba(255, 255, 255, 0.16),
+    inset -0.05cqw 0 0.05cqw rgba(255, 255, 255, 0.13);
+  pointer-events: none;
 }
 
 .black-key[data-pressed='true'] {
   background: linear-gradient(180deg, #161616 0%, #050505 60%, #1d1d1d 100%);
   transform: translateY(2.5%) scaleY(0.985);
   box-shadow: 0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.6);
+}
+
+.black-key[data-pressed='true']::after {
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0) 0%, #121212 35%, #232323 70%, #141414 100%);
 }
 
 .key:focus-visible {
@@ -256,6 +292,25 @@ body {
   color: var(--legend-dim);
 }
 
+/* Section-inspect/zoom affordance (narrow-legend-legibility): the plate
+   title doubles as a real button, visually identical to the plain span. */
+.plate-title-button {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.plate-title-button:focus-visible {
+  outline: 0.15cqw solid #57b7ff;
+  outline-offset: 0.15cqw;
+  border-radius: 0.1cqw;
+}
+
 .fx-focus {
   display: inline-flex;
   align-items: center;
@@ -345,6 +400,12 @@ body {
   width: 0.26cqw;
   height: 0.26cqw;
   border-radius: 0.08cqw;
+}
+
+/* Morph assignment range indicator (manual p. 39): LEDs spanning the
+   assigned start->end range render dimmed instead of fully on/off. */
+.led-ladder .led[data-range='true'] {
+  opacity: 0.5;
 }
 
 /* Buttons */
@@ -1422,21 +1483,21 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3cqw;
+  gap: 0.2cqw;
   min-height: 0;
 }
 
 .synth-top {
   flex: none;
   display: flex;
-  gap: 0.35cqw;
+  gap: 0.25cqw;
 }
 
 .synth-display-block {
   display: flex;
   flex-direction: column;
   gap: 0.2cqw;
-  width: 40%;
+  width: 38%;
   flex: none;
 }
 
@@ -1451,12 +1512,18 @@ body {
 
 .vibrato-box .legend,
 .voice-box .legend {
-  font-size: 0.26cqw;
-  max-width: 3.4cqw;
+  font-size: 0.24cqw;
+  max-width: 100%;
+}
+
+.voice-box .knob.small,
+.vibrato-box .knob.small {
+  width: 0.85cqw;
+  height: 0.85cqw;
 }
 
 .deck-section[data-section='synth'] .oled {
-  min-height: 3cqw;
+  min-height: 2.6cqw;
 }
 
 .deck-section[data-section='synth'] .oled .oled-name {
@@ -1466,6 +1533,11 @@ body {
 .synth-dials {
   display: flex;
   justify-content: space-around;
+}
+
+.synth-dials .encoder.small {
+  width: 0.85cqw;
+  height: 0.85cqw;
 }
 
 .synth-dial {
@@ -1478,7 +1550,7 @@ body {
 .mode-column {
   display: flex;
   flex-direction: column;
-  gap: 0.25cqw;
+  gap: 0.15cqw;
   align-items: center;
 }
 
@@ -1498,12 +1570,12 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25cqw;
+  gap: 0.15cqw;
 }
 
 .arp-row {
   display: flex;
-  gap: 0.12cqw;
+  gap: 0.08cqw;
   align-items: flex-start;
   width: 100%;
   min-width: 0;
@@ -1514,13 +1586,39 @@ body {
   min-width: 0;
 }
 
+/* Knob cells need more width than the button cells beside them. */
+.arp-row .knob-cell {
+  flex: 1.35 1 0;
+}
+
+.arp-row .arp-mode-cell {
+  flex: 0.85 1 0;
+}
+
+.arp-mode-cell .tiny-led-row {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.arp-row .knob.small {
+  width: 0.9cqw;
+  height: 0.9cqw;
+}
+
 .arp-box .legend {
-  font-size: 0.26cqw;
+  font-size: 0.22cqw;
   max-width: 100%;
 }
 
 .arp-box .panel-button .panel-button-cap {
   font-size: 0.26cqw;
+}
+
+.arp-box .panel-button.tiny,
+.voice-box .panel-button.tiny,
+.vibrato-box .panel-button.tiny {
+  min-width: 0.78cqw;
+  min-height: 0.6cqw;
 }
 
 .knob-cell {
@@ -1544,20 +1642,22 @@ body {
 
 .voice-vibrato-row {
   display: flex;
-  gap: 0.15cqw;
+  gap: 0.1cqw;
 }
 
 .voice-box,
 .vibrato-box {
   flex: 1;
   flex-direction: column;
+  gap: 0.06cqw;
+  padding: 0.34cqw 0.08cqw 0.08cqw;
 }
 
 .synth-bottom {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 0.2cqw;
+  gap: 0.15cqw;
   align-items: stretch;
 }
 
@@ -1571,19 +1671,19 @@ body {
 }
 
 .synth-bottom .panel-button.tiny {
-  min-width: 1cqw;
+  min-width: 0.85cqw;
   min-height: 0.7cqw;
 }
 
 .synth-bottom .knob,
 .synth-bottom .encoder {
-  width: 1.15cqw;
-  height: 1.15cqw;
+  width: 1.05cqw;
+  height: 1.05cqw;
 }
 
 .synth-bottom .knob.small {
-  width: 1cqw;
-  height: 1cqw;
+  width: 0.92cqw;
+  height: 0.92cqw;
 }
 
 .synth-bottom .group-box {
@@ -1615,7 +1715,6 @@ body {
 .lfo-box,
 .osc-box,
 .filter-box {
-  flex: 1;
   justify-content: flex-start;
 }
 
@@ -1701,18 +1800,38 @@ body {
 }
 
 .reverb-box .variation-cell .legend {
-  max-width: 7cqw;
+  max-width: 3.3cqw;
+}
+
+.reverb-box .fx-on-cell {
+  flex-direction: column;
+  gap: 0.04cqw;
 }
 
 .reverb-box,
 .comp-box {
-  gap: 0.05cqw 0.15cqw;
-  padding-top: 0.28cqw;
+  gap: 0.03cqw 0.12cqw;
+  padding-top: 0.24cqw;
 }
 
 .reverb-box .knob.small {
-  width: 1cqw;
-  height: 1cqw;
+  width: 0.9cqw;
+  height: 0.9cqw;
+}
+
+.reverb-box .legend,
+.comp-box .legend {
+  font-size: 0.26cqw;
+}
+
+.delay-box {
+  gap: 0.05cqw 0.12cqw;
+  padding-top: 0.28cqw;
+}
+
+.delay-box .knob.small {
+  width: 0.95cqw;
+  height: 0.95cqw;
 }
 
 .effects-grid .legend {
@@ -1767,6 +1886,46 @@ body {
   gap: 0.08cqw;
 }
 
+/* Morph destination indicator (manual p. 39): assigned controls get a green dot. */
+[data-morphed]::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #46d05a;
+  box-shadow: 0 0 3px rgba(70, 210, 90, 0.9);
+  pointer-events: none;
+}
+
+/* On-screen Control Pedal (the spec's virtual CC11 morph source). */
+.ctrl-pedal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.ctrl-pedal input[type='range'] {
+  width: 90px;
+  accent-color: #8a2f28;
+}
+
+/* Active split points render as thin markers above the keys (manual p. 39). */
+.keybed .split-marker {
+  position: absolute;
+  top: 0;
+  width: 0.35%;
+  height: 8%;
+  background: #c8342a;
+  border-radius: 0 0 2px 2px;
+  box-shadow: 0 0 3px rgba(220, 60, 40, 0.8);
+  z-index: 5;
+  pointer-events: none;
+}
+
 /* --------------------------------------------------------- status strip -- */
 
 .status-strip {
@@ -1787,6 +1946,51 @@ body {
   color: #a03024;
 }
 
+/* Minimal chrome: the informational strip collapses; essentials stay. */
+.chrome-essentials {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-basis: 100%;
+  justify-content: center;
+}
+
+.chrome-info {
+  display: contents;
+}
+
+.status-strip.chrome-minimal .chrome-info {
+  display: none;
+}
+
+.chrome-toggle {
+  appearance: none;
+  border: 1px solid #b9b3a9;
+  border-radius: 10px;
+  background: transparent;
+  color: #8a847b;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 1px 8px 2px;
+  cursor: pointer;
+}
+
+.chrome-toggle:hover {
+  color: #4a453f;
+  border-color: #8a847b;
+}
+
+.chrome-toggle[aria-pressed='true'] {
+  background: #d8d3ca;
+  color: #4a453f;
+}
+
+.chrome-toggle:focus-visible {
+  outline: 2px solid #d8a03c;
+  outline-offset: 1px;
+}
+
 /* On-screen sustain pedal (latching): the required UI sustain input. */
 .sustain-pedal {
   appearance: none;
@@ -1799,7 +2003,6 @@ body {
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 1px 8px 2px;
-  margin-right: 8px;
   cursor: pointer;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
 }
@@ -1880,4 +2083,85 @@ body {
 /* Last-edit readout line on the Program display. */
 .oled-line .oled-edit {
   opacity: 0.85;
+}
+
+/* --------------------------------------------------- section-zoom overlay -- */
+/* Additive, opt-in magnification (narrow-legend-legibility). Portaled under
+   .stage-app, so it never alters the default control-deck DOM/geometry the
+   chassis regression tests assert. The section renders again inside a fresh
+   container-query context (`.section-zoom-container`) that is much wider
+   than its usual slice of the instrument, so every cqw-sized legend/control
+   in the cloned section recomputes larger in absolute pixels. */
+
+.section-zoom-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 6, 6, 0.72);
+  padding: 4vh 4vw;
+}
+
+.section-zoom-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 96vw;
+  max-height: 92vh;
+  background: #1b1616;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.section-zoom-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #262020;
+  color: #f2efe9;
+  font-family: 'Helvetica Neue', Arial, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.section-zoom-close {
+  appearance: none;
+  border: none;
+  background: #3c3535;
+  color: #f2efe9;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.section-zoom-close:focus-visible {
+  outline: 2px solid #57b7ff;
+  outline-offset: 2px;
+}
+
+.section-zoom-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #100d0d;
+  padding: 24px;
+}
+
+.section-zoom-container {
+  container-type: inline-size;
+  width: 1600px;
+  height: 480px;
+  display: flex;
+}
+
+.section-zoom-container .deck-section {
+  width: 100% !important;
 }

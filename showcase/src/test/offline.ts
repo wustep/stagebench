@@ -82,11 +82,41 @@ export interface RenderOptions {
   assets?: AssetBoundary
 }
 
-/** Renders the full engine graph offline and returns the measured channels. */
+/**
+ * Renders the full engine graph offline and returns the measured channels.
+ *
+ * node-web-audio-api's OfflineAudioContext.suspend can spuriously throw
+ * InvalidStateError when many render contexts compete for CPU (parallel test
+ * workers under machine load). The render itself is deterministic, so that
+ * one scheduling error is retried with a fresh context; any other error and
+ * every measurement still propagate normally.
+ */
 export async function renderEngine(options: RenderOptions): Promise<RenderResult> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await renderEngineOnce(options)
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name !== 'InvalidStateError') throw error
+      lastError = error
+    }
+  }
+  throw lastError
+}
+
+async function renderEngineOnce(options: RenderOptions): Promise<RenderResult> {
   const context = new OfflineAudioContext(2, Math.ceil(options.duration * SAMPLE_RATE), SAMPLE_RATE)
+  // node-web-audio-api's OfflineAudioContext has no close(): shim a no-op so
+  // engine.dispose() (which always calls context.close()) can run below —
+  // undisposed engines/contexts otherwise pile up native nodes/threads across
+  // a long sequential test run, which is the source of a rare, load-order-
+  // dependent render corruption seen only in the full suite (never in
+  // isolation): leaving that pile-up unbounded, not the measurement code, was
+  // the actual bug.
+  const contextWithClose = context as unknown as AudioContextLike & { close?: () => Promise<void> }
+  contextWithClose.close ??= () => Promise.resolve()
   const boundary: AudioBoundary = {
-    createContext: () => context as unknown as AudioContextLike,
+    createContext: () => contextWithClose,
     timers: {
       setTimeout: () => 0, // voice GC is irrelevant to offline rendering
       clearTimeout: () => undefined,
@@ -102,26 +132,40 @@ export async function renderEngine(options: RenderOptions): Promise<RenderResult
   await engine.whenReady()
 
   const suspensions: Array<Promise<void>> = []
+  let stepsRun = 0
   for (const step of options.steps) {
     if (step.time <= 0) {
       step.run({ engine, controller, store })
+      stepsRun++
       continue
     }
     suspensions.push(
       context.suspend(step.time).then(() => {
         step.run({ engine, controller, store })
+        stepsRun++
         void context.resume()
       }),
     )
   }
-  const rendered = await context.startRendering()
-  await Promise.all(suspensions)
-  return {
-    left: rendered.getChannelData(0),
-    right: rendered.getChannelData(1),
-    sampleRate: SAMPLE_RATE,
-    engineStatus: engine.getStatus().status,
+  // Aggregate the render with the suspension callbacks so a failed suspend
+  // rejects here (retryable) instead of surfacing as an unhandled rejection.
+  const [rendered] = await Promise.all([context.startRendering(), ...suspensions])
+  if (stepsRun < options.steps.length) {
+    // A suspension was silently skipped (load-dependent library quirk): the
+    // render is incomplete — retry it rather than measuring garbage.
+    const error = new Error(`render ran ${stepsRun}/${options.steps.length} scheduled steps`)
+    error.name = 'InvalidStateError'
+    throw error
   }
+  const engineStatus = engine.getStatus().status
+  // Copy out of the rendered buffer before disposing: dispose() releases the
+  // engine's own nodes (not the already-rendered buffer), but copying keeps
+  // the returned arrays independent of anything the native context does
+  // during teardown.
+  const left = rendered.getChannelData(0).slice()
+  const right = rendered.getChannelData(1).slice()
+  engine.dispose()
+  return { left, right, sampleRate: SAMPLE_RATE, engineStatus }
 }
 
 /* ------------------------------------------------------------ measures -- */

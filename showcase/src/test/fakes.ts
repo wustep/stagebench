@@ -15,7 +15,9 @@ import type {
   MidiBoundary,
   MidiPortLike,
   OscillatorNodeLike,
+  PeriodicWaveLike,
   StereoPannerNodeLike,
+  StorageBoundary,
   TimerBoundary,
   WaveShaperNodeLike,
 } from '../audio/boundaries'
@@ -117,6 +119,13 @@ export class FakeGain extends FakeNode implements GainNodeLike {
   }
 }
 
+export class FakePeriodicWave implements PeriodicWaveLike {
+  constructor(
+    readonly real: Float32Array,
+    readonly imag: Float32Array,
+  ) {}
+}
+
 export class FakeOscillator extends FakeNode implements OscillatorNodeLike {
   type = 'sine'
   frequency = new FakeParam(440)
@@ -124,6 +133,8 @@ export class FakeOscillator extends FakeNode implements OscillatorNodeLike {
   started = false
   stopped = false
   stopTime: number | null = null
+  /** Set by setPeriodicWave (Sync/Multi/Super waveforms use a custom wave, not a built-in `type`). */
+  periodicWave: FakePeriodicWave | null = null
   constructor(context: FakeAudioContext) {
     super(context, 'oscillator')
   }
@@ -134,12 +145,17 @@ export class FakeOscillator extends FakeNode implements OscillatorNodeLike {
     this.stopped = true
     this.stopTime = when ?? this.context.currentTime
   }
+  setPeriodicWave(wave: PeriodicWaveLike) {
+    this.type = 'custom'
+    this.periodicWave = wave as FakePeriodicWave
+  }
 }
 
 export class FakeBufferSource extends FakeNode implements AudioBufferSourceNodeLike {
   buffer: AudioBufferLike | null = null
   playbackRate = new FakeParam(1)
   detune = new FakeParam(0)
+  loop = false
   started = false
   stopped = false
   stopTime: number | null = null
@@ -265,6 +281,9 @@ export class FakeAudioContext implements AudioContextLike {
   createStereoPanner(): StereoPannerNodeLike {
     return new FakeStereoPanner(this)
   }
+  createPeriodicWave(real: Float32Array, imag: Float32Array): PeriodicWaveLike {
+    return new FakePeriodicWave(real, imag)
+  }
   createDynamicsCompressor?: () => DynamicsCompressorNodeLike
   decodeAudioData(_bytes: ArrayBuffer): Promise<AudioBufferLike> {
     return Promise.resolve(new FakeAudioBuffer(2, 4410, this.sampleRate))
@@ -377,6 +396,19 @@ export function fakeAudioBoundary(options: FakeAudioContextOptions & { failConte
  * content is deterministic per path — enough for state/lifecycle tests. Real
  * decoding/rendering is covered by the offline node-web-audio-api suite.
  */
+/* ------------------------------------------------------------ fake storage -- */
+
+export function fakeStorageBoundary(initial: Record<string, string> = {}): StorageBoundary & {
+  data: Map<string, string>
+} {
+  const data = new Map(Object.entries(initial))
+  return {
+    data,
+    load: (key) => data.get(key) ?? null,
+    save: (key, value) => void data.set(key, value),
+  }
+}
+
 export function fakeAssetBoundary(options: { fail?: boolean | ((path: string) => boolean) } = {}): AssetBoundary & {
   loaded: string[]
 } {

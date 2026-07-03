@@ -4,12 +4,17 @@ import type { SectionId } from './variant'
  * Normalized, typed hardware model for the Nord Stage 4 control deck.
  * Every visible physical panel input has a stable ID and an accessible name.
  *
- * Phase 2 contract: Piano-section, Layer-Effects, Rotary, Master Level,
- * pitch stick, Shift and Panic controls are FUNCTIONAL — they write canonical
+ * Contract: nearly every control is FUNCTIONAL — it writes canonical
  * instrument state that the audio engine applies to the live signal graph.
- * Every other control (Organ, Synth, Program/Morph — Phase 3 scope) remains
- * truthfully DECORATIVE: it moves or presses and exposes accessible
- * presentation state, but has no effect on audio or canonical state.
+ * This now spans Piano, Organ (all six models), the complete Synth section
+ * (oscillators, filter, envelopes, LFO, voice modes, arpeggiator/gate),
+ * Layer Effects (per-layer piano/organ-shared/synth-layer chains), Rotary,
+ * Master Level, pitch stick, Shift/Panic, and Programs/scenes/splits/morphs/
+ * master clock/transpose. A small, truthfully DECORATIVE remainder moves or
+ * presses and exposes accessible presentation state but has no audio effect,
+ * matching spec exclusions: Synth Mode's Extern/Samples positions, the
+ * preset-library buttons, the Prog View/Section Edit/Layer Init/Mon·Copy
+ * menus, Morph A.T. (no browser aftertouch), and the Organ preset button.
  */
 export type ControlType = 'knob' | 'encoder' | 'button' | 'fader' | 'drawbar' | 'wheel' | 'stick'
 
@@ -49,17 +54,43 @@ interface ControlSeed {
 }
 
 /**
- * Controls with canonical, audible Phase 2 behavior. Everything else stays
- * truthfully decorative until Phase 3.
+ * Controls with canonical, audible behavior. Everything else stays
+ * truthfully decorative until the Synth/Program scope is built.
  */
 export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   // Performance / master / pitch
   'perf-master-level',
   'perf-pitch-stick',
-  // Rotary Speaker (single instance, routed via Amp Sim/EQ "To Rotary")
+  // Rotary Speaker (single instance; Piano routes via Amp Sim/EQ "To Rotary",
+  // the Organ via the strip's ORGAN source button)
   'rotary-drive',
   'rotary-speed',
   'rotary-stop-mode',
+  'rotary-source',
+  // Organ section — all controls except the spec-excluded preset button
+  'organ-on',
+  'organ-level-a',
+  'organ-level-b',
+  'organ-layer-a',
+  'organ-layer-b',
+  'organ-model',
+  'organ-vib-select',
+  'organ-vib-on',
+  'organ-perc-volume',
+  'organ-perc-decay',
+  'organ-perc-harmonic',
+  'organ-perc-on',
+  'organ-octave-down',
+  'organ-octave-up',
+  'organ-drawbar-1',
+  'organ-drawbar-2',
+  'organ-drawbar-3',
+  'organ-drawbar-4',
+  'organ-drawbar-5',
+  'organ-drawbar-6',
+  'organ-drawbar-7',
+  'organ-drawbar-8',
+  'organ-drawbar-9',
   // Piano section — all controls
   'piano-on',
   'piano-level-a',
@@ -76,9 +107,71 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'piano-model',
   'piano-octave-down',
   'piano-octave-up',
-  // Program section: Panic (this phase) and Shift (modifier for Global mode)
+  // Program section: Panic, Shift (Global-mode / SUSTPED / Exit modifier),
+  // and the Programs cluster (32 slots + 8 Live, store flows, navigation)
   'panic',
   'shift',
+  'store',
+  'store-as',
+  'program-dial',
+  'page-left',
+  'page-right',
+  'live-mode',
+  'solo-undo',
+  'layer-scene',
+  'split-onset',
+  'mstclk-tap',
+  'transpose-onset',
+  'morph-wheel',
+  'morph-ctrlped',
+  'perf-mod-wheel',
+  'program-1',
+  'program-2',
+  'program-3',
+  'program-4',
+  'program-5',
+  'program-6',
+  'program-7',
+  'program-8',
+  // Synth section (sources/layers, filters/envelopes/LFO, and now voice
+  // modes + the arpeggiator/gate — every Synth control is functional except
+  // Synth Mode's Extern/Samples positions, which stay spec-excluded)
+  'synth-on',
+  'synth-level-a',
+  'synth-level-b',
+  'synth-level-c',
+  'synth-layer-a',
+  'synth-layer-b',
+  'synth-layer-c',
+  'synth-octave-down',
+  'synth-octave-up',
+  'waveform-select',
+  'synth-dial-1',
+  'synth-dial-2',
+  'synth-dial-3',
+  'osc-ctrl',
+  'amp-envelope',
+  'filter-type',
+  'filter-envelope',
+  'filter-on',
+  'filter-freq',
+  'filter-res',
+  'filter-env-amt',
+  'osc-envelope',
+  'osc-env-amt',
+  'lfo-waveform',
+  'lfo-rate',
+  'lfo-mod-amt',
+  'voice-mode',
+  'glide',
+  'synth-unison',
+  'vibrato-mode',
+  'arp-run',
+  'arp-mode',
+  'arp-rate',
+  'arp-range',
+  'kb-hold',
+  'fx-focus-synth',
   // Layer Effects section
   'effects-on',
   'all-fx-off',
@@ -185,12 +278,12 @@ const pianoControls = section('piano', [
 ])
 
 const programControls = section('program', [
-  push('morph-wheel', 'Morph Assign Wheel', 'Morph Assign'),
+  toggle('morph-wheel', 'Morph Assign Wheel', 'Morph Assign'),
   push('morph-at', 'Morph Assign Aftertouch', 'Morph Assign'),
-  push('morph-ctrlped', 'Morph Assign Control Pedal', 'Morph Assign'),
-  push('split-onset', 'Split On/Set', 'Split'),
+  toggle('morph-ctrlped', 'Morph Assign Control Pedal', 'Morph Assign'),
+  toggle('split-onset', 'Split On/Set', 'Split'),
   push('mstclk-tap', 'Master Clock Tap/Set', 'Mst Clk'),
-  push('transpose-onset', 'Transpose On/Set', 'Transp'),
+  toggle('transpose-onset', 'Transpose On/Set', 'Transp'),
   push('panic', 'Panic', 'Transp'),
   push('prog-view', 'Prog View'),
   push('store', 'Store'),
@@ -219,17 +312,17 @@ const synthControls = section('synth', [
   push('synth-mode', 'Synth Mode Select', 'Mode'),
   knob('arp-rate', 'Arpeggiator Rate/Time', 'Arpeggiator/Gate'),
   push('arp-mode', 'Arpeggiator Mode', 'Arpeggiator/Gate'),
-  knob('arp-range', 'Arpeggiator Range', 'Arpeggiator/Gate'),
+  { ...knob('arp-range', 'Arpeggiator Range', 'Arpeggiator/Gate'), initial: 0 },
   push('arp-menu', 'Arpeggiator Menu', 'Arpeggiator/Gate'),
   push('voice-mode', 'Voice Mode', 'Voice'),
-  knob('glide', 'Glide', 'Voice'),
+  { ...knob('glide', 'Glide', 'Voice'), initial: 0 },
   push('vibrato-mode', 'Synth Vibrato Mode', 'Vibrato'),
   push('vibrato-menu', 'Synth Vibrato Menu', 'Vibrato'),
   push('waveform-select', 'Waveform Select'),
   push('sound-init', 'Sound Init'),
   push('lfo-waveform', 'LFO Waveform', 'LFO'),
   knob('lfo-rate', 'LFO Rate/Time', 'LFO'),
-  knob('lfo-mod-amt', 'LFO Mod Amount', 'LFO'),
+  { ...knob('lfo-mod-amt', 'LFO Mod Amount', 'LFO'), initial: 0 },
   push('osc-pitch-smp', 'Oscillator Pitch/Sample', 'Oscillators'),
   push('osc-envelope', 'Oscillator Envelope', 'Oscillators'),
   knob('osc-ctrl', 'Oscillator Control', 'Oscillators'),
@@ -237,10 +330,10 @@ const synthControls = section('synth', [
   push('filter-type', 'Filter Type', 'Filter'),
   push('filter-envelope', 'Filter Envelope', 'Filter'),
   toggle('filter-on', 'Filter On', 'Filter'),
-  knob('filter-freq', 'Filter Frequency', 'Filter'),
-  knob('filter-res', 'Filter Resonance', 'Filter'),
+  { ...knob('filter-freq', 'Filter Frequency', 'Filter'), initial: 127 },
+  { ...knob('filter-res', 'Filter Resonance', 'Filter'), initial: 0 },
   knob('filter-env-amt', 'Filter Envelope Amount', 'Filter'),
-  push('amp-envelope', 'Amp Envelope', 'Amp'),
+  toggle('amp-envelope', 'Amp Envelope', 'Amp'),
   push('synth-unison', 'Synth Unison', 'Unison'),
   fader('synth-level-a', 'Synth Layer A Level'),
   fader('synth-level-b', 'Synth Layer B Level'),

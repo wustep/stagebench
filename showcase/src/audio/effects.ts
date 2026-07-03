@@ -17,6 +17,7 @@ import {
   type Mod2State,
   type ReverbState,
   type RotarySpeed,
+  type VibratoType,
 } from '../state/instrument'
 
 /**
@@ -739,6 +740,44 @@ export interface RotaryUnit {
   readonly output: AudioNodeLike
   update(state: RotaryState, now: number): void
   dispose(): void
+}
+
+/* --------------------------------------------- Organ vib/chorus scanner -- */
+
+export interface ScannerState {
+  type: VibratoType
+}
+
+/**
+ * Organ vibrato/chorus scanner approximation (manual p. 19): a modulated
+ * delay line. Vibrato (V1-V3) outputs the modulated signal only; Chorus
+ * (C1-C3) mixes it with the original. Depth increases across 1-3; V1 and C1
+ * are audibly distinct effects (wet-only pitch wobble vs dry+wet shimmer).
+ */
+export function createScanner(ctx: AudioContextLike): EffectUnit<ScannerState> {
+  const shell = makeShell(ctx)
+  const delay = ctx.createDelay(0.05)
+  delay.delayTime.value = 0.0045
+  shell.wetIn.connect(delay)
+  delay.connect(shell.wetOut)
+  const lfo = makeLfo(ctx, delay.delayTime)
+  lfo.osc.frequency.value = 6.9 // classic scanner rate
+
+  return {
+    input: shell.input,
+    output: shell.output,
+    update(state, on, now) {
+      const level = Number(state.type[1]) // 1..3
+      const chorus = state.type[0] === 'C'
+      setParam(lfo.depth.gain, 0.0005 + level * 0.0009, now)
+      if (chorus) shell.setActive(on, 1, 0.5 + level * 0.12, now)
+      else shell.setActive(on, 0.0001, 1, now)
+    },
+    dispose() {
+      stopAndDisconnect(lfo.nodes)
+      shell.dispose([delay])
+    },
+  }
 }
 
 /**

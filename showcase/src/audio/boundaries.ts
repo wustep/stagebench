@@ -23,12 +23,17 @@ export interface GainNodeLike extends AudioNodeLike {
   gain: AudioParamLike
 }
 
+/** Opaque handle for a custom periodic waveform built from Fourier coefficients.
+ *  Never inspected — only round-tripped from createPeriodicWave to setPeriodicWave. */
+export type PeriodicWaveLike = object
+
 export interface OscillatorNodeLike extends AudioNodeLike {
   type: string
   frequency: AudioParamLike
   detune: AudioParamLike
   start(when?: number): void
   stop(when?: number): void
+  setPeriodicWave(wave: PeriodicWaveLike): void
 }
 
 export interface BiquadFilterNodeLike extends AudioNodeLike {
@@ -58,6 +63,7 @@ export interface AudioBufferSourceNodeLike extends AudioNodeLike {
   buffer: AudioBufferLike | null
   playbackRate: AudioParamLike
   detune: AudioParamLike
+  loop: boolean
   start(when?: number, offset?: number): void
   stop(when?: number): void
 }
@@ -96,6 +102,7 @@ export interface AudioContextLike {
   createConvolver(): ConvolverNodeLike
   createStereoPanner(): StereoPannerNodeLike
   createDynamicsCompressor?(): DynamicsCompressorNodeLike
+  createPeriodicWave(real: Float32Array, imag: Float32Array): PeriodicWaveLike
   decodeAudioData(bytes: ArrayBuffer): Promise<AudioBufferLike>
 }
 
@@ -146,6 +153,33 @@ export function realAssetBoundary(): AssetBoundary {
       const response = await fetch(`${base}${path}`)
       if (!response.ok) throw new Error(`Sample fetch failed (${response.status}): ${path}`)
       return response.arrayBuffer()
+    },
+  }
+}
+
+/* -------------------------------------------------------------- storage -- */
+
+/** Injectable persistence for programs (Live slots must survive reload). */
+export interface StorageBoundary {
+  load(key: string): string | null
+  save(key: string, value: string): void
+}
+
+export function realStorageBoundary(): StorageBoundary {
+  return {
+    load(key) {
+      try {
+        return window.localStorage.getItem(key)
+      } catch {
+        return null // storage denied (private mode / sandbox): programs stay in-memory
+      }
+    },
+    save(key, value) {
+      try {
+        window.localStorage.setItem(key, value)
+      } catch {
+        /* storage denied: programs stay in-memory */
+      }
     },
   }
 }

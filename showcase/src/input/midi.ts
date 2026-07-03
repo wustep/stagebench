@@ -17,6 +17,8 @@ export interface MidiHandlers {
   setSostenuto?(down: boolean): void
   /** CC67 soft pedal. */
   setSoft?(down: boolean): void
+  /** CC11 expression — continuous 0..1; drives the Control Pedal morph source. */
+  setControlPedal?(value: number): void
   /** Called when the active device disappears so owned notes can be cleaned up. */
   onDisconnectCleanup(): void
 }
@@ -24,6 +26,7 @@ export interface MidiHandlers {
 const NOTE_ON = 0x90
 const NOTE_OFF = 0x80
 const CONTROL_CHANGE = 0xb0
+const CC_EXPRESSION = 11
 const CC_SUSTAIN = 64
 const CC_SOSTENUTO = 66
 const CC_SOFT = 67
@@ -129,6 +132,7 @@ export class MidiInputManager {
       if (data[1] === CC_SUSTAIN) this.handlers.setSustain(data[2]! / 127)
       else if (data[1] === CC_SOSTENUTO) this.handlers.setSostenuto?.(data[2]! >= 64)
       else if (data[1] === CC_SOFT) this.handlers.setSoft?.(data[2]! >= 64)
+      else if (data[1] === CC_EXPRESSION) this.handlers.setControlPedal?.(data[2]! / 127)
     }
   }
 
