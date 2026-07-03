@@ -282,3 +282,76 @@ describe('splits.zones — engine routing and panel editing', () => {
     expect(state.layers.A.zone).toEqual({ from: 1, to: 1 })
   })
 })
+
+/**
+ * SOLO (manual p. 18): "Press the On button for roughly half a second to
+ * perform a SOLO operation, which activates only [that section]" — either by
+ * holding a section's ON button (PanelButton's holdAction) or, for
+ * keyboards that can't long-press, Shift + click on the same button.
+ */
+describe('solo — activates only the pressed section', () => {
+  it('soloSection round-trips through the program snapshot and sets exactly one section on', () => {
+    const store = new InstrumentStore()
+    store.setOrganSectionOn(true)
+    store.setSynthSectionOn(true)
+    expect(store.getState().piano.sectionOn).toBe(true) // default on
+    store.soloSection('organ')
+    let state = store.getState()
+    expect(state.piano.sectionOn).toBe(false)
+    expect(state.organ.sectionOn).toBe(true)
+    expect(state.synth.sectionOn).toBe(false)
+    expect(state.lastEdit).toBe('Solo Organ')
+    expect(state.programs.dirty).toBe(true) // sectionOn fields are snapshot state
+
+    store.soloSection('synth')
+    state = store.getState()
+    expect(state.piano.sectionOn).toBe(false)
+    expect(state.organ.sectionOn).toBe(false)
+    expect(state.synth.sectionOn).toBe(true)
+
+    // Round-trips through Store/recall like any other snapshot field.
+    store.storePress()
+    store.storePress() // store into 1.1
+    store.setPianoSectionOn(true) // dirty the live state away from the stored solo
+    store.selectProgram(1)
+    store.selectProgram(0)
+    expect(store.getState().synth.sectionOn).toBe(true)
+    expect(store.getState().piano.sectionOn).toBe(false)
+  })
+
+  it('Shift + click on a section ON button SOLOs it (keyboard-accessible path)', () => {
+    renderApp()
+    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
+    const organOn = screen.getByRole('button', { name: 'Organ Section On' })
+    fireEvent.click(organOn) // Organ on (Piano already on by default)
+    fireEvent.click(shift)
+    fireEvent.click(organOn) // Shift + click SOLOs Organ
+    fireEvent.click(shift)
+    expect(screen.getByTestId('oled-edit-line').textContent).toBe('Solo Organ')
+    // A plain click still performs the normal on/off toggle.
+    fireEvent.click(organOn)
+    expect(screen.getByTestId('oled-edit-line').textContent).toBe('Organ Section Off')
+  })
+
+  it('holding the ON button ~500ms SOLOs; a quick click keeps the normal toggle', async () => {
+    renderApp()
+    const pianoOn = screen.getByRole('button', { name: 'Piano Section On' })
+    const organOn = screen.getByRole('button', { name: 'Organ Section On' })
+    fireEvent.click(organOn) // Organ on too, so solo has something to turn off
+
+    // A quick click (well under the hold threshold) keeps the normal toggle.
+    fireEvent.pointerDown(pianoOn, { pointerId: 1 })
+    fireEvent.pointerUp(pianoOn, { pointerId: 1 })
+    fireEvent.click(pianoOn)
+    expect(screen.getByTestId('oled-edit-line').textContent).toBe('Piano Section Off')
+    fireEvent.click(pianoOn) // back on
+
+    // A held press (>= 500ms) fires SOLO instead, and suppresses the trailing click's toggle.
+    fireEvent.pointerDown(pianoOn, { pointerId: 1 })
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    fireEvent.pointerUp(pianoOn, { pointerId: 1 })
+    fireEvent.click(pianoOn)
+    expect(screen.getByTestId('oled-edit-line').textContent).toBe('Solo Piano')
+    expect(screen.getByRole('button', { name: 'Organ Section On' })).not.toHaveAttribute('data-lit')
+  }, 10000)
+})

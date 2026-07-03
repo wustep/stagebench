@@ -43,11 +43,13 @@ describe('visual.control-inventory — normalized hardware model', () => {
     // oscillator envelope (amount + Env To Pitch), the LFO (waveform/rate/
     // mod amt/destination via dial 3/clock sync), voice modes (mode/
     // priority/glide/unison/vibrato, now including the optional Delayed/
-    // Pedal vibrato modes on the same cycle), the arpeggiator/gate (run/
-    // mode/direction/rate/range/hold via KB Hold), and the optional Sound
-    // Init and Synth Mode (Analog<->Samples cycle) are all functional now.
-    // Only Synth Mode's Extern position stays spec-excluded (unreachable
-    // from the button, which cycles only the two real modes).
+    // Pedal vibrato modes on the same cycle), the VIBRATO MENU button (spec
+    // voice.vibrato.menu: latches dials 1/2 onto Rate/Amount editing), the
+    // arpeggiator/gate (run/mode/direction/rate/range/hold via KB Hold), and
+    // the optional Sound Init and Synth Mode (Analog<->Samples cycle) are
+    // all functional now. Only Synth Mode's Extern position stays
+    // spec-excluded (unreachable from the button, which cycles only the two
+    // real modes).
     const synthFunctional = new Set([
       'synth-on',
       'synth-level-a',
@@ -81,6 +83,7 @@ describe('visual.control-inventory — normalized hardware model', () => {
       'glide',
       'synth-unison',
       'vibrato-mode',
+      'vibrato-menu',
       'arp-run',
       'arp-mode',
       'arp-rate',
@@ -106,7 +109,10 @@ describe('visual.control-inventory — normalized hardware model', () => {
 
   it('orders the six sections with the measured width fractions', () => {
     expect(SECTIONS.map((s) => s.id)).toEqual(['performance', 'organ', 'piano', 'program', 'synth', 'effects'])
-    expect(SECTIONS.map((s) => s.fraction)).toEqual([0.13, 0.21, 0.15, 0.09, 0.21, 0.21])
+    // Pixel-measured from reference/nord-stage-4-73.jpg (red-vs-slate column
+    // segmentation): the Piano section is genuinely narrow (~8.5%) and the
+    // Program strip wide (~12.5%) — the earlier 15%/9% split was mismeasured.
+    expect(SECTIONS.map((s) => s.fraction)).toEqual([0.14, 0.2, 0.085, 0.125, 0.25, 0.2])
     expect(SECTIONS.reduce((sum, s) => sum + s.fraction, 0)).toBeCloseTo(1)
   })
 

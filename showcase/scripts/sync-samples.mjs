@@ -140,6 +140,26 @@ for (const spec of [
       'GM Vibraphone (mallet character, per the spec\'s Misc source rule), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/011-vibraphone. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
     license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
   },
+  {
+    folder: '006-harpsichord',
+    id: 'clav-harpsichord',
+    type: 'Clav',
+    name: 'Harpsichord',
+    dir: 'harpsichord',
+    source:
+      'GM Harpsichord (plucked-string harpsichord character; the spec\'s Clav source rule allows clavinet or harpsichord — this is a second, audibly distinct Clav-type model), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/006-harpsichord. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
+    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
+  },
+  {
+    folder: '012-marimba',
+    id: 'misc-marimba',
+    type: 'Misc',
+    name: 'Marimba',
+    dir: 'marimba',
+    source:
+      'GM Marimba (mallet character; the spec\'s Misc source rule names marimba/vibraphone — this is a second, audibly distinct Misc-type model), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/012-marimba. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
+    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
+  },
 ]) {
   const sourceDir = join(root, 'node_modules', 'web-music-score-samples', 'samples', spec.folder)
   const dir = join(out, spec.dir)

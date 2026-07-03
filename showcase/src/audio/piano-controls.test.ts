@@ -158,6 +158,22 @@ describe('piano.velocity-controls', () => {
     sources.forEach((s, i) => expect(s.playbackRate.value).toBeCloseTo(baseRates[i]! * Math.pow(2, 2 / 12), 5))
   })
 
+  it('Shift + Piano Model dial shows the model list view for Clav (Clavinet/Harpsichord), spec.scope.optional', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Grand -> Upright
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Upright -> Electric
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Electric -> Clav
+    expect(screen.getByTestId('oled-piano-line').textContent).toMatch(/Clavinet/)
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    const dial = screen.getByRole('slider', { name: 'Piano Model Dial' })
+    fireEvent.keyDown(dial, { key: 'End' }) // dial to the last (second) model — opens the model list view
+    expect(screen.getByTestId('oled-model-list-1').textContent).toContain('Harpsichord')
+    expect(screen.getByTestId('oled-model-list-0').textContent).toContain('Clavinet')
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' })) // dropping Shift closes the list view
+    expect(screen.queryByTestId('oled-model-list-0')).toBeNull()
+    expect(screen.getByTestId('oled-piano-line').textContent).toMatch(/Harpsichord/)
+  })
+
   it('panel piano controls update LEDs, display feedback and canonical state together', () => {
     renderApp()
     fireEvent.click(screen.getByRole('button', { name: 'KB Touch Select' }))

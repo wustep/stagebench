@@ -149,6 +149,10 @@ export const PitchStick = memo(function PitchStick({ store, id, className }: Con
   )
 })
 
+/** Press-and-hold duration (manual p. 18: "roughly half a second") before a
+ *  holdAction fires instead of the normal click toggle. */
+const HOLD_MS = 500
+
 export interface PanelButtonProps {
   store: PresentationStore
   id: string
@@ -156,12 +160,47 @@ export interface PanelButtonProps {
   /** Small legend printed on/next to the button. */
   children?: ReactNode
   led?: 'green' | 'red' | 'yellow' | 'none'
+  /** Fires when the button is held for HOLD_MS instead of clicked (manual p.
+   *  18 SOLO gesture); a quick click still performs the normal toggle. */
+  holdAction?: () => void
 }
 
-export const PanelButton = memo(function PanelButton({ store, id, className, children, led = 'none' }: PanelButtonProps) {
+export const PanelButton = memo(function PanelButton({ store, id, className, children, led = 'none', holdAction }: PanelButtonProps) {
   const control = getControl(id)
   const lit = usePresentationToggle(store, id)
   const latching = control.latching === true
+  const holdTimer = useRef<number | null>(null)
+  const held = useRef(false)
+
+  const clearHoldTimer = () => {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
+  }
+
+  const onPointerDown = holdAction
+    ? () => {
+        held.current = false
+        holdTimer.current = window.setTimeout(() => {
+          held.current = true
+          holdTimer.current = null
+          holdAction()
+        }, HOLD_MS)
+      }
+    : undefined
+
+  const onPointerUp = holdAction ? clearHoldTimer : undefined
+
+  const onClick = () => {
+    // A hold already fired the solo action; suppress the trailing click toggle.
+    if (held.current) {
+      held.current = false
+      return
+    }
+    store.toggle(id)
+  }
+
   return (
     <button
       type="button"
@@ -171,7 +210,10 @@ export const PanelButton = memo(function PanelButton({ store, id, className, chi
       aria-label={control.label}
       aria-pressed={latching ? lit : undefined}
       data-lit={latching && lit ? 'true' : undefined}
-      onClick={() => store.toggle(id)}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
+      onClick={onClick}
     >
       {led !== 'none' && <span className={`btn-led led-${led}`} data-on={latching && lit ? 'true' : 'false'} aria-hidden="true" />}
       <span className="panel-button-cap" aria-hidden="true">{children}</span>

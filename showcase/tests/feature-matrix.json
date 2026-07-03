@@ -11,7 +11,7 @@
     {
       "id": "visual.section-layout",
       "tests": ["src/components/surface.test.tsx", "src/model/hardware.test.ts"],
-      "notes": "Six ordered sections at 13/21/15/9/21/21% widths, 54/46 deck/keybed split via inline styles, continuous single-chassis DOM with rails and end cheeks."
+      "notes": "Six ordered sections at 14/20/8.5/12.5/25/20% of the deck content width (pixel-measured from the reference photo; the deck keeps a ~4.6% bare-red right margin), 54/46 deck/keybed split via inline styles, continuous single-chassis DOM with rails and end cheeks."
     },
     {
       "id": "visual.control-inventory",
@@ -60,8 +60,8 @@
     },
     {
       "id": "piano.instrument-library",
-      "tests": ["src/audio/library.test.ts", "src/audio/render-library.test.ts"],
-      "notes": "All six selectable piano types now bundle a recorded model — Grand (Salamander CC BY 3.0), Upright/Electric/Digital/Clav/Misc from the MIT MIDI-JS Soundfonts collection (Honky-tonk, Electric Piano 1, Electric Piano 2, Clavinet, Vibraphone) — all files on disk and offline, 30 roots x 3 recorded velocity layers on the grand and 19 roots x 1 layer elsewhere; rendered-audio tests prove all six are audibly distinct and the fallback is synthesized and labeled."
+      "tests": ["src/audio/library.test.ts", "src/audio/render-library.test.ts", "src/audio/piano-controls.test.ts"],
+      "notes": "All six selectable piano types bundle a recorded model, and Clav and Misc each bundle a SECOND model (8 sets total, spec.scope.optional \"More than one model per type\") — Grand (Salamander CC BY 3.0), Upright/Electric/Digital/Clav/Misc/Harpsichord/Marimba from the MIT MIDI-JS Soundfonts collection (Honky-tonk, Electric Piano 1, Electric Piano 2, Clavinet, Vibraphone, Harpsichord, Marimba) — all files on disk and offline, 30 roots x 3 recorded velocity layers on the grand and 19 roots x 1 layer elsewhere; rendered-audio tests prove all eight are audibly distinct (including Clavinet vs Harpsichord and Vibraphone vs Marimba) and the fallback is synthesized and labeled. The model LIST view (spec.scope.optional) shows the focused layer's model list on the Program OLED while Shift is latched and the Piano Model dial turns, mirroring the Shift + Program dial numeric list view."
     },
     {
       "id": "piano.layers",
@@ -121,7 +121,7 @@
     {
       "id": "scenes.switching",
       "tests": ["src/state/scenes-splits.test.ts"],
-      "notes": "Showcase extension: Layer Scenes I/II swap the piano/organ layer-enable configuration while every sound parameter stays shared; the LAYER SCENE II LED shows the active scene; scene configs round-trip through Store."
+      "notes": "Showcase extension: Layer Scenes I/II swap the piano/organ layer-enable configuration while every sound parameter stays shared; the LAYER SCENE II LED shows the active scene; scene configs round-trip through Store. Also covers SOLO (manual p. 18): holding a section's ON button ~500ms (PanelButton holdAction) or Shift + click on the same button activates only that section, turning the other two off; soloSection round-trips through the program snapshot since sectionOn is snapshot state."
     },
     {
       "id": "organ.engine",
@@ -175,8 +175,8 @@
     },
     {
       "id": "synth.voice-modes",
-      "tests": ["src/audio/synth-voice.test.ts", "src/audio/render-synth3.test.ts"],
-      "notes": "Part 3 of the Synth engine, voice half (spec: nord-stage-4.synth.json voice): per-layer voice.mode (Poly/Mono/Legato), priority (Off/Low/High), glide (0..127, constant-rate portamento via setTargetAtTime), unison (Off/1/2/3, detuned duplicate oscillator pairs reusing the piano unison pattern), and vibrato (Off/On/Wheel, a fixed 5.5 Hz per-layer pitch LFO whose depth is vibratoAmount or the live mod-wheel position). Mono always retriggers the single sounding voice's envelope on a new note; Legato reuses the sounding voice and glides its oscillator frequencies in place (no envelope retrigger, no new nodes) when notes overlap; priority Low/High makes the lower/higher of two held notes win the sounding voice while the loser waits on a held-note stack, and releasing the winner returns to the next-priority held note. VOICE MODE (Shift = priority), GLIDE, SYNTH UNISON and VIBRATO MODE are now functional. Rendered tests prove a Legato glide slides pitch continuously (zero-crossing rate rises across the glide) rather than stepping. Optional scope (spec.scope.optional): the vibrato cycle now includes Delayed (per-voice depth ramps 0->full over ~700ms via a dedicated per-voice gain stage inserted between the shared per-layer depth gain and each sounding voice's targets, so new notes get their own onset time without disturbing already-sounding voices) and Pedal (depth follows state.morphValues.pedal live, exactly mirroring Wheel's mod-wheel following) — Aftertouch stays excluded (no browser aftertouch input)."
+      "tests": ["src/audio/synth-voice.test.ts", "src/audio/render-synth3.test.ts", "src/audio/synth-filter.test.ts"],
+      "notes": "Part 3 of the Synth engine, voice half (spec: nord-stage-4.synth.json voice): per-layer voice.mode (Poly/Mono/Legato), priority (Off/Low/High), glide (0..127, constant-rate portamento via setTargetAtTime), unison (Off/1/2/3, detuned duplicate oscillator pairs reusing the piano unison pattern), and vibrato (Off/On/Wheel, a per-layer pitch LFO whose depth is vibratoAmount-scaled or the live mod-wheel/pedal position scaled by vibratoAmount). Mono always retriggers the single sounding voice's envelope on a new note; Legato reuses the sounding voice and glides its oscillator frequencies in place (no envelope retrigger, no new nodes) when notes overlap; priority Low/High makes the lower/higher of two held notes win the sounding voice while the loser waits on a held-note stack, and releasing the winner returns to the next-priority held note. VOICE MODE (Shift = priority), GLIDE, SYNTH UNISON and VIBRATO MODE are now functional. Rendered tests prove a Legato glide slides pitch continuously (zero-crossing rate rises across the glide) rather than stepping. Optional scope (spec.scope.optional): the vibrato cycle now includes Delayed (per-voice depth ramps 0->full over ~700ms via a dedicated per-voice gain stage inserted between the shared per-layer depth gain and each sounding voice's targets, so new notes get their own onset time without disturbing already-sounding voices) and Pedal (depth follows state.morphValues.pedal live, exactly mirroring Wheel's mod-wheel following) — Aftertouch stays excluded (no browser aftertouch input). The VIBRATO MENU button (spec voice.vibrato.menu: Rate 2.0-8.0 Hz linear, Amount displayed 0-10) is now functional: it latches the Synth OLED dials 1/2 onto per-layer Rate/Amount editing (mutually exclusive with the AMP/FILTER/OSC envelope dial-repurposing), the vibrato LFO oscillator's frequency follows the mapped Rate directly, and depth scales with the mapped Amount across every mode including Wheel/Pedal/Delayed. A pre-existing snapshot missing voice.vibratoRate backfills to the prior fixed-rate default (~5.5 Hz) via the same normalizeSynthLayer path used for other post-hoc synth fields."
     },
     {
       "id": "synth.arp-gate",

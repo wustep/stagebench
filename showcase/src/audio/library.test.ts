@@ -9,7 +9,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 /**
  * piano.instrument-library — the bundled recorded library is truthfully
- * declared: six distinct sources (one per selectable type), real files on
+ * declared: eight distinct sources (Clav and Misc each carry a second
+ * model, spec.scope.optional "More than one model per type"), real files on
  * disk, complete root/velocity/license provenance, offline (no remote URLs
  * anywhere).
  */
@@ -21,16 +22,26 @@ describe('piano.instrument-library — bundled provenance', () => {
     }
   })
 
+  it('Clav and Misc each expose a second model (spec.scope.optional model list view)', () => {
+    expect(instrumentsOfType('Clav')).toHaveLength(2)
+    expect(instrumentsOfType('Misc')).toHaveLength(2)
+    expect(instrumentsOfType('Clav').map((i) => i.name)).toEqual(['Clavinet', 'Harpsichord'])
+    expect(instrumentsOfType('Misc').map((i) => i.name)).toEqual(['Vibraphone', 'Marimba'])
+    for (const type of ['Grand', 'Upright', 'Electric', 'Digital'] as const) {
+      expect(instrumentsOfType(type), type).toHaveLength(1)
+    }
+  })
+
   it('declares distinct sources and redistributable licenses per instrument', () => {
     const sources = new Set(INSTRUMENTS.map((i) => i.source))
-    expect(sources.size).toBe(6)
+    expect(sources.size).toBe(8)
     for (const instrument of INSTRUMENTS) {
       expect(instrument.license.length).toBeGreaterThan(5)
       expect(instrument.source.length).toBeGreaterThan(20)
       expect(instrument.source).toMatch(/npm/i) // registry-only acquisition
     }
     expect(INSTRUMENTS.find((i) => i.id === 'grand-salamander')!.license).toMatch(/CC BY 3\.0/)
-    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone']) {
+    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone', 'clav-harpsichord', 'misc-marimba']) {
       expect(INSTRUMENTS.find((i) => i.id === id)!.license, id).toMatch(/MIT/)
     }
   })
@@ -72,7 +83,7 @@ describe('piano.instrument-library — bundled provenance', () => {
     expect(grandRoots.size).toBe(30) // minor-third spacing A0..C8
     expect(grand.velocityLayers).toBe(3)
     expect(grand.zones).toHaveLength(90)
-    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone']) {
+    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone', 'clav-harpsichord', 'misc-marimba']) {
       const instrument = INSTRUMENTS.find((i) => i.id === id)!
       expect(new Set(instrument.zones.map((z) => z.rootMidi)).size, id).toBe(19) // major-third spacing
     }

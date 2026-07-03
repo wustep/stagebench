@@ -1,10 +1,12 @@
 /**
  * Bundled recorded Piano sample library.
  *
- * Six audibly distinct recorded sample sets — one per selectable piano type —
- * bundled under public/samples/ for offline playback (see
- * public/samples/SOURCES.md and IMPLEMENTATION_DETAILS.json for the complete
- * source/license provenance):
+ * Eight audibly distinct recorded sample sets across the six selectable
+ * piano types — Clav and Misc each carry a second model (spec:
+ * nord-stage-4.piano.json scope.optional "More than one model per type and
+ * the model list view") — bundled under public/samples/ for offline
+ * playback (see public/samples/SOURCES.md and IMPLEMENTATION_DETAILS.json
+ * for the complete source/license provenance):
  *
  * - Grand    "Salamander Grand" — Salamander Grand Piano V3 (Alexander Holm,
  *            CC BY 3.0), 30 roots x 3 recorded velocity layers.
@@ -14,10 +16,14 @@
  *            MIDI-JS Soundfonts collection (MIT), 19 roots x 1 layer.
  * - Clav     "Clavinet" — GM Clavinet from the same collection (MIT),
  *            19 roots x 1 layer (spec: clavinet/harpsichord character).
+ *            "Harpsichord" — a second Clav model, GM Harpsichord (MIT),
+ *            19 roots x 1 layer.
  * - Digital  "FM Piano" — GM Electric Piano 2 (FM/DX digital piano character)
  *            from the same collection (MIT), 19 roots x 1 layer.
  * - Misc     "Vibraphone" — GM Vibraphone (mallet character) from the same
  *            collection (MIT), 19 roots x 1 layer.
+ *            "Marimba" — a second Misc model, GM Marimba (MIT),
+ *            19 roots x 1 layer.
  *
  * The "Piano not found" state (spec: nord-stage-4.piano.json
  * selection.missingModelState) remains for any type whose model list is
@@ -148,6 +154,26 @@ export const INSTRUMENTS: readonly InstrumentSpec[] = [
     license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
     gain: 1.4,
     zones: gmZones('misc'),
+  },
+  {
+    id: 'clav-harpsichord',
+    type: 'Clav',
+    name: 'Harpsichord',
+    velocityLayers: 1,
+    source: 'GM Harpsichord (plucked-string harpsichord character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
+    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    gain: 1.5,
+    zones: gmZones('harpsichord'),
+  },
+  {
+    id: 'misc-marimba',
+    type: 'Misc',
+    name: 'Marimba',
+    velocityLayers: 1,
+    source: 'GM Marimba (mallet character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
+    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    gain: 1.4,
+    zones: gmZones('marimba'),
   },
 ]
 

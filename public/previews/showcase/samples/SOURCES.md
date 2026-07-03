@@ -77,17 +77,48 @@ Regenerate with `node scripts/sync-samples.mjs`.
 - **Source chain / license**: identical to `synth-strings/` above, folder
   `samples/052-choir-aahs`.
 
+## 9. `harpsichord/` — "Harpsichord" (type: Clav, second model)
+
+- **What**: General MIDI "Harpsichord" program — a plucked-string
+  harpsichord character (the spec's Clav source rule allows clavinet or
+  harpsichord; this is a SECOND, audibly distinct Clav-type model alongside
+  `clav/`, spec.scope.optional "More than one model per type and the model
+  list view"); 19 root notes × 1 velocity layer.
+- **Source chain**: MIDI-JS Soundfonts collection
+  (github.com/gleitz/midi-js-soundfonts, Benjamin Gleitzman) → npm package
+  `web-music-score-samples` v3.0.0, folder `samples/006-harpsichord`.
+- **License**: MIT (both the MIDI-JS Soundfonts collection and the npm
+  repackaging). The collection is rendered from the FluidR3_GM / MusyngKite /
+  FatBoy soundfont banks; the packaging does not identify which bank produced
+  these renders — this uncertainty is declared rather than papered over.
+
+## 10. `marimba/` — "Marimba" (type: Misc, second model)
+
+- **What**: General MIDI "Marimba" program — a mallet character (the spec's
+  Misc source rule names marimba/vibraphone; this is a SECOND, audibly
+  distinct Misc-type model alongside `misc/`, spec.scope.optional "More than
+  one model per type and the model list view"); 19 root notes × 1 velocity
+  layer.
+- **Source chain**: MIDI-JS Soundfonts collection
+  (github.com/gleitz/midi-js-soundfonts, Benjamin Gleitzman) → npm package
+  `web-music-score-samples` v3.0.0, folder `samples/012-marimba`.
+- **License**: MIT (both the MIDI-JS Soundfonts collection and the npm
+  repackaging). The collection is rendered from the FluidR3_GM / MusyngKite /
+  FatBoy soundfont banks; the packaging does not identify which bank produced
+  these renders — this uncertainty is declared rather than papered over.
+
 ## Honesty notes
 
-- The eight sets (six Piano types plus the two Synth Samples-mode sets) are
+- The ten sets (eight Piano-type models — six types, with Clav and Misc each
+  carrying a second model — plus the two Synth Samples-mode sets) are
   genuinely different recordings/programs, not one source under different
   labels.
-- The Grand crossfades its three recorded velocity layers. The seven other
-  GM-derived sets (five Piano types plus Strings/Choir) have a single recorded
-  layer each; their velocity response is shaped by gain and a velocity-keyed
-  filter in the engine and is declared as such.
+- The Grand crossfades its three recorded velocity layers. The nine other
+  GM-derived sets (seven Piano-type models plus Strings/Choir) have a single
+  recorded layer each; their velocity response is shaped by gain and a
+  velocity-keyed filter in the engine and is declared as such.
 - The two Synth sample sets are a SEPARATE library (SYNTH_SAMPLE_SETS) from
-  the six Piano types (INSTRUMENTS) — they are never selectable as a Piano
+  the Piano types (INSTRUMENTS) — they are never selectable as a Piano
   model, and selecting them is only possible through the Synth section's
   Samples mode (spec.scope.optional).
 - Everything else that sounds (synthesized fallback voice, generated reverb

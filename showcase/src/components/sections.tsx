@@ -4,6 +4,7 @@ import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
 import { usePresentationMorphRange, usePresentationValue } from '../state/presentation'
 import {
+  mappings,
   programLabel,
   splitBoundaries,
   SPLIT_POINT_NAMES,
@@ -94,6 +95,7 @@ function SectionHeader({
   onId,
   fxFocusLit = false,
   onZoom,
+  onSoloHold,
 }: {
   title: string
   store: PresentationStore
@@ -101,6 +103,10 @@ function SectionHeader({
   fxFocusLit?: boolean
   /** Opens the section-zoom overlay (narrow-viewport legend legibility). */
   onZoom?: () => void
+  /** Holding the ON button ~half a second performs SOLO (manual p. 18); a
+   *  quick click keeps the normal on/off toggle. Shift + click is the
+   *  keyboard-accessible equivalent, wired in presentation.ts's toggle(). */
+  onSoloHold?: () => void
 }) {
   return (
     <div className="plate-header">
@@ -111,7 +117,7 @@ function SectionHeader({
       </span>
       <span className="on-cluster">
         <Legend>ON</Legend>
-        <PanelButton store={store} id={onId} className="pill" led="green" />
+        <PanelButton store={store} id={onId} className="pill" led="green" holdAction={onSoloHold} />
         <Legend className="dim">SOLO ▾</Legend>
       </span>
     </div>
@@ -269,7 +275,14 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
   return (
     <SectionShell id="organ">
       <div className="plate">
-        <SectionHeader title="ORGAN" store={store} onId="organ-on" fxFocusLit={state.fxSection === 'organ'} onZoom={onZoom} />
+        <SectionHeader
+          title="ORGAN"
+          store={store}
+          onId="organ-on"
+          fxFocusLit={state.fxSection === 'organ'}
+          onZoom={onZoom}
+          onSoloHold={() => instrument.soloSection('organ')}
+        />
         <div className="organ-body">
           <div className="levels-column">
             <div className="layer-pair">
@@ -408,7 +421,14 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
   return (
     <SectionShell id="piano">
       <div className="plate">
-        <SectionHeader title="PIANO" store={store} onId="piano-on" fxFocusLit={state.fxSection === 'piano'} onZoom={onZoom} />
+        <SectionHeader
+          title="PIANO"
+          store={store}
+          onId="piano-on"
+          fxFocusLit={state.fxSection === 'piano'}
+          onZoom={onZoom}
+          onSoloHold={() => instrument.soloSection('piano')}
+        />
         <div className="piano-body">
           <div className="levels-column">
             <div className="layer-pair">
@@ -645,24 +665,34 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
       {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode)} {activeBank[i]!.name}
     </span>
   ))
+  // Model list view (Shift + Piano Model dial, spec.scope.optional): shows
+  // every bundled model for the focused layer's type, same list-row shape as
+  // the program numeric list view above.
+  const modelListRows = state.modelListView
+    ? models.map((m, i) => (
+        <span key={m.id} className="oled-slot" data-testid={`oled-model-list-${i}`}>
+          {i === focused.model ? '▸' : ' '} {focused.type} / {m.name}
+        </span>
+      ))
+    : null
   return (
     <SectionShell id="program">
       <div className="program-layout">
-        <GroupBox title="Morph Assign" className="morph-box">
-          <div className="morph-buttons">
-            <PanelButton store={store} id="morph-wheel" className="dark tiny" led="yellow">
-              WHEEL
-            </PanelButton>
-            <PanelButton store={store} id="morph-at" className="dark tiny" led="yellow">
-              A.T.
-            </PanelButton>
-            <PanelButton store={store} id="morph-ctrlped" className="dark tiny" led="yellow">
-              CTRLPED
-            </PanelButton>
-          </div>
-          <Legend className="dim">CLEAR MORPH ▾</Legend>
-        </GroupBox>
         <div className="program-top-row">
+          <GroupBox title="Morph Assign" className="morph-box">
+            <div className="morph-buttons">
+              <PanelButton store={store} id="morph-wheel" className="dark tiny" led="yellow">
+                WHEEL
+              </PanelButton>
+              <PanelButton store={store} id="morph-at" className="dark tiny" led="yellow">
+                A.T.
+              </PanelButton>
+              <PanelButton store={store} id="morph-ctrlped" className="dark tiny" led="yellow">
+                CTRLPED
+              </PanelButton>
+            </div>
+            <Legend className="dim">CLEAR MORPH ▾</Legend>
+          </GroupBox>
           <GroupBox title="Split" className="split-box">
             <PanelButton store={store} id="split-onset" className="dark tiny" led="yellow">
               ON/SET ▾
@@ -712,8 +742,22 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               <Legend>◂ PAGE/CAT ▸</Legend>
               <Legend className="dim">◂ BANK ▸</Legend>
             </div>
+            <div className="mode-block">
+              <span className="mode-cell">
+                <PanelButton store={store} id="live-mode" className="pill small" led="red">
+                  LIVE MODE
+                </PanelButton>
+                <Legend className="dim">NUM PAD ▿</Legend>
+              </span>
+              <span className="mode-cell">
+                <PanelButton store={store} id="layer-scene" className="dark tiny" led="green">
+                  LAYER SCENE II
+                </PanelButton>
+                <Legend className="dim">PEDAL ▿</Legend>
+              </span>
+            </div>
           </div>
-          <div className="program-mid-right">
+          <div className="program-center">
             <GroupBox title="Preset Library" className="preset-box">
               <div className="preset-buttons">
                 <PanelButton store={store} id="preset-organ" className="dark tiny">
@@ -736,6 +780,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                 ...(splitRows ??
                   clockRows ??
                   transposeRows ??
+                  modelListRows ??
                   (programs.listView
                     ? listRows
                     : [
@@ -751,61 +796,56 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                 </span>,
               ]}
             />
-            <div className="mode-block">
-              <span className="mode-cell">
-                <PanelButton store={store} id="live-mode" className="pill small" led="red">
-                  LIVE MODE
-                </PanelButton>
-                <Legend className="dim">NUM PAD ▿</Legend>
-              </span>
-              <span className="mode-cell">
-                <PanelButton store={store} id="layer-scene" className="dark tiny" led="green">
-                  LAYER SCENE II
-                </PanelButton>
-                <Legend className="dim">PEDAL ▿</Legend>
-              </span>
-            </div>
+            <GroupBox title="Program" className="program-grid-box">
+              <div className="program-grid">
+                {PROGRAM_BUTTON_LEGENDS.map((legend, i) => (
+                  <span key={legend} className="program-cell">
+                    <span className="prog-num" aria-hidden="true">
+                      <Led
+                        color="red"
+                        on={reference % 8 === i}
+                        className={programs.storePending && reference % 8 === i ? 'flash' : ''}
+                      />
+                      {i + 1}
+                    </span>
+                    <PanelButton store={store} id={`program-${i + 1}`} className="dark tiny" />
+                    <Legend className="dim">{legend.toUpperCase()}</Legend>
+                  </span>
+                ))}
+              </div>
+            </GroupBox>
           </div>
-        </div>
-        <GroupBox title="Program" className="program-grid-box">
-          <div className="program-grid">
-            {PROGRAM_BUTTON_LEGENDS.map((legend, i) => (
-              <span key={legend} className="program-cell">
-                <span className="prog-num" aria-hidden="true">
-                  <Led
-                    color="red"
-                    on={reference % 8 === i}
-                    className={programs.storePending && reference % 8 === i ? 'flash' : ''}
-                  />
-                  {i + 1}
-                </span>
-                <PanelButton store={store} id={`program-${i + 1}`} className="dark tiny" />
-                <Legend className="dim">{legend.toUpperCase()}</Legend>
-              </span>
-            ))}
+          {/* Right utility rail (reference photo): Prog View down to the
+              Program section's own Shift/Exit at the keybed edge. */}
+          <div className="program-rail">
+            <span className="rail-cell">
+              <Legend>PROG VIEW</Legend>
+              <PanelButton store={store} id="prog-view" className="dark tiny" />
+            </span>
+            <span className="rail-cell">
+              <Legend>SOLO</Legend>
+              <PanelButton store={store} id="solo-undo" className="dark tiny" />
+              <Legend className="dim">UNDO</Legend>
+            </span>
+            <span className="rail-cell">
+              <Legend>SECTION EDIT ⇕</Legend>
+              <PanelButton store={store} id="section-edit" className="dark tiny" />
+            </span>
+            <span className="rail-cell">
+              <Legend>LAYER INIT</Legend>
+              <PanelButton store={store} id="layer-init" className="dark tiny" />
+            </span>
+            <span className="rail-cell">
+              <Legend>MON|COPY</Legend>
+              <PanelButton store={store} id="mon-copy" className="dark tiny" />
+              <Legend className="dim">PASTE ⇕</Legend>
+            </span>
+            <span className="shift-cluster">
+              <Legend>SHIFT</Legend>
+              <PanelButton store={store} id="shift" className="rocker" />
+              <Legend className="dim">EXIT</Legend>
+            </span>
           </div>
-        </GroupBox>
-        <div className="program-utility">
-          <PanelButton store={store} id="prog-view" className="dark tiny">
-            PROG VIEW
-          </PanelButton>
-          <PanelButton store={store} id="solo-undo" className="dark tiny">
-            SOLO UNDO
-          </PanelButton>
-          <PanelButton store={store} id="section-edit" className="dark tiny">
-            SECTION EDIT ⇕
-          </PanelButton>
-          <PanelButton store={store} id="layer-init" className="dark tiny">
-            LAYER INIT
-          </PanelButton>
-          <PanelButton store={store} id="mon-copy" className="dark tiny">
-            MON|COPY PASTE ⇕
-          </PanelButton>
-          <span className="shift-cluster">
-            <Legend>SHIFT</Legend>
-            <PanelButton store={store} id="shift" className="rocker" />
-            <Legend className="dim">EXIT</Legend>
-          </span>
         </div>
       </div>
     </SectionShell>
@@ -842,7 +882,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
   return (
     <SectionShell id="synth">
       <div className="plate">
-        <SectionHeader title="SYNTH" store={store} onId="synth-on" onZoom={onZoom} />
+        <SectionHeader title="SYNTH" store={store} onId="synth-on" onZoom={onZoom} onSoloHold={() => instrument.soloSection('synth')} />
         <div className="synth-body">
           <div className="levels-column">
             <div className="layer-pair triple">
@@ -906,7 +946,31 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <Oled
                   section="synth"
                   lines={
-                    editedEnvelope
+                    state.synthVibratoEdit
+                      ? [
+                          <span key="t" className="oled-dim">
+                            VIBRATO
+                          </span>,
+                          <b key="w" className="oled-name" data-testid="oled-synth-name-line">
+                            {displayName}
+                          </b>,
+                          <span key="vib" data-testid="oled-synth-vibrato-line">
+                            VIBRATO Rate {mappings.vibratoRateHz(focused.voice.vibratoRate).toFixed(1)} Hz · Amt{' '}
+                            {mappings.vibratoAmountDisplay(focused.voice.vibratoAmount).toFixed(1)}
+                          </span>,
+                          <span key="m" className="oled-menu">
+                            <span>
+                              {mappings.vibratoRateHz(focused.voice.vibratoRate).toFixed(1)} Hz <b>RATE</b>
+                            </span>
+                            <span>
+                              {mappings.vibratoAmountDisplay(focused.voice.vibratoAmount).toFixed(1)} <b>AMOUNT</b>
+                            </span>
+                            <span>
+                              {synth.focusedLayer} <b>LAYER</b>
+                            </span>
+                          </span>,
+                        ]
+                      : editedEnvelope
                       ? [
                           <span key="t" className="oled-dim">
                             {editedEnvelope.label}
@@ -1192,54 +1256,61 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
   const chain = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
   return (
     <SectionShell id="effects">
-      <div className="plate">
-        <div className="plate-header">
-          <PlateTitle title="LAYER EFFECTS" onZoom={onZoom} />
-          <span className="on-cluster">
-            <Legend>ON</Legend>
-            <PanelButton store={store} id="effects-on" className="pill" led="green" />
+      <div className="effects-wrap">
+        {/* FX FOCUS is a standalone strip on exposed red chassis between the
+            Synth and Layer Effects plates (reference photo), not part of the
+            effects plate. The organ entry has ONE focus LED captioned "A B":
+            both organ layers share a single FX chain. */}
+        <div className="fx-strip" role="group" aria-label="FX Focus">
+          <span className="fx-strip-tab">FX FOCUS</span>
+          <span className="focus-cell">
+            <Legend>ORGAN</Legend>
+            <span className="tiny-led-row" aria-hidden="true">
+              <Led color="yellow" on={state.fxSection === 'organ'} />
+            </span>
+            <Legend className="focus-caption" aria-hidden="true">
+              A B
+            </Legend>
+            <PanelButton store={store} id="all-fx-off" className="dark tiny" />
+            <Legend className="dim">ALL FX OFF</Legend>
+          </span>
+          <span className="focus-cell">
+            <Legend>PIANO</Legend>
+            <span className="tiny-led-row" aria-hidden="true">
+              <Led color="yellow" on={state.fxSection === 'piano' && (state.focusedLayer === 'A' || state.fxGroupPiano)} />
+              <Led color="yellow" on={state.fxSection === 'piano' && (state.focusedLayer === 'B' || state.fxGroupPiano)} />
+            </span>
+            <Legend className="focus-caption" aria-hidden="true">
+              A B
+            </Legend>
+            <PanelButton store={store} id="fx-focus-piano" className="dark tiny" />
+            <Legend className="dim">GROUP ▿</Legend>
+          </span>
+          <span className="focus-cell">
+            <Legend>SYNTH</Legend>
+            <span className="tiny-led-row" aria-hidden="true">
+              <Led color="yellow" on={state.fxSection === 'synth' && (state.synth.focusedLayer === 'A' || state.fxGroupSynth)} />
+              <Led color="yellow" on={state.fxSection === 'synth' && (state.synth.focusedLayer === 'B' || state.fxGroupSynth)} />
+              <Led color="yellow" on={state.fxSection === 'synth' && (state.synth.focusedLayer === 'C' || state.fxGroupSynth)} />
+            </span>
+            <Legend className="focus-caption" aria-hidden="true">
+              A B C
+            </Legend>
+            <PanelButton store={store} id="fx-focus-synth" className="dark tiny" />
+            <Legend className="dim">GROUP ▿</Legend>
+          </span>
+          <span className="shift-cluster fx-shift">
+            <Legend>SHIFT</Legend>
+            <PanelButton store={store} id="shift-2" className="rocker" />
+            <Legend className="dim">EXIT</Legend>
           </span>
         </div>
-        <div className="effects-body">
-          <div className="fx-focus-column" role="group" aria-label="FX Focus">
-            <Legend className="group-label">FX FOCUS</Legend>
-            <span className="focus-cell">
-              <Legend>ORGAN</Legend>
-              <span className="tiny-led-row" aria-hidden="true">
-                <Led color="green" on={state.fxSection === 'organ' && state.organ.layers.A.enabled} />
-                <Legend>A</Legend>
-                <Led color="green" on={state.fxSection === 'organ' && state.organ.layers.B.enabled} />
-                <Legend>B</Legend>
-              </span>
-              <PanelButton store={store} id="all-fx-off" className="dark tiny">
-                ALL FX OFF
-              </PanelButton>
-            </span>
-            <span className="focus-cell">
-              <Legend>PIANO</Legend>
-              <span className="tiny-led-row" aria-hidden="true">
-                <Led color="green" on={state.fxSection === 'piano' && (state.focusedLayer === 'A' || state.fxGroupPiano)} />
-                <Legend>A</Legend>
-                <Led color="green" on={state.fxSection === 'piano' && (state.focusedLayer === 'B' || state.fxGroupPiano)} />
-                <Legend>B</Legend>
-              </span>
-              <PanelButton store={store} id="fx-focus-piano" className="dark tiny">
-                GROUP ▿
-              </PanelButton>
-            </span>
-            <span className="focus-cell">
-              <Legend>SYNTH</Legend>
-              <span className="tiny-led-row" aria-hidden="true">
-                <Led color="green" />
-                <Legend>A</Legend>
-                <Led color="green" />
-                <Legend>B</Legend>
-                <Led color="green" />
-                <Legend>C</Legend>
-              </span>
-              <PanelButton store={store} id="fx-focus-synth" className="dark tiny">
-                GROUP ▿
-              </PanelButton>
+        <div className="plate">
+          <div className="plate-header">
+            <PlateTitle title="LAYER EFFECTS" onZoom={onZoom} />
+            <span className="on-cluster">
+              <Legend>ON</Legend>
+              <PanelButton store={store} id="effects-on" className="pill" led="green" />
             </span>
           </div>
           <div className="effects-grid">

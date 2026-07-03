@@ -76,6 +76,40 @@ describe('piano.instrument-library — rendered distinctions', () => {
     }
   }, 240000)
 
+  it('the second Clav/Misc models (Harpsichord/Marimba) are audibly distinct from the first (spec.scope.optional model list)', async () => {
+    const clavinet = await renderNote('Clav')
+    const harpsichord = await renderEngine({
+      duration: 1.6,
+      configure: (store) => {
+        selectBoth(store, 'Clav')
+        store.selectPianoModel(1)
+      },
+      steps: [
+        { time: 0, run: ({ engine }) => engine.noteOn(60, 0.85) },
+        { time: 1.1, run: ({ engine }) => engine.noteOff(60) },
+      ],
+    })
+    expect(harpsichord.engineStatus).toBe('ready')
+    expect(rms(harpsichord.left, 0.05, 1.0)).toBeGreaterThan(0.003)
+    expect(Math.abs(similarity(clavinet.left, harpsichord.left, 0.05, 1.0)), 'clavinet-vs-harpsichord').toBeLessThan(0.9)
+
+    const vibraphone = await renderNote('Misc')
+    const marimba = await renderEngine({
+      duration: 1.6,
+      configure: (store) => {
+        selectBoth(store, 'Misc')
+        store.selectPianoModel(1)
+      },
+      steps: [
+        { time: 0, run: ({ engine }) => engine.noteOn(60, 0.85) },
+        { time: 1.1, run: ({ engine }) => engine.noteOff(60) },
+      ],
+    })
+    expect(marimba.engineStatus).toBe('ready')
+    expect(rms(marimba.left, 0.05, 1.0)).toBeGreaterThan(0.003)
+    expect(Math.abs(similarity(vibraphone.left, marimba.left, 0.05, 1.0)), 'vibraphone-vs-marimba').toBeLessThan(0.9)
+  }, 240000)
+
   it('different notes select different recorded roots (no uniform pitch shifting)', async () => {
     const low = await renderNote('Grand', 41)
     const high = await renderNote('Grand', 84)

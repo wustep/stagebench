@@ -217,12 +217,13 @@ export interface SynthLfoUnit {
   waveform: SynthLfoWaveform
 }
 
-/** Fixed 5.5 Hz pitch LFO for the layer's Vibrato (spec voice.vibrato menu:
- *  "Rate 2.0-8.0 Hz" — fixed here per the brief; only Amount is panel-
- *  editable). `depth`'s gain follows On (fixed vibratoAmount) or Wheel (the
- *  live mod-wheel position) and connects to each sounding voice's source
- *  detune params at voice build, mirroring the standing LFO's connect-at-
- *  build pattern. */
+/** Per-layer pitch LFO for the layer's Vibrato (spec voice.vibrato.menu:
+ *  "Rate 2.0-8.0 Hz", "Amount 0-10" — both panel-editable via the VIBRATO
+ *  MENU button's OLED dials, see setSynthVibratoEdit/updateSynthChannels).
+ *  `depth`'s gain follows On/Delayed (vibratoAmount-scaled) or Wheel/Pedal
+ *  (live position scaled by vibratoAmount) and connects to each sounding
+ *  voice's source detune params at voice build, mirroring the standing
+ *  LFO's connect-at-build pattern. */
 export interface SynthVibratoUnit {
   osc: OscillatorNodeLike
   depth: GainNodeLike
@@ -779,10 +780,13 @@ export class PianoEngine {
     return { voiceBus, levelGain, units, toMaster, toRotary, lfo: this.buildSynthLfo(context), vibrato: this.buildSynthVibrato(context) }
   }
 
-  /** Fixed-rate (5.5 Hz) per-layer vibrato pitch LFO (spec voice.vibrato):
-   *  always running once the layer's channel exists; its depth gain
-   *  connects to every sounding voice's source detune params at voice build,
-   *  same connect-at-build convention as the standing modulation LFO. */
+  /** Per-layer vibrato pitch LFO (spec voice.vibrato.menu): always running
+   *  once the layer's channel exists; its frequency follows the layer's
+   *  mapped Rate and its depth gain follows the mapped Amount (see
+   *  updateSynthChannels), connecting to every sounding voice's source
+   *  detune params at voice build, same convention as the standing
+   *  modulation LFO. Initial frequency is the default mapped rate; the next
+   *  sync pass corrects it to the layer's actual state. */
   private buildSynthVibrato(context: AudioContextLike): SynthVibratoUnit {
     const osc = context.createOscillator()
     osc.type = 'sine'
@@ -1204,20 +1208,26 @@ export class PianoEngine {
         rampTo(channel.toRotary.gain, routed ? 1 : 0.0001, now)
         rampTo(channel.toMaster.gain, routed ? 0.0001 : 1, now)
 
+        // Vibrato rate: the layer's mapped Rate (spec voice.vibrato.menu:
+        // 2.0-8.0 Hz) drives the per-layer pitch LFO oscillator directly.
+        const voice = layerState.voice
+        rampTo(channel.vibrato.osc.frequency, mappings.vibratoRateHz(voice.vibratoRate), now)
+
         // Vibrato depth: On/Delayed = fixed vibratoAmount (Delayed's per-
         // voice 0->full ramp lives on each voice's own delayGain — see
         // startSynthVoice/buildSynthVibrato); Wheel = live mod-wheel
-        // position; Pedal = live control-pedal position (spec
-        // voice.vibrato.optionalModes, mirroring Wheel); Off = 0. ±40 cents
-        // at full depth.
-        const voice = layerState.voice
+        // position scaled by vibratoAmount; Pedal = live control-pedal
+        // position scaled by vibratoAmount (spec voice.vibrato.optionalModes,
+        // mirroring Wheel); Off = 0. ±40 cents at full depth (Amount 127 ->
+        // spec-displayed 10).
+        const amountScale = voice.vibratoAmount / 127
         const vibratoDepth =
           voice.vibrato === 'On' || voice.vibrato === 'Delayed'
-            ? (voice.vibratoAmount / 127) * 40
+            ? amountScale * 40
             : voice.vibrato === 'Wheel'
-              ? (state.morphValues.wheel / 127) * 40
+              ? (state.morphValues.wheel / 127) * amountScale * 40
               : voice.vibrato === 'Pedal'
-                ? (state.morphValues.pedal / 127) * 40
+                ? (state.morphValues.pedal / 127) * amountScale * 40
                 : 0
         rampTo(channel.vibrato.depth.gain, vibratoDepth, now)
       }

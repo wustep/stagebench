@@ -915,3 +915,112 @@ Orchestrator-side visual pass against reference/nord-stage-4-73.jpg crops:
 - Fixed the status-strip note that still called Synth Samples mode
   visual-only (iteration 19 made it functional; only Extern is excluded).
 - Gates: 391/391, typecheck, lint, build, verify:layout 12/12.
+
+### 21 — Second piano models, SOLO, vibrato menu, bundled logotype face (2026-07-03)
+
+- **Second piano models + model LIST view** (spec nord-stage-4.piano.json
+  scope.optional "More than one model per type and the model list view"):
+  Clav and Misc each gain a second bundled recorded model — Harpsichord
+  (GM Harpsichord, `006-harpsichord`) and Marimba (GM Marimba,
+  `012-marimba`), same MIDI-JS Soundfonts/MIT provenance chain as every
+  other GM-derived set, added to `scripts/sync-samples.mjs` and
+  `src/audio/library.ts`'s `INSTRUMENTS` (8 sets total; `instrumentsOfType`
+  now returns 2 for Clav and Misc). While Shift is latched, turning the
+  Piano Model dial now shows a model list for the focused layer's type on
+  the Program OLED (`▸ Clav / Harpsichord`, etc.) — a non-snapshot
+  `modelListView` flag on `InstrumentState`, wired exactly like the
+  existing Shift + Program dial numeric list view (same precedence slot,
+  same clear-on-Shift-release path).
+- **SOLO** (manual p. 18: "Press the On button for roughly half a second to
+  perform a SOLO operation, which activates only [that section]"): a new
+  `soloSection('piano' | 'organ' | 'synth')` store action turns the target
+  section on and the other two off (ordinary snapshot state, so it
+  round-trips through Store/recall). Two input paths: holding a section's
+  ON button for >= 500 ms (`PanelButton` gained an optional `holdAction`
+  prop, wired through `SectionHeader`'s new `onSoloHold`, with a quick
+  click still performing the normal toggle), and Shift + click on the same
+  button (mirrors the existing SUSTPED shift pattern) for keyboards that
+  can't long-press.
+- **Synth vibrato menu values** (spec voice.vibrato.menu: Rate 2.0-8.0 Hz,
+  Amount 0-10): the per-layer vibrato LFO gained a panel-editable
+  `vibratoRate` (0..127 -> 2.0..8.0 Hz linear, alongside the existing
+  `vibratoAmount`, displayed 0..10) — old snapshots backfill the new field
+  through the same `voice: {...defaults.voice, ...layer?.voice}` path
+  already used for post-hoc synth fields. The previously decorative
+  `vibrato-menu` MENU button is now FUNCTIONAL (moved into
+  `FUNCTIONAL_CONTROL_IDS`): it latches the Synth OLED's dials 1/2 onto
+  Rate/Amount editing, copying the `synthEnvEdit` dial-repurposing pattern
+  exactly (mutually exclusive with it — engaging one clears the other).
+  Engine-side, the vibrato oscillator's frequency now follows the mapped
+  Rate directly, and depth scales with the mapped Amount across every mode
+  including Wheel/Pedal/Delayed (previously Wheel/Pedal ignored Amount
+  entirely).
+- **Bundled logotype face**: `@fontsource/comfortaa` (SIL OFL 1.1, The
+  Comfortaa Project Authors) is now imported in `src/main.tsx`
+  (`@fontsource/comfortaa/700.css`), so the brand-line's rounded wordmark
+  renders identically fully offline with no system-font or network-font
+  dependency — vite inlines the woff2 into `dist/assets/`. `.brand-line`
+  puts Comfortaa first, keeping the prior rounded-font stack as fallback;
+  font-size nudged down slightly (1.08cqw -> 0.98cqw) so the new face's
+  wider glyphs still fit the branding container without reflow
+  (`no-text-overflows-desktop` and a direct `scrollWidth <= clientWidth`
+  check on `.brand-line` both pass).
+- Tests: 403 passing (up from 391 before this scope; 12 net new/evolved
+  across library.test.ts, render-library.test.ts, piano-controls.test.ts,
+  scenes-splits.test.ts, synth-voice.test.ts, synth-filter.test.ts,
+  hardware.test.ts). One pinned assertion evolved truthfully rather than
+  weakened: synth-voice.test.ts's "vibrato Off..." test used to match the
+  vibrato oscillator by an exact fixed 5.5 Hz; it now matches by the
+  mapped default rate (`mappings.vibratoRateHz` of the default
+  `vibratoRate`, which still resolves to ~5.5 Hz) since the rate is no
+  longer hardcoded. hardware.test.ts's functional/decorative inventory
+  gained `vibrato-menu` in the Synth functional set.
+- Gates: typecheck, test (403/403), lint, build, verify:layout (12/12) —
+  all green.
+
+### 22 — Measured section widths, FX FOCUS strip, Program rail (2026-07-03)
+
+Layout surgery driven by pixel-measurement of the reference photo (red-vs-
+slate column segmentation across the deck's full height), correcting three
+user-reported issues: the Piano section rendered nearly double its true
+width, the Program strip was starved (MORPH ASSIGN clipping), and the FX
+FOCUS column didn't match the reference.
+
+- **Section fractions remeasured**: `SECTIONS` in `src/model/variant.ts` is
+  now 14/20/8.5/12.5/25/20% (was 13/21/15/9/21/21). The Piano plate is
+  genuinely the narrowest on the panel (~8.5%) and the Synth plate the
+  widest (~25%). The deck also keeps the photo's bare-red right margin
+  (~4.6% of the instrument width) as `.control-deck` padding, with a
+  matching narrow left margin. The `hardware.test.ts` fraction pin and the
+  feature-matrix chassis note evolved with the measurement rationale.
+- **FX FOCUS strip redesigned to the reference**: it is a standalone strip
+  on exposed red chassis BETWEEN the Synth and Layer Effects plates (not a
+  column inside the effects plate), with its own light header tab. The
+  ORGAN entry now has ONE yellow focus LED captioned "A B" — both organ
+  layers share the single organ FX chain, so separate A/B LEDs were wrong.
+  PIANO keeps two LEDs and SYNTH three (focus/group semantics unchanged,
+  colors corrected green -> yellow per the photo). `organ-chain.test.ts`
+  and `effects-routing.test.ts` LED probes evolved to the new structure.
+- **Second Shift/Exit button**: the reference shows TWO physical
+  Shift/Exit buttons — one on the Program section's right rail, one at the
+  FX FOCUS strip's foot on a light tab. Added `shift-2` (functional,
+  effects section) mirroring the same latched modifier: pressing either
+  lights both; browser-verified that `shift-2` latches and `shift`
+  unlatches the shared state.
+- **Program section restructured to the reference's three-column design**:
+  Morph Assign joins Split/Mst Clk/Transp on the top row; a left rail
+  (Store cluster, Program dial, Page/Cat, Live Mode, Layer Scene II); a
+  center column (Preset Library, the OLED, the Program 8-button grid); and
+  a right utility rail (Prog View, Solo/Undo, Section Edit, Layer Init,
+  Mon|Copy — legends printed on the panel beside plain button caps, as on
+  the hardware — with Shift/Exit pinned at the keybed edge). With the
+  corrected 12.5% width, MORPH ASSIGN no longer clips.
+- **Piano plate density pass** for the corrected 8.5% width: one size
+  class smaller throughout (like the Program strip), `minmax(0,1fr)`
+  columns so single-word legends can't blow out the grid, and the narrow
+  header drops the FX FOCUS / ON text labels (LEDs remain) exactly as the
+  photo does at this width. Reverb/Comp boxes tightened so the narrower
+  effects plate keeps every box inside its grid track.
+- Verification: computed-layout audit 12/12 (overflow scan clean at both
+  desktop and 390px), typecheck, lint, build green; tests 403/403 with the
+  two FX-focus LED probes and the fraction pin evolved truthfully.

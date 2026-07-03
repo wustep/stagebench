@@ -168,6 +168,7 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'glide',
   'synth-unison',
   'vibrato-mode',
+  'vibrato-menu',
   'arp-run',
   'arp-mode',
   'arp-rate',
@@ -182,6 +183,7 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'effects-on',
   'all-fx-off',
   'fx-focus-piano',
+  'shift-2',
   'mod1-rate',
   'mod1-amount',
   'mod1-variation',
@@ -358,6 +360,10 @@ const effectsControls = section('effects', [
   push('all-fx-off', 'All FX Off', 'FX Focus'),
   push('fx-focus-piano', 'Piano FX Focus Group', 'FX Focus'),
   push('fx-focus-synth', 'Synth FX Focus Group', 'FX Focus'),
+  // The panel has TWO physical Shift/Exit buttons (reference photo: one at
+  // the Program section's right rail, one at the FX FOCUS strip's foot).
+  // This one mirrors the same latched modifier as 'shift'.
+  toggle('shift-2', 'Shift/Exit (FX)', 'FX Focus'),
   knob('mod1-rate', 'Mod 1 Rate', 'Mod 1'),
   knob('mod1-amount', 'Mod 1 Amount', 'Mod 1'),
   push('mod1-variation', 'Mod 1 Variation', 'Mod 1'),

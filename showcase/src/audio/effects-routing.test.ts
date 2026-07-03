@@ -176,7 +176,7 @@ describe('effects.routing', () => {
     renderApp()
     const focusButton = screen.getByRole('button', { name: 'Piano FX Focus Group' })
     const focusLeds = () =>
-      Array.from(document.querySelectorAll('.fx-focus-column .focus-cell')[1]!.querySelectorAll('.led')).map(
+      Array.from(document.querySelectorAll('.fx-strip .focus-cell')[1]!.querySelectorAll('.led')).map(
         (led) => (led as HTMLElement).dataset.on,
       )
     expect(focusLeds()).toEqual(['true', 'false'])

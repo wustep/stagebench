@@ -36,24 +36,25 @@ describe('organ-chain — FX focus follows section-layer presses', () => {
     expect(store.focusedChain()).toBe(store.getState().chains.A)
   })
 
-  it('the panel LEDs light PIANO A/B only when focused on Piano and ORGAN A/B only when focused on Organ', () => {
+  it('the panel LEDs light PIANO A/B only when focused on Piano and the single ORGAN LED only when focused on Organ', () => {
     renderApp()
     const ledsOf = (index: number) =>
-      Array.from(document.querySelectorAll('.fx-focus-column .focus-cell')[index]!.querySelectorAll('.led')).map(
+      Array.from(document.querySelectorAll('.fx-strip .focus-cell')[index]!.querySelectorAll('.led')).map(
         (led) => (led as HTMLElement).dataset.on,
       )
-    // Power-on: Piano A focused, Organ off — PIANO A lit, ORGAN LEDs dark.
+    // Power-on: Piano A focused, Organ unfocused — PIANO A lit, ORGAN LED dark.
+    // The organ entry has ONE focus LED captioned "A B" (reference photo):
+    // both organ layers share the single organ FX chain.
     expect(ledsOf(1)).toEqual(['true', 'false']) // PIANO A, B
-    expect(ledsOf(0)).toEqual(['false', 'false']) // ORGAN A, B
+    expect(ledsOf(0)).toEqual(['false']) // ORGAN (shared A B)
     fireEvent.click(screen.getByRole('button', { name: 'Organ Layer B On/Off' }))
-    // Organ A is pre-enabled (power-on pose); enabling B lights both.
-    expect(ledsOf(0)).toEqual(['true', 'true']) // ORGAN A, B lit, focus moved
+    expect(ledsOf(0)).toEqual(['true']) // focus moved to the shared organ chain
     expect(ledsOf(1)).toEqual(['false', 'false']) // PIANO LEDs dark while focus is on Organ
     fireEvent.click(screen.getByRole('button', { name: 'Piano Layer A On/Off' }))
     expect(ledsOf(1)).toEqual(['false', 'false']) // A was on; this click switches it off, focus untouched
     fireEvent.click(screen.getByRole('button', { name: 'Piano Layer A On/Off' })) // switch A back on
     expect(ledsOf(1)).toEqual(['true', 'false'])
-    expect(ledsOf(0)).toEqual(['false', 'false'])
+    expect(ledsOf(0)).toEqual(['false'])
   })
 })
 

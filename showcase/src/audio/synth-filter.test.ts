@@ -402,6 +402,34 @@ describe('synth.snapshot — filter/envelope/LFO round-trip', () => {
     expect(() => engine.noteOn(60, 0.8)).not.toThrow()
     engine.noteOff(60)
   })
+
+  it('backfills voice.vibratoRate on a persisted layer that predates the Vibrato Menu Rate control', () => {
+    const first = new InstrumentStore()
+    const rawBank = first.getState().programs.bank.map((slot) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as { synth: { layers: Record<string, unknown> } }
+      for (const layer of Object.values(snapshot.synth.layers)) {
+        const l = layer as Record<string, unknown>
+        const voice = l.voice as Record<string, unknown>
+        delete voice.vibratoRate // pre-existing field only: mode/priority/glide/unison/vibrato/vibratoAmount
+      }
+      return { name: slot.name, snapshot }
+    })
+    const rawLive = first.getState().programs.live.map((slot) => ({ name: slot.name, snapshot: slot.snapshot }))
+    const storage = {
+      data: new Map<string, string>(),
+      load(key: string) {
+        return this.data.get(key) ?? null
+      },
+      save(key: string, value: string) {
+        this.data.set(key, value)
+      },
+    }
+    storage.save('stagebench.programs.v1', JSON.stringify({ version: 1, bank: rawBank, live: rawLive, liveMode: false, current: 0 }))
+    const restored = new InstrumentStore(storage)
+    const voice = restored.getState().synth.layers.A.voice
+    expect(voice.vibratoRate).toBe(74) // default backfilled, matching a freshly-constructed store
+    expect(mappings.vibratoRateHz(voice.vibratoRate)).toBeCloseTo(5.5, 1)
+  })
 })
 
 function selectWaveform(store: InstrumentStore, name: string): void {

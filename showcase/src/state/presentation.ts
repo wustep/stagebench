@@ -142,6 +142,7 @@ export class PresentationStore {
           return Math.round(((state.synth.arp.range - 1) / 3) * 127)
         case 'synth-dial-1': {
           const synth = state.synth.layers[state.synth.focusedLayer]
+          if (state.synthVibratoEdit) return synth.voice.vibratoRate
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.attack
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.attack
           if (state.synthEnvEdit === 'osc') return synth.oscEnvelope.attack
@@ -149,6 +150,7 @@ export class PresentationStore {
         }
         case 'synth-dial-2': {
           const synth = state.synth.layers[state.synth.focusedLayer]
+          if (state.synthVibratoEdit) return synth.voice.vibratoAmount
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.decay
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.decay
           if (state.synthEnvEdit === 'osc') return synth.oscEnvelope.decay
@@ -239,6 +241,9 @@ export class PresentationStore {
       const state = wiring.instrument.getState()
       const chain = wiring.instrument.focusedChain()
       switch (id) {
+        case 'shift-2':
+          // Second physical Shift/Exit button (FX FOCUS strip): same latch.
+          return this.state.toggles['shift'] === true
         case 'piano-on':
           return state.piano.sectionOn
         case 'piano-layer-a':
@@ -265,6 +270,8 @@ export class PresentationStore {
           return state.synthEnvEdit === 'filter'
         case 'osc-envelope':
           return state.synthEnvEdit === 'osc'
+        case 'vibrato-menu':
+          return state.synthVibratoEdit
         case 'filter-on':
           return state.synth.layers[state.synth.focusedLayer].filter.on
         case 'arp-run':
@@ -425,6 +432,9 @@ export class PresentationStore {
         case 'piano-model': {
           const layer = store.getState().layers[store.getState().focusedLayer]
           const models = instrumentsOfType(layer.type)
+          // Shift + dial browses the model list on the Program OLED (spec
+          // scope.optional model list view), mirroring Shift + Program dial.
+          if (this.state.toggles['shift'] === true) store.setModelListView(true)
           store.selectPianoModel(models.length > 1 ? Math.round((clamped / 127) * (models.length - 1)) : 0)
           return
         }
@@ -468,14 +478,24 @@ export class PresentationStore {
           store.setArpRange(clamped)
           return
         case 'synth-dial-1': {
-          const edit = store.getState().synthEnvEdit
+          const state = store.getState()
+          if (state.synthVibratoEdit) {
+            store.setSynthVibratoRate(clamped)
+            return
+          }
+          const edit = state.synthEnvEdit
           if (edit === 'amp') store.setSynthAmpEnvelope({ attack: clamped })
           else if (edit === 'filter') store.setSynthFilterEnvelope({ attack: clamped })
           else if (edit === 'osc') store.setSynthOscEnvelope({ attack: clamped })
           return
         }
         case 'synth-dial-2': {
-          const edit = store.getState().synthEnvEdit
+          const state = store.getState()
+          if (state.synthVibratoEdit) {
+            store.setSynthVibratoAmount(clamped)
+            return
+          }
+          const edit = state.synthEnvEdit
           if (edit === 'amp') store.setSynthAmpEnvelope({ decay: clamped })
           else if (edit === 'filter') store.setSynthFilterEnvelope({ decay: clamped })
           else if (edit === 'osc') store.setSynthOscEnvelope({ decay: clamped })
@@ -557,8 +577,15 @@ export class PresentationStore {
       const store = wiring.instrument
       const shift = this.state.toggles['shift'] === true
       switch (id) {
+        case 'shift-2':
+          // Second physical Shift/Exit button: delegates to the one modifier.
+          this.toggle('shift')
+          return
         case 'piano-on':
-          store.setPianoSectionOn(!store.getState().piano.sectionOn)
+          // Shift + click SOLOs the Piano section (manual p. 18); a keyboard-
+          // accessible alternative to holding the button (mirrors SUSTPED).
+          if (shift) store.soloSection('piano')
+          else store.setPianoSectionOn(!store.getState().piano.sectionOn)
           return
         case 'piano-layer-a':
           // SUSTPED = Shift + Layer A (manual p. 23): routes the sustain pedal to this section.
@@ -571,7 +598,9 @@ export class PresentationStore {
           else store.toggleLayerEnabled('B')
           return
         case 'organ-on':
-          store.setOrganSectionOn(!store.getState().organ.sectionOn)
+          // Shift + click SOLOs the Organ section (manual p. 18 pattern).
+          if (shift) store.soloSection('organ')
+          else store.setOrganSectionOn(!store.getState().organ.sectionOn)
           return
         case 'organ-layer-a':
           // Same Shift pattern as Piano (manual p. 18): SUSTPED = Shift + Layer A.
@@ -617,7 +646,9 @@ export class PresentationStore {
           store.toggleOrganRotary()
           return
         case 'synth-on':
-          store.setSynthSectionOn(!store.getState().synth.sectionOn)
+          // Shift + click SOLOs the Synth section (manual p. 18 pattern).
+          if (shift) store.soloSection('synth')
+          else store.setSynthSectionOn(!store.getState().synth.sectionOn)
           return
         case 'synth-layer-a':
           // SUSTPED = Shift + Layer A (manual p. 18/23 pattern, applied to Synth).
@@ -689,6 +720,11 @@ export class PresentationStore {
           return
         case 'vibrato-mode':
           store.cycleSynthVibratoMode()
+          return
+        case 'vibrato-menu':
+          // Latches the Synth OLED dials 1/2 onto Rate/Amount editing (spec
+          // voice.vibrato.menu), mirroring the AMP/FILTER/OSC envelope buttons.
+          store.setSynthVibratoEdit(!store.getState().synthVibratoEdit)
           return
         case 'arp-run':
           // Shift + ARP RUN = master-clock rate sync (the brief's own note:
@@ -953,8 +989,12 @@ export class PresentationStore {
             store.setTransposeEdit(false)
             return
           }
-          // …and dropping Shift closes the numeric list view.
-          if (shift) store.setProgramListView(false)
+          // …and dropping Shift closes the numeric list view and the piano
+          // model list view (spec.scope.optional model list view).
+          if (shift) {
+            store.setProgramListView(false)
+            store.setModelListView(false)
+          }
           break // functional modifier; lit state kept locally below
       }
     }

@@ -76,7 +76,11 @@ body {
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 0.35cqw 0.8cqw 0.4cqw;
+  /* Asymmetric horizontal padding measured from the reference photo: the
+     sections start ~0.3% from the left edge but stop ~4.6% short of the
+     right edge (bare red chassis). SECTIONS fractions normalize to this
+     content width. */
+  padding: 0.35cqw 4.6cqw 0.4cqw 0.3cqw;
   gap: 0.25cqw;
 }
 
@@ -907,12 +911,13 @@ body {
   line-height: 1;
 }
 
-/* One-line rounded logotype approximation (no bundled/webfont: the artifact
-   stays self-contained, so the stack leans on locally available rounded
-   faces and degrades to the system sans). */
+/* One-line rounded logotype approximation. Comfortaa (bundled, SIL OFL 1.1 —
+   see main.tsx's import and IMPLEMENTATION_DETAILS.json) renders it
+   identically offline; the remaining stack is the previous locally-available
+   fallback chain if the bundled face is ever unavailable. */
 .brand-line {
-  font-family: 'Arial Rounded MT Bold', 'Helvetica Rounded', ui-rounded, 'Trebuchet MS', 'Helvetica Neue', sans-serif;
-  font-size: 1.08cqw;
+  font-family: 'Comfortaa', 'Arial Rounded MT Bold', 'Helvetica Rounded', ui-rounded, 'Trebuchet MS', 'Helvetica Neue', sans-serif;
+  font-size: 0.98cqw;
   font-weight: 700;
   letter-spacing: 0.01cqw;
   color: #f3efe8;
@@ -1160,7 +1165,89 @@ body {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 0.35cqw;
+  gap: 0.25cqw;
+}
+
+/* The Piano section is the narrowest plate on the panel (~8.5% of the deck,
+   measured from the reference photo) and correspondingly dense: everything
+   inside runs one size class smaller, like the Program strip. */
+.deck-section[data-section='piano'] .plate {
+  padding: 0.2cqw 0.25cqw 0.25cqw;
+}
+
+.deck-section[data-section='piano'] .plate-header {
+  margin: -0.2cqw -0.25cqw 0.18cqw;
+  gap: 0.3cqw;
+  padding: 0.08cqw 0.3cqw 0.1cqw;
+}
+
+/* Reference photo: the narrow Piano header carries the FX FOCUS and ON LEDs
+   without their text labels (only SOLO ▾ text survives at this width). */
+.deck-section[data-section='piano'] .plate-header .fx-focus .legend,
+.deck-section[data-section='piano'] .plate-header .on-cluster > .legend:first-child {
+  display: none;
+}
+
+.deck-section[data-section='piano'] .legend {
+  font-size: 0.3cqw;
+}
+
+.deck-section[data-section='piano'] .tiny-led-row .legend {
+  font-size: 0.28cqw;
+}
+
+.deck-section[data-section='piano'] .acoustics-cell .group-label {
+  font-size: 0.27cqw;
+  letter-spacing: 0;
+}
+
+.deck-section[data-section='piano'] .panel-button.dark.small {
+  min-width: 1.2cqw;
+  min-height: 0.68cqw;
+}
+
+.deck-section[data-section='piano'] .type-led-grid .legend {
+  width: 1.3cqw;
+  font-size: 0.26cqw;
+}
+
+.deck-section[data-section='piano'] .group-box {
+  padding: 0.28cqw 0.12cqw 0.1cqw;
+  gap: 0.08cqw;
+}
+
+.deck-section[data-section='piano'] .group-box-title {
+  font-size: 0.36cqw;
+  letter-spacing: 0.03cqw;
+}
+
+.deck-section[data-section='piano'] .layer-pair {
+  gap: 0.2cqw;
+}
+
+.deck-section[data-section='piano'] .layer-column .panel-button.pill.small {
+  min-width: 0.9cqw;
+}
+
+.deck-section[data-section='piano'] .layer-letter {
+  font-size: 0.28cqw;
+}
+
+.deck-section[data-section='piano'] .tiny-led-row {
+  gap: 0.1cqw;
+}
+
+.deck-section[data-section='piano'] .tiny-led-row .legend {
+  font-size: 0.24cqw;
+}
+
+.deck-section[data-section='piano'] .piano-groups {
+  gap: 0.15cqw 0.18cqw;
+}
+
+.deck-section[data-section='piano'] .acoustics-cell .panel-button.dark.small {
+  min-width: 1.05cqw;
+  min-height: 0.62cqw;
 }
 
 .timbre-box {
@@ -1194,7 +1281,9 @@ body {
 
 .piano-groups {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,…) so a long single-word legend can't blow the track out past
+     the narrow plate (grid's default min-content floor). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.2cqw 0.3cqw;
 }
 
@@ -1257,31 +1346,44 @@ body {
   padding: 0.05cqw 0.05cqw 0.1cqw;
 }
 
-.program-utility {
-  gap: 0.06cqw;
-  flex-wrap: nowrap;
+/* Right utility rail (reference): Prog View → Mon/Copy stacked, Shift/Exit
+   pinned at the keybed edge. */
+.program-rail {
+  flex: none;
+  width: 22%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2cqw;
+  padding-top: 0.1cqw;
 }
 
-.program-utility .panel-button.tiny {
-  min-width: 0.9cqw;
+.program-rail .rail-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.06cqw;
+}
+
+.program-rail .rail-cell .legend {
+  font-size: 0.26cqw;
+  text-align: center;
+}
+
+.program-rail .panel-button.tiny {
+  min-width: 1.05cqw;
   min-height: 0.55cqw;
   padding: 0.06cqw;
 }
 
-.program-utility .panel-button .panel-button-cap {
-  font-size: 0.22cqw;
+.program-rail .shift-cluster {
+  margin-top: auto;
 }
 
 /* Overlap guard: children never shrink into each other; the section's
    overflow clip plus the visibility audit catch any regression instead. */
 .program-layout > * {
   flex-shrink: 0;
-}
-
-/* Keep the SHIFT/EXIT legends beside the rocker to save a stacked row. */
-.deck-section[data-section='program'] .shift-cluster {
-  flex-direction: row;
-  gap: 0.12cqw;
 }
 
 /* The Program strip is only 9% wide and very dense on the reference:
@@ -1302,7 +1404,7 @@ body {
 }
 
 .deck-section[data-section='program'] .panel-button.tiny {
-  min-width: 1.05cqw;
+  min-width: 1cqw;
   min-height: 0.62cqw;
 }
 
@@ -1310,10 +1412,13 @@ body {
   font-size: 0.28cqw;
 }
 
-.morph-box,
 .program-top-row .group-box {
   flex-direction: column;
   padding: 0.4cqw 0.2cqw 0.2cqw;
+}
+
+.morph-box {
+  flex: 1.2;
 }
 
 .morph-buttons {
@@ -1323,7 +1428,7 @@ body {
 
 .program-top-row {
   display: flex;
-  gap: 0.2cqw;
+  gap: 0.15cqw;
   justify-content: space-between;
 }
 
@@ -1332,21 +1437,28 @@ body {
 }
 
 .program-mid {
+  flex: 1;
+  min-height: 0;
   display: flex;
   gap: 0.2cqw;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .program-mid-left {
   flex: none;
-  width: 34%;
+  width: 24%;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.15cqw;
 }
 
-.program-mid-right {
+.program-mid-left .mode-block {
+  flex-direction: column;
+  margin-top: auto;
+}
+
+.program-center {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1490,14 +1602,6 @@ body {
 
 .program-cell .legend {
   font-size: 0.28cqw;
-}
-
-.program-utility {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15cqw;
-  align-items: center;
-  justify-content: center;
 }
 
 .shift-cluster {
@@ -1808,25 +1912,38 @@ body {
 
 /* -------------------------------------------------------------- effects -- */
 
-.effects-body {
+/* The FX FOCUS strip sits on exposed red chassis BETWEEN the Synth and
+   Layer Effects plates (reference photo), with its own light header tab and
+   the panel's second Shift/Exit button at its foot. */
+.effects-wrap {
   flex: 1;
   min-height: 0;
   display: flex;
   gap: 0.3cqw;
 }
 
-.fx-focus-column {
+.fx-strip {
   flex: none;
-  width: 3.6cqw;
+  width: 2.5cqw;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25cqw;
-  padding-top: 0.1cqw;
+  gap: 0.3cqw;
+  min-height: 0;
 }
 
-.fx-focus-column .group-label {
-  font-size: 0.38cqw;
+.fx-strip-tab {
+  align-self: stretch;
+  text-align: center;
+  font-size: 0.36cqw;
+  font-weight: 800;
+  letter-spacing: 0.04cqw;
+  color: #232a38;
+  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  border-radius: 0.25cqw 0.25cqw 0 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  padding: 0.08cqw 0.05cqw 0.1cqw;
+  white-space: nowrap;
 }
 
 .focus-cell {
@@ -1836,8 +1953,34 @@ body {
   gap: 0.08cqw;
 }
 
+.focus-cell .tiny-led-row {
+  gap: 0.22cqw;
+}
+
+.focus-caption {
+  letter-spacing: 0.18cqw;
+  margin-right: -0.18cqw; /* balance the trailing letter-space */
+}
+
+/* Second Shift/Exit on its light tab (reference), pinned at the strip foot. */
+.fx-shift {
+  margin-top: auto;
+  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  border-radius: 0.25cqw 0.25cqw 0 0;
+  padding: 0.1cqw 0.25cqw 0.15cqw;
+}
+
+.fx-shift .legend {
+  color: #232a38;
+}
+
+.fx-shift .legend.dim {
+  color: #4d5464;
+}
+
 .effects-grid {
   flex: 1;
+  min-height: 0;
   min-width: 0;
   display: grid;
   grid-template-columns: 1.15fr 1fr;
@@ -1861,7 +2004,22 @@ body {
 }
 
 .reverb-box .variation-cell .legend {
-  max-width: 3.3cqw;
+  max-width: 3cqw;
+}
+
+.reverb-box .type-token {
+  font-size: 0.22cqw;
+}
+
+.reverb-box .knob-cell .knob.small {
+  width: 0.75cqw;
+  height: 0.75cqw;
+}
+
+.reverb-box .fx-on-cell .panel-button.pill.small {
+  min-width: 0.95cqw;
+  min-height: 0.6cqw;
+  padding: 0.04cqw;
 }
 
 .reverb-box .fx-on-cell {
@@ -1871,18 +2029,25 @@ body {
 
 .reverb-box,
 .comp-box {
-  gap: 0.03cqw 0.12cqw;
-  padding-top: 0.24cqw;
+  gap: 0.02cqw 0.1cqw;
+  padding-top: 0.2cqw;
+  padding-bottom: 0.04cqw;
 }
 
 .reverb-box .knob.small {
-  width: 0.9cqw;
-  height: 0.9cqw;
+  width: 0.8cqw;
+  height: 0.8cqw;
 }
 
 .reverb-box .legend,
 .comp-box .legend {
-  font-size: 0.26cqw;
+  font-size: 0.24cqw;
+}
+
+.reverb-box .panel-button .panel-button-cap,
+.comp-box .panel-button .panel-button-cap {
+  font-size: 0.24cqw;
+  padding: 0.05cqw 0.12cqw;
 }
 
 .delay-box {

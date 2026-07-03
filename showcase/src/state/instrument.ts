@@ -296,13 +296,17 @@ export interface SynthVoiceState {
   glide: number // 0..127 -> mappings.glideTimeConstant; active in Mono/Legato when played legato
   unison: 0 | 1 | 2 | 3
   vibrato: SynthVibratoMode
-  /** Menu rate is fixed at 5.5 Hz (spec vibrato.menu); amount is the only
-   *  panel-editable vibrato parameter here. */
-  vibratoAmount: number // 0..127
+  /** 0..127 -> mappings.vibratoRateHz (spec vibrato.menu: 2.0-8.0 Hz), edited
+   *  via the VIBRATO MENU button's OLED dial 1 (synthVibratoEdit). */
+  vibratoRate: number
+  /** 0..127, displayed 0..10 (spec vibrato.menu: Amount 0-10), edited via the
+   *  VIBRATO MENU button's OLED dial 2 (synthVibratoEdit). */
+  vibratoAmount: number
 }
 
 function defaultSynthVoice(): SynthVoiceState {
-  return { mode: 'Poly', priority: 'Off', glide: 0, unison: 0, vibrato: 'Off', vibratoAmount: 40 }
+  // vibratoRate 74 -> ~5.5 Hz (mappings.vibratoRateHz), matching the prior fixed rate.
+  return { mode: 'Poly', priority: 'Off', glide: 0, unison: 0, vibrato: 'Off', vibratoRate: 74, vibratoAmount: 40 }
 }
 
 /** Analog (oscillator) or Samples (bundled recorded sample sets) sound
@@ -559,6 +563,14 @@ export interface InstrumentState {
    *  the focused layer's selected envelope's attack/decay/release instead of
    *  their normal waveform-list/menu roles. Not program state (panel mode only). */
   synthEnvEdit: 'amp' | 'filter' | 'osc' | null
+  /** Shift + Piano Model dial (spec.scope.optional model list view): shows the
+   *  focused layer's type's model list on the Program OLED, mirroring the
+   *  Shift + Program dial numeric list view. Not program state (panel mode only). */
+  modelListView: boolean
+  /** Synth VIBRATO MENU button latched: the Synth OLED dials 1/2 edit the
+   *  focused layer's vibrato Rate/Amount (spec voice.vibrato.menu) instead of
+   *  their normal roles. Mutually exclusive with synthEnvEdit. Not program state. */
+  synthVibratoEdit: boolean
   /** Live morph source positions (mod wheel, control pedal 0..127). Not program state. */
   morphValues: Record<MorphSource, number>
   /** When true (Group mode), effect edits apply to both piano layer chains. */
@@ -682,6 +694,8 @@ function baseInstrumentState(): InstrumentState {
     transposeEdit: false,
     morphArming: null,
     synthEnvEdit: null,
+    modelListView: false,
+    synthVibratoEdit: false,
     morphValues: { wheel: 0, pedal: 0 },
     organ: {
       // The section starts off (Piano is the power-on sound); its layer A is
@@ -968,6 +982,13 @@ export class InstrumentStore {
     const clamped = Math.max(0, Math.min(models.length - 1, Math.round(model)))
     const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], model: clamped } }
     this.patch({ layers, pianoNotFound: null }, `Piano ${layer}: ${models[clamped]!.name}`)
+  }
+
+  /** Model list view (Shift + Piano Model dial, spec.scope.optional): shows
+   *  the focused layer's type's model list on the Program OLED, mirroring
+   *  setProgramListView. Not program state (panel mode only). */
+  setModelListView(on: boolean): void {
+    if (this.state.modelListView !== on) this.patch({ modelListView: on })
   }
 
   /* -------------------------------------------------- piano performance -- */
@@ -1681,6 +1702,20 @@ export class InstrumentStore {
     this.patchSynth({ sectionOn: on }, `Synth Section ${on ? 'On' : 'Off'}`)
   }
 
+  /** SOLO (manual p. 18): holding a section's ON button for ~half a second
+   *  activates only that section, turning the other two off. */
+  soloSection(section: 'piano' | 'organ' | 'synth'): void {
+    const label = `Solo ${section.charAt(0).toUpperCase()}${section.slice(1)}`
+    this.patch(
+      {
+        piano: { ...this.state.piano, sectionOn: section === 'piano' },
+        organ: { ...this.state.organ, sectionOn: section === 'organ' },
+        synth: { ...this.state.synth, sectionOn: section === 'synth' },
+      },
+      label,
+    )
+  }
+
   toggleSynthLayerEnabled(layer: SynthLayerId): void {
     const enabled = !this.state.synth.layers[layer].enabled
     const layers = { ...this.state.synth.layers, [layer]: { ...this.state.synth.layers[layer], enabled } }
@@ -1791,7 +1826,9 @@ export class InstrumentStore {
   }
 
   /** AMP/FILTER/OSC ENVELOPE button: latches the synth OLED dials onto that
-   *  envelope's A/D/R editing (manual p. 27: three dials share every menu). */
+   *  envelope's A/D/R editing (manual p. 27: three dials share every menu).
+   *  Engaging an envelope edit closes the Vibrato Menu edit (mutually
+   *  exclusive dial-repurposing modes). */
   setSynthEnvEdit(edit: 'amp' | 'filter' | 'osc' | null): void {
     if (edit === this.state.synthEnvEdit) return
     const label =
@@ -1802,7 +1839,7 @@ export class InstrumentStore {
           : edit === 'osc'
             ? 'Synth Osc Envelope — dials: A · D · R'
             : 'Synth Envelope closed'
-    this.patch({ synthEnvEdit: edit }, label)
+    this.patch({ synthEnvEdit: edit, synthVibratoEdit: edit ? false : this.state.synthVibratoEdit }, label)
   }
 
   /* --------------------------------------------------------- synth filter -- */
@@ -2021,6 +2058,23 @@ export class InstrumentStore {
     const clamped = clamp(value)
     const layer = this.state.synth.focusedLayer
     this.patchSynthVoice({ vibratoAmount: clamped }, `Synth ${layer} Vibrato Amount ${clamped}`)
+  }
+
+  setSynthVibratoRate(value: number): void {
+    const clamped = clamp(value)
+    const layer = this.state.synth.focusedLayer
+    this.patchSynthVoice({ vibratoRate: clamped }, `Synth ${layer} Vibrato Rate ${mappings.vibratoRateHz(clamped).toFixed(1)} Hz`)
+  }
+
+  /** VIBRATO MENU button (spec voice.vibrato.menu): latches the Synth OLED
+   *  dials 1/2 onto Rate/Amount editing, mirroring setSynthEnvEdit's
+   *  dial-repurposing pattern. Mutually exclusive with synthEnvEdit. */
+  setSynthVibratoEdit(edit: boolean): void {
+    if (edit === this.state.synthVibratoEdit) return
+    this.patch(
+      { synthVibratoEdit: edit, synthEnvEdit: edit ? null : this.state.synthEnvEdit },
+      edit ? 'Synth Vibrato Menu — dials: Rate · Amount' : 'Synth Vibrato Menu closed',
+    )
   }
 
   /* --------------------------------------------------------- arpeggiator -- */
@@ -2518,6 +2572,19 @@ export const mappings = {
   /** 0..127 -> a portamento time constant in seconds (constant-rate glide). */
   glideTimeConstant(value: number): number {
     return 0.001 + Math.pow(value / 127, 2) * 0.6
+  },
+  /** 0..127 -> 2.0..8.0 Hz, linear (spec voice.vibrato.menu: "Rate 2.0-8.0 Hz"). */
+  vibratoRateHz(value: number): number {
+    return 2 + (value / 127) * 6
+  },
+  /** Inverse of vibratoRateHz: Hz -> 0..127 panel value. */
+  hzToVibratoRate(hz: number): number {
+    const clamped = Math.max(2, Math.min(8, hz))
+    return Math.max(0, Math.min(127, Math.round(((clamped - 2) / 6) * 127)))
+  },
+  /** 0..127 -> displayed 0..10 with one decimal (spec voice.vibrato.menu: "Amount 0-10"). */
+  vibratoAmountDisplay(value: number): number {
+    return (value / 127) * 10
   },
 }
 

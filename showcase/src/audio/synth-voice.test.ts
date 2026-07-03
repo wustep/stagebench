@@ -1,6 +1,8 @@
+import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary, FakeGain, FakeOscillator } from '../test/fakes'
-import { InstrumentStore } from '../state/instrument'
+import { renderApp } from '../test/renderApp'
+import { InstrumentStore, mappings } from '../state/instrument'
 import { PianoEngine } from './engine'
 
 /**
@@ -184,8 +186,11 @@ describe('synth.voice — unison, vibrato', () => {
     const { engine, store, getContext } = makeSystem()
     engine.ensureStarted()
     const context = getContext()!
-    // The layer's always-running vibrato oscillator (5.5 Hz sine, spec voice.vibrato).
-    const vibratoOsc = context.oscillators().find((o) => o.type === 'sine' && o.frequency.value === 5.5)!
+    // The layer's always-running vibrato oscillator (spec voice.vibrato.menu:
+    // "Rate 2.0-8.0 Hz", panel-editable; default layer rate maps to ~5.5 Hz).
+    const defaultRateHz = mappings.vibratoRateHz(store.getState().synth.layers.A.voice.vibratoRate)
+    expect(defaultRateHz).toBeCloseTo(5.5, 1)
+    const vibratoOsc = context.oscillators().find((o) => o.type === 'sine' && Math.abs(o.frequency.value - defaultRateHz) < 0.01)!
     expect(vibratoOsc).toBeDefined()
     expect(vibratoOsc.started).toBe(true)
 
@@ -268,6 +273,102 @@ describe('synth.voice — unison, vibrato', () => {
     store.setMorphSource('wheel', 0)
     expect(diagnosticsA.vibrato.depth.gain.value).toBe(depthAtFull)
     engine.noteOff(60)
+  })
+
+  it('vibratoRate/vibratoAmount round-trip through the program snapshot (spec voice.vibrato.menu)', () => {
+    const { store } = makeSystem()
+    store.setSynthVibratoRate(0) // -> 2.0 Hz
+    store.setSynthVibratoAmount(127) // -> displayed 10
+    expect(store.getState().programs.dirty).toBe(true)
+    store.storePress()
+    store.storePress() // store into 1.1
+    store.setSynthVibratoRate(64)
+    store.setSynthVibratoAmount(0)
+    store.selectProgram(1)
+    store.selectProgram(0)
+    const voice = store.getState().synth.layers.A.voice
+    expect(voice.vibratoRate).toBe(0)
+    expect(voice.vibratoAmount).toBe(127)
+    expect(mappings.vibratoRateHz(voice.vibratoRate)).toBeCloseTo(2.0, 5)
+    expect(mappings.vibratoAmountDisplay(voice.vibratoAmount)).toBeCloseTo(10, 5)
+  })
+
+  it("the vibrato LFO's oscillator frequency follows the mapped Rate (2.0 Hz .. 8.0 Hz endpoints)", () => {
+    const { engine, store } = makeSystem()
+    engine.ensureStarted()
+    store.setSynthVibratoRate(0)
+    const diagnosticsA = engine.diagnostics().synthChannels!.A
+    const osc = diagnosticsA.vibrato.osc as unknown as FakeOscillator
+    expect(osc.frequency.value).toBeCloseTo(2.0, 5)
+    store.setSynthVibratoRate(127)
+    expect(osc.frequency.value).toBeCloseTo(8.0, 5)
+  })
+
+  it('vibrato depth scales with the mapped Amount for every mode (On/Delayed/Wheel/Pedal)', () => {
+    const { engine, store } = makeSystem()
+    engine.ensureStarted()
+    const diagnosticsA = engine.diagnostics().synthChannels!.A
+
+    // On: depth is directly proportional to vibratoAmount.
+    store.cycleSynthVibratoMode() // Off -> On
+    store.setSynthVibratoAmount(0)
+    engine.noteOn(60, 0.8)
+    const depthAtZeroAmount = diagnosticsA.vibrato.depth.gain.value
+    expect(depthAtZeroAmount).toBe(0)
+    store.setSynthVibratoAmount(127)
+    const depthAtFullAmount = diagnosticsA.vibrato.depth.gain.value
+    expect(depthAtFullAmount).toBeGreaterThan(depthAtZeroAmount)
+    engine.noteOff(60)
+
+    // Wheel: live wheel position scaled DOWN by a low Amount vs a high one.
+    store.cycleSynthVibratoMode() // On -> Wheel
+    store.setSynthVibratoAmount(20)
+    engine.noteOn(61, 0.8)
+    store.setMorphSource('wheel', 127)
+    const wheelDepthLowAmount = diagnosticsA.vibrato.depth.gain.value
+    store.setSynthVibratoAmount(120)
+    const wheelDepthHighAmount = diagnosticsA.vibrato.depth.gain.value
+    expect(wheelDepthHighAmount).toBeGreaterThan(wheelDepthLowAmount)
+    engine.noteOff(61)
+
+    // Pedal: same scaling relationship as Wheel.
+    store.cycleSynthVibratoMode() // Wheel -> Delayed
+    store.cycleSynthVibratoMode() // Delayed -> Pedal
+    store.setSynthVibratoAmount(20)
+    engine.noteOn(62, 0.8)
+    store.setMorphSource('pedal', 127)
+    const pedalDepthLowAmount = diagnosticsA.vibrato.depth.gain.value
+    store.setSynthVibratoAmount(120)
+    const pedalDepthHighAmount = diagnosticsA.vibrato.depth.gain.value
+    expect(pedalDepthHighAmount).toBeGreaterThan(pedalDepthLowAmount)
+    engine.noteOff(62)
+  })
+
+  it('the VIBRATO MENU button toggles the Rate/Amount edit mode; dial 1 changes the displayed rate', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Synth Section On' }))
+    const menuButton = screen.getByRole('button', { name: 'Synth Vibrato Menu' })
+    fireEvent.click(menuButton)
+    expect(screen.getByTestId('oled-synth-vibrato-line').textContent).toMatch(/Rate 5\.5 Hz/)
+    const dial1 = screen.getByRole('slider', { name: 'Synth Display Dial 1' })
+    fireEvent.keyDown(dial1, { key: 'End' }) // dial to max -> 8.0 Hz
+    expect(screen.getByTestId('oled-synth-vibrato-line').textContent).toMatch(/Rate 8\.0 Hz/)
+    // Closing the menu returns the OLED to its normal oscillator waveform view.
+    fireEvent.click(menuButton)
+    expect(screen.queryByTestId('oled-synth-vibrato-line')).toBeNull()
+    expect(screen.getByTestId('oled-synth-ctrl-line')).toBeInTheDocument()
+  })
+
+  it('the VIBRATO MENU edit mode and an envelope edit mode are mutually exclusive', () => {
+    const { store } = makeSystem()
+    store.setSynthVibratoEdit(true)
+    expect(store.getState().synthVibratoEdit).toBe(true)
+    store.setSynthEnvEdit('amp')
+    expect(store.getState().synthVibratoEdit).toBe(false) // engaging an envelope edit closes it
+    expect(store.getState().synthEnvEdit).toBe('amp')
+    store.setSynthVibratoEdit(true)
+    expect(store.getState().synthEnvEdit).toBe(null) // and vice versa
+    expect(store.getState().synthVibratoEdit).toBe(true)
   })
 })
 

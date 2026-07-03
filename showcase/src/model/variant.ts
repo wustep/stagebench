@@ -31,13 +31,18 @@ export interface SectionSpec {
   hasOled: boolean
 }
 
+/* Fractions are pixel-measured from reference/nord-stage-4-73.jpg (red-vs-
+   slate column segmentation of the control deck; photo is authoritative for
+   visible layout). The deck also has a red right margin ≈4.5% of the
+   instrument width, modeled as .control-deck padding, so these normalize the
+   six section extents to the remaining content width. */
 export const SECTIONS: readonly SectionSpec[] = [
-  { id: 'performance', label: 'Performance controls', fraction: 0.13, insetPlate: false, hasOled: false },
-  { id: 'organ', label: 'Organ', fraction: 0.21, insetPlate: true, hasOled: false },
-  { id: 'piano', label: 'Piano', fraction: 0.15, insetPlate: true, hasOled: false },
-  { id: 'program', label: 'Program and morph', fraction: 0.09, insetPlate: false, hasOled: true },
-  { id: 'synth', label: 'Synth', fraction: 0.21, insetPlate: true, hasOled: true },
-  { id: 'effects', label: 'Layer effects', fraction: 0.21, insetPlate: true, hasOled: false },
+  { id: 'performance', label: 'Performance controls', fraction: 0.14, insetPlate: false, hasOled: false },
+  { id: 'organ', label: 'Organ', fraction: 0.2, insetPlate: true, hasOled: false },
+  { id: 'piano', label: 'Piano', fraction: 0.085, insetPlate: true, hasOled: false },
+  { id: 'program', label: 'Program and morph', fraction: 0.125, insetPlate: false, hasOled: true },
+  { id: 'synth', label: 'Synth', fraction: 0.25, insetPlate: true, hasOled: true },
+  { id: 'effects', label: 'Layer effects', fraction: 0.2, insetPlate: true, hasOled: false },
 ] as const
 
 export type SectionId = SectionSpec['id']
