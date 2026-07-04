@@ -235,6 +235,23 @@ describe('organ.models-drawbars — recipes and live registration', () => {
     engine.noteOff(60)
   })
 
+  it('percussion stays suppressed while a pedal-sustained organ chord is still SOUNDING (manual p. 20)', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.toggleOrganPercussion('on')
+    engine.noteOn(60, 0.8)
+    engine.setSustain(true)
+    engine.noteOff(60) // key up, but the pedal keeps the note sounding
+    const restruck = newOscillators(context, () => engine.noteOn(64, 0.8))
+    engine.noteOff(64)
+    engine.setSustain(false)
+    // Fresh strike with nothing sounding: percussion returns — one extra oscillator.
+    const clean = newOscillators(context, () => engine.noteOn(60, 0.8))
+    expect(clean.length).toBe(restruck.length + 1)
+    engine.noteOff(60)
+  })
+
   it('Percussion POLY (Shift + Percussion Volume) lets a legato addition retrigger its own percussion partial', () => {
     const { engine, store, getContext } = makeSystem()
     engine.ensureStarted()

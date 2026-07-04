@@ -1569,17 +1569,18 @@ export class PianoEngine {
     }
     const state = this.state
     // B3 percussion is single-triggered (manual p. 20): it sounds only when
-    // no other organ key is held at the moment this key goes down — unless
-    // Percussion POLY is on (Shift + Percussion Volume, manual p. 20), which
-    // lets every new key retrigger its own percussion partial.
-    let organKeyAlreadyDown = false
+    // no other organ note IS SOUNDING at the moment this key goes down —
+    // a chord held by the sustain pedal suppresses it just like held keys —
+    // unless Percussion POLY is on (Shift + Percussion Volume, manual
+    // p. 20), which lets every new key retrigger its own percussion partial.
+    let organNoteSounding = false
     for (const voice of this.voices.values()) {
-      if (voice.section === 'organ' && voice.keyDown) {
-        organKeyAlreadyDown = true
+      if (voice.section === 'organ') {
+        organNoteSounding = true
         break
       }
     }
-    const allowPercussion = state.organ.percussion.poly ? true : !organKeyAlreadyDown
+    const allowPercussion = state.organ.percussion.poly ? true : !organNoteSounding
     for (const layer of AB_LAYERS) {
       // Keyboard zones (manual p. 39): a layer only sounds inside its
       // assigned zones; crossfades scale adjacent layers complementarily.
@@ -1652,8 +1653,16 @@ export class PianoEngine {
       return
     }
     // Mono (always retriggers), or Legato's first note (nothing sounding yet).
-    if (wasSounding) this.releaseVoice(this.voices.get(previousKey!)!, QUICK_RELEASE_SECONDS)
-    this.startSynthVoice(layer, midi, velocity, zoneGain)
+    let resumeLevel: number | undefined
+    if (wasSounding) {
+      const previous = this.voices.get(previousKey!)!
+      // Manual p. 34: in Mono mode the envelope "restarts from the point in
+      // the attack phase where the level is equal to the previous note" —
+      // read the sounding level so fast mono lines never dip to silence.
+      resumeLevel = previous.gain.gain.value
+      this.releaseVoice(previous, QUICK_RELEASE_SECONDS)
+    }
+    this.startSynthVoice(layer, midi, velocity, zoneGain, true, resumeLevel)
     this.synthSoundingMidi[layer] = midi
   }
 
@@ -2131,7 +2140,14 @@ export class PianoEngine {
 
   /* -------------------------------------------------------- synth voices -- */
 
-  private startSynthVoice(layer: SynthLayerId, midi: number, velocity: number, zoneGain = 1, releasePrevious = true): Voice {
+  private startSynthVoice(
+    layer: SynthLayerId,
+    midi: number,
+    velocity: number,
+    zoneGain = 1,
+    releasePrevious = true,
+    resumeLevel?: number,
+  ): Voice {
     const context = this.context!
     const channel = this.synthChannels![layer]
     const key = voiceKey('synth', layer, midi)
@@ -2159,10 +2175,16 @@ export class PianoEngine {
     const attackSeconds = Math.max(0.001, synthAttackSeconds(envelope.attack))
 
     const gain = context.createGain()
-    gain.gain.setValueAtTime(0.0001, now)
-    gain.gain.exponentialRampToValueAtTime(peak, now + attackSeconds)
+    // Mono retrigger (manual p. 34): resume the attack from the previous
+    // note's sounding level. The remaining ramp time is the unfinished part
+    // of the exponential attack, so the slope stays identical.
+    const startFrom = Math.min(Math.max(0.0001, resumeLevel ?? 0.0001), peak)
+    const attackDone = Math.log(startFrom / 0.0001) / Math.log(peak / 0.0001)
+    const attackRemaining = Math.max(0.001, attackSeconds * (1 - Math.min(1, Math.max(0, attackDone))))
+    gain.gain.setValueAtTime(startFrom, now)
+    gain.gain.exponentialRampToValueAtTime(peak, now + attackRemaining)
     const decaySeconds = synthDecaySeconds(envelope.decay)
-    if (decaySeconds !== null) gain.gain.setTargetAtTime(Math.max(0.0001, peak * 0.001), now + attackSeconds, decaySeconds)
+    if (decaySeconds !== null) gain.gain.setTargetAtTime(Math.max(0.0001, peak * 0.001), now + attackRemaining, decaySeconds)
 
     const voice = this.acquireVoice('synth', layer, midi, gain)
     const ownedNodes = voice.ownedNodes

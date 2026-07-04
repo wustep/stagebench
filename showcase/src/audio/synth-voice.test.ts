@@ -44,6 +44,24 @@ describe('synth.voice — Mono/Legato single-voice behavior', () => {
     engine.noteOff(60)
   })
 
+  it('Mono retrigger resumes the amp envelope from the sounding level, never from silence (manual p. 34)', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.cycleSynthVoiceMode() // Poly -> Mono
+    store.setSynthAmpEnvelope({ decay: 127 }) // sustain at peak between notes
+
+    engine.noteOn(60, 0.8)
+    const before = context.nodes.length
+    engine.noteOn(64, 0.8) // retrigger while 60 is still at full level
+    const newGains = context.nodes.slice(before).filter((n): n is FakeGain => n instanceof FakeGain)
+    const envelopeGain = newGains.find((g) => g.gain.events.some((e) => e.kind === 'exp'))!
+    const firstSet = envelopeGain.gain.events.find((e) => e.kind === 'set')!
+    expect(firstSet.value!).toBeGreaterThan(0.01) // resumed near the previous level, not 0.0001
+    engine.noteOff(64)
+    engine.noteOff(60)
+  })
+
   it('Legato does not retrigger the envelope when played overlapped, and glides the frequency', () => {
     const { engine, store, getContext } = makeSystem()
     engine.ensureStarted()
