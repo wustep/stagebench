@@ -1858,17 +1858,28 @@ export class InstrumentStore {
 
   /** Sources with an assignment for a control (destination indicator data). */
   morphSourcesFor(control: string): MorphSource[] {
+    // Filter by the same layer resolution the range read-back uses, so the
+    // green dot and the LED range can never disagree about an assignment.
+    const layer = this.morphLayerFor(control)
     const sources: MorphSource[] = []
     for (const source of ['wheel', 'pedal'] as const) {
-      if (this.state.morph[source].some((a) => a.control === control)) sources.push(source)
+      if (this.state.morph[source].some((a) => a.control === control && a.layer === layer)) sources.push(source)
     }
     return sources
   }
 
-  /** The layer context a morph edit to `control` would capture right now —
-   *  the same resolution `setValue`'s capture path uses, so a range read
-   *  back later matches whichever layer/chain is currently focused. */
-  private morphLayerFor(control: string): MorphAssignment['layer'] {
+  /** The layer context a morph edit to `control` captures — THE single
+   *  resolver shared by `setValue`'s capture path (presentation.ts), the
+   *  indicator read-backs and `applyMorphWrite`'s own id-encoded branches.
+   *  Controls that encode their layer in the id (piano/organ/synth level
+   *  faders) resolve from the id, NEVER from focus — a fader is bolted to
+   *  its layer on the panel (manual p. 38's "Piano B Level" example), so
+   *  capturing focus here used to store assignments the interpolator (which
+   *  reads the id) and the indicators (which re-resolved via focus) each
+   *  understood differently. */
+  morphLayerFor(control: string): MorphAssignment['layer'] {
+    if (control === 'piano-level-a' || control === 'organ-level-a') return 'A'
+    if (control === 'piano-level-b' || control === 'organ-level-b') return 'B'
     if (
       control === 'osc-ctrl' ||
       control === 'filter-freq' ||

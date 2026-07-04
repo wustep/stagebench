@@ -213,3 +213,38 @@ describe('morph.assignments — panel and input paths', () => {
     })
   })
 })
+
+describe('morph.assignments — id-encoded destinations resolve their own layer (audit C1)', () => {
+  it('capturing an organ/piano level fader binds the fader’s OWN layer regardless of focus', () => {
+    const store = new InstrumentStore()
+    store.setOrganSectionOn(true)
+    store.setOrganFocusedLayer('A') // focus is on A…
+    store.toggleMorphArming('wheel')
+    // …but the B-level fader is moved (presentation resolves via morphLayerFor).
+    store.recordMorphEdit('wheel', 'organ-level-b', store.morphLayerFor('organ-level-b'), 100, 40)
+    store.toggleMorphArming('wheel')
+    const assignment = store.getState().morph.wheel[0]!
+    expect(assignment.layer).toBe('B') // bound to the fader's layer, not focus
+    // Indicators find it no matter which layer is focused.
+    expect(store.morphAssignmentFor('organ-level-b')).not.toBeNull()
+    expect(store.morphSourcesFor('organ-level-b')).toEqual(['wheel'])
+    store.setOrganFocusedLayer('B')
+    expect(store.morphAssignmentFor('organ-level-b')).not.toBeNull()
+    // A second capture updates the SAME assignment — no focus-keyed duplicate.
+    store.toggleMorphArming('wheel')
+    store.recordMorphEdit('wheel', 'organ-level-b', store.morphLayerFor('organ-level-b'), 100, 20)
+    store.toggleMorphArming('wheel')
+    expect(store.getState().morph.wheel).toHaveLength(1)
+    expect(store.getState().morph.wheel[0]!.end).toBe(20)
+    // Interpolation still moves layer B only.
+    store.setMorphSource('wheel', 127)
+    expect(store.getState().organ.layers.B.level).toBe(20)
+  })
+
+  it('piano level faders resolve by id too', () => {
+    const store = new InstrumentStore()
+    store.setFocusedLayer('A')
+    expect(store.morphLayerFor('piano-level-b')).toBe('B')
+    expect(store.morphLayerFor('piano-level-a')).toBe('A')
+  })
+})

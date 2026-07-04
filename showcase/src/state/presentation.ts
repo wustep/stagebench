@@ -408,32 +408,13 @@ export class PresentationStore {
     const previous = arming && MORPH_DESTINATIONS.has(id) && !liveDrawbar ? this.getValue(id) : null
     this.applyValue(id, clamped)
     if (wiring && arming && previous !== null && previous !== clamped) {
-      const state = wiring.instrument.getState()
-      // Drawbar/level destinations capture the organ layer they live on;
-      // effect-field destinations capture the shared organ chain when FX
-      // focus is on the Organ section, or the focused synth layer's own
-      // chain when FX focus is on Synth (manual p. 18/38, and manual p. 48's
-      // per-chain pattern applied to Synth since each layer keeps its own).
-      // Synth voice/filter/LFO knobs (osc-ctrl, filter-freq/res, lfo-rate/
-      // mod-amt) always act on the focused synth layer, regardless of FX
-      // focus; synth-level-a/b/c encode their own layer in the control id
-      // (applyMorphWrite reads it back off the id, not `layer`); arp-rate is
-      // section-wide so its captured layer is a don't-care ('SA').
-      const layer =
-        id === 'osc-ctrl' || id === 'filter-freq' || id === 'filter-res' || id === 'lfo-rate' || id === 'lfo-mod-amt'
-          ? (`S${state.synth.focusedLayer}` as 'SA' | 'SB' | 'SC')
-          : id === 'synth-level-a' || id === 'synth-level-b' || id === 'synth-level-c'
-            ? 'SA'
-            : id === 'arp-rate'
-              ? 'SA'
-              : id.startsWith('organ')
-                ? state.organ.focusedLayer
-                : state.fxSection === 'organ'
-                  ? 'organ'
-                  : state.fxSection === 'synth'
-                    ? (`S${state.synth.focusedLayer}` as 'SA' | 'SB' | 'SC')
-                    : state.focusedLayer
-      wiring.instrument.recordMorphEdit(arming, id, layer, previous, clamped)
+      // One shared resolver (instrument.morphLayerFor) decides the captured
+      // layer: id-encoded level faders bind to their own layer, drawbars to
+      // the focused organ layer, synth voice/filter/LFO knobs to the focused
+      // synth layer, and effect-field destinations to the FX-focused chain
+      // (manual p. 18/38/48). The interpolator and the LED/dot indicators
+      // resolve through the exact same function, so they can never disagree.
+      wiring.instrument.recordMorphEdit(arming, id, wiring.instrument.morphLayerFor(id), previous, clamped)
     }
   }
 
