@@ -1,0 +1,323 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt5-5-high-2",
+  "stage": 3,
+  "stageName": "Complete Stage 4 system",
+  "status": "complete",
+  "evaluator": "Codex independent evaluator",
+  "evaluatedAt": "2026-07-04T08:34:27.000Z",
+  "summary": "The sealed artifact has a credible retained Nord Stage 4 surface, passing package gates, and a sizable serialized Stage 3 state/probe model for programs, organ, synth, splits, scenes, morphs, and effects. It falls well short of the complete system contract: Grand/Upright/Electric are explicitly generated approximations rather than the required recorded sample sets; live browser key/MIDI playback still uses only the piano engine; organ and synth are represented by deterministic probes instead of being mixed into the actual Web Audio note path; Store As naming lacks a panel UI; many hardware bindings are state-only or shallow; and the runtime displays non-finite synth RMS.",
+  "score": 43,
+  "rawScore": 43,
+  "categories": [
+    {
+      "id": "visualRetention",
+      "label": "Final visual fidelity",
+      "weight": 5,
+      "score": 62.5,
+      "contribution": 3.1,
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "label": "Reference and regression retention",
+          "weight": 50,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "The desktop and narrow sealed captures show the complete red chassis, six ordered sections, two OLED locations, drawbar bank, effects controls, and 73-key keybed; evidence/stage3-capture.json reports no console messages or page errors for both 1440x900 and 390x844 captures.",
+            "src/App.test.tsx verifies 73 keys, E1-to-E7 range, 43 white/30 black keys, section order, section width fractions, and Program/Synth as the only primary OLEDs.",
+            "The narrow capture preserves the whole instrument but control labels are extremely small, so retention is inspectable rather than comfortably usable."
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "label": "Complete hardware state fidelity",
+          "weight": 50,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Interactive preview changes Program and Synth OLED text for page/program/live/split/scene/synth source actions, e.g. after clicks the Program OLED read LIVE 1 / Scene II / Split C3-C4-C5 and Synth read Super Saw / Arp Run.",
+            "src/App.tsx marks nearly all Organ/Program/Synth controls functional via functionalControlIds, with Aftertouch and Delay Tempo excluded, but many bindings are shallow state updates or status messages rather than canonical hardware behavior.",
+            "Drawbar LED ladders are rendered from a fixed index value in SectionView, not from the actual drawbar state, weakening hardware state fidelity."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "label": "Complete feature system",
+      "weight": 35,
+      "score": 50,
+      "contribution": 17.5,
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "label": "Programs and Live Mode",
+          "weight": 25,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "stage3System.ts creates 32 program slots and 8 live slots, supports selectProgram, selectLiveSlot, storeProgram, storeAsProgram, dirty state, page buttons, program buttons, and program-dial listView state.",
+            "src/App.test.tsx exercises round-trip, Store/Store As helper path, Live auto-store, edit discard, page/program buttons, and dial navigation.",
+            "The artifact's own visual audit states Store As naming is only covered through the deterministic storeAsProgram API path rather than a text-entry modal or panel workflow; numeric list view is a boolean state, not a visible browsable list."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "label": "Layers, splits, scenes, and morphs",
+          "weight": 25,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "stage3System.ts models the documented 11 split positions and Off/6/12 crossfade values, scenes I/II, Wheel and Control Pedal morph assignment arrays, clock data, transpose, and Panic.",
+            "Panel Split only toggles a fixed C3/C4/C5 configuration; there is no visible editing of the 11 split positions or crossfade widths from the panel.",
+            "Morph assignment is hardcoded to synth.A.filter.cutoff and organ.A.level, with panel buttons clearing assignments rather than assigning arbitrary targets; master clock has serialized BPM/sync targets but no real tap/dial workflow in the UI."
+          ]
+        },
+        {
+          "id": "organSystem",
+          "label": "Complete Organ system",
+          "weight": 23,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "stage3System.ts implements two organ layers, B3/Vox/Farf/Pipe harmonic tables, drawbar/register behavior, percussion, key click, vibrato/chorus, and rotary slow/fast/stop in renderOrganProbe; tests verify model and drawbar spectral differences.",
+            "Panel controls primarily alter layer A model/drawbars/percussion/vibrato/rotary; there is limited panel support for layer B focus/zones and no live organ note lifecycle through the keybed.",
+            "The visual audit explicitly says Organ/Synth live browser key playback is represented through state and deterministic render probes while the live Web Audio oscillator path remains piano-focused."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "label": "Complete Synth system",
+          "weight": 27,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "stage3System.ts defines three synth layers, Pure/Sync/Multi/Super/FM-H waveform lists, oscillator control, LP12/LP24/HP/BP filtering, envelopes, LFO waveforms, voice modes, and arpeggiatorSteps; tests render distinct probe outputs for these.",
+            "The UI exposes only a subset of canonical Synth editing: source buttons map Sample to Pure, Analog to Super, Wavetable to Multi, with Osc Select cycling all waves; voice priority, glide, hold, arp direction/range, LFO destination/sync, and independent layer routing are not fully panel-editable.",
+            "Runtime status in the sealed capture and my interactive pass displayed synth RMS as Infinity, indicating a non-finite synth probe/load issue despite tests sanitizing non-finite samples."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "label": "Audio quality and integration",
+      "weight": 30,
+      "score": 33.8,
+      "contribution": 10.1,
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "label": "Distinct engine behavior",
+          "weight": 35,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Tests compare deterministic Float32Array probes for organ models and synth waveforms/filters/envelopes/LFO/voice/arp and require non-zero distances, so there is some distinct generated behavior.",
+            "These are generated probe algorithms, not full live engine implementations; organ and synth are not connected to the actual browser key/MIDI playback path.",
+            "The non-finite synth RMS shown at runtime makes the quality and stability of the synth engine suspect even where tests pass."
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "label": "Inherited graph and effects integration",
+          "weight": 35,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "createPianoEngine builds the real Web Audio graph for piano only; App.startKey and MIDI handlers call engineRef.current.noteOn/noteOff, which route into the piano engine.",
+            "Organ and Synth integration is represented by integrationSnapshot and render probes, not by actual Web Audio buses feeding the inherited effects/master destination.",
+            "Effects focus buttons for Organ/Synth only set a status message saying they are routed through the shared graph; no code connects organ/synth audio to that graph."
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "label": "Musical quality, latency, and load",
+          "weight": 30,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "The artifact passes test/typecheck/lint/build and capture logs report no console/page errors.",
+            "Live play quality is limited to the inherited piano oscillator/sample-style engine; organ/synth are not audible from the keybed.",
+            "Status displayed 'Audio: piano + organ 0.125 + synth Infinity' in both sealed desktop evidence and interactive runtime, which is a visible runtime quality defect."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "label": "Full-system behavior",
+      "weight": 20,
+      "score": 36.3,
+      "contribution": 7.3,
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "label": "Canonical state round-trip",
+          "weight": 30,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "ProgramSnapshot serializes piano layers/performance, effects, organ, synth, split, scenes, morphs, clock, and transpose; store/load clones this state across 32 slots and Live slots.",
+            "Tests verify selected organ/synth/split edits survive Store As and program selection, and dirty edits are discarded on program change.",
+            "Round-trip evidence is mostly helper-level state testing; Store As naming is not exposed in the UI, and live audio/effect routing state is not validated against actual played organ/synth audio."
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "label": "Required hardware bindings",
+          "weight": 30,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "All non-excluded controls have accessible labels and many have data-control-id values, but canonical behavior is uneven.",
+            "Several required workflows are shallow or missing: Store As has no text-entry UI, split point/crossfade editing is not panel-editable, morph assignment is hardcoded/clear-only, master clock tap/dial is not implemented, and organ/synth effect focus is status-only.",
+            "Excluded controls are honestly declared: program.morph-aftertouch and effects.delay-tempo are decorative, and IMPLEMENTATION_DETAILS.json lists Extern, Aux KB, MIDI-out, aftertouch, preset libraries, pattern editing, and related exclusions."
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "label": "Cross-system workflows",
+          "weight": 25,
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "Interactive clicks update Program/Synth OLEDs and selected button states across Live, Split, Scene II, Vox, Super Saw, and Arp Run.",
+            "The cross-system workflow is primarily serialized state plus probe readouts; playing keys after changing organ/synth/splits still uses App.startKey -> pianoEngine.noteOn, so zones, scenes, morphs, organ, synth, and effects do not operate as one audible instrument.",
+            "Panic is triggered by a special double Transpose click condition rather than a dedicated canonical Panic control."
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "label": "Inherited regression reliability",
+          "weight": 15,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Local gates passed: pnpm test reported 18 passed tests, and typecheck, lint, and build all exited successfully.",
+            "The feature matrix retains Phase 1 and Phase 2 IDs including regression.phase1 and regression.phase2 mapped to src/App.test.tsx.",
+            "Phase 2 hard-gate regression is material: sampleLibrary and IMPLEMENTATION_DETAILS.json explicitly state Grand/Upright/Electric are generated approximations, not required bundled recorded sample sets."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 10,
+      "score": 50,
+      "contribution": 5,
+      "criteria": [
+        {
+          "id": "architecture",
+          "label": "System architecture",
+          "weight": 40,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "The code has separable hardware data, pianoEngine, and stage3System modules with normalized ProgramSnapshot state and cloning for serialization.",
+            "The architecture splits real Web Audio playback from Stage 3 deterministic probes, so organ/synth/effects integration is declarative rather than an actual unified engine path.",
+            "IMPLEMENTATION_DETAILS.json claims one shared system model but also admits organ/synth live browser playback remains piano-focused in the visual audit."
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "label": "Tests and maintainability",
+          "weight": 35,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "The feature matrix maps every required Stage 1-3 feature ID to a real test file, and the single test suite covers visual inventory, piano, effects, programs, organ, synth, and integration helpers.",
+            "Tests are concentrated in one large App.test.tsx and often exercise helper functions/render probes rather than the actual browser UI and real audio graph.",
+            "The inherited piano library test asserts generated-not-recorded provenance, which directly conflicts with the Phase 2/3 hard gate requiring recorded Grand/Upright/Electric sample sets."
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "label": "Runtime performance",
+          "weight": 25,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "The production preview loaded and an interaction pass through Program, Live, Split, Scene, Organ, Synth, and Arp controls produced no browser console errors.",
+            "Repeated interactions visibly changed OLED/status state without crashing, and package build output was small.",
+            "Runtime quality is reduced by the visible synth Infinity readout and by the fact that organ/synth playback is not connected to the live key path."
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 6085,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 1369,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 407,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 1459,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "high",
+      "summary": "Required recorded Grand/Upright/Electric sample sets are absent.",
+      "evidence": "src/pianoEngine.ts sampleLibrary and IMPLEMENTATION_DETAILS.json explicitly declare generated approximations/not recordings; the visual audit lists this as a known deviation."
+    },
+    {
+      "severity": "high",
+      "summary": "Organ and Synth are not live keybed/MIDI audio engines.",
+      "evidence": "App.startKey and MIDI note handlers call pianoEngine.noteOn only; visual audit states Organ/Synth live browser key playback is represented by state/probes while the live Web Audio path remains piano-focused."
+    },
+    {
+      "severity": "high",
+      "summary": "Organ/Synth/effects shared-routing integration is mostly declarative.",
+      "evidence": "integrationSnapshot declares a shared path, but the actual Web Audio graph is built in createPianoEngine for piano layer buses; Organ/Synth focus buttons only update status text."
+    },
+    {
+      "severity": "medium",
+      "summary": "Program and performance workflows are incomplete from the panel.",
+      "evidence": "Store As naming exists only as storeAsProgram helper, split editing toggles fixed C3/C4/C5 points, morph assignment is hardcoded/clear-only, and master clock tap/dial controls are not visibly implemented."
+    },
+    {
+      "severity": "medium",
+      "summary": "Runtime displays non-finite Synth probe output.",
+      "evidence": "Sealed desktop capture and interactive preview status both show synth RMS as Infinity."
+    },
+    {
+      "severity": "medium",
+      "summary": "Tests pass but do not prove full canonical behavior.",
+      "evidence": "All required feature IDs map to one App.test.tsx; many assertions target state helpers and deterministic probes instead of the real browser UI/audio graph, and one test codifies the generated-sample deviation."
+    }
+  ]
+}

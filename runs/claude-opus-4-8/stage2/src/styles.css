@@ -1,0 +1,1020 @@
+/* Nord Stage 4 (73-key) surface — Phase 1.
+   Colors from specs/nord-stage-4.visual.json referenceColors. */
+:root {
+  --chassis-mid: #79232c;
+  --chassis-dark: #721f29;
+  --chassis-light: #8f2b34;
+  --panel: #3c424d;
+  --panel-dark: #333842;
+  --panel-light: #464d59;
+  --key-black: #0b0b0b;
+  --key-white: #dcdcdc;
+  --led-red: #ff3b30;
+  --led-green: #6cff4a;
+  --led-amber: #ffb020;
+  --oled-bg: #071a24;
+  --oled-fg: #7fe3ff;
+  --legend: #f0f0f0;
+  --group-border: #6b7280;
+  --bg: #d9d7d2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  color: var(--legend);
+  -webkit-font-smoothing: antialiased;
+}
+
+.stage-app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0 6px;
+  min-height: 100vh;
+  gap: 6px;
+}
+
+/* ---- Chassis -------------------------------------------------------------
+   The deck is content-driven at a fixed comfortable height; the keybed takes
+   ~46/54 of the deck height so the overall deck/keybed split matches the visual
+   spec while everything stays visible without vertical page scroll. */
+.chassis {
+  width: 92vw;
+  max-width: 1720px;
+  background: linear-gradient(180deg, var(--chassis-light), var(--chassis-mid) 22%, var(--chassis-dark));
+  border-radius: 14px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.35),
+    inset 0 2px 3px rgba(255, 255, 255, 0.12),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.4);
+  padding: 12px 12px 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 54 / 46 deck / keybed split (deck ~1.17x keybed height). */
+.deck {
+  height: 430px;
+  display: grid;
+  gap: 4px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.keybed-rail {
+  height: 366px;
+  padding: 6px 5px 10px;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+/* ---- Sections ------------------------------------------------------------ */
+.deck-section {
+  position: relative;
+  min-width: 0;
+  padding: 4px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 9px;
+  overflow: hidden;
+}
+
+.deck-section.inset,
+.deck-section.central {
+  background: linear-gradient(180deg, var(--panel-light), var(--panel) 40%, var(--panel-dark));
+  border: 1.5px solid rgba(0, 0, 0, 0.35);
+  border-radius: 7px;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.deck-section.central {
+  background: linear-gradient(180deg, #4a2a30, #3d2126 60%, #341c21);
+}
+
+.deck-section.performance {
+  background: transparent;
+  border: none;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 3px;
+  gap: 4px;
+}
+
+.section-title {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: #fff;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-sub {
+  font-size: 6px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  opacity: 0.75;
+}
+
+.section-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.fx-focus {
+  font-size: 6px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.85;
+}
+
+.fx-focus-led {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--led-amber);
+  box-shadow: 0 0 4px var(--led-amber);
+}
+
+/* ---- Controls: common ---------------------------------------------------- */
+.ctl {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.ctl-caption {
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-align: center;
+  color: var(--legend);
+  white-space: nowrap;
+}
+
+.ctl-caption.top {
+  order: -1;
+}
+
+/* Knob */
+.knob {
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #2a2a2a, #111 70%, #000);
+  border: 1.5px solid #000;
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+  position: relative;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.knob:focus-visible {
+  outline: 2px solid var(--led-amber);
+  outline-offset: 2px;
+}
+
+.knob-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 46%;
+  background: #fff;
+  border-radius: 1px;
+  transform-origin: bottom center;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
+/* Encoder (endless dial) */
+.encoder {
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 32%, #3a3a3a, #161616 72%, #000);
+  border: 2px solid #000;
+  box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.15), 0 2px 3px rgba(0, 0, 0, 0.5);
+  position: relative;
+  cursor: ns-resize;
+  touch-action: none;
+  width: 38px !important;
+  height: 38px !important;
+}
+
+.encoder:focus-visible {
+  outline: 2px solid var(--led-amber);
+  outline-offset: 2px;
+}
+
+.encoder-detent {
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  width: 3px;
+  height: 22%;
+  background: #cfcfcf;
+  border-radius: 2px;
+  transform-origin: center 200%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Fader */
+.fader-assembly {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.led-ladder {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  gap: 1px;
+  width: 5px;
+}
+
+.led-seg {
+  flex: 1;
+  border-radius: 1px;
+  background: #2c1416;
+}
+
+.led-seg.on {
+  background: var(--led-green);
+  box-shadow: 0 0 3px var(--led-green);
+}
+
+.fader-track {
+  position: relative;
+  width: 12px;
+  background: linear-gradient(90deg, #111, #2b2b2b, #111);
+  border-radius: 3px;
+  border: 1px solid #000;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.fader-track:focus-visible {
+  outline: 2px solid var(--led-amber);
+  outline-offset: 2px;
+}
+
+.fader-cap {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 14px;
+  background: linear-gradient(180deg, #bcbcbc, #8a8a8a 55%, #6a6a6a);
+  border-radius: 3px;
+  border: 1px solid #000;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.fader-cap::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 2px;
+  background: #333;
+  transform: translateY(-50%);
+}
+
+/* Drawbar */
+.ctl-drawbar {
+  gap: 1px;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.drawbar-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 9px;
+}
+
+.db-seg {
+  height: 4px;
+  border-radius: 1px;
+  background: #2c1416;
+}
+
+.db-seg.on {
+  background: var(--led-red);
+  box-shadow: 0 0 2px var(--led-red);
+}
+
+.drawbar-track {
+  position: relative;
+  width: 14px;
+  height: 46px;
+  background: linear-gradient(90deg, #0c0c0c, #262626, #0c0c0c);
+  border-radius: 3px;
+  border: 1px solid #000;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.drawbar-track:focus-visible {
+  outline: 2px solid var(--led-amber);
+  outline-offset: 2px;
+}
+
+.drawbar-cap {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 22px;
+  border-radius: 2px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  font-size: 7px;
+  font-weight: 700;
+  padding-top: 1px;
+  border: 1px solid #000;
+  pointer-events: none;
+}
+
+.drawbar-cap.white {
+  background: linear-gradient(180deg, #f0f0f0, #cfcfcf);
+  color: #222;
+}
+
+.drawbar-cap.black {
+  background: linear-gradient(180deg, #333, #111);
+  color: #ddd;
+}
+
+.db-caption {
+  margin-top: 1px;
+}
+
+/* Button */
+.ctl-button {
+  gap: 1px;
+}
+
+.btn-led {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #401518;
+}
+
+.btn-led.red.on {
+  background: var(--led-red);
+  box-shadow: 0 0 4px var(--led-red);
+}
+.btn-led.green.on {
+  background: var(--led-green);
+  box-shadow: 0 0 4px var(--led-green);
+}
+.btn-led.amber.on {
+  background: var(--led-amber);
+  box-shadow: 0 0 4px var(--led-amber);
+}
+
+.panel-btn {
+  border: 1px solid #000;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  background: linear-gradient(180deg, #2a2a2a, #141414);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.panel-btn.pill {
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+}
+
+.panel-btn.square {
+  width: 22px;
+  height: 15px;
+}
+
+.panel-btn.grey {
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #c9c9c9, #9a9a9a);
+}
+
+.panel-btn:focus-visible {
+  outline: 2px solid var(--led-amber);
+  outline-offset: 2px;
+}
+
+.panel-btn.pressed {
+  background: linear-gradient(180deg, #3a3a3a, #202020);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.6);
+}
+.panel-btn.grey.pressed {
+  background: linear-gradient(180deg, #8a8a8a, #6a6a6a);
+}
+
+.btn-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Selector */
+.ctl-selector {
+  align-items: flex-start;
+}
+
+.selector-body {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.selector-leds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-auto-flow: row;
+  gap: 1px;
+}
+
+.selector-leds li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 6px;
+  font-weight: 700;
+  opacity: 0.55;
+}
+
+.selector-leds li.active {
+  opacity: 1;
+}
+
+.sel-led {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #401518;
+  flex: none;
+}
+
+.sel-led.on {
+  background: var(--led-red);
+  box-shadow: 0 0 3px var(--led-red);
+}
+
+.selector-btn {
+  flex: none;
+}
+
+/* Wheel + pitch stick */
+.ctl-wheel {
+  gap: 3px;
+}
+
+.wheel-track {
+  position: relative;
+  width: 18px;
+  background: linear-gradient(90deg, #1a1a1a, #333 50%, #1a1a1a);
+  border-radius: 6px;
+  border: 1px solid #000;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.ctl-wheel.pitch .wheel-track {
+  background: linear-gradient(90deg, #6a4a1a, #b98a3a 50%, #6a4a1a);
+}
+
+.wheel-track:focus-visible {
+  outline: 2px solid var(--led-amber);
+  outline-offset: 2px;
+}
+
+.wheel-cap {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 12px;
+  background: linear-gradient(180deg, #333, #111);
+  border-radius: 3px;
+  border: 1px solid #000;
+  pointer-events: none;
+}
+
+.ctl-wheel.pitch .wheel-cap {
+  background: linear-gradient(180deg, #c79a4a, #8a6522);
+}
+
+/* ---- Performance section ------------------------------------------------- */
+.performance {
+  justify-content: space-between;
+}
+
+.perf-top {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 4px 0;
+}
+
+.perf-wheels {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 2px 0;
+}
+
+.rotary-group {
+  font-size: 6px;
+}
+
+.rotary-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: auto;
+  padding: 4px 2px;
+}
+
+.brand-name {
+  font-size: 18px;
+  font-weight: 800;
+  font-style: italic;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.brand-sub {
+  font-size: 6px;
+  letter-spacing: 3px;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+/* ---- Group boxes --------------------------------------------------------- */
+.group {
+  position: relative;
+  border: 1px solid var(--group-border);
+  border-radius: 5px;
+  padding: 7px 4px 3px;
+  min-width: 0;
+}
+
+.group-title {
+  position: absolute;
+  top: -5px;
+  left: 6px;
+  background: var(--panel);
+  padding: 0 3px;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #fff;
+}
+
+.central .group-title {
+  background: #3d2126;
+}
+
+.group-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+/* ---- Organ / Piano / Synth shared body ----------------------------------- */
+.organ-body,
+.piano-body,
+.synth-body {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  min-height: 0;
+}
+
+.organ-left,
+.piano-left,
+.synth-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: none;
+}
+
+.fader-pair,
+.fader-trio {
+  display: flex;
+  gap: 4px;
+}
+
+.layer-row,
+.octave-row {
+  display: flex;
+  gap: 3px;
+}
+
+.organ-right,
+.piano-right,
+.synth-right {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.organ-top-groups,
+.piano-top-row,
+.synth-top {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.perc-buttons {
+  display: flex;
+  gap: 3px;
+}
+
+.drawbar-bank {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-top: 2px;
+}
+
+.drawbar-bank .ctl-drawbar {
+  flex: 1;
+}
+
+/* ---- Piano --------------------------------------------------------------- */
+.piano-mid-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.piano-right {
+  overflow: hidden;
+}
+
+.piano-select {
+  display: flex;
+}
+
+.piano-select .group-body {
+  align-items: center;
+}
+
+/* ---- Program ------------------------------------------------------------- */
+.program {
+  gap: 5px;
+}
+
+.morph-assign .group-body {
+  justify-content: space-between;
+}
+
+.program-mid {
+  display: flex;
+  gap: 5px;
+  align-items: flex-start;
+}
+
+.program-store-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+
+.program-nav,
+.program-scene-row {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.program-buttons .group-body {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+
+/* ---- OLED ---------------------------------------------------------------- */
+.oled {
+  background: var(--oled-bg);
+  border: 1.5px solid #04222f;
+  border-radius: 3px;
+  padding: 4px 6px;
+  color: var(--oled-fg);
+  font-family: 'Courier New', monospace;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.7);
+  line-height: 1.15;
+  flex: 1;
+  min-width: 0;
+}
+
+.program-oled {
+  min-width: 120px;
+}
+
+.synth-oled {
+  min-width: 118px;
+  flex: none;
+  width: 128px;
+  max-height: 62px;
+}
+
+.oled-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oled-line.big {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.oled-line.header {
+  font-size: 8px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.oled-line.small {
+  font-size: 8px;
+  opacity: 0.9;
+}
+
+.oled-tabs {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  font-size: 7px;
+}
+
+.oled-tabs span {
+  border: 1px solid var(--oled-fg);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* ---- Synth --------------------------------------------------------------- */
+.synth-body {
+  overflow: hidden;
+}
+
+.synth-top {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.synth-bottom {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.synth-bottom .group,
+.synth-top .group {
+  padding: 6px 2px 1px;
+}
+
+.synth-bottom .ctl-knob,
+.synth-top .ctl-knob {
+  gap: 0;
+}
+
+/* Compact knobs in the dense Synth + Effects sections. */
+.synth .knob,
+.effects .knob {
+  width: 21px !important;
+  height: 21px !important;
+}
+
+.synth .ctl-caption,
+.effects .ctl-caption {
+  font-size: 5px;
+}
+
+.btn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ---- Effects ------------------------------------------------------------- */
+.effects-header {
+  align-items: center;
+}
+
+.effects-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.effects-body {
+  overflow: hidden;
+  flex: 1;
+}
+
+.effects-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  flex: 1;
+}
+
+.effects-grid .group {
+  padding: 7px 3px 2px;
+}
+
+.effects-grid .group-body {
+  gap: 2px 3px;
+}
+
+.effects-grid .ctl-knob {
+  gap: 1px;
+}
+
+/* ---- Keybed -------------------------------------------------------------- */
+.keybed {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #111;
+  border-radius: 3px;
+  padding: 3px 3px 0;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.white-keys {
+  display: flex;
+  height: 100%;
+  gap: 1px;
+}
+
+.key {
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  touch-action: none;
+  font: inherit;
+}
+
+.key.white {
+  height: 100%;
+  background: linear-gradient(180deg, #fff 0%, var(--key-white) 92%, #b6b6b6 100%);
+  border: 1px solid #999;
+  border-top: none;
+  border-radius: 0 0 3px 3px;
+  box-shadow: inset 0 -3px 4px rgba(0, 0, 0, 0.15);
+}
+
+.key.white:focus-visible,
+.key.black:focus-visible {
+  outline: 2px solid var(--led-amber);
+  outline-offset: -2px;
+  z-index: 5;
+}
+
+.key.white.active {
+  background: linear-gradient(180deg, #ffe6a0 0%, #ffd15a 100%);
+}
+
+.black-keys {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  right: 3px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.key.black {
+  position: absolute;
+  top: 0;
+  pointer-events: auto;
+  background: linear-gradient(180deg, #2a2a2a 0%, var(--key-black) 100%);
+  border: 1px solid #000;
+  border-radius: 0 0 2px 2px;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.6);
+  z-index: 3;
+}
+
+.key.black.active {
+  background: linear-gradient(180deg, #6a5520 0%, #4a3a10 100%);
+}
+
+/* ---- Status bar ---------------------------------------------------------- */
+.status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  color: #333;
+  padding: 4px 10px;
+}
+
+.status-chip {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #eee;
+  border: 1px solid #ccc;
+  font-weight: 600;
+}
+
+.status-chip.piano.ready {
+  background: #e5f7e5;
+  border-color: #86c986;
+}
+.status-chip.piano.fallback,
+.status-chip.piano.error {
+  background: #fdeaea;
+  border-color: #d99;
+}
+.status-chip.midi.ready {
+  background: #e5f0fb;
+  border-color: #8ab3dd;
+}
+.status-chip.midi.denied,
+.status-chip.midi.disconnected {
+  background: #fbf2e5;
+  border-color: #ddb98a;
+}
+
+.status-note {
+  color: #666;
+}
+
+/* ---- Narrow viewport (390x844) ------------------------------------------- */
+@media (max-width: 720px) {
+  .stage-app {
+    padding: 8px 4px;
+    align-items: stretch;
+  }
+  .chassis {
+    width: 100%;
+    /* Allow horizontal scroll of the wide deck rather than clipping it. */
+    aspect-ratio: auto;
+    height: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .deck,
+  .keybed-rail {
+    min-width: 1000px;
+  }
+  .deck {
+    height: 300px;
+  }
+  .keybed-rail {
+    height: 150px;
+  }
+}

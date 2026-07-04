@@ -1,0 +1,125 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "One AudioContext (src/audio/audioEngine.ts). Two Piano layers (A, B) each own their voices and route only to their own layer bus. Each layer bus passes through an ordered effect chain — Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ (or Filter) -> Compressor -> Reverb — then a per-layer level gain into the master gain -> DynamicsCompressor limiter -> the single AudioContext.destination. A single shared Rotary sits AFTER reverb (reverb always precedes rotary); a layer whose Amp Sim/EQ model is 'To Rotary' has its post-reverb signal rerouted into the shared rotary and out of the normal master path. Grand/Upright/Electric play RECORDED multi-sampled buffers (nearest recorded root, playback-rate pitch, <=1 semitone shift); Clav/Digital/Misc play HONEST SYNTHESIS. KB Touch, Dyn Comp, Timbre, Unison, and Soft Release shape each voice; sustain (UI/keyboard/MIDI CC64) holds released notes per layer only when that layer's SUSTPED is on. Every functional Piano, Layer-Effects, and Master control maps to real audio via src/audio/controlBindings.ts; Organ, Synth, and Program controls are not bound and stay decorative. Parameter changes use short ~20ms ramps to avoid clicks; voices, effect units, and the AudioContext are all cleaned up on release/teardown.",
+    "generatedSources": [
+      {
+        "name": "Clav (Clavinet D6) voice",
+        "type": "generated",
+        "synthesis": "Sawtooth fundamental + square octave partial with a percussive decay envelope; velocity/KB-Touch shaped; optional detuned unison stack.",
+        "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'clav').",
+        "license": "Generated at runtime; no third-party asset.",
+        "notes": "Honest synthesis, NOT a recording. Declared as the Clav type per the piano spec (Clav may be honest synthesis)."
+      },
+      {
+        "name": "Digital (Digital Grand) voice",
+        "type": "generated",
+        "synthesis": "Triangle fundamental + octave and twelfth sine partials, velocity/KB-Touch shaped; also serves as the labeled playable fallback when sample assets fail to load.",
+        "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'digital').",
+        "license": "Generated at runtime; no third-party asset.",
+        "notes": "Honest synthesis, NOT a recording. Digital type per the piano spec (honest synthesis acceptable)."
+      },
+      {
+        "name": "Misc (Vibraphone / mallet) voice",
+        "type": "generated",
+        "synthesis": "Sine fundamental + inharmonic mallet partials (ratios 4 and 9.2) with a long percussive decay.",
+        "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'mallet').",
+        "license": "Generated at runtime; no third-party asset.",
+        "notes": "Honest synthesis, NOT a recording. Misc mallet character per the piano spec."
+      },
+      {
+        "name": "Layer effect units",
+        "type": "generated",
+        "synthesis": "Real Web Audio subgraphs: Mod 1 (LFO tremolo/pan, ring mod, wah), Mod 2 (modulated-delay chorus/flanger/ensemble/spin and all-pass phaser/vibe), Delay (stereo delay with an in-loop feedback filter so repeats are progressively filtered), Amp Sim/EQ (waveshaper drive + 3-band EQ or 24 dB resonant filter or To Rotary), Compressor (DynamicsCompressor + makeup), Reverb (convolution with a per-type generated impulse), Rotary (horn+bass rotor with LFO pan/amplitude).",
+        "implementation": "src/audio/effects.ts.",
+        "license": "Generated at runtime; no third-party asset.",
+        "notes": "Reverb impulse responses are generated (deterministic PRNG), not recorded IRs; all units process real audio with working bypass and dry/wet."
+      }
+    ],
+    "sampleSources": [
+      {
+        "type": "recorded",
+        "pianoType": "Grand",
+        "set": "public/samples/grand",
+        "instrument": "FluidR3_GM acoustic_grand_piano",
+        "soundfont": "FluidR3_GM",
+        "author": "Frank Wen (FluidR3_GM SoundFont)",
+        "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+        "license": "CC-BY-3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+        "format": "mp3",
+        "rootNoteCount": 30,
+        "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+        "velocityLayers": 1,
+        "velocityHandling": "Single recorded velocity layer per root note; velocity, KB Touch, and Dyn Comp shape loudness via a gain/curve at play time (declared honestly — not multiple recorded velocity layers).",
+        "manifest": "public/samples/grand/manifest.json",
+        "offline": true,
+        "name": "Grand — FluidR3_GM acoustic_grand_piano (public/samples/grand)",
+        "source": "FluidR3_GM acoustic_grand_piano pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+      },
+      {
+        "type": "recorded",
+        "pianoType": "Upright",
+        "set": "public/samples/upright",
+        "instrument": "FluidR3_GM honkytonk_piano",
+        "soundfont": "FluidR3_GM",
+        "author": "Frank Wen (FluidR3_GM SoundFont)",
+        "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+        "license": "CC-BY-3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+        "format": "mp3",
+        "rootNoteCount": 30,
+        "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+        "velocityLayers": 1,
+        "velocityHandling": "Single recorded velocity layer per root note; loudness shaped at play time. Audibly distinct from the grand (upright / tack character).",
+        "manifest": "public/samples/upright/manifest.json",
+        "offline": true,
+        "name": "Upright — FluidR3_GM honkytonk_piano (public/samples/upright)",
+        "source": "FluidR3_GM honkytonk_piano pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+      },
+      {
+        "type": "recorded",
+        "pianoType": "Electric",
+        "set": "public/samples/electric",
+        "instrument": "FluidR3_GM electric_piano_1",
+        "soundfont": "FluidR3_GM",
+        "author": "Frank Wen (FluidR3_GM SoundFont)",
+        "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+        "license": "CC-BY-3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+        "format": "mp3",
+        "rootNoteCount": 30,
+        "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+        "velocityLayers": 1,
+        "velocityHandling": "Single recorded velocity layer per root note; loudness shaped at play time. Rhodes-style tine EP timbre, audibly distinct from grand and upright.",
+        "manifest": "public/samples/electric/manifest.json",
+        "offline": true,
+        "name": "Electric — FluidR3_GM electric_piano_1 (public/samples/electric)",
+        "source": "FluidR3_GM electric_piano_1 pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+      }
+    ],
+    "notes": [
+      "The recorded sample sets are bundled under public/samples/ and load offline (no network at runtime). scripts/fetch-samples.mjs reproducibly re-downloads them; provenance is echoed in each set's manifest.json and public/samples/LICENSE.txt.",
+      "Each recorded set uses 30 root notes spaced a minor third apart, so playback pitch-shifts a note by at most ~1 semitone (no obvious stretching). Only a single recorded velocity layer per root note is bundled; velocity/KB-Touch/Dyn-Comp shaping at play time is declared honestly and is NOT presented as multiple recorded velocity layers.",
+      "If a sample set fails to load, the engine reports a labeled playable fallback (StatusBar) and plays the synthesized 'digital' recipe instead of pretending recordings exist.",
+      "Master Level, all functional Piano controls, and all Layer-Effects controls change rendered audio and agree with their panel feedback (tests: tests/instruments.test.ts, tests/pianoControls.test.ts, tests/effects.test.ts, tests/controlBindings.test.ts).",
+      "The audio boundary is exercised in tests with node-web-audio-api's OfflineAudioContext (real rendered signals), not mocks. The Phase-1 fake backend (src/audio/fakeBackend.ts) still backs the preserved Phase-1 tests.",
+      "Organ, Synth, and Program controls remain honestly decorative in Phase 2: they move/press and store presentation-only state (src/state/controlStore.ts) and are not bound in src/audio/controlBindings.ts."
+    ]
+  },
+  "decorativeControls": {
+    "summary": "Organ, Synth, and Program controls stay decorative in Phase 2 (they have stable IDs, accessible names/roles/values, respond to pointer and keyboard, and show state, but change no audio or system state). The Piano section, the Layer Effects section, and the Master Level knob are now functional.",
+    "inventory": "src/model/controls.ts (CONTROLS); presentation state in src/state/controlStore.ts; functional bindings in src/audio/controlBindings.ts."
+  },
+  "functional": {
+    "keybed": "73 keys (E1..E7), pointer + independent multi-touch + accessible computer keyboard + Web MIDI note/velocity + CC64 sustain, through one shared note lifecycle (src/input/noteRouter.ts) into the single-context AudioEngine.",
+    "piano": "Six selectable types (Grand/Upright/Electric recorded; Clav/Digital/Misc synth), two layers (enable/focus/level/octave/SUSTPED/PSTICK with per-layer voice ownership), KB Touch (3 curves), Dyn Comp (Off/1/2/3), Timbre (per family), Unison (Off/1/2/3), Soft Release, String Res, and a labeled playable fallback.",
+    "layerEffects": "Per-layer chains for Piano A and B (Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb) plus a shared Rotary via To Rotary; FX focus follows/overrides layer focus, Piano group mode, Delay/Compressor/Reverb global mode, per-unit bypass, all-effects bypass, and the documented signal order.",
+    "master": "Master Level knob drives the single master gain feeding the limiter and the one destination."
+  }
+}
