@@ -800,9 +800,19 @@ export function createReverb(ctx: AudioContextLike): EffectUnit<ReverbState> {
 
 /* ------------------------------------------------------------- Rotary -- */
 
+/** Sound menu 8-11 (manual p. 58): rotor/horn speed and acceleration trims. */
+export interface RotaryTuning {
+  rotorSpeed: 'Low' | 'Normal' | 'High'
+  rotorAcc: 'Low' | 'Normal' | 'High'
+  hornSpeed: 'Low' | 'Normal' | 'High'
+  hornAcc: 'Low' | 'Normal' | 'High'
+}
+
 export interface RotaryState {
   speed: RotarySpeed
   drive: number
+  /** Global Sound-menu tuning; omitted = Normal everywhere. */
+  tuning?: RotaryTuning
 }
 
 export interface RotaryUnit {
@@ -943,12 +953,18 @@ export function createRotary(ctx: AudioContextLike): RotaryUnit {
         setParam(driveIn.gain, 1 + amount * 0.8, now)
       }
       // Acceleration inertia: horn ~0.8 s, rotor ~1.9 s time constants.
-      const hornTarget = state.speed === 'fast' ? 6.7 : state.speed === 'slow' ? 0.8 : 0.02
-      const rotorTarget = state.speed === 'fast' ? 5.9 : state.speed === 'slow' ? 0.7 : 0.02
+      // The Sound menu's speed trims scale the rotation targets (not the
+      // stopped state) and its acceleration trims scale the inertia (Low
+      // acceleration = slower spin-up = longer time constant).
+      const speedScale = (level: 'Low' | 'Normal' | 'High' = 'Normal') => (level === 'Low' ? 0.75 : level === 'High' ? 1.3 : 1)
+      const accScale = (level: 'Low' | 'Normal' | 'High' = 'Normal') => (level === 'Low' ? 1.8 : level === 'High' ? 0.45 : 1)
+      const tuning = state.tuning
+      const hornTarget = state.speed === 'fast' ? 6.7 * speedScale(tuning?.hornSpeed) : state.speed === 'slow' ? 0.8 * speedScale(tuning?.hornSpeed) : 0.02
+      const rotorTarget = state.speed === 'fast' ? 5.9 * speedScale(tuning?.rotorSpeed) : state.speed === 'slow' ? 0.7 * speedScale(tuning?.rotorSpeed) : 0.02
       hornLfo.frequency.cancelScheduledValues(now)
-      hornLfo.frequency.setTargetAtTime(hornTarget, now, 0.8)
+      hornLfo.frequency.setTargetAtTime(hornTarget, now, 0.8 * accScale(tuning?.hornAcc))
       rotorLfo.frequency.cancelScheduledValues(now)
-      rotorLfo.frequency.setTargetAtTime(rotorTarget, now, 1.9)
+      rotorLfo.frequency.setTargetAtTime(rotorTarget, now, 1.9 * accScale(tuning?.rotorAcc))
       const depthScale = state.speed === 'stop' ? 0.15 : 1
       setParam(hornAmpDepth.gain, 0.22 * depthScale, now, 0.5)
       setParam(hornPanDepth.gain, 0.75 * depthScale, now, 0.5)

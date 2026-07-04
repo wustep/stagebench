@@ -1220,7 +1220,19 @@ export class PianoEngine {
     }
 
     if (!this.channels || !this.rotary) return
-    this.rotary.update(state.rotary, now)
+    this.rotary.update(
+      {
+        ...state.rotary,
+        // Sound menu 8-11 (manual p. 58): global rotor/horn speed + acceleration.
+        tuning: {
+          rotorSpeed: state.globalSettings.rotaryRotorSpeed,
+          rotorAcc: state.globalSettings.rotaryRotorAcc,
+          hornSpeed: state.globalSettings.rotaryHornSpeed,
+          hornAcc: state.globalSettings.rotaryHornAcc,
+        },
+      },
+      now,
+    )
 
     // GLOBAL Reverb relocation (manual p. 52-53): with Reverb in Global
     // mode the ONE shared post-rotary reverb takes over and every chain's
@@ -1268,9 +1280,11 @@ export class PianoEngine {
         rampTo(channel.dynMakeup.gain, level === 0 ? 1 : 1 + level * 0.35, now)
       }
 
-      // Resonance send follows String Res + damper state (as routed by SUSTPED).
+      // Resonance send follows String Res + damper state (as routed by
+      // SUSTPED), trimmed by the Sound menu's String Res level (±6 dB).
       const resActive = state.piano.stringRes && this.effectiveSustainLevel('piano') >= SUSTAIN_LIFT
-      rampTo(channel.resSend.gain, resActive ? 0.4 : 0.0001, now)
+      const resLevel = 0.4 * Math.pow(10, state.globalSettings.stringResDb / 20)
+      rampTo(channel.resSend.gain, resActive ? resLevel : 0.0001, now)
 
       // Ordered effect chain (families process real audio; allFxOff bypasses everything).
       const fxOn = !state.allFxOff
@@ -2188,7 +2202,9 @@ export class PianoEngine {
       filter.frequency.value = recipe.click === 'b3' ? 2600 : Math.min(6000, fundamental * 3)
       filter.Q.value = 1
       const clickGain = context.createGain()
-      clickGain.gain.value = recipe.click === 'b3' ? 0.06 : 0.1
+      // Sound menu 6 (manual p. 58): B3 Key Click level Normal/High.
+      const clickBoost = recipe.click === 'b3' && this.state.globalSettings.b3ClickLevel === 'High' ? 2 : 1
+      clickGain.gain.value = (recipe.click === 'b3' ? 0.06 : 0.1) * clickBoost
       source.connect(filter)
       filter.connect(clickGain)
       clickGain.connect(gain)
@@ -3134,7 +3150,8 @@ export class PianoEngine {
       filter.type = 'lowpass'
       filter.frequency.value = 300
       const gain = context.createGain()
-      gain.gain.value = 0.06
+      // Sound menu 2 (manual p. 58): Pedal Noise level trim, ±6 dB.
+      gain.gain.value = 0.06 * Math.pow(10, this.state.globalSettings.pedalNoiseDb / 20)
       source.connect(filter)
       filter.connect(gain)
       gain.connect(this.channels[layer].voiceBus)
@@ -3168,9 +3185,15 @@ export class PianoEngine {
     return routed ? this.pitchBend : 0
   }
 
-  /** Program transpose (manual p. 40): shifts sounding pitch, never zone routing. */
+  /** Program transpose (manual p. 40) plus the System menu's Global
+   *  Transpose and Fine Tune (manual p. 57, added on top of the per-program
+   *  value): shifts sounding pitch, never zone routing. Fine Tune is
+   *  fractional semitones — every pitch path here is exponential, so
+   *  cents flow through the same offset. */
   private transposeOffset(): number {
-    return this.state.transpose.on ? this.state.transpose.semitones : 0
+    const program = this.state.transpose.on ? this.state.transpose.semitones : 0
+    const settings = this.state.globalSettings
+    return program + settings.globalTranspose + settings.fineTune / 100
   }
 
   /** Per-layer Osc Pitch offset in cents (manual p. 28: -24..+24 semitones

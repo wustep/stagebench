@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react'
-import { getControl, HARDWARE_CONTROLS } from '../model/hardware'
+import { getControl, HARDWARE_CONTROLS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
 import { PRESET_BANKS } from '../model/presets'
 import { instrumentsOfType, SYNTH_SAMPLE_SETS, type InstrumentSpec } from '../audio/library'
 import type { InstrumentController } from '../input/controller'
 import {
   ARP_DIRECTIONS,
   mappings,
+  MENU_PAGES,
   MORPH_DESTINATIONS,
   presetSectionName,
   SPLIT_POSITIONS,
@@ -117,6 +118,15 @@ export class PresentationStore {
           }
           if (state.clockEdit) return Math.round(((state.masterClock.bpm - 30) / 270) * 127)
           if (state.transposeEdit) return Math.round(((state.transpose.semitones + 6) / 12) * 127)
+          if (state.menu) {
+            const def = MENU_PAGES[state.menu.id][state.menu.page]!
+            const value = state.globalSettings[def.key]
+            if (def.options) {
+              const label = typeof value === 'boolean' ? (value ? 'On' : 'Off') : String(value)
+              return Math.round((Math.max(0, def.options.indexOf(label)) / (def.options.length - 1)) * 127)
+            }
+            return Math.round((((value as number) - def.min!) / (def.max! - def.min!)) * 127)
+          }
           // Preset Library browse (manual p. 41): the dial spans the preset list.
           if (state.presetBrowse)
             return Math.round((state.presetBrowse.index / (PRESET_BANKS[state.presetBrowse.section].length - 1)) * 127)
@@ -435,6 +445,11 @@ export class PresentationStore {
           store.setMorphSource('wheel', clamped)
           return
         case 'program-dial':
+          // Menu screens repurpose the dial for the focused setting (manual p. 57).
+          if (store.getState().menu) {
+            store.setMenuValueFromDial(clamped)
+            return
+          }
           // Split-edit mode repurposes the dial for the point position.
           if (store.getState().splitEdit) {
             store.setSplitPosition(clamped)
@@ -977,11 +992,13 @@ export class PresentationStore {
         }
         case 'page-left':
           if (store.getState().presetBrowse) store.stepPreset(-1)
+          else if (store.getState().menu) store.stepMenuPage(-1)
           else if (store.getState().splitEdit) store.selectSplitPoint(-1)
           else store.shiftProgramPage(-1)
           return
         case 'page-right':
           if (store.getState().presetBrowse) store.stepPreset(1)
+          else if (store.getState().menu) store.stepMenuPage(1)
           else if (store.getState().splitEdit) store.selectSplitPoint(1)
           else store.shiftProgramPage(1)
           return
@@ -1070,6 +1087,30 @@ export class PresentationStore {
         case 'program-7':
         case 'program-8': {
           const button = Number(id.slice('program-'.length)) - 1
+          // Shift + PROGRAM opens the menus (manual p. 57): System (1) and
+          // Sound (2) are implemented; the other printed menus are declared
+          // honestly instead of pretending. The OLED edit modes keep their
+          // soft-button rows even while the Shift latch is still lit (the
+          // pointer-first adaptation of the hardware's held Shift).
+          const editModeActive =
+            store.getState().clockEdit ||
+            store.getState().splitEdit !== null ||
+            store.getState().layerInitEdit ||
+            store.getState().presetBrowse !== null ||
+            store.getState().programs.numPad ||
+            store.getState().programs.storePending !== null
+          if (shift && !editModeActive) {
+            if (button === 0) store.openMenu('system')
+            else if (button === 1) store.openMenu('sound')
+            else store.setLastEdit(`${PROGRAM_BUTTON_LEGENDS[button]} menu — not implemented in this showcase`)
+            return
+          }
+          if (store.getState().menu) {
+            // Menu screen: our pages hold one setting each, so the soft-button
+            // row only re-prints the navigation hint.
+            store.setLastEdit('Menu — dial: set · PAGE: page · EXIT: leave')
+            return
+          }
           if (store.getState().clockEdit) {
             // Clock-edit mode (manual p. 40-41): PROG 1 syncs the Delay,
             // PROG 2 syncs Mod 1, PROG 3 cycles KBS, PROG 4 toggles Pedal Tap.
@@ -1245,6 +1286,11 @@ export class PresentationStore {
           // …then unlatches the Mon/Copy or Paste mode (manual p. 43)…
           if (store.getState().monCopy !== null) {
             store.setMonCopyMode(null)
+            return
+          }
+          // …then leaves an open System/Sound menu (EXIT, manual p. 57)…
+          if (store.getState().menu) {
+            store.closeMenu()
             return
           }
           // …then leaves the Preset Library screen, KEEPING the loaded

@@ -5,6 +5,8 @@ import type { PresentationStore } from '../state/presentation'
 import { usePresentationMorphRange, usePresentationToggle, usePresentationValue } from '../state/presentation'
 import {
   mappings,
+  MENU_PAGES,
+  menuPageValueLabel,
   organModelLabel,
   programLabel,
   splitBoundaries,
@@ -732,6 +734,20 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
     </b>
   )
   const chainForFocused = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
+  const menuRows = state.menu
+    ? (() => {
+        const pages = MENU_PAGES[state.menu.id]
+        const def = pages[state.menu.page]!
+        return [
+          <span key="mn1" className="oled-slot" data-testid="oled-menu-line">
+            ⚙ {state.menu.id === 'system' ? 'SYSTEM' : 'SOUND'} MENU {state.menu.page + 1}/{pages.length} — {def.label}
+          </span>,
+          <span key="mn2" className="oled-slot" data-testid="oled-menu-value">
+            {menuPageValueLabel(state.globalSettings, def)} · dial: set · PAGE: page · EXIT: leave
+          </span>,
+        ]
+      })()
+    : null
   const clockRows = state.clockEdit
     ? [
         <span key="ck1" className="oled-slot" data-testid="oled-clock-line">
@@ -1046,7 +1062,8 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               lines={[
                 <span key="p" className={`oled-program${xl}`} data-testid="oled-program-line">{programReadout}</span>,
                 <span key="n">{nameLine}</span>,
-                ...(presetRows ??
+                ...(menuRows ??
+                  presetRows ??
                   layerInitRows ??
                   splitRows ??
                   clockRows ??

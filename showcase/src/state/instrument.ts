@@ -445,6 +445,90 @@ export interface ScenesState {
   }
 }
 
+/** Three-position Low/Normal/High setting used by the Sound menu's rotary pages. */
+export type MenuLevel = 'Low' | 'Normal' | 'High'
+
+/** Menus chapter (manual p. 57-58): the global (non-program) settings behind
+ *  Shift + PROGRAM 1 (System) and Shift + PROGRAM 2 (Sound). "Settings that
+ *  are made in the menus will take immediate effect, and will be stored until
+ *  they are changed again" — persisted to storage, never part of a program
+ *  snapshot, never marking the program edited. */
+export interface GlobalSettingsState {
+  /** System 1 — gates Store operations to program slots (Live slots and menu
+   *  settings are unaffected, manual p. 57). The hardware ships with this On;
+   *  the showcase boots Off (declared adaptation: a first-time browser
+   *  visitor's STORE should work out of the box) — the gate itself is fully
+   *  functional once enabled. */
+  memoryProtect: boolean
+  /** System 2 — semitones added on top of any per-program transpose (±6). */
+  globalTranspose: number
+  /** System 3 — instrument-wide fine tune in cents (±50). */
+  fineTune: number
+  /** Sound 2 — Piano Pedal Noise level trim in dB (±6). */
+  pedalNoiseDb: number
+  /** Sound 3 — Piano String Resonance level trim in dB (±6). */
+  stringResDb: number
+  /** Sound 6 — B3 organ Key Click level. */
+  b3ClickLevel: 'Normal' | 'High'
+  /** Sound 8-11 — rotary speaker rotor/horn speed and acceleration. */
+  rotaryRotorSpeed: MenuLevel
+  rotaryRotorAcc: MenuLevel
+  rotaryHornSpeed: MenuLevel
+  rotaryHornAcc: MenuLevel
+}
+
+export function defaultGlobalSettings(): GlobalSettingsState {
+  return {
+    memoryProtect: false,
+    globalTranspose: 0,
+    fineTune: 0,
+    pedalNoiseDb: 0,
+    stringResDb: 0,
+    b3ClickLevel: 'Normal',
+    rotaryRotorSpeed: 'Normal',
+    rotaryRotorAcc: 'Normal',
+    rotaryHornSpeed: 'Normal',
+    rotaryHornAcc: 'Normal',
+  }
+}
+
+/** One Program-OLED menu page (manual p. 57: "Menus are navigated with the
+ *  PAGE 3 and 4 buttons and settings are changed with the PROGRAM dial"). */
+export interface MenuPageDef {
+  key: keyof GlobalSettingsState
+  label: string
+  /** Enumerated options in dial order; omitted for integer ranges. */
+  options?: readonly string[]
+  min?: number
+  max?: number
+  unit?: string
+}
+
+export const MENU_PAGES: Record<'system' | 'sound', readonly MenuPageDef[]> = {
+  system: [
+    { key: 'memoryProtect', label: 'Memory Protect', options: ['On', 'Off'] },
+    { key: 'globalTranspose', label: 'Global Transpose', min: -6, max: 6, unit: 'st' },
+    { key: 'fineTune', label: 'Fine Tune', min: -50, max: 50, unit: 'cent' },
+  ],
+  sound: [
+    { key: 'pedalNoiseDb', label: 'Piano Pedal Noise Lvl', min: -6, max: 6, unit: 'dB' },
+    { key: 'stringResDb', label: 'Piano String Res Lvl', min: -6, max: 6, unit: 'dB' },
+    { key: 'b3ClickLevel', label: 'B3 Organ Click Level', options: ['Normal', 'High'] },
+    { key: 'rotaryRotorSpeed', label: 'Rotary Rotor Speed', options: ['Low', 'Normal', 'High'] },
+    { key: 'rotaryRotorAcc', label: 'Rotary Rotor Acc', options: ['Low', 'Normal', 'High'] },
+    { key: 'rotaryHornSpeed', label: 'Rotary Horn Speed', options: ['Low', 'Normal', 'High'] },
+    { key: 'rotaryHornAcc', label: 'Rotary Horn Acc', options: ['Low', 'Normal', 'High'] },
+  ],
+}
+
+/** A menu page's current value formatted for the OLED. */
+export function menuPageValueLabel(settings: GlobalSettingsState, page: MenuPageDef): string {
+  const value = settings[page.key]
+  if (page.options) return typeof value === 'boolean' ? (value ? 'On' : 'Off') : String(value)
+  const n = value as number
+  return `${n > 0 ? '+' : ''}${n} ${page.unit ?? ''}`.trim()
+}
+
 /** KBS — Master Clock Keyboard Sync (manual p. 41): Off, On (the clock
  *  restarts when a key is pressed on a silent keyboard) or Soft (the running
  *  pattern restarts from its first step at the next beat, without moving the
@@ -651,6 +735,12 @@ export interface InstrumentState {
   clockExternal: boolean
   /** Transpose dial-edit panel mode (dial = semitones). Not program state. */
   transposeEdit: boolean
+  /** Open menu screen (Shift + PROGRAM 1/2, manual p. 57): PAGE navigates,
+   *  the dial changes the setting, EXIT (Shift) leaves. Not program state. */
+  menu: { id: 'system' | 'sound'; page: number } | null
+  /** The global menu settings themselves (manual p. 57-58). Persisted to
+   *  storage; independent of programs. */
+  globalSettings: GlobalSettingsState
   /** SOLO monitor latch (manual quick guide): the soloed layer plays alone
    *  via a live gain gate — nothing destructive. Not program state. */
   soloLayer: { section: 'piano' | 'organ' | 'synth'; layer: 'A' | 'B' | 'C' } | null
@@ -862,6 +952,8 @@ function baseInstrumentState(): InstrumentState {
     clockEdit: false,
     clockExternal: false,
     transposeEdit: false,
+    menu: null,
+    globalSettings: defaultGlobalSettings(),
     soloLayer: null,
     layerInitEdit: false,
     sectionEdit: false,
@@ -1009,6 +1101,7 @@ export function selectedInstrumentId(layer: PianoLayerState): string | null {
 type Listener = () => void
 
 const PROGRAMS_STORAGE_KEY = 'stagebench.programs.v1'
+const SETTINGS_STORAGE_KEY = 'stagebench.settings.v1'
 
 export class InstrumentStore {
   private state: InstrumentState = initialInstrumentState()
@@ -1023,6 +1116,8 @@ export class InstrumentStore {
     this.storage = storage
     const restored = this.restorePrograms()
     if (restored) this.state = restored
+    const settings = this.restoreSettings()
+    if (settings) this.state = { ...this.state, globalSettings: settings }
   }
 
   getState = (): InstrumentState => this.state
@@ -1390,7 +1485,7 @@ export class InstrumentStore {
   setClockEdit(on: boolean): void {
     if (on === this.state.clockEdit) return
     this.patch(
-      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null } : {}) },
+      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null } : {}) },
       on ? 'Mst Clk Edit — dial: BPM · PROG: sync/KBS/ped tap' : 'Mst Clk Edit closed',
     )
   }
@@ -1416,7 +1511,7 @@ export class InstrumentStore {
   setTransposeEdit(on: boolean): void {
     if (on === this.state.transposeEdit) return
     this.patch(
-      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null } : {}) },
+      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null } : {}) },
       on ? 'Transpose Edit — dial: -6…+6 st' : 'Transpose Edit closed',
     )
   }
@@ -1485,7 +1580,7 @@ export class InstrumentStore {
   setSplitEdit(on: boolean): void {
     if (on === !!this.state.splitEdit) return
     this.patch(
-      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false, layerInitEdit: false, presetBrowse: null, monCopy: null } : {}) },
+      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null } : {}) },
       on ? 'Split Edit — dial: position · PAGE: point · PROG 1/2: on/xfade' : 'Split Edit closed',
     )
   }
@@ -1543,7 +1638,7 @@ export class InstrumentStore {
       // Also drops the Section Edit latch: both live on the same physical
       // button (Layer Init = Shift + Section Edit), so both lit at once
       // would be a panel lie — the OLED can only show one of them.
-      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null, sectionEdit: false } : {}) },
+      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null, sectionEdit: false, menu: null } : {}) },
       on ? 'Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn' : 'Layer Init closed',
     )
   }
@@ -1563,6 +1658,96 @@ export class InstrumentStore {
       { sectionEdit: on, ...(on ? { layerInitEdit: false } : {}) },
       on ? 'Section Edit — edits apply to all Layers of the Section' : 'Section Edit off',
     )
+  }
+
+  /* ----- global settings menus (manual p. 57-58) ----- */
+
+  /** Shift + PROGRAM 1 (System) / 2 (Sound): opens the menu screen on the
+   *  Program OLED. Pressing the combo again while open leaves the menu. */
+  openMenu(id: 'system' | 'sound'): void {
+    if (this.state.menu?.id === id) {
+      this.closeMenu()
+      return
+    }
+    this.patch(
+      {
+        menu: { id, page: 0 },
+        clockEdit: false,
+        transposeEdit: false,
+        splitEdit: null,
+        layerInitEdit: false,
+        presetBrowse: null,
+        monCopy: null,
+      },
+      `${id === 'system' ? 'System' : 'Sound'} Menu — dial: set · PAGE: page · EXIT: leave`,
+    )
+  }
+
+  closeMenu(): void {
+    if (!this.state.menu) return
+    this.patch({ menu: null }, 'Menu closed')
+  }
+
+  /** PAGE buttons while a menu is open (manual p. 57), wrapping. */
+  stepMenuPage(delta: -1 | 1): void {
+    const menu = this.state.menu
+    if (!menu) return
+    const pages = MENU_PAGES[menu.id]
+    const page = (menu.page + delta + pages.length) % pages.length
+    const def = pages[page]!
+    this.patch(
+      { menu: { ...menu, page } },
+      `${def.label}: ${menuPageValueLabel(this.state.globalSettings, def)}`,
+    )
+  }
+
+  /** PROGRAM dial while a menu is open: sets the focused page's value.
+   *  Menu settings take immediate effect and are global — they never mark
+   *  the program edited (patch skips the dirty flag for non-snapshot keys)
+   *  and persist to storage immediately (they change rarely). */
+  setMenuValueFromDial(dial: number): void {
+    const menu = this.state.menu
+    if (!menu) return
+    const def = MENU_PAGES[menu.id][menu.page]!
+    const clamped = Math.max(0, Math.min(127, dial))
+    let value: GlobalSettingsState[typeof def.key]
+    if (def.options) {
+      const index = Math.round((clamped / 127) * (def.options.length - 1))
+      const option = def.options[index]!
+      value = (def.key === 'memoryProtect' ? option === 'On' : option) as GlobalSettingsState[typeof def.key]
+    } else {
+      value = Math.round(def.min! + (clamped / 127) * (def.max! - def.min!)) as GlobalSettingsState[typeof def.key]
+    }
+    if (this.state.globalSettings[def.key] === value) return
+    const settings = { ...this.state.globalSettings, [def.key]: value }
+    this.patch({ globalSettings: settings }, `${def.label}: ${menuPageValueLabel(settings, def)}`)
+    this.persistSettings(settings)
+  }
+
+  /** Direct setter (tests, and anything scripting the System menu). */
+  setMemoryProtect(on: boolean): void {
+    if (this.state.globalSettings.memoryProtect === on) return
+    const settings = { ...this.state.globalSettings, memoryProtect: on }
+    this.patch({ globalSettings: settings }, `Memory Protect ${on ? 'On' : 'Off'}`)
+    this.persistSettings(settings)
+  }
+
+  private persistSettings(settings: GlobalSettingsState): void {
+    this.storage?.save(SETTINGS_STORAGE_KEY, JSON.stringify({ version: 1, settings }))
+  }
+
+  private restoreSettings(): GlobalSettingsState | null {
+    if (!this.storage) return null
+    const raw = this.storage.load(SETTINGS_STORAGE_KEY)
+    if (!raw) return null
+    try {
+      const parsed = JSON.parse(raw) as { version: number; settings: Partial<GlobalSettingsState> }
+      if (parsed.version !== 1) return null
+      // Backfill so settings persisted before a field existed stay valid.
+      return { ...defaultGlobalSettings(), ...parsed.settings }
+    } catch {
+      return null
+    }
   }
 
   /** LAYER INIT — All (manual p. 43): "Initializes the entire Program so
@@ -1672,6 +1857,7 @@ export class InstrumentStore {
         splitEdit: null,
         layerInitEdit: false,
         monCopy: null,
+        menu: null,
       },
       single ? `${name} Preset — Single Layer ${focused} · dial: load` : `${name} Preset — dial: load · PROG 1: Cancel`,
     )
@@ -2108,6 +2294,7 @@ export class InstrumentStore {
       clockEdit: false,
       transposeEdit: false,
       splitEdit: null,
+      menu: null,
       programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `${programLabel(clamped, programs.liveMode)} ${slot.name}`,
     })
@@ -2222,6 +2409,12 @@ export class InstrumentStore {
    * press confirms the name and moves on to destination selection.
    */
   storePress(): void {
+    // MEMORY PROTECT (System menu, manual p. 57): gates every Store to the
+    // program bank. The eight Live slots (and menu settings) are unaffected.
+    if (this.state.globalSettings.memoryProtect && !this.state.programs.liveMode) {
+      this.setLastEdit('Memory Protect On — System menu (Shift + Prog 1) to disable')
+      return
+    }
     // Declared limitation: storing back INTO the preset bank (manual p. 42
     // "Storing Presets to the Preset Library") is out of scope — the bank is
     // read-only factory content, so STORE always targets program slots. A
@@ -2252,6 +2445,10 @@ export class InstrumentStore {
 
   /** STORE AS: opens naming before the destination step (manual p. 41). */
   storeAsPress(): void {
+    if (this.state.globalSettings.memoryProtect && !this.state.programs.liveMode) {
+      this.setLastEdit('Memory Protect On — System menu (Shift + Prog 1) to disable')
+      return
+    }
     const programs = this.state.programs
     if (programs.storePending) return
     const name = programs.naming ? programs.naming.name : this.activeBank()[programs.current]!.name
@@ -2361,6 +2558,7 @@ export class InstrumentStore {
       clockEdit: false,
       transposeEdit: false,
       splitEdit: null,
+      menu: null,
       programs: {
         ...programs,
         liveMode,
@@ -2398,6 +2596,7 @@ export class InstrumentStore {
       clockEdit: false,
       transposeEdit: false,
       splitEdit: null,
+      menu: null,
       programs: { ...programs, liveMode: undo.liveMode, current: undo.slot, dirty: true, undo: null },
       lastEdit: `Undo — back to ${programLabel(undo.slot, undo.liveMode)} (edited)`,
     })
@@ -2419,7 +2618,7 @@ export class InstrumentStore {
     this.patch(
       {
         monCopy: mode,
-        ...(mode ? { clockEdit: false, transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null } : {}),
+        ...(mode ? { clockEdit: false, transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, menu: null } : {}),
       },
       mode === 'copy'
         ? 'Mon/Copy — turn a knob: monitor · Layer/FX On/Morph/Program: copy'
