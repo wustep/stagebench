@@ -3212,11 +3212,22 @@ body {
   padding: 0.02cqw 0.3cqw 0.04cqw;
 }
 
+/* Photo: the fader/AUX KB column only occupies the UPPER part of the plate
+   (faders end at the AUX KB cluster, SUSTPED/PSTICK/PAN prints right below),
+   and the bottom LFO/OSC/FILTER/AMP row runs the plate's FULL width — only
+   the narrow KB HOLD/OCTAVE SHIFT cluster sits left of the LFO box. */
 .synth-body {
   flex: 1;
   min-height: 0;
-  display: flex;
-  gap: 0.35cqw;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  /* Same ~60/40 upper/lower split the old flex layout used. */
+  grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 0.2cqw 0.35cqw;
+}
+
+.synth-body .levels-column {
+  grid-area: 1 / 1;
 }
 
 .layer-pair.triple {
@@ -3243,19 +3254,15 @@ body {
   gap: 0.08cqw;
 }
 
+/* The wrapper dissolves: synth-top and synth-bottom place themselves on
+   .synth-body's grid directly. */
 .synth-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2cqw;
-  min-height: 0;
+  display: contents;
 }
 
 .synth-top {
-  /* Splits the plate height with .synth-bottom at roughly the reference's
-     60/40 so no dead band opens and neither half gets crushed. */
-  flex: 1.45;
+  grid-area: 1 / 2;
+  min-width: 0;
   min-height: 0;
   display: flex;
   gap: 0.15cqw;
@@ -3602,11 +3609,26 @@ body {
 
 
 .synth-bottom {
-  flex: 1;
+  /* Full plate width (photo): the boxes start under the PAN column, left
+     of them only the narrow KB HOLD/OCTAVE SHIFT cluster. */
+  grid-area: 2 / 1 / 3 / 3;
   min-height: 0;
+  min-width: 0;
   display: flex;
   gap: 0.15cqw;
   align-items: stretch;
+}
+
+/* KB HOLD/ARP RUN + OCTAVE SHIFT + KB ZONE column (photo), vertically
+   spread beside the LFO box. */
+.kb-cluster {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 0.1cqw;
+  padding: 0.1cqw 0.05cqw;
 }
 
 .synth-bottom .legend {
