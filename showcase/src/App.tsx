@@ -129,7 +129,12 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       // Pitch bend routes through the panel's own pitch-stick handler so the
       // on-screen stick mirrors the device (engine bend + local visual).
       setPitchBend: (value) => store.setValue('perf-pitch-stick', value * 100),
-      onDisconnectCleanup: () => controller.allNotesOff('midi-disconnect'),
+      // Real-time clock ticks lock the master clock to the device's tempo.
+      setExternalClock: (bpm) => instrument.setExternalClock(bpm),
+      onDisconnectCleanup: () => {
+        controller.allNotesOff('midi-disconnect')
+        instrument.setExternalClock(null)
+      },
     })
     return { engine, controller, midi, store, instrument, storage }
     // The instrument system is created once per mounted app.

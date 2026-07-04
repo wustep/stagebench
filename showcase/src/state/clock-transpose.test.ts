@@ -88,30 +88,50 @@ describe('system.clock-transpose — panel', () => {
 })
 
 describe('system.clock-transpose — engine', () => {
-  it('delay sync drives the live delay time from the BPM', () => {
+  it('delay sync follows the BPM at the knob-selected subdivision (audit B4)', () => {
     const { store, engine, getContext } = makeSystem()
-    store.updateUnit('delay', { on: true } as never)
+    // Tempo knob 80 selects the 1/4 subdivision while synced.
+    store.updateUnit('delay', { on: true, tempo: 80 } as never)
     store.toggleDelayClockSync()
     engine.ensureStarted()
     const context = getContext()!
     const delayNodes = () => context.nodes.filter((n) => n.kind === 'delay')
-    expect(delayNodes().some((n) => Math.abs((n as unknown as { delayTime: { value: number } }).delayTime.value - 0.5) < 0.02)).toBe(
-      true,
-    )
+    const hasDelayNear = (seconds: number) =>
+      delayNodes().some((n) => Math.abs((n as unknown as { delayTime: { value: number } }).delayTime.value - seconds) < 0.02)
+    expect(hasDelayNear(0.5)).toBe(true) // 1/4 at 120 BPM
     store.setMasterClockBpm(60)
-    expect(delayNodes().some((n) => Math.abs((n as unknown as { delayTime: { value: number } }).delayTime.value - 1.0) < 0.02)).toBe(
-      true,
-    )
+    expect(hasDelayNear(1.0)).toBe(true) // 1/4 at 60 BPM
+    // The knob stays live while synced: 1/8 (value 55) halves the time.
+    store.updateUnit('delay', { tempo: 55 } as never)
+    expect(hasDelayNear(0.5)).toBe(true) // 1/8 at 60 BPM
   })
 
-  it('mod1 sync sets the LFO to one cycle per beat', () => {
+  it('mod1 sync follows the BPM at the knob-selected subdivision', () => {
     const { store, engine, getContext } = makeSystem()
-    store.updateUnit('mod1', { on: true } as never)
+    // Rate knob 45 selects the 1/4 subdivision (one cycle per beat).
+    store.updateUnit('mod1', { on: true, rate: 45 } as never)
     store.toggleMod1ClockSync()
     engine.ensureStarted()
     const context = getContext()!
     store.setMasterClockBpm(180)
     expect(context.oscillators().some((o) => Math.abs(o.frequency.value - 3.0) < 0.05)).toBe(true)
+    // Knob to 1/8 (value 70): two cycles per beat.
+    store.updateUnit('mod1', { rate: 70 } as never)
+    expect(context.oscillators().some((o) => Math.abs(o.frequency.value - 6.0) < 0.1)).toBe(true)
+  })
+
+  it('external MIDI clock locks the tempo and overrides the dial until it stops', () => {
+    const { store } = makeSystem()
+    store.setExternalClock(140)
+    expect(store.getState().masterClock.bpm).toBe(140)
+    expect(store.getState().clockExternal).toBe(true)
+    store.setMasterClockBpm(90) // dial is overridden while locked
+    expect(store.getState().masterClock.bpm).toBe(140)
+    expect(store.getState().lastEdit).toMatch(/locked/i)
+    store.setExternalClock(null)
+    expect(store.getState().clockExternal).toBe(false)
+    store.setMasterClockBpm(90)
+    expect(store.getState().masterClock.bpm).toBe(90)
   })
 
   it('transpose shifts sounding pitch but not zone routing', () => {

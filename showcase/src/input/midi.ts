@@ -25,6 +25,10 @@ export interface MidiHandlers {
   /** Pitch bend — normalized -1..1 (14-bit, center 8192 = 0); drives the
    *  pitch stick's ±2 semitone bend. */
   setPitchBend?(value: number): void
+  /** External MIDI clock lock (manual p. 40): a BPM estimated from real-time
+   *  clock ticks (0xF8, 24 per quarter), or null when the device stops
+   *  (0xFC) — the master clock reverts to its internal tempo. */
+  setExternalClock?(bpm: number | null): void
   /** Called when the active device disappears so owned notes can be cleaned up. */
   onDisconnectCleanup(): void
 }
@@ -33,6 +37,11 @@ const NOTE_ON = 0x90
 const NOTE_OFF = 0x80
 const CONTROL_CHANGE = 0xb0
 const PITCH_BEND = 0xe0
+const CLOCK_TICK = 0xf8
+const CLOCK_START = 0xfa
+const CLOCK_STOP = 0xfc
+/** Ticks per quarter note in MIDI real-time clock. */
+const TICKS_PER_BEAT = 24
 const CC_MOD_WHEEL = 1
 const CC_EXPRESSION = 11
 const CC_SUSTAIN = 64
@@ -55,6 +64,8 @@ export class MidiInputManager {
   private access: MidiAccessLike | null = null
   private attachedPorts = new Set<MidiPortLike>()
   private disposed = false
+  /** Recent 0xF8 tick times for external-clock tempo estimation. */
+  private clockTicks: number[] = []
 
   constructor(handlers: MidiHandlers) {
     this.handlers = handlers
@@ -135,7 +146,22 @@ export class MidiInputManager {
 
   handleMessage(event: MidiMessageEventLike): void {
     const data = event.data
-    if (!data || data.length < 2 || this.disposed) return
+    if (!data || data.length < 1 || this.disposed) return
+    // Real-time messages are single-byte and may arrive interleaved.
+    if (data[0] === CLOCK_TICK) {
+      this.handleClockTick(event.timeStamp ?? Date.now())
+      return
+    }
+    if (data[0] === CLOCK_START) {
+      this.clockTicks.length = 0 // re-sync the estimator from the downbeat
+      return
+    }
+    if (data[0] === CLOCK_STOP) {
+      this.clockTicks.length = 0
+      this.handlers.setExternalClock?.(null)
+      return
+    }
+    if (data.length < 2) return
     const statusByte = data[0]! & 0xf0
     if (statusByte === NOTE_ON && data.length >= 3) {
       const note = data[1]!
@@ -160,6 +186,21 @@ export class MidiInputManager {
       const centered = raw - 8192
       this.handlers.setPitchBend?.(centered < 0 ? centered / 8192 : centered / 8191)
     }
+  }
+
+  /** Rolling-average tempo from 24-ppq real-time ticks: after one full beat
+   *  of samples the estimated BPM is forwarded on every tick (the store
+   *  dedupes repeats). A gap or backwards timestamp restarts the window. */
+  private handleClockTick(at: number): void {
+    const last = this.clockTicks[this.clockTicks.length - 1]
+    if (last !== undefined && (at - last > 500 || at <= last)) this.clockTicks.length = 0
+    this.clockTicks.push(at)
+    // Two beats of history keeps the average steady against jitter.
+    if (this.clockTicks.length > TICKS_PER_BEAT * 2 + 1) this.clockTicks.shift()
+    if (this.clockTicks.length < TICKS_PER_BEAT + 1) return
+    const first = this.clockTicks[0]!
+    const beatMs = ((at - first) / (this.clockTicks.length - 1)) * TICKS_PER_BEAT
+    if (beatMs > 0) this.handlers.setExternalClock?.(60000 / beatMs)
   }
 
   dispose(): void {

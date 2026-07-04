@@ -620,6 +620,10 @@ export interface InstrumentState {
   splitEdit: { point: 0 | 1 | 2 } | null
   /** Master-clock dial-edit panel mode (dial = BPM, PROG 1/2 = delay/mod1 sync). Not program state. */
   clockEdit: boolean
+  /** External MIDI clock lock (manual p. 40): true while real-time clock
+   *  ticks drive the tempo — the dial/tap are overridden until the device
+   *  stops. Performance state, never stored in programs. */
+  clockExternal: boolean
   /** Transpose dial-edit panel mode (dial = semitones). Not program state. */
   transposeEdit: boolean
   /** SOLO monitor latch (manual quick guide): the soloed layer plays alone
@@ -830,6 +834,7 @@ function baseInstrumentState(): InstrumentState {
     transpose: { on: false, semitones: 0 },
     splitEdit: null,
     clockEdit: false,
+    clockExternal: false,
     transposeEdit: false,
     soloLayer: null,
     layerInitEdit: false,
@@ -1250,8 +1255,33 @@ export class InstrumentStore {
   /* ----- master clock / transpose ----- */
 
   setMasterClockBpm(bpm: number): void {
+    // While locked to external MIDI clock the dial/tap are overridden
+    // (manual p. 40) — announce why instead of silently ignoring.
+    if (this.state.clockExternal) {
+      this.commit({ ...this.state, lastEdit: 'Mst Clk locked to external MIDI clock' })
+      return
+    }
     const clamped = Math.max(30, Math.min(300, Math.round(bpm)))
     this.patch({ masterClock: { bpm: clamped } }, `Mst Clk ${clamped} BPM`)
+  }
+
+  /** External MIDI clock lock (manual p. 40): follows the estimated device
+   *  tempo; `null` (clock stop / device gone) reverts to internal control.
+   *  A performance input — the program is never marked edited by it. */
+  setExternalClock(bpm: number | null): void {
+    if (bpm === null) {
+      if (!this.state.clockExternal) return
+      this.commit({ ...this.state, clockExternal: false, lastEdit: 'Mst Clk external clock stopped — internal' })
+      return
+    }
+    const clamped = Math.max(30, Math.min(300, Math.round(bpm)))
+    if (this.state.clockExternal && this.state.masterClock.bpm === clamped) return
+    this.commit({
+      ...this.state,
+      clockExternal: true,
+      masterClock: { ...this.state.masterClock, bpm: clamped },
+      lastEdit: `Mst Clk EXT ${clamped} BPM`,
+    })
   }
 
   setClockEdit(on: boolean): void {
@@ -2846,7 +2876,10 @@ export class InstrumentStore {
   setSynthLfoRate(value: number): void {
     const clamped = clamp(value)
     const layer = this.state.synth.focusedLayer
-    this.patchSynthLfo({ rate: clamped }, `Synth ${layer} LFO Rate ${mappings.lfoRateHz(clamped).toFixed(2)} Hz`)
+    const label = this.state.synth.layers[layer].lfo.mstClk
+      ? `Synth ${layer} LFO Rate ${mappings.clockRateDivision(clamped).label} (MST CLK)`
+      : `Synth ${layer} LFO Rate ${mappings.lfoRateHz(clamped).toFixed(2)} Hz`
+    this.patchSynthLfo({ rate: clamped }, label)
   }
 
   setSynthLfoAmount(value: number): void {
@@ -3070,7 +3103,10 @@ export class InstrumentStore {
 
   setArpRate(value: number): void {
     const clamped = clamp(value)
-    this.patchArp({ rate: clamped }, `Arp Rate ${Math.round(mappings.arpRateBpm(clamped))} BPM`)
+    const label = this.state.synth.arp.mstClk
+      ? `Arp Rate ${mappings.clockRateDivision(clamped).label} (MST CLK)`
+      : `Arp Rate ${Math.round(mappings.arpRateBpm(clamped))} BPM`
+    this.patchArp({ rate: clamped }, label)
   }
 
   /** Shift + ARP RUN (manual adaptation — the brief's own note: Shift +
@@ -3630,6 +3666,24 @@ export function useInstrumentState(store: InstrumentStore): InstrumentState {
   return useSyncExternalStore(store.subscribe, store.getState)
 }
 
+/** Master-clock subdivisions (manual p. 17/35/49/51): while MST CLK is lit
+ *  a unit's own Rate/Tempo knob selects a musical division of the master
+ *  quarter-note beat instead of a free rate. `beats` is the division's
+ *  length in quarter-note beats (1/4 = 1, 1/8T = 1/3, …). Ordered short to
+ *  long so each caller can match its knob's unsynced direction. */
+export const CLOCK_SUBDIVISIONS: ReadonlyArray<{ label: string; beats: number }> = [
+  { label: '1/32', beats: 1 / 8 },
+  { label: '1/16T', beats: 1 / 6 },
+  { label: '1/16', beats: 1 / 4 },
+  { label: '1/8T', beats: 1 / 3 },
+  { label: '1/8', beats: 1 / 2 },
+  { label: '1/4T', beats: 2 / 3 },
+  { label: '1/4', beats: 1 },
+  { label: '1/2T', beats: 4 / 3 },
+  { label: '1/2', beats: 2 },
+  { label: '1/1', beats: 4 },
+]
+
 /** Mapped physical values used by both the engine and the display readouts. */
 export const mappings = {
   /** 0..127 -> gain (squared taper). */
@@ -3670,6 +3724,18 @@ export const mappings = {
   bpmToArpRate(bpm: number): number {
     const clamped = Math.max(30, Math.min(300, bpm))
     return Math.max(0, Math.min(127, Math.round(((clamped - 30) / 270) * 127)))
+  },
+  /** MST CLK subdivision for knobs whose unsynced direction is "up = longer"
+   *  (Delay Tempo): knob up selects a longer division. */
+  clockDelayDivision(value: number): { label: string; beats: number } {
+    const index = Math.min(CLOCK_SUBDIVISIONS.length - 1, Math.floor((value / 128) * CLOCK_SUBDIVISIONS.length))
+    return CLOCK_SUBDIVISIONS[index]!
+  },
+  /** MST CLK subdivision for knobs whose unsynced direction is "up = faster"
+   *  (Mod 1 Rate, synth LFO Rate, Arp Rate): knob up selects a shorter one. */
+  clockRateDivision(value: number): { label: string; beats: number } {
+    const index = Math.min(CLOCK_SUBDIVISIONS.length - 1, Math.floor((value / 128) * CLOCK_SUBDIVISIONS.length))
+    return CLOCK_SUBDIVISIONS[CLOCK_SUBDIVISIONS.length - 1 - index]!
   },
   /** 0..127 -> a portamento time constant in seconds (constant-rate glide). */
   glideTimeConstant(value: number): number {

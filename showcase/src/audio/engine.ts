@@ -1197,9 +1197,15 @@ export class PianoEngine {
     if (!this.channels || !this.rotary) return
     this.rotary.update(state.rotary, now)
 
-    // Master-clock sync (manual p. 40): quarter-note delay time, one-LFO-cycle-per-beat Mod 1.
-    const syncedDelayTempo = mappings.msToDelayTempo(60000 / state.masterClock.bpm)
-    const syncedMod1Rate = mappings.hzToLfoRate(state.masterClock.bpm / 60)
+    // Master-clock sync (manual p. 17/40/49/51): while a unit's MST CLK is
+    // lit its OWN Rate/Tempo knob selects a subdivision of the master beat
+    // (½ = half notes, 1/8T = eighth triplets …) — the knob stays musical,
+    // it never goes dead. Each unit reads its own knob value here.
+    const beatMs = 60000 / state.masterClock.bpm
+    const syncDelay = <T extends { mstClk: boolean; tempo: number }>(delay: T): T =>
+      delay.mstClk ? { ...delay, tempo: mappings.msToDelayTempo(beatMs * mappings.clockDelayDivision(delay.tempo).beats) } : delay
+    const syncMod1 = <T extends { mstClk: boolean; rate: number }>(mod1: T): T =>
+      mod1.mstClk ? { ...mod1, rate: mappings.hzToLfoRate(1000 / (beatMs * mappings.clockRateDivision(mod1.rate).beats)) } : mod1
 
     for (const layer of ['A', 'B'] as const) {
       const channel = this.channels[layer]
@@ -1231,11 +1237,9 @@ export class PianoEngine {
 
       // Ordered effect chain (families process real audio; allFxOff bypasses everything).
       const fxOn = !state.allFxOff
-      const mod1State = chain.mod1.mstClk ? { ...chain.mod1, rate: syncedMod1Rate } : chain.mod1
-      channel.units.mod1.update(mod1State, fxOn && chain.mod1.on, now)
+      channel.units.mod1.update(syncMod1(chain.mod1), fxOn && chain.mod1.on, now)
       channel.units.mod2.update(chain.mod2, fxOn && chain.mod2.on, now)
-      const delayState = chain.delay.mstClk ? { ...chain.delay, tempo: syncedDelayTempo } : chain.delay
-      channel.units.delay.update(delayState, fxOn && chain.delay.on, now)
+      channel.units.delay.update(syncDelay(chain.delay), fxOn && chain.delay.on, now)
       channel.units.ampEq.update(chain.ampEq, fxOn && chain.ampEq.on, now)
       channel.units.comp.update(chain.comp, fxOn && chain.comp.on, now)
       channel.units.reverb.update(chain.reverb, fxOn && chain.reverb.on, now)
@@ -1267,13 +1271,9 @@ export class PianoEngine {
       const organChain = this.organChain!
       const organFxState = state.organChain
       const organFxOn = !state.allFxOff
-      const organMod1State = organFxState.mod1.mstClk ? { ...organFxState.mod1, rate: syncedMod1Rate } : organFxState.mod1
-      organChain.units.mod1.update(organMod1State, organFxOn && organFxState.mod1.on, now)
+      organChain.units.mod1.update(syncMod1(organFxState.mod1), organFxOn && organFxState.mod1.on, now)
       organChain.units.mod2.update(organFxState.mod2, organFxOn && organFxState.mod2.on, now)
-      const organDelayState = organFxState.delay.mstClk
-        ? { ...organFxState.delay, tempo: syncedDelayTempo }
-        : organFxState.delay
-      organChain.units.delay.update(organDelayState, organFxOn && organFxState.delay.on, now)
+      organChain.units.delay.update(syncDelay(organFxState.delay), organFxOn && organFxState.delay.on, now)
       organChain.units.ampEq.update(organFxState.ampEq, organFxOn && organFxState.ampEq.on, now)
       organChain.units.comp.update(organFxState.comp, organFxOn && organFxState.comp.on, now)
       organChain.units.reverb.update(organFxState.reverb, organFxOn && organFxState.reverb.on, now)
@@ -1300,11 +1300,9 @@ export class PianoEngine {
         rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
 
         const synthChain = state.synthChains[layer]
-        const mod1State = synthChain.mod1.mstClk ? { ...synthChain.mod1, rate: syncedMod1Rate } : synthChain.mod1
-        channel.units.mod1.update(mod1State, fxOn && synthChain.mod1.on, now)
+        channel.units.mod1.update(syncMod1(synthChain.mod1), fxOn && synthChain.mod1.on, now)
         channel.units.mod2.update(synthChain.mod2, fxOn && synthChain.mod2.on, now)
-        const delayState = synthChain.delay.mstClk ? { ...synthChain.delay, tempo: syncedDelayTempo } : synthChain.delay
-        channel.units.delay.update(delayState, fxOn && synthChain.delay.on, now)
+        channel.units.delay.update(syncDelay(synthChain.delay), fxOn && synthChain.delay.on, now)
         channel.units.ampEq.update(synthChain.ampEq, fxOn && synthChain.ampEq.on, now)
         channel.units.comp.update(synthChain.comp, fxOn && synthChain.comp.on, now)
         channel.units.reverb.update(synthChain.reverb, fxOn && synthChain.reverb.on, now)
@@ -1512,8 +1510,12 @@ export class PianoEngine {
         rampTo(channel.lfo.invertSelect.gain, usesInvert ? 1 : 0, now)
         rampTo(channel.lfo.shSelect.gain, usesSh ? 1 : 0, now)
       }
-      const rateHz = lfo.mstClk ? mappings.hzToLfoRate(this.state.masterClock.bpm / 60) : lfo.rate
-      const frequencyHz = mappings.lfoRateHz(rateHz)
+      // Synced: the Rate knob picks a beat subdivision — one LFO cycle per
+      // division (manual p. 30: "presented as subdivisions of the tempo").
+      const rateValue = lfo.mstClk
+        ? mappings.hzToLfoRate(this.state.masterClock.bpm / 60 / mappings.clockRateDivision(lfo.rate).beats)
+        : lfo.rate
+      const frequencyHz = mappings.lfoRateHz(rateValue)
       rampTo(channel.lfo.osc.frequency, frequencyHz, now)
       // S&H steps at a fixed 16 Hz base rate; scale playbackRate so faster
       // Rate settings step faster, matching the oscillator waveforms' feel.
@@ -1767,8 +1769,10 @@ export class PianoEngine {
 
   private arpStepMs(): number {
     const arp = this.state.synth.arp
-    const bpm = arp.mstClk ? this.state.masterClock.bpm : mappings.arpRateBpm(arp.rate)
-    return 60000 / Math.max(1, bpm)
+    // Synced: the Rate knob picks a beat subdivision (manual p. 35: "Set the
+    // subdivision to 1/8 if you want the notes played as eighths").
+    if (arp.mstClk) return (60000 / Math.max(1, this.state.masterClock.bpm)) * mappings.clockRateDivision(arp.rate).beats
+    return 60000 / Math.max(1, mappings.arpRateBpm(arp.rate))
   }
 
   /** The expanded note sequence for Arp mode at the current range/direction

@@ -605,7 +605,15 @@ export class PresentationStore {
           return
         }
         case 'mod1-rate':
-          store.updateUnit('mod1', { rate: clamped }, `Mod 1 Rate ${clamped}`)
+          // Synced: the knob selects a beat subdivision (manual p. 49) — the
+          // OLED edit line shows the division, not a meaningless raw number.
+          store.updateUnit(
+            'mod1',
+            { rate: clamped },
+            store.focusedChain().mod1.mstClk
+              ? `Mod 1 Rate ${mappings.clockRateDivision(clamped).label} (MST CLK)`
+              : `Mod 1 Rate ${clamped}`,
+          )
           return
         case 'mod1-amount':
           store.updateUnit('mod1', { amount: clamped }, `Mod 1 Amount ${clamped}`)
@@ -617,7 +625,13 @@ export class PresentationStore {
           store.updateUnit('mod2', { amount: clamped }, `Mod 2 Amount ${clamped}`)
           return
         case 'delay-tempo':
-          store.updateUnit('delay', { tempo: clamped }, `Delay Tempo ${Math.round(mappings.delayTempoMs(clamped))} ms`)
+          store.updateUnit(
+            'delay',
+            { tempo: clamped },
+            store.focusedChain().delay.mstClk
+              ? `Delay Tempo ${mappings.clockDelayDivision(clamped).label} (MST CLK)`
+              : `Delay Tempo ${Math.round(mappings.delayTempoMs(clamped))} ms`,
+          )
           return
         case 'delay-feedback':
           store.updateUnit('delay', { feedback: clamped }, `Delay Feedback ${clamped}`)

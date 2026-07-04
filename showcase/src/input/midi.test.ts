@@ -150,6 +150,25 @@ describe('piano.basic-inputs — Web MIDI boundary', () => {
     expect(handlers.bend).toHaveBeenLastCalledWith(4096 / 8191)
   })
 
+  it('estimates BPM from 24-ppq real-time clock ticks and releases on stop', async () => {
+    const access = new FakeMidiAccess()
+    const handlers = makeHandlers()
+    const clock = vi.fn()
+    handlers.setExternalClock = clock
+    const manager = new MidiInputManager(handlers)
+    await manager.start(fakeMidiBoundary(access))
+    const port = new FakePort('p1', 'Clock Dev')
+    access.addPort(port)
+    // 120 BPM: a quarter note is 500 ms -> ticks every 500/24 ms.
+    const tickMs = 500 / 24
+    for (let i = 0; i <= 48; i++) port.emit([0xf8], 1000 + i * tickMs)
+    expect(clock).toHaveBeenCalled()
+    const lastBpm = clock.mock.calls.at(-1)![0] as number
+    expect(lastBpm).toBeCloseTo(120, 0)
+    port.emit([0xfc]) // clock stop -> release the lock
+    expect(clock).toHaveBeenLastCalledWith(null)
+  })
+
   it('ignores notes outside the keybed range and malformed messages', async () => {
     const handlers = makeHandlers()
     const access = new FakeMidiAccess()

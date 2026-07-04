@@ -190,6 +190,9 @@ export function realStorageBoundary(): StorageBoundary {
 
 export interface MidiMessageEventLike {
   data: Uint8Array | null
+  /** DOMHighResTimeStamp of the message (Web MIDI provides it; used for
+   *  external-clock tempo estimation). */
+  timeStamp?: number
 }
 
 export interface MidiPortLike {

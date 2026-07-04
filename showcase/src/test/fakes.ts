@@ -445,13 +445,13 @@ export class FakePort implements MidiPortLike {
   id: string
   name: string
   state = 'connected'
-  onmidimessage: ((event: { data: Uint8Array | null }) => void) | null = null
+  onmidimessage: ((event: { data: Uint8Array | null; timeStamp?: number }) => void) | null = null
   constructor(id: string, name: string) {
     this.id = id
     this.name = name
   }
-  emit(bytes: number[]) {
-    this.onmidimessage?.({ data: new Uint8Array(bytes) })
+  emit(bytes: number[], timeStamp?: number) {
+    this.onmidimessage?.({ data: new Uint8Array(bytes), timeStamp })
   }
 }
 
