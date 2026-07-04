@@ -1,17 +1,28 @@
 {
   "rubricVersion": "3.1.0",
-  "runId": "gpt5-5-high-2",
+  "runId": "gpt5-5-high",
   "stage": 2,
+  "stageName": "Piano library and working effects",
+  "status": "complete",
   "evaluator": "fresh-independent-evaluator",
-  "evaluatedAt": "2026-07-04T08:15:03Z",
+  "evaluatedAt": "2026-07-04T08:15:03.000Z",
   "summary": "Phase 2 preserves a recognizable Stage 4 73 surface and implements a useful generated two-layer piano shell with keyboard/pointer/MIDI input, stateful layer controls, and deterministic Float32Array probe processors for piano controls and effects. The artifact misses the main Phase 2 piano hard gate: IMPLEMENTATION_DETAILS.json declares sampleSources: [] and explicitly says Grand/Upright/Electric are generated approximations, not bundled recorded sample sets. A second major issue is that live played notes bypass the effect processors: noteOn builds oscillator/filter/gain voices directly into layer buses and master, while Mod/Delay/Amp/Compressor/Reverb/Rotary processing exists only in renderProbe(). Current pnpm test also fails with a timeout in the surface inventory test, while typecheck, lint, and build pass.",
+  "score": 44.3,
+  "rawScore": 44.3,
   "categories": [
     {
       "id": "visualRetention",
+      "label": "Visual and interaction retention",
+      "weight": 10,
+      "score": 65,
+      "contribution": 6.5,
       "criteria": [
         {
           "id": "surfaceRetention",
+          "label": "Surface fidelity retention",
+          "weight": 60,
           "rating": 3,
+          "score": 75,
           "evidence": [
             "Sealed desktop and narrow captures show one continuous red Stage 4 73-style chassis, six ordered sections, Program/Synth as the only primary OLEDs, and the full 73-key E1-E7 keybed with 43 white and 30 black keys.",
             "src/hardware.ts models the required section fractions [0.13, 0.21, 0.15, 0.09, 0.21, 0.21], and src/App.test.tsx asserts the key count, section order, and two-OLED rule.",
@@ -20,7 +31,10 @@
         },
         {
           "id": "functionalHardwareState",
+          "label": "Piano/effect hardware state",
+          "weight": 40,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "Piano and effects controls are marked functional in App.tsx and update state for layer focus, layer levels, type buttons, KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, effect on/type/amount, group, bypass, global flags, rotary, and Master Level.",
             "The status strip reflects selected layer and several piano performance values, and button/knob aria state changes are visible through the surface.",
@@ -31,10 +45,17 @@
     },
     {
       "id": "pianoLibrary",
+      "label": "Piano library and performance",
+      "weight": 35,
+      "score": 48.8,
+      "contribution": 17.1,
       "criteria": [
         {
           "id": "instrumentBreadth",
+          "label": "Distinct Piano instruments",
+          "weight": 30,
           "rating": 1,
+          "score": 25,
           "evidence": [
             "The code exposes all six required type names: Grand, Upright, Electric, Clav, Digital, and Misc.",
             "IMPLEMENTATION_DETAILS.json has sampleSources: [] and lists Grand/Upright/Electric under generatedSources as candidate-authored generated approximations, explicitly 'not sampled from a recording'.",
@@ -43,7 +64,10 @@
         },
         {
           "id": "twoLayerBehavior",
+          "label": "Two-layer Piano behavior",
+          "weight": 25,
           "rating": 3,
+          "score": 75,
           "evidence": [
             "createPianoEngine initializes Piano layers A and B with enable, focus, level, octave, SUSTPED, PSTICK, and type state.",
             "noteOn iterates over enabled layers and stores each voice with its layer owner; tests exercise enabling B, focus following B, octave shift, per-layer sustain-pedal routing, and cleanup.",
@@ -52,7 +76,10 @@
         },
         {
           "id": "pianoControls",
+          "label": "Detailed Piano controls",
+          "weight": 25,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, and Master Level are represented in canonical state and renderProbe tests assert measurable Float32Array changes.",
             "Live noteOn applies KB Touch, Dyn Comp, Timbre, Unison detune, Soft Release, layer level, and Master Level to the oscillator path.",
@@ -61,7 +88,10 @@
         },
         {
           "id": "inputsReliability",
+          "label": "Input and fallback reliability",
+          "weight": 20,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "The rendered app supports pointer key press/release/cancel, mapped computer keyboard notes with repeat suppression, keyboard sustain via spacebar, MIDI note on/off, and MIDI CC64 sustain.",
             "Blur, MIDI state change, unmount, allNotesOff, voice stealing, and fallback when AudioContext is unavailable are implemented and partly tested.",
@@ -72,10 +102,17 @@
     },
     {
       "id": "effectsAudio",
+      "label": "Effects and signal graph",
+      "weight": 30,
+      "score": 31.3,
+      "contribution": 9.4,
       "criteria": [
         {
           "id": "sharedGraph",
+          "label": "Shared graph and gain staging",
+          "weight": 25,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "The live engine creates one AudioContext, two layer GainNode buses, one master gain, a DynamicsCompressor limiter when available, and one destination.",
             "Dispose/allNotesOff disconnect buses/master/limiter and schedules owned voices for cleanup.",
@@ -84,7 +121,10 @@
         },
         {
           "id": "effectCoverage",
+          "label": "Audible effect coverage",
+          "weight": 45,
           "rating": 1,
+          "score": 25,
           "evidence": [
             "pianoEngine.ts contains deterministic Float32Array processors for all required Mod 1, Mod 2, Amp/EQ, Reverb types plus Delay, Compressor, and Rotary, and tests compare renderProbe output changes.",
             "Those processors are not connected to the live Web Audio path used by keybed playback; updateEffects changes state, but noteOn voices still connect directly through a simple filter/gain path to the layer bus.",
@@ -93,7 +133,10 @@
         },
         {
           "id": "routingControl",
+          "label": "Routing and control",
+          "weight": 30,
           "rating": 1,
+          "score": 25,
           "evidence": [
             "The UI updates focus, group, all-bypass, per-unit bypass, type, amount/rate/mix, delay feedback filter, global flags, and To Rotary-related state.",
             "renderProbe applies focus/group/all-bypass, delay feedback filtering, reverb-before-rotary ordering, and rotary when Amp/EQ type is To Rotary.",
@@ -104,10 +147,17 @@
     },
     {
       "id": "systemBehavior",
+      "label": "System behavior and UX",
+      "weight": 10,
+      "score": 50,
+      "contribution": 5,
       "criteria": [
         {
           "id": "audibleFeedback",
+          "label": "Audible/visible feedback",
+          "weight": 50,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "Key presses produce live Web Audio oscillator output, visual key pressed state updates, and piano type/performance controls update visible button/status state.",
             "Some piano parameters affect live sound immediately through oscillator type, filter, detune, velocity curve, release, and master gain.",
@@ -116,7 +166,10 @@
         },
         {
           "id": "failureStress",
+          "label": "Failure and stress behavior",
+          "weight": 50,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "The engine reports a labeled fallback when AudioContext is missing or construction fails, and MIDI unavailable/denied states are surfaced in the status strip.",
             "Voice stealing, sustain release, blur cleanup, MIDI state-change cleanup, and unmount cleanup are implemented in source and partly exercised by tests.",
@@ -127,10 +180,17 @@
     },
     {
       "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 15,
+      "score": 42.5,
+      "contribution": 6.4,
       "criteria": [
         {
           "id": "audioArchitecture",
+          "label": "Audio architecture",
+          "weight": 45,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "The artifact separates hardware data, App UI, and a pianoEngine with injectable AudioContext and deterministic renderProbe support.",
             "The live engine has clear layer, voice, master, sustain, and cleanup state, and implementation details truthfully declare generated sources.",
@@ -139,7 +199,10 @@
         },
         {
           "id": "realBoundaryTests",
+          "label": "Real-boundary tests",
+          "weight": 30,
           "rating": 1,
+          "score": 25,
           "evidence": [
             "tests/feature-matrix.json maps all required Phase 1 and Phase 2 IDs, but every feature maps to one broad src/App.test.tsx file.",
             "The audio tests use FakeAudioContext and renderProbe Float32Array comparisons; they do not prove the live Web Audio graph routes through effects or recorded samples.",
@@ -148,7 +211,10 @@
         },
         {
           "id": "performanceMaintainability",
+          "label": "Performance and maintainability",
+          "weight": 25,
           "rating": 2,
+          "score": 50,
           "evidence": [
             "pnpm typecheck, pnpm lint, and pnpm build pass; the production build completes and produces dist/index.html and bundled assets.",
             "The code is small and readable enough for a benchmark artifact, with stable control IDs and no large external asset dependency.",
@@ -158,6 +224,46 @@
       ]
     }
   ],
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 6206,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 1651,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 433,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 1681,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      }
+    ]
+  },
   "issues": [
     {
       "severity": "critical",

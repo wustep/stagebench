@@ -3,19 +3,19 @@
   "version": 1,
   "phase": 1,
   "audio": {
-    "strategy": "Generated browser synthesis for Phase 1: each played note starts two Web Audio oscillators (triangle fundamental plus quiet sine partial) through a gain envelope and low-pass filter. Tests use an injectable null adapter, so they do not require audio hardware.",
+    "strategy": "Phase 1 uses live Web Audio synthesis only: one generated triangle-wave piano-like voice with velocity-scaled gain, per-note release envelopes, sustain hold/release, bounded polyphony, and deterministic oldest/released voice stealing. No recorded samples are bundled or claimed.",
     "generatedSources": [
       {
-        "name": "Phase 1 generated piano voice",
-        "source": "src/pianoEngine.ts WebAudioPianoAdapter",
-        "license": "Candidate-authored code; no recorded samples or external audio assets.",
-        "notes": "Honest fallback-quality piano-like synthesis with velocity-sensitive gain/filter envelope, release, sustain, and deterministic voice ownership."
+        "name": "Generated basic piano voice",
+        "method": "Web Audio OscillatorNode triangle waveform through per-voice GainNode ADS-style envelope",
+        "license": "Candidate-authored code; no external audio assets"
       }
     ],
     "sampleSources": [],
     "notes": [
-      "No bundled recorded piano samples are included or claimed in Phase 1.",
-      "Panel controls are decorative presentation state only; only keybed/computer-key/MIDI note input and MIDI/keyboard sustain affect the generated voice."
+      "Panel controls outside the keybed and sustain input are decorative in Phase 1 and intentionally do not change audio, program, synth, organ, or effects state.",
+      "If AudioContext is unavailable or cannot be started, the app reports a labeled playable fallback state instead of claiming recorded piano readiness.",
+      "Web MIDI input is requested when available; denied, unavailable, disconnected, and no-input states are reported in visible status text."
     ]
   }
 }

@@ -1,111 +1,166 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { HARDWARE_CONTROLS, SECTIONS, VARIANT, generateKeybed } from './hardware'
+import { blackKeyCount, createControlState, decorativeControls, keyboard, sections, whiteKeyCount } from './hardware'
+import { createPianoEngine } from './pianoEngine'
 
-describe('Nord Stage 4 phase 1 surface', () => {
-  it('models the Stage 4 73 keybed exactly', () => {
-    const keybed = generateKeybed()
-    expect(keybed).toHaveLength(73)
-    expect(keybed.filter((key) => key.color === 'white')).toHaveLength(43)
-    expect(keybed.filter((key) => key.color === 'black')).toHaveLength(30)
-    expect(keybed[0]).toEqual(expect.objectContaining({ note: 'E1', midi: 28, color: 'white' }))
-    expect(keybed.at(-1)).toEqual(expect.objectContaining({ note: 'E7', midi: 100, color: 'white' }))
-    expect(VARIANT.aspectRatio).toBeCloseTo(3.0951)
+class FakeAudioParam {
+  value = 0
+  setValueAtTime(value: number) {
+    this.value = value
+  }
+  exponentialRampToValueAtTime(value: number) {
+    this.value = value
+  }
+  cancelScheduledValues() {}
+}
+
+class FakeNode {
+  gain = new FakeAudioParam()
+  frequency = new FakeAudioParam()
+  detune = new FakeAudioParam()
+  type = 'triangle'
+  connected: unknown[] = []
+  stopped = false
+  connect(target: unknown) {
+    this.connected.push(target)
+  }
+  disconnect() {
+    this.connected = []
+  }
+  start() {}
+  stop() {
+    this.stopped = true
+  }
+}
+
+class FakeAudioContext {
+  currentTime = 1
+  destination = {}
+  state = 'running'
+  createOscillator() {
+    return new FakeNode() as unknown as OscillatorNode
+  }
+  createGain() {
+    return new FakeNode() as unknown as GainNode
+  }
+  resume = vi.fn()
+  close = vi.fn()
+}
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+describe('Nord Stage 4 73 surface', () => {
+  it('models the exact Stage 4 73 E-to-E keybed and section layout', () => {
+    expect(keyboard).toHaveLength(73)
+    expect(whiteKeyCount).toBe(43)
+    expect(blackKeyCount).toBe(30)
+    expect(keyboard[0]).toMatchObject({ note: 'E1', midi: 28, black: false })
+    expect(keyboard.at(-1)).toMatchObject({ note: 'E7', midi: 100, black: false })
+    expect(sections.map((section) => section.id)).toEqual(['performance', 'organ', 'piano', 'program', 'synth', 'effects'])
+    expect(sections.map((section) => section.fraction)).toEqual([0.13, 0.21, 0.15, 0.09, 0.21, 0.21])
+    expect(sections.filter((section) => section.hasOled).map((section) => section.id)).toEqual(['program', 'synth'])
   })
 
-  it('renders the six documented sections and dense control inventory', () => {
+  it('renders the complete visible surface with required landmarks and stable controls', () => {
     render(<App />)
-    for (const section of SECTIONS) {
-      expect(screen.getByRole('region', { name: section.label })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Nord Stage 4 73 Phase 1 recreation/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /piano key/i })).toHaveLength(73)
+    expect(screen.getByLabelText(/Program \/ Morph primary OLED/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Synth primary OLED/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Organ primary OLED/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/Nine decorative organ drawbars/i)).toBeInTheDocument()
+
+    for (const control of decorativeControls) {
+      const button = screen.getByRole('button', { name: `${control.label} decorative control` })
+      expect(button).toHaveAttribute('data-control-id', control.id)
     }
-    expect(SECTIONS.map((section) => section.fraction)).toEqual([0.13, 0.21, 0.15, 0.09, 0.21, 0.21])
-    expect(new Set(HARDWARE_CONTROLS.map((control) => control.id)).size).toBe(HARDWARE_CONTROLS.length)
-    expect(HARDWARE_CONTROLS.filter((control) => control.type === 'drawbar')).toHaveLength(9)
-    expect(screen.getByText('A:11 Nord Stage 4')).toBeInTheDocument()
-    expect(screen.getByText('OSC CTRL SOFT')).toBeInTheDocument()
-    expect(screen.queryByText(/wide oled/i)).not.toBeInTheDocument()
   })
 
-  it('presses and releases keybed notes by pointer and cleans up on cancel', () => {
+  it('moves decorative controls accessibly without changing their stable inventory', () => {
     render(<App />)
-    const c4 = screen.getByRole('button', { name: 'C4 piano key' })
-    fireEvent.pointerDown(c4, { pointerId: 12, pressure: 0.6 })
-    expect(c4).toHaveClass('is-pressed')
-    expect(screen.getByText('Voices 1')).toBeInTheDocument()
-    fireEvent.pointerUp(c4, { pointerId: 12 })
-    expect(c4).not.toHaveClass('is-pressed')
-
-    const d4 = screen.getByRole('button', { name: 'D4 piano key' })
-    fireEvent.pointerDown(d4, { pointerId: 13, pressure: 0.7 })
-    expect(d4).toHaveClass('is-pressed')
-    fireEvent.pointerCancel(d4, { pointerId: 13 })
-    expect(d4).not.toHaveClass('is-pressed')
+    const state = createControlState()
+    expect(Object.keys(state)).toHaveLength(decorativeControls.length)
+    const dial = screen.getByRole('button', { name: /Program Dial decorative control/i })
+    expect(dial).toHaveAttribute('aria-valuenow', '42')
+    fireEvent.keyDown(dial, { key: 'ArrowRight' })
+    expect(dial).toHaveAttribute('aria-valuenow', '50')
+    const live = screen.getByRole('button', { name: /Live Mode decorative control/i })
+    fireEvent.pointerDown(live, { pointerId: 9 })
+    expect(live).toHaveAttribute('aria-pressed', 'true')
   })
+})
 
-  it('supports mapped keyboard notes, repeat suppression, sustain, and blur cleanup', () => {
+describe('piano key interactions', () => {
+  it('supports pointer note press, release, cancel, and blur cleanup presentation', () => {
     render(<App />)
-    fireEvent.keyDown(window, { key: 'a', repeat: false })
-    fireEvent.keyDown(window, { key: 'a', repeat: true })
-    expect(screen.getByRole('button', { name: 'C4 piano key' })).toHaveClass('is-pressed')
-    expect(screen.getByText('Voices 1')).toBeInTheDocument()
+    const key = screen.getByRole('button', { name: 'C4 piano key' })
+    fireEvent.pointerDown(key, { pointerId: 1, clientY: 20 })
+    expect(key).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.pointerCancel(key, { pointerId: 1 })
+    expect(key).toHaveAttribute('aria-pressed', 'false')
 
-    fireEvent.keyDown(window, { key: ' ', repeat: false })
-    expect(screen.getByText('Sustain on')).toBeInTheDocument()
-    fireEvent.keyUp(window, { key: 'a' })
-    expect(screen.getByRole('button', { name: 'C4 piano key' })).not.toHaveClass('is-pressed')
-    fireEvent.keyUp(window, { key: ' ' })
-    expect(screen.getByText('Sustain off')).toBeInTheDocument()
-
-    fireEvent.keyDown(window, { key: 's', repeat: false })
-    expect(screen.getByRole('button', { name: 'D4 piano key' })).toHaveClass('is-pressed')
+    fireEvent.pointerDown(key, { pointerId: 2, clientY: 20 })
     fireEvent.blur(window)
-    expect(screen.getByRole('button', { name: 'D4 piano key' })).not.toHaveClass('is-pressed')
+    expect(key).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('makes decorative controls accessible and presentation-only', () => {
+  it('supports mapped computer keys with repeat suppression and sustain cleanup', () => {
     render(<App />)
-    const master = screen.getByRole('slider', { name: /master level decorative knob/i })
-    expect(master).toHaveAttribute('aria-valuenow', '0')
-    fireEvent.keyDown(master, { key: 'ArrowUp' })
-    expect(master).toHaveAttribute('aria-valuenow', '12')
-
-    const organ = screen.getByRole('button', { name: /organ decorative button/i })
-    expect(organ).toHaveAttribute('aria-pressed', 'false')
-    fireEvent.pointerDown(organ)
-    expect(organ).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText(/Basic piano: ready generated synthesis/i)).toBeInTheDocument()
+    const c3 = screen.getByRole('button', { name: 'C3 piano key' })
+    fireEvent.keyDown(window, { key: 'a', repeat: false })
+    expect(c3).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.keyDown(window, { key: 'a', repeat: true })
+    expect(c3).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.keyDown(window, { key: ' ', repeat: false })
+    fireEvent.keyUp(window, { key: 'a' })
+    expect(c3).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('piano-status')).toHaveTextContent(/sustain held/i)
+    fireEvent.keyUp(window, { key: ' ' })
+    expect(screen.getByTestId('piano-status')).toHaveTextContent(/generated piano ready/i)
   })
 
-  it('reports MIDI denied and disconnected states without requiring a device', async () => {
+  it('keeps the chassis inspectable within the canonical document at desktop and narrow widths', () => {
     render(<App />)
-    const requestMIDIAccess = vi.fn().mockRejectedValue(new Error('denied'))
-    Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: requestMIDIAccess })
-    fireEvent.click(screen.getByRole('button', { name: 'Enable MIDI' }))
-    expect(await screen.findByText('MIDI denied')).toBeInTheDocument()
+    const shell = screen.getByLabelText(/Nord Stage 4 73 Phase 1 recreation/i)
+    expect(shell).toHaveClass('instrument-shell')
+    expect(within(shell).getByLabelText(/73 key E to E hammer action keybed/i)).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/hero|buy now|fully modeled effects/i)
+  })
+})
 
-    const inputs = new Map<string, { onmidimessage: ((event: { data: number[] }) => void) | null }>([
-      ['fake', { onmidimessage: null }],
-    ])
-    const access = { inputs, onstatechange: null as null | ((event: { port: { state: string } }) => void) }
-    requestMIDIAccess.mockResolvedValue(access)
-    fireEvent.click(screen.getByRole('button', { name: 'Enable MIDI' }))
-    expect(await screen.findByText('MIDI connected')).toBeInTheDocument()
-    inputs.get('fake')?.onmidimessage?.({ data: [0x90, 60, 100] })
-    await waitFor(() => expect(screen.getByText('Voices 1')).toBeInTheDocument())
-    inputs.get('fake')?.onmidimessage?.({ data: [0xb0, 64, 127] })
-    await waitFor(() => expect(screen.getByText('Sustain on')).toBeInTheDocument())
-    access.onstatechange?.({ port: { state: 'disconnected' } })
-    await waitFor(() => expect(screen.getByText('MIDI disconnected')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('Voices 0')).toBeInTheDocument())
+describe('basic generated piano engine', () => {
+  it('has a deterministic note lifecycle with release, sustain, polyphony, and voice stealing', () => {
+    vi.useFakeTimers()
+    const status = vi.fn()
+    const engine = createPianoEngine({ context: new FakeAudioContext() as unknown as AudioContext, maxVoices: 2, onStatus: status })
+    engine.prepare()
+    engine.noteOn(60, 0.2, 'one')
+    engine.noteOn(64, 1, 'two')
+    expect(engine.getSnapshot()).toMatchObject({ activeVoices: 2, sustain: false, stolenVoices: 0 })
+    engine.noteOn(67, 0.8, 'three')
+    expect(engine.getSnapshot().stolenVoices).toBe(1)
+    engine.setSustain(true)
+    engine.noteOff(64, 'two')
+    expect(engine.getSnapshot().sustain).toBe(true)
+    engine.setSustain(false)
+    engine.allNotesOff()
+    vi.advanceTimersByTime(1000)
+    expect(engine.getSnapshot().activeVoices).toBe(0)
   })
 
-  it('keeps the chassis as one visible application surface with status outside the instrument', () => {
-    render(<App />)
-    const instrument = screen.getByLabelText(/phase 1 surface/i)
-    expect(instrument).toHaveAttribute('data-variant', 'stage-4-73')
-    expect(within(instrument).getAllByRole('button', { name: /^[A-G][0-9] piano key$/i })).toHaveLength(43)
-    expect(within(instrument).getAllByRole('button', { name: /black piano key/i })).toHaveLength(30)
-    expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+  it('reports a truthful fallback when no browser audio context exists', () => {
+    const originalAudioContext = window.AudioContext
+    const originalWebkitAudioContext = window.webkitAudioContext
+    Object.defineProperty(window, 'AudioContext', { configurable: true, value: undefined })
+    Object.defineProperty(window, 'webkitAudioContext', { configurable: true, value: undefined })
+    const engine = createPianoEngine()
+    engine.prepare()
+    expect(engine.getSnapshot().status).toMatchObject({ state: 'fallback' })
+    Object.defineProperty(window, 'AudioContext', { configurable: true, value: originalAudioContext })
+    Object.defineProperty(window, 'webkitAudioContext', { configurable: true, value: originalWebkitAudioContext })
   })
 })

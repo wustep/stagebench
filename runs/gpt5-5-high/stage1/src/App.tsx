@@ -1,116 +1,341 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { COMPUTER_KEY_TO_MIDI, GeneratedPianoEngine, WebAudioPianoAdapter } from './pianoEngine'
-import { HARDWARE_CONTROLS, HardwareControl, SECTIONS, SECTION_LABELS, VARIANT, generateKeybed } from './hardware'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  computerKeyMap,
+  createControlState,
+  decorativeControls,
+  getMidiNote,
+  isBlackKey,
+  keyboard,
+  sections,
+  whiteKeyCount,
+  type Control,
+  type ControlState,
+  type KeyModel,
+} from './hardware'
+import { createPianoEngine, type PianoEngine, type PianoStatus } from './pianoEngine'
+import './styles.css'
 
-type ControlState = Record<string, number>
-type MidiState = 'not-requested' | 'unsupported' | 'connected' | 'denied' | 'disconnected'
+type PointerMap = Map<number, string>
 
-interface MidiInputLike {
-  onmidimessage: ((event: { data: Uint8Array | number[] | null }) => void) | null
+const pressedClass = (active: boolean) => (active ? ' is-active' : '')
+
+function clamp(value: number, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value))
 }
 
-interface MidiAccessLike {
-  inputs: {
-    size: number
-    values(): IterableIterator<MidiInputLike>
+function nextControlValue(control: Control, current: number) {
+  if (control.kind === 'button') return current > 0 ? 0 : 1
+  if (control.kind === 'knob' || control.kind === 'wheel') return current >= 0.95 ? 0 : clamp(current + 0.12)
+  if (control.kind === 'encoder') return (current + 0.14) % 1
+  return current >= 0.95 ? 0 : clamp(current + 0.14)
+}
+
+function controlValueText(control: Control, value: number) {
+  if (control.kind === 'button') return value > 0 ? 'on' : 'off'
+  return `${Math.round(value * 100)} percent`
+}
+
+function ControlView({
+  control,
+  value,
+  onChange,
+}: {
+  control: Control
+  value: number
+  onChange: (id: string, value: number) => void
+}) {
+  const style = { '--value': String(value) } as React.CSSProperties
+
+  const activate = useCallback(() => {
+    onChange(control.id, nextControlValue(control, value))
+  }, [control, onChange, value])
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      activate()
+      return
+    }
+    if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      onChange(control.id, clamp(value + 0.08))
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+      event.preventDefault()
+      onChange(control.id, clamp(value - 0.08))
+    }
+    if (event.key === 'Home') {
+      event.preventDefault()
+      onChange(control.id, 0)
+    }
+    if (event.key === 'End') {
+      event.preventDefault()
+      onChange(control.id, 1)
+    }
   }
-  onstatechange: ((event: { port?: { state?: string } }) => void) | null
+
+  return (
+    <button
+      type="button"
+      className={`control control-${control.kind}${pressedClass(value > 0.5)}`}
+      style={style}
+      data-control-id={control.id}
+      data-section={control.section}
+      aria-label={`${control.label} decorative control`}
+      aria-pressed={control.kind === 'button' ? value > 0 : undefined}
+      aria-valuenow={control.kind === 'button' ? undefined : Math.round(value * 100)}
+      aria-valuemin={control.kind === 'button' ? undefined : 0}
+      aria-valuemax={control.kind === 'button' ? undefined : 100}
+      aria-valuetext={controlValueText(control, value)}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture?.(event.pointerId)
+        activate()
+      }}
+      onKeyDown={onKeyDown}
+    >
+      <span className="control-face" aria-hidden="true">
+        {control.kind === 'fader' || control.kind === 'drawbar' ? <span className="cap" /> : null}
+      </span>
+      <span className="control-label">{control.label}</span>
+    </button>
+  )
 }
 
-interface MidiNavigatorLike {
-  requestMIDIAccess?: () => Promise<MidiAccessLike>
+function LedLadder({ count = 8, value = 0.65 }: { count?: number; value?: number }) {
+  return (
+    <span className="led-ladder" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <span key={index} className={index / count < value ? 'on' : ''} />
+      ))}
+    </span>
+  )
 }
 
-const initialControlState = HARDWARE_CONTROLS.reduce<ControlState>((state, control) => {
-  state[control.id] = control.type === 'drawbar' ? 0.72 : 0
-  return state
-}, {})
-
-function clamp(value: number) {
-  return Math.max(0, Math.min(1, value))
+function SectionView({
+  section,
+  controls,
+  state,
+  onChange,
+}: {
+  section: (typeof sections)[number]
+  controls: Control[]
+  state: ControlState
+  onChange: (id: string, value: number) => void
+}) {
+  const drawbars = controls.filter((control) => control.kind === 'drawbar')
+  const otherControls = controls.filter((control) => control.kind !== 'drawbar')
+  return (
+    <section
+      className={`section section-${section.id}`}
+      style={{ '--section-width': `${section.fraction * 100}%` } as React.CSSProperties}
+      aria-label={section.label}
+      data-section-id={section.id}
+    >
+      <div className="section-title">{section.label}</div>
+      {section.id === 'performance' ? (
+        <div className="brand-block" aria-hidden="true">
+          <strong>nord stage 4</strong>
+          <span>hammer action 73</span>
+        </div>
+      ) : null}
+      {section.hasOled ? (
+        <div className="oled" aria-label={`${section.label} primary OLED`}>
+          {section.id === 'program' ? (
+            <>
+              <span>A:11</span>
+              <strong>Nord Stage 4</strong>
+              <span>Phase 1 Piano</span>
+            </>
+          ) : (
+            <>
+              <span>OSC SAMPLE</span>
+              <strong>Decorative</strong>
+              <span>No synth audio</span>
+            </>
+          )}
+        </div>
+      ) : null}
+      {drawbars.length > 0 ? (
+        <div className="drawbar-bank" aria-label="Nine decorative organ drawbars">
+          {drawbars.map((control, index) => (
+            <div className="drawbar-slot" key={control.id}>
+              <LedLadder value={(9 - index) / 10} />
+              <ControlView control={control} value={state[control.id] ?? 0} onChange={onChange} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className={`control-grid grid-${section.id}`}>
+        {otherControls.map((control) => (
+          <ControlView key={control.id} control={control} value={state[control.id] ?? 0} onChange={onChange} />
+        ))}
+      </div>
+    </section>
+  )
 }
 
-function controlStep(control: HardwareControl, current: number, direction = 1) {
-  if (control.type === 'button') return current > 0 ? 0 : 1
-  if (control.type === 'stick') return direction > 0 ? 0.78 : 0.22
-  return clamp(current + direction * 0.12)
+function KeyView({
+  keyModel,
+  active,
+  onNoteStart,
+  onNoteEnd,
+  registerPointer,
+}: {
+  keyModel: KeyModel
+  active: boolean
+  onNoteStart: (keyId: string, velocity: number) => void
+  onNoteEnd: (keyId: string) => void
+  registerPointer: (pointerId: number, keyId: string | null) => void
+}) {
+  const whiteIndex = keyModel.whiteIndex ?? 0
+  const style = keyModel.black
+    ? ({ '--white-index': String(whiteIndex), '--black-left': `${(whiteIndex / whiteKeyCount) * 100}%` } as React.CSSProperties)
+    : ({ '--white-index': String(whiteIndex) } as React.CSSProperties)
+
+  return (
+    <button
+      type="button"
+      className={`piano-key ${keyModel.black ? 'black' : 'white'}${pressedClass(active)}`}
+      style={style}
+      data-key-id={keyModel.id}
+      data-midi={keyModel.midi}
+      aria-label={`${keyModel.note} piano key`}
+      aria-pressed={active}
+      onPointerDown={(event) => {
+        event.preventDefault()
+        event.currentTarget.setPointerCapture?.(event.pointerId)
+        registerPointer(event.pointerId, keyModel.id)
+        const rect = event.currentTarget.getBoundingClientRect()
+        const y = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5
+        onNoteStart(keyModel.id, clamp(0.45 + y * 0.5, 0.2, 1))
+      }}
+      onPointerUp={(event) => {
+        event.preventDefault()
+        registerPointer(event.pointerId, null)
+        onNoteEnd(keyModel.id)
+      }}
+      onPointerCancel={(event) => {
+        registerPointer(event.pointerId, null)
+        onNoteEnd(keyModel.id)
+      }}
+      onLostPointerCapture={(event) => {
+        registerPointer(event.pointerId, null)
+        onNoteEnd(keyModel.id)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onNoteStart(keyModel.id, 0.8)
+        }
+      }}
+      onKeyUp={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onNoteEnd(keyModel.id)
+        }
+      }}
+    />
+  )
 }
 
 export default function App() {
-  const keybed = useMemo(() => generateKeybed(), [])
-  const [controlState, setControlState] = useState<ControlState>(initialControlState)
-  const [pressedKeys, setPressedKeys] = useState<Set<number>>(() => new Set())
-  const [sustainOn, setSustainOn] = useState(false)
-  const [voiceCount, setVoiceCount] = useState(0)
-  const [midiState, setMidiState] = useState<MidiState>('not-requested')
-  const engineRef = useRef<GeneratedPianoEngine | null>(null)
-  const activePointerSources = useRef(new Map<number, { midi: number; source: string }>())
-  const activeKeyboardSources = useRef(new Map<string, { midi: number; source: string }>())
+  const engineRef = useRef<PianoEngine | null>(null)
+  const pointers = useRef<PointerMap>(new Map())
+  const heldComputerKeys = useRef<Map<string, string>>(new Map())
+  const [controlState, setControlState] = useState<ControlState>(() => createControlState())
+  const [activeKeys, setActiveKeys] = useState<Set<string>>(() => new Set())
+  const [status, setStatus] = useState<PianoStatus>({ state: 'loading', message: 'Preparing generated piano voice' })
+  const [midiStatus, setMidiStatus] = useState('MIDI not requested')
+  const controlBySection = useMemo(
+    () =>
+      sections.map((section) => ({
+        section,
+        controls: decorativeControls.filter((control) => control.section === section.id),
+      })),
+    [],
+  )
 
-  if (!engineRef.current) {
-    const adapter = typeof window !== 'undefined' && 'AudioContext' in window ? new WebAudioPianoAdapter() : undefined
-    engineRef.current = new GeneratedPianoEngine(adapter)
-  }
-
-  const syncSnapshot = useCallback(() => {
-    const snapshot = engineRef.current?.snapshot()
-    setVoiceCount(snapshot?.voices.filter((voice) => voice.state !== 'released').length ?? 0)
-    setSustainOn(snapshot?.sustain ?? false)
+  useEffect(() => {
+    const engine = createPianoEngine({
+      onStatus: setStatus,
+      maxVoices: 18,
+    })
+    engineRef.current = engine
+    engine.prepare()
+    return () => {
+      engine.allNotesOff()
+      engine.dispose()
+      engineRef.current = null
+    }
   }, [])
 
-  const noteOn = useCallback((midi: number, velocity: number, source: string) => {
-    engineRef.current?.noteOn(midi, velocity, source)
-    setPressedKeys((current) => new Set(current).add(midi))
-    syncSnapshot()
-  }, [syncSnapshot])
-
-  const noteOff = useCallback((midi: number, source: string) => {
-    engineRef.current?.noteOff(midi, source)
-    setPressedKeys((current) => {
+  const setKeyActive = useCallback((keyId: string, active: boolean) => {
+    setActiveKeys((current) => {
       const next = new Set(current)
-      next.delete(midi)
+      if (active) next.add(keyId)
+      else next.delete(keyId)
       return next
     })
-    syncSnapshot()
-  }, [syncSnapshot])
+  }, [])
 
-  const allNotesOff = useCallback(() => {
+  const startKey = useCallback(
+    (keyId: string, velocity = 0.76) => {
+      const key = keyboard.find((entry) => entry.id === keyId)
+      if (!key) return
+      setKeyActive(keyId, true)
+      engineRef.current?.noteOn(key.midi, velocity, keyId)
+    },
+    [setKeyActive],
+  )
+
+  const endKey = useCallback(
+    (keyId: string) => {
+      const key = keyboard.find((entry) => entry.id === keyId)
+      if (!key) return
+      setKeyActive(keyId, false)
+      engineRef.current?.noteOff(key.midi, keyId)
+    },
+    [setKeyActive],
+  )
+
+  const cleanupAll = useCallback(() => {
+    pointers.current.clear()
+    heldComputerKeys.current.clear()
+    setActiveKeys(new Set())
     engineRef.current?.allNotesOff()
-    activePointerSources.current.clear()
-    activeKeyboardSources.current.clear()
-    setPressedKeys(new Set())
-    syncSnapshot()
-  }, [syncSnapshot])
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase()
       if (event.repeat) return
-      if (event.key === ' ') {
-        event.preventDefault()
+      if (event.key === 'Tab' || event.metaKey || event.ctrlKey || event.altKey) return
+      const mapped = computerKeyMap[event.key.toLowerCase()]
+      if (!mapped) return
+      event.preventDefault()
+      if (mapped === 'sustain') {
         engineRef.current?.setSustain(true)
-        syncSnapshot()
+        setStatus((current) => ({ ...current, message: 'Generated piano ready - sustain held from keyboard' }))
         return
       }
-      const midi = COMPUTER_KEY_TO_MIDI.get(key)
-      if (!midi || activeKeyboardSources.current.has(key)) return
-      const source = `computer-${key}`
-      activeKeyboardSources.current.set(key, { midi, source })
-      noteOn(midi, 0.78, source)
+      if (heldComputerKeys.current.has(event.key)) return
+      heldComputerKeys.current.set(event.key, mapped)
+      startKey(mapped, 0.82)
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase()
-      if (event.key === ' ') {
+      const mapped = computerKeyMap[event.key.toLowerCase()]
+      if (!mapped) return
+      event.preventDefault()
+      if (mapped === 'sustain') {
         engineRef.current?.setSustain(false)
-        syncSnapshot()
+        setStatus((current) => ({ ...current, message: 'Generated piano ready' }))
         return
       }
-      const active = activeKeyboardSources.current.get(key)
-      if (!active) return
-      activeKeyboardSources.current.delete(key)
-      noteOff(active.midi, active.source)
+      const keyId = heldComputerKeys.current.get(event.key)
+      if (!keyId) return
+      heldComputerKeys.current.delete(event.key)
+      endKey(keyId)
     }
-    const onBlur = () => allNotesOff()
+    const onBlur = () => cleanupAll()
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
@@ -118,214 +343,135 @@ export default function App() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
-      allNotesOff()
     }
-  }, [allNotesOff, noteOff, noteOn, syncSnapshot])
+  }, [cleanupAll, endKey, startKey])
 
-  const requestMidi = useCallback(async () => {
-    const nav = navigator as unknown as MidiNavigatorLike
-    if (!nav.requestMIDIAccess) {
-      setMidiState('unsupported')
+  useEffect(() => {
+    let access: MIDIAccess | null = null
+    const onMidiMessage = (event: MIDIMessageEvent) => {
+      const [statusByte = 0, note = 0, value = 0] = Array.from(event.data ?? [])
+      const command = statusByte & 0xf0
+      if (command === 0x90 && value > 0) {
+        const key = keyboard.find((entry) => entry.midi === note)
+        if (key) {
+          setKeyActive(key.id, true)
+          engineRef.current?.noteOn(note, value / 127, `midi-${note}`)
+        }
+      } else if (command === 0x80 || (command === 0x90 && value === 0)) {
+        const key = keyboard.find((entry) => entry.midi === note)
+        if (key) setKeyActive(key.id, false)
+        engineRef.current?.noteOff(note, `midi-${note}`)
+      } else if (command === 0xb0 && note === 64) {
+        engineRef.current?.setSustain(value >= 64)
+      }
+    }
+    const attachInputs = () => {
+      if (!access) return
+      const inputs = Array.from(access.inputs.values())
+      for (const input of inputs) input.onmidimessage = onMidiMessage
+      setMidiStatus(inputs.length > 0 ? `${inputs.length} MIDI input${inputs.length === 1 ? '' : 's'} connected` : 'MIDI ready - no inputs connected')
+    }
+    if (!('requestMIDIAccess' in navigator)) {
+      setMidiStatus('Web MIDI unavailable in this browser')
       return
     }
-    try {
-      const access = await nav.requestMIDIAccess()
-      const handleMidi = (event: { data: Uint8Array | number[] | null }) => {
-        if (!event.data) return
-        const [status, note, value] = Array.from(event.data)
-        const command = status & 0xf0
-        if (command === 0x90 && value > 0) noteOn(note, value / 127, `midi-${note}`)
-        if (command === 0x80 || (command === 0x90 && value === 0)) noteOff(note, `midi-${note}`)
-        if (command === 0xb0 && note === 64) {
-          engineRef.current?.setSustain(value >= 64)
-          syncSnapshot()
+    navigator
+      .requestMIDIAccess({ sysex: false })
+      .then((midiAccess) => {
+        access = midiAccess
+        access.onstatechange = () => {
+          cleanupAll()
+          attachInputs()
         }
+        attachInputs()
+      })
+      .catch(() => setMidiStatus('MIDI permission denied or unavailable'))
+    return () => {
+      if (access) {
+        for (const input of access.inputs.values()) input.onmidimessage = null
+        access.onstatechange = null
       }
-      for (const input of access.inputs.values()) input.onmidimessage = handleMidi
-      access.onstatechange = (event) => {
-        setMidiState(event.port?.state === 'disconnected' ? 'disconnected' : 'connected')
-        if (event.port?.state === 'disconnected') allNotesOff()
-      }
-      setMidiState(access.inputs.size > 0 ? 'connected' : 'disconnected')
-    } catch {
-      setMidiState('denied')
-      allNotesOff()
+      cleanupAll()
     }
-  }, [allNotesOff, noteOff, noteOn, syncSnapshot])
+  }, [cleanupAll, setKeyActive])
 
-  const updateControl = useCallback((control: HardwareControl, direction = 1) => {
-    setControlState((current) => ({ ...current, [control.id]: controlStep(control, current[control.id] ?? 0, direction) }))
+  const changeControl = useCallback((id: string, value: number) => {
+    setControlState((current) => ({ ...current, [id]: clamp(value) }))
   }, [])
+
+  const registerPointer = useCallback(
+    (pointerId: number, keyId: string | null) => {
+      const previous = pointers.current.get(pointerId)
+      if (previous && previous !== keyId) endKey(previous)
+      if (keyId) pointers.current.set(pointerId, keyId)
+      else pointers.current.delete(pointerId)
+    },
+    [endKey],
+  )
 
   return (
     <main className="stage-page">
-      <section
-        className="instrument"
-        aria-label={`${VARIANT.name}, phase 1 surface with generated basic piano voice`}
-        data-variant={VARIANT.id}
-      >
-        <div className="top-rail" aria-hidden="true" />
-        <div className="deck" style={{ gridTemplateColumns: SECTIONS.map((section) => `${section.fraction}fr`).join(' ') }}>
-          {SECTIONS.map((section) => (
-            <section className={`panel panel-${section.id}`} aria-label={section.label} key={section.id}>
-              <PanelChrome sectionId={section.id} />
-              {HARDWARE_CONTROLS.filter((control) => control.section === section.id).map((control) => (
-                <DecorativeControl
-                  control={control}
-                  key={control.id}
-                  value={controlState[control.id] ?? 0}
-                  onMove={updateControl}
+      <div className="instrument-shell" aria-label="Nord Stage 4 73 Phase 1 recreation">
+        <div className="top-rail" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="control-deck">
+          {controlBySection.map(({ section, controls }) => (
+            <SectionView key={section.id} section={section} controls={controls} state={controlState} onChange={changeControl} />
+          ))}
+        </div>
+        <div className="keybed" aria-label="73 key E to E hammer action keybed">
+          <div className="white-key-row">
+            {keyboard
+              .filter((key) => !key.black)
+              .map((key) => (
+                <KeyView
+                  key={key.id}
+                  keyModel={key}
+                  active={activeKeys.has(key.id)}
+                  onNoteStart={startKey}
+                  onNoteEnd={endKey}
+                  registerPointer={registerPointer}
                 />
               ))}
-            </section>
-          ))}
-        </div>
-        <div className="front-lip" aria-hidden="true" />
-        <div className="keybed" aria-label={`${VARIANT.totalKeys} key hammer action keybed, ${VARIANT.range}`}>
-          {keybed.filter((key) => key.color === 'white').map((key) => (
-            <button
-              aria-label={`${key.note} piano key`}
-              className={`piano-key white-key ${pressedKeys.has(key.midi) ? 'is-pressed' : ''}`}
-              data-midi={key.midi}
-              data-note={key.note}
-              key={key.id}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture?.(event.pointerId)
-                const source = `pointer-${event.pointerId}-${key.midi}`
-                activePointerSources.current.set(event.pointerId, { midi: key.midi, source })
-                noteOn(key.midi, event.pressure > 0 ? event.pressure : 0.74, source)
-              }}
-              onPointerUp={(event) => {
-                const active = activePointerSources.current.get(event.pointerId)
-                if (!active) return
-                activePointerSources.current.delete(event.pointerId)
-                noteOff(active.midi, active.source)
-              }}
-              onPointerCancel={(event) => {
-                const active = activePointerSources.current.get(event.pointerId)
-                if (!active) return
-                activePointerSources.current.delete(event.pointerId)
-                noteOff(active.midi, active.source)
-              }}
-              style={{ left: `${key.x * 100}%`, width: `${key.width * 100}%` }}
-              type="button"
-            />
-          ))}
-          {keybed.filter((key) => key.color === 'black').map((key) => (
-            <button
-              aria-label={`${key.note} black piano key`}
-              className={`piano-key black-key ${pressedKeys.has(key.midi) ? 'is-pressed' : ''}`}
-              data-midi={key.midi}
-              data-note={key.note}
-              key={key.id}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture?.(event.pointerId)
-                const source = `pointer-${event.pointerId}-${key.midi}`
-                activePointerSources.current.set(event.pointerId, { midi: key.midi, source })
-                noteOn(key.midi, event.pressure > 0 ? event.pressure : 0.82, source)
-              }}
-              onPointerUp={(event) => {
-                const active = activePointerSources.current.get(event.pointerId)
-                if (!active) return
-                activePointerSources.current.delete(event.pointerId)
-                noteOff(active.midi, active.source)
-              }}
-              onPointerCancel={(event) => {
-                const active = activePointerSources.current.get(event.pointerId)
-                if (!active) return
-                activePointerSources.current.delete(event.pointerId)
-                noteOff(active.midi, active.source)
-              }}
-              style={{ left: `${key.x * 100}%`, width: `${key.width * 100}%` }}
-              type="button"
-            />
-          ))}
+          </div>
+          <div className="black-key-row" aria-hidden="false">
+            {keyboard
+              .filter((key) => key.black)
+              .map((key) => (
+                <KeyView
+                  key={key.id}
+                  keyModel={key}
+                  active={activeKeys.has(key.id)}
+                  onNoteStart={startKey}
+                  onNoteEnd={endKey}
+                  registerPointer={registerPointer}
+                />
+              ))}
+          </div>
         </div>
         <div className="bottom-rail" aria-hidden="true" />
-      </section>
-      <aside className="status-strip" aria-label="Phase 1 status">
-        <span>Basic piano: ready generated synthesis</span>
-        <span>Voices {voiceCount}</span>
-        <span>Sustain {sustainOn ? 'on' : 'off'}</span>
-        <span>MIDI {midiState.replace('-', ' ')}</span>
-        <button type="button" onClick={requestMidi}>Enable MIDI</button>
+      </div>
+      <aside className="status-strip" aria-live="polite">
+        <span data-testid="piano-status">{status.message}</span>
+        <span>{status.state === 'ready' ? 'Audio: generated synthesis' : `Audio: ${status.state}`}</span>
+        <span>{midiStatus}</span>
+        <span>Panel controls decorative in Phase 1</span>
       </aside>
+      <dl className="sr-only">
+        <dt>Variant</dt>
+        <dd>Nord Stage 4 73, hammer action, E to E, 73 total keys, 43 white keys, 30 black keys.</dd>
+        <dt>Decorative contract</dt>
+        <dd>Panel controls update presentation state only. The keybed and sustain input are the only functional audio controls.</dd>
+        <dt>Black key pattern</dt>
+        <dd>{keyboard.filter(isBlackKey).map((key) => key.note).join(', ')}</dd>
+        <dt>Middle C MIDI note</dt>
+        <dd>{getMidiNote('C4')}</dd>
+      </dl>
     </main>
-  )
-}
-
-function PanelChrome({ sectionId }: { sectionId: string }) {
-  if (sectionId === 'performance') {
-    return (
-      <>
-        <div className="brand">nord stage 4</div>
-        <div className="edition">hammer action 73</div>
-      </>
-    )
-  }
-  if (sectionId === 'program' || sectionId === 'synth') {
-    return <div className="oled" aria-hidden="true">{sectionId === 'program' ? 'A:11 Nord Stage 4' : 'OSC CTRL SOFT'}</div>
-  }
-  return <div className="section-title">{SECTION_LABELS[sectionId as keyof typeof SECTION_LABELS]}</div>
-}
-
-function DecorativeControl({ control, value, onMove }: { control: HardwareControl; value: number; onMove: (control: HardwareControl, direction?: number) => void }) {
-  const style = { left: `${control.x}%`, top: `${control.y}%` }
-  const capStyle = {
-    '--value': value,
-    '--angle': `${value * 270 - 45}deg`,
-    '--offset': `${value * 76}%`,
-    '--wheel-offset': `${(1 - value) * 62}%`,
-  } as CSSProperties
-  const common = {
-    'aria-label': `${control.label} decorative ${control.type}`,
-    'data-control-id': control.id,
-    'data-section': control.section,
-    style,
-    onPointerDown: () => onMove(control),
-    onKeyDown: (event: ReactKeyboardEvent) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault()
-        onMove(control)
-      }
-      if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
-        event.preventDefault()
-        onMove(control, 1)
-      }
-      if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
-        event.preventDefault()
-        onMove(control, -1)
-      }
-    },
-  }
-
-  if (control.type === 'button') {
-    return (
-      <button
-        {...common}
-        aria-pressed={value > 0}
-        className={`decor-control decor-button ${value > 0 ? 'is-on' : ''}`}
-        title={`${control.label} is decorative in phase 1`}
-        type="button"
-      >
-        <span>{control.label}</span>
-      </button>
-    )
-  }
-
-  return (
-    <div
-      {...common}
-      aria-valuemax={100}
-      aria-valuemin={0}
-      aria-valuenow={Math.round(value * 100)}
-      className={`decor-control decor-${control.type}`}
-      role="slider"
-      tabIndex={0}
-      title={`${control.label} moves visually only in phase 1`}
-    >
-      <span className="control-cap" style={capStyle} />
-      <span className="control-label">{control.label}</span>
-    </div>
   )
 }

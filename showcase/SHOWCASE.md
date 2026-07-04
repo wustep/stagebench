@@ -1622,3 +1622,27 @@ User-directed round, verified control-by-control in the DOM:
 - Confirmed already-clean: no waveform-name readout above WAVEFORM (gone
   since iteration 38), drawbar cap colors, A:11 readout, stepped LFX band.
 - Gates: typecheck, lint, verify:layout 12/12, tests 494/494.
+
+### 40 — Synth breathing room + program-strip density (2026-07-04)
+
+Follow-up to the uniform-switch pass, which had left the synth section
+starved and colliding:
+
+- **The fader trio gives back its stolen width** (6.65 → 5.06cqw, photo
+  ≈ 5.2): tighter column/ladder gaps, one-notch aux prints, and compact
+  ON/OFF tabs capped at the switch width below them. synth-main grew from
+  15.6 to 17.2cqw.
+- **Arp box uncrowded** (6.8 → 8.3cqw): RANGE'S label no longer clips to
+  "ANGE ENV" against RATE/TIME; MENU/GROUP ▿ clear. The WAVEFORM /
+  SOUND INIT column is capped at the photo's slim 1.8cqw (was a 3cqw
+  block squeezing the row).
+- **Knob numeral arcs no longer run into prints**: clearance above the
+  LFO / OSCILLATORS / FILTER knob rows (GROUP ▿ / VELOCITY ▿ /
+  ENV TO PITCH ▿ were being struck through by scale numerals).
+- **Framed button pairs never touch**: .button-cell gap covers both red
+  frames' outline offsets. GLIDE's LO ▿ HI ▿ prints on one line.
+- **Program strip: MIDI/EXTERN beside STORE** like the photo (the wrap
+  fallback stacked them below, adding phantom height; the pair's print
+  sizes now clear the blanket program-strip legend rule that had been
+  silently overriding them).
+- Gates: typecheck, lint, verify:layout 12/12, tests 494/494.
