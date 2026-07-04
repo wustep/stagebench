@@ -1,0 +1,234 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "composer-2-5-fast",
+  "stage": 1,
+  "stageName": "Complete surface and basic piano",
+  "status": "complete",
+  "evaluator": "independent-evaluator (Composer)",
+  "evaluatedAt": "2026-07-04T00:15:00.000Z",
+  "summary": "Solid Phase 1 pass with correct geometry, a complete decorative control inventory, and a dependable synthesized piano voice backed by real audio tests. The six-section layout, 54/46 deck/keybed split, 73-key E1–E7 keybed, and Program/Synth-only OLED placement match the spec. Visual fidelity is functional but schematic: controls render as generic CSS sliders/buttons rather than reference-faithful Nord hardware, and narrow viewports hide section headers below 480px. All four technical gates pass (26/26 tests); capture harness reports zero console errors at 1440×900 and 390×844.",
+  "score": 71.1,
+  "rawScore": 71.1,
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "label": "Complete visual fidelity",
+      "weight": 45,
+      "score": 66.3,
+      "contribution": 29.8,
+      "criteria": [
+        {
+          "id": "silhouetteGeometry",
+          "label": "Silhouette, chassis, and geometry",
+          "weight": 30,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Candidate audit and hardware tests confirm 54/46 deck/keybed split and six sections at 13/21/15/9/21/21% in the documented order.",
+            "73-key E1–E7 keybed (43 white / 30 black, 61% black-key height) rendered on a continuous red chassis with end cheeks; desktop capture fills ~97% viewport width with no scroll.",
+            "Chassis uses variant aspect ratio 3.095 via `min(97vw, calc(97vh * 3.095))`; silhouette reads as a Stage 4 study but lacks photo-exact rails, branding placement, and micro-geometry."
+          ]
+        },
+        {
+          "id": "hardwareInventory",
+          "label": "Complete hardware inventory and placement",
+          "weight": 35,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "163 panel controls with stable `data-control-id` values; hardware model tests assert ≥140 unique IDs, nine organ drawbars, performance wheels, and eight program buttons.",
+            "Primary OLED displays exist only in Program ('Init Program') and Synth ('Init Synth') sections; organ drawbar LED ladders, piano type selectors, effects matrix, and synth oscillator/filter groups are present as landmarks.",
+            "Controls use responsive flex-wrap grids rather than photo-exact absolute coordinates; density and grouping are credible but not reference-traced."
+          ]
+        },
+        {
+          "id": "materialsTypography",
+          "label": "Materials, color, typography, and displays",
+          "weight": 20,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Desktop capture shows simplified flat CSS controls (gray slider tracks, white rectangular buttons) on a red deck — the material family is recognizable but far from the reference's dark inset panels, indexed knobs, LED ladders, and condensed legends.",
+            "Section titles are generic uppercase labels; Nord logotype, tan pitch stick, green LED states, and blue-green OLED typography from the reference photo are absent or approximated.",
+            "Candidate audit documents intentional simplification of knob/fader industrial design and micro-typography."
+          ]
+        },
+        {
+          "id": "responsiveRetention",
+          "label": "Narrow retention",
+          "weight": 15,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Narrow capture at 390×844 completes with zero page errors and zero console messages; chassis and all 73 keys remain on-screen.",
+            "CSS hides section headers and control captions below 480px to prevent clipping — instrument is inspectable but panel legends are largely illegible at narrow width.",
+            "Candidate uses a slightly taller narrow aspect (3.095/1.15) to preserve keybed legibility; structure retained but 'legible state' is only partially met."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "basicPiano",
+      "label": "Basic Piano functionality",
+      "weight": 25,
+      "score": 75,
+      "contribution": 18.8,
+      "criteria": [
+        {
+          "id": "unifiedInputs",
+          "label": "Unified playable inputs",
+          "weight": 35,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Keybed tests cover pointer down/up/cancel and keyboard focus; engine tests exercise computer-key mapping with repeat suppression (`KeyA` held twice → one pressed note).",
+            "Injectable `createMockMidiPort` drives note-on/note-off and CC64 sustain through the shared `NoteLifecycle`; MIDI denied/disconnected paths are implemented in `src/input/midi.ts`.",
+            "Status strip reports 'Piano: ready · Voices: 0' after load; all input sources route through one lifecycle controller."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "label": "Voice lifecycle and performance",
+          "weight": 40,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Engine tests verify note start/release cleanup, repeated/overlapping notes on one key, and `allNotesOff` clearing every voice.",
+            "Sustain tests hold voices after key release and release on pedal up; polyphony test fills 33 notes and asserts deterministic oldest-voice stealing at limit 32.",
+            "Velocity scaling and blur/disconnect cleanup are covered in engine tests with injectable timing boundaries."
+          ]
+        },
+        {
+          "id": "honestBasicSource",
+          "label": "Basic source and status honesty",
+          "weight": 25,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json truthfully declares Phase 1 additive synthesis (triangle + sine overtone, AD envelope) with zero sample sources.",
+            "Verification digest confirms `sampleSources: 0` and generated strategy text matches the JSON.",
+            "Phase 1 scope allows a declared synthesis voice; no fake sample claims."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interaction",
+      "label": "Surface interaction and honesty",
+      "weight": 15,
+      "score": 75,
+      "contribution": 11.3,
+      "criteria": [
+        {
+          "id": "physicalInteraction",
+          "label": "Control movement and feedback",
+          "weight": 55,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Every panel control type (knob, fader, drawbar, button, wheel, display) is modeled in `CONTROLS` with accessible names and section ownership.",
+            "Keybed tests assert aria-pressed state on pointer interaction; decorative control movement updates presentation state in the hardware model.",
+            "163 controls respond to pointer and keyboard activation without breaking layout."
+          ]
+        },
+        {
+          "id": "decorativeBoundary",
+          "label": "Decorative-control boundary",
+          "weight": 45,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Phase 1 contract excludes panel audio/system changes; only keybed notes and sustain input are functional.",
+            "IMPLEMENTATION_DETAILS and status strip scope panel controls as visual-only for this phase.",
+            "No panel knob/button tests assert audio graph mutation — decorative boundary is honest."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 15,
+      "score": 75,
+      "contribution": 11.3,
+      "criteria": [
+        {
+          "id": "structureTests",
+          "label": "Data structure and tests",
+          "weight": 55,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Normalized typed hardware model (`src/model/hardware.ts`) with stable IDs; keyboard geometry in `src/model/keyboard.ts`.",
+            "Feature matrix maps all 11 Phase 1 IDs to five non-empty test files; verification confirms 11/11 coverage.",
+            "Injectable audio/MIDI/timing boundaries in `src/audio/boundaries.ts` keep tests deterministic without network or devices."
+          ]
+        },
+        {
+          "id": "runtime",
+          "label": "Runtime quality",
+          "weight": 45,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Sealed verification: test/typecheck/lint/build all passed; 26/26 tests in ~2.9s.",
+            "Playwright capture reports zero console messages and zero page errors at desktop and narrow profiles.",
+            "Production build produces `dist/index.html` (211 KB JS bundle); preview at `/previews/composer-2-5-fast/stage1/index.html`."
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 3117,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 931,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 336,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 1187,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "minor",
+      "category": "visualFidelity",
+      "description": "Panel controls use simplified CSS primitives instead of reference-faithful Nord hardware styling; materials/typography score capped accordingly."
+    },
+    {
+      "severity": "minor",
+      "category": "visualFidelity",
+      "description": "Narrow viewport hides section headers and control captions below 480px; structure retained but legends are not legible at 390×844."
+    }
+  ]
+}
