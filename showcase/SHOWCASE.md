@@ -1493,3 +1493,34 @@ the old under-sized controls were papering over space problems.
   LED rows, prog-num, perc, arp cell, acoustics, piano-select, program
   rail/mid gaps, oled line-height, perf-right air).
 - Gates: typecheck, lint, build, verify:layout 12/12, tests 494/494.
+
+### 35 — Reference-photo audit: ON LEDs, Amp Sim/EQ print + rows (2026-07-03)
+
+Panel-print audit against `reference/nord-stage-4.jpg` crops (organ, synth,
+effects at ~5x) and the manual; fixed the three deviations the photo settles
+unambiguously:
+
+- **Section ON state is a red LED on the header strip** (photo: ORGAN/PIANO/
+  SYNTH/LAYER EFFECTS headers all print ON ● left of the switch). Was a
+  green lamp on the button cap. Same correction for the organ VIB/CHORUS and
+  B3 PERCUSSION ON clusters (their separate green/cap lamps → one red LED
+  between print and switch). LED still tracks canonical state (verified live:
+  toggling Organ ON flips only its LED).
+- **Amp Sim/EQ print**: the mid-frequency knob is printed `FREQ` with a boxed
+  `FREQ` shift tag (was wrongly `FREQ [MID]`), and the MID gain knob wears
+  the boxed `RES` tag (was an invented `MID ▿`). Both stay static prints —
+  no resonance/shift behavior is faked (manual p. 51: sweepable mid via its
+  FREQ knob; RES is the filter-mode shift function, out of scope).
+- **Amp Sim/EQ rows**: explicit grid to the photo's two aligned rows —
+  DRIVE / FREQ / amp-model selector above BASS / MID / TREBLE — replacing
+  flex wrap that orphaned TREBLE bottom-center and crowded BASS/MID against
+  the selector.
+
+Audited-and-kept (deliberate adaptations, left as is): `◂ MST CLK` under ARP
+RUN where the panel prints `KB SYNC ▽` (Shift+Arp Run is this build's real,
+documented master-clock pairing — relabeling would make the print lie);
+LFO `TRIANGLE` / VOICE `PRI OFF` / `PATTERN` direction readouts; numeric
+`1.7` program readout vs the hardware's `A:11` bank:page format (program
+model adaptation, candidate for a future pass).
+
+- Gates: typecheck, lint, verify:layout 12/12, tests 494/494.

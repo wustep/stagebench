@@ -109,6 +109,9 @@ function SectionHeader({
    *  keyboard-accessible equivalent, wired in presentation.ts's toggle(). */
   onSoloHold?: () => void
 }) {
+  // Reference: the section ON state is a RED LED between the ON print and
+  // the button, on the header strip — not a lamp on the button cap.
+  const lit = usePresentationToggle(store, onId)
   return (
     <div className="plate-header">
       <PlateTitle title={title} onZoom={onZoom} subtitle="SECTION" />
@@ -118,7 +121,8 @@ function SectionHeader({
       </span>
       <span className="on-cluster">
         <Legend>ON</Legend>
-        <PanelButton store={store} id={onId} className="pill" led="green" holdAction={onSoloHold} />
+        <Led color="red" on={lit} />
+        <PanelButton store={store} id={onId} className="pill" holdAction={onSoloHold} />
         <Legend className="dim">SOLO ▾</Legend>
       </span>
     </div>
@@ -408,9 +412,10 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                   </div>
                 </div>
                 <span className="perc-on">
-                  <Led color="green" on={focused.vibrato} />
+                  {/* Reference: red ON LED between the print and the button. */}
                   <Legend>ON</Legend>
-                  <PanelButton store={store} id="organ-vib-on" className="pill small" led="green" />
+                  <Led color="red" on={focused.vibrato} />
+                  <PanelButton store={store} id="organ-vib-on" className="pill small" />
                 </span>
               </GroupBox>
               <GroupBox title="B3 Percussion" className="organ-perc">
@@ -446,7 +451,8 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <Led color="yellow" on={organ.percussion.poly} />
                   <Legend className="dim">POLY ▿</Legend>
                   <Legend>ON</Legend>
-                  <PanelButton store={store} id="organ-perc-on" className="pill small" led="green" />
+                  <Led color="red" on={organ.percussion.on} />
+                  <PanelButton store={store} id="organ-perc-on" className="pill small" />
                 </span>
               </GroupBox>
             </div>
@@ -1852,7 +1858,8 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             <PlateTitle title="LAYER EFFECTS" onZoom={onZoom} />
             <span className="on-cluster">
               <Legend>ON</Legend>
-              <PanelButton store={store} id="effects-on" className="pill" led="green" />
+              <Led color="red" on={!state.allFxOff} />
+              <PanelButton store={store} id="effects-on" className="pill" />
             </span>
           </div>
           <div className="effects-grid">
@@ -2057,15 +2064,20 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
             </GroupBox>
             <GroupBox title="Amp Sim/EQ" className="fx-box amp-sim-box">
-              <span className="knob-cell">
+              {/* Reference layout: two aligned rows — DRIVE / FREQ / selector
+                  on top, BASS / MID / TREBLE beneath them — with the ON
+                  rocker pinned at the right edge. The mid-frequency knob is
+                  printed FREQ with a boxed FREQ shift tag; the MID gain knob
+                  wears the boxed RES tag (both static prints, like GROUP ▿). */}
+              <span className="knob-cell amp-cell-drive">
                 <Knob store={store} id="amp-drive" className="small" />
                 <Legend>DRIVE</Legend>
               </span>
-              <span className="knob-cell">
+              <span className="knob-cell amp-cell-freq">
                 <Knob store={store} id="amp-freq" className="small" scale={['200', '250', '400', '600', '1K', '2K', '4K', '6K', '8K']} />
-                <Legend>FREQ <b className="tag-box">MID</b></Legend>
+                <Legend>FREQ <b className="tag-box">FREQ</b></Legend>
               </span>
-              <span className="variation-cell">
+              <span className="variation-cell amp-cell-sel">
                 <SelectorLedGrid
                   rows={selectorRows(
                     [
@@ -2082,15 +2094,15 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                   <Legend className="dim">VARIATION ▿</Legend>
                 </span>
               </span>
-              <span className="knob-cell">
+              <span className="knob-cell amp-cell-bass">
                 <Knob store={store} id="eq-bass" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
                 <Legend>BASS</Legend>
               </span>
-              <span className="knob-cell">
+              <span className="knob-cell amp-cell-mid">
                 <Knob store={store} id="eq-mid" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
-                <Legend>MID <i className="dim">▿</i></Legend>
+                <Legend>MID <b className="tag-box">RES</b></Legend>
               </span>
-              <span className="knob-cell">
+              <span className="knob-cell amp-cell-treble">
                 <Knob store={store} id="eq-treble" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
                 <Legend>TREBLE</Legend>
               </span>
