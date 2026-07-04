@@ -572,7 +572,15 @@ export interface ProgramsState {
   dirty: boolean
   /** STORE pressed once: destination selection in progress; the captured
    *  slot is what will be written on confirm (manual p. 13). */
-  storePending: { origin: number; originDirty: boolean; destination: number; captured: ProgramSlot } | null
+  storePending: {
+    origin: number
+    originDirty: boolean
+    /** Bank mode at Store time — restored on cancel (Live Mode may have
+     *  been toggled during destination selection, manual p. 13/44). */
+    originLiveMode: boolean
+    destination: number
+    captured: ProgramSlot
+  } | null
   /** STORE AS naming step before destination selection (manual p. 41). */
   naming: { name: string; cursor: number } | null
   /** Single-level undo: the edited state discarded by the last program change. */
@@ -614,6 +622,9 @@ export interface InstrumentState {
   clockEdit: boolean
   /** Transpose dial-edit panel mode (dial = semitones). Not program state. */
   transposeEdit: boolean
+  /** SOLO monitor latch (manual quick guide): the soloed layer plays alone
+   *  via a live gain gate — nothing destructive. Not program state. */
+  soloLayer: { section: 'piano' | 'organ' | 'synth'; layer: 'A' | 'B' | 'C' } | null
   /** LAYER INIT screen (Shift + Section Edit, manual p. 43): PROGRAM 1-4 act
    *  as the four soft buttons (All / Org AB / Pno / Syn). Not program state. */
   layerInitEdit: boolean
@@ -820,6 +831,7 @@ function baseInstrumentState(): InstrumentState {
     splitEdit: null,
     clockEdit: false,
     transposeEdit: false,
+    soloLayer: null,
     layerInitEdit: false,
     sectionEdit: false,
     presetBrowse: null,
@@ -900,6 +912,10 @@ function baseInstrumentState(): InstrumentState {
 /** Display label for a slot in the hardware's bank:page-slot format
  *  (manual p. 13/44: e.g. "A:11" … "A:48"). This build carries one bank, so
  *  the letter is always A; Live slots read L1 … L8. */
+function sectionShort(section: 'piano' | 'organ' | 'synth'): string {
+  return section === 'piano' ? 'Pno' : section === 'organ' ? 'Org' : 'Syn'
+}
+
 export function programLabel(index: number, liveMode: boolean): string {
   return liveMode ? `L${index + 1}` : `A:${Math.floor(index / 8) + 1}${(index % 8) + 1}`
 }
@@ -2057,6 +2073,7 @@ export class InstrumentStore {
         storePending: {
           origin: programs.current,
           originDirty: programs.dirty,
+          originLiveMode: programs.liveMode,
           destination: programs.current,
           captured,
         },
@@ -2128,7 +2145,17 @@ export class InstrumentStore {
       ...this.state,
       ...cloneSnapshot(pending.captured.snapshot),
       pianoNotFound: null,
-      programs: { ...programs, storePending: null, current: pending.origin, dirty: pending.originDirty },
+      programs: {
+        ...programs,
+        storePending: null,
+        current: pending.origin,
+        dirty: pending.originDirty,
+        // The origin index is only valid in the origin bank: restore the
+        // bank mode too, or a Live toggle during destination selection
+        // strands a bank index on the 8-slot Live array (crash + silent
+        // auto-store loss).
+        liveMode: pending.originLiveMode,
+      },
       lastEdit: 'Store cancelled',
     })
     return true
@@ -2524,6 +2551,28 @@ export class InstrumentStore {
 
   /** SOLO (manual p. 18): holding a section's ON button for ~half a second
    *  activates only that section, turning the other two off. */
+  /** SOLO button (manual quick guide p. 13): latches solo monitoring of
+   *  the FX-focused layer; pressing another Layer button retargets it.
+   *  Solo again (or Shift/Exit) exits. A live gain gate in the engine —
+   *  layer enables and program state are never touched. */
+  toggleProgramSolo(): void {
+    if (this.state.soloLayer) {
+      this.patch({ soloLayer: null }, 'Solo Off')
+      return
+    }
+    const section = this.state.fxSection === 'organ' ? ('organ' as const) : this.state.fxSection === 'synth' ? ('synth' as const) : ('piano' as const)
+    const layer = section === 'organ' ? this.state.organ.focusedLayer : section === 'synth' ? this.state.synth.focusedLayer : this.state.focusedLayer
+    this.patch({ soloLayer: { section, layer } }, `Solo ${sectionShort(section)} ${layer} — Layer buttons retarget`)
+  }
+
+  /** While the Solo latch is on, Layer buttons retarget the monitor instead
+   *  of toggling enables (manual: "pressing the button for that Layer"). */
+  retargetProgramSolo(section: 'piano' | 'organ' | 'synth', layer: 'A' | 'B' | 'C'): boolean {
+    if (!this.state.soloLayer) return false
+    this.patch({ soloLayer: { section, layer } }, `Solo ${sectionShort(section)} ${layer}`)
+    return true
+  }
+
   soloSection(section: 'piano' | 'organ' | 'synth'): void {
     const label = `Solo ${section.charAt(0).toUpperCase()}${section.slice(1)}`
     this.patch(
@@ -2801,7 +2850,9 @@ export class InstrumentStore {
     const layer = this.state.synth.focusedLayer
     const current = this.state.synth.layers[layer].lfo.destination
     const index = current === null ? -1 : SYNTH_LFO_DESTINATIONS.indexOf(current)
-    this.selectSynthLfoDestination(index + 2) // +1 for the 0-based Off slot, +1 to advance
+    // +1 for the 0-based Off slot, +1 to advance; wrap past the last
+    // destination back to Off (the clamp used to pin the cycle at the end).
+    this.selectSynthLfoDestination((index + 2) % (SYNTH_LFO_DESTINATIONS.length + 1))
   }
 
   /** Selects the LFO destination by absolute list position: 0 = Off,
@@ -3053,13 +3104,38 @@ export class InstrumentStore {
   /** Chains an effect edit targets: focused layer, or both in Group/global
    *  mode — or while SECTION EDIT is latched (manual p. 43: "setting up just
    *  some of the effects the same for a whole Section"). */
-  private targetLayers(unit: keyof EffectChainState): LayerId[] {
-    const global = (unit === 'delay' && this.state.fxGlobal.delay) || (unit === 'comp' && this.state.fxGlobal.comp) || (unit === 'reverb' && this.state.fxGlobal.reverb)
-    if (global || this.state.fxGroupPiano || this.state.sectionEdit) return ['A', 'B']
+  private targetLayers(_unit: keyof EffectChainState): LayerId[] {
+    // Global units are fanned out in updateUnit before reaching here.
+    if (this.state.fxGroupPiano || this.state.sectionEdit) return ['A', 'B']
     return [this.state.focusedLayer]
   }
 
   updateUnit<K extends keyof EffectChainState>(unit: K, partial: Partial<EffectChainState[K]>, label?: string): void {
+    const globalUnit =
+      (unit === 'delay' && this.state.fxGlobal.delay) ||
+      (unit === 'comp' && this.state.fxGlobal.comp) ||
+      (unit === 'reverb' && this.state.fxGlobal.reverb)
+    if (globalUnit) {
+      // GLOBAL mode (manual p. 48): the edit applies to all Layers of all
+      // Sections, no matter which section holds FX focus.
+      const applyTo = (chain: EffectChainState): EffectChainState => ({
+        ...chain,
+        [unit]: { ...chain[unit], ...partial },
+      })
+      this.patch(
+        {
+          chains: { A: applyTo(this.state.chains.A), B: applyTo(this.state.chains.B) },
+          organChain: applyTo(this.state.organChain),
+          synthChains: {
+            A: applyTo(this.state.synthChains.A),
+            B: applyTo(this.state.synthChains.B),
+            C: applyTo(this.state.synthChains.C),
+          },
+        },
+        label,
+      )
+      return
+    }
     if (this.state.fxSection === 'organ') {
       // The single shared Organ chain is already section-wide (manual
       // p. 18), so SECTION EDIT changes nothing here.
@@ -3194,14 +3270,20 @@ export class InstrumentStore {
     const fxGlobal = { ...this.state.fxGlobal, [unit]: value }
     if (value) {
       // Entering global mode mirrors the focused layer's unit settings
-      // everywhere — including onto the shared Organ chain (manual p. 18/48).
+      // everywhere — piano A/B, the shared Organ chain AND all three synth
+      // chains (manual p. 48: "all Layers of all Sections").
       const focused = this.state.chains[this.state.focusedLayer][unit]
       const chains = {
         A: { ...this.state.chains.A, [unit]: { ...focused } },
         B: { ...this.state.chains.B, [unit]: { ...focused } },
       }
       const organChain = { ...this.state.organChain, [unit]: { ...focused } }
-      this.patch({ fxGlobal, chains, organChain }, `${unitLabel(unit)} Global On`)
+      const synthChains = {
+        A: { ...this.state.synthChains.A, [unit]: { ...focused } },
+        B: { ...this.state.synthChains.B, [unit]: { ...focused } },
+        C: { ...this.state.synthChains.C, [unit]: { ...focused } },
+      }
+      this.patch({ fxGlobal, chains, organChain, synthChains }, `${unitLabel(unit)} Global On`)
     } else {
       this.patch({ fxGlobal }, `${unitLabel(unit)} Global Off`)
     }

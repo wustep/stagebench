@@ -191,6 +191,7 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'osc-envelope',
   'osc-env-amt',
   'lfo-waveform',
+  'lfo-destination',
   'lfo-rate',
   'lfo-mod-amt',
   'voice-mode',
@@ -257,7 +258,7 @@ const toggle = (id: string, label: string, group?: string): ControlSeed => ({ id
 const push = (id: string, label: string, group?: string): ControlSeed => ({ id, group, type: 'button', label, latching: false })
 
 export const DRAWBAR_FOOTAGES = ['16′', '5⅓′', '8′', '4′', '2⅔′', '2′', '1⅗′', '1⅓′', '1′'] as const
-export const DRAWBAR_LEGENDS = ['BASS16', 'STR16', 'FLUTE8', 'OBOE8', 'TRMP8', 'STR8', 'FLUTE4', 'STR4', '2⅔–1'] as const
+export const DRAWBAR_LEGENDS = ['BASS16', 'STR16', 'FLUTE8', 'OBOE8', 'TRMP8', 'STR8', 'FLUTE4', 'STR4', '2 2/3'] as const
 /** Second dim register row printed under each drawbar name (reference photo):
  *  blank under STR4, a sine-span glyph under the last column. */
 export const DRAWBAR_REGISTERS = ['16′', '8′', '4′', '2′', 'II', 'III', 'IV', '', '∿–∿'] as const
@@ -369,6 +370,7 @@ const synthControls = section('synth', [
   // Shift + press (manual p. 37: "SOUND INIT (Shift+Waveform)").
   push('waveform-select', 'Waveform Select'),
   push('lfo-waveform', 'LFO Waveform', 'LFO'),
+  push('lfo-destination', 'LFO Destination', 'LFO'),
   knob('lfo-rate', 'LFO Rate/Time', 'LFO'),
   { ...knob('lfo-mod-amt', 'LFO Mod Amount', 'LFO'), initial: 0 },
   push('osc-pitch-smp', 'Oscillator Pitch/Sample', 'Oscillators'),

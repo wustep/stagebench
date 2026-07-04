@@ -256,7 +256,12 @@ describe('synth.lfo — standing per-layer LFO, destination switching, clock syn
     store.selectSynthLfoDestination(1) // Osc Pitch
     engine.noteOn(60, 0.8)
     const oscillator = context.oscillators().slice(-1)[0]! // Saw is a single-oscillator Pure voice
-    expect(depthGains.some((g) => g.paramConnections.includes(oscillator.detune))).toBe(true)
+    // The channel depth now feeds a PER-VOICE destination-scale gain, which
+    // feeds the target param (the scale keeps old voices at their own
+    // destination's unit range when the destination changes mid-note).
+    const feedsParamViaScale = (g: FakeGain, param: unknown) =>
+      g.connections.some((n) => n instanceof FakeGain && n.paramConnections.includes(param as never))
+    expect(depthGains.some((g) => feedsParamViaScale(g, oscillator.detune))).toBe(true)
     engine.noteOff(60)
 
     selectWaveform(store, 'FM 2-op')
@@ -267,7 +272,7 @@ describe('synth.lfo — standing per-layer LFO, destination switching, clock syn
       .slice(before)
       .filter((n): n is FakeGain => n instanceof FakeGain)
       .find((g) => g.paramConnections.length > 0 && g.connections.length === 0)! // modGain: no node outputs, only feeds carrier.frequency
-    expect(depthGains.some((g) => g.paramConnections.includes(modGain.gain))).toBe(true)
+    expect(depthGains.some((g) => feedsParamViaScale(g, modGain.gain))).toBe(true)
     engine.noteOff(61)
   })
 

@@ -82,6 +82,7 @@ describe('visual.control-inventory — normalized hardware model', () => {
       'osc-envelope',
       'osc-env-amt',
       'lfo-waveform',
+      'lfo-destination',
       'lfo-rate',
       'lfo-mod-amt',
       'voice-mode',

@@ -190,9 +190,11 @@ export function createMod1(ctx: AudioContextLike): EffectUnit<Mod1State> {
       case 'Wah':
       case 'A-Wah': {
         const filter = ctx.createBiquadFilter()
-        filter.type = 'bandpass'
+        // Spec: Wah is an LFO-driven resonant LOW-PASS sweep; band-pass is
+        // the envelope-followed A-Wah's characteristic.
+        filter.type = type === 'Wah' ? 'lowpass' : 'bandpass'
         filter.frequency.value = 600
-        filter.Q.value = 4
+        filter.Q.value = type === 'Wah' ? 6 : 4
         shell.wetIn.connect(filter)
         filter.connect(shell.wetOut)
         if (type === 'Wah') {
@@ -580,7 +582,10 @@ export function createAmpEq(ctx: AudioContextLike): EffectUnit<AmpEqState> {
         const cutoff = mappings.filterFreqHz(state.freq)
         setParam(voicing.frequency, cutoff, now)
         setParam(stage2.frequency, cutoff, now)
-        setParam(voicing.Q, 4, now) // resonant 24 dB filter
+        // Gain/Res (the MID knob, spec ampSimEq.filterModes): resonance for
+        // the 24 dB filter modes — center = mild, right = screaming.
+        const resonance = 0.5 + Math.pow(state.mid / 127, 2) * 11.5
+        setParam(voicing.Q, resonance, now)
         setParam(stage2.Q, 0.7, now)
         setParam(mid.gain, 0, now)
       } else {

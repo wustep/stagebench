@@ -300,3 +300,23 @@ describe('input regressions — stuck-state and continuity bugs', () => {
     }
   })
 })
+
+describe('press visuals — shared across the magnifier lens clone', () => {
+  it('a momentary press shows on BOTH the real button and the lens clone', () => {
+    renderApp()
+    fireEvent.click(screen.getByTestId('magnify-toggle'))
+    const lens = screen.getByTestId('magnify-lens')
+    const real = screen.getByRole('button', { name: 'Organ Octave Shift Down' })
+    const clone = lens.querySelector('[data-control-id="organ-octave-down"]')
+    expect(clone).not.toBeNull()
+
+    fireEvent.pointerDown(real, { pointerId: 2 })
+    expect(real.getAttribute('data-pressed')).toBe('true')
+    expect(clone!.getAttribute('data-pressed')).toBe('true')
+
+    fireEvent.pointerUp(real, { pointerId: 2 })
+    expect(real.getAttribute('data-pressed')).toBeNull()
+    expect(clone!.getAttribute('data-pressed')).toBeNull()
+    fireEvent.click(screen.getByTestId('magnify-toggle'))
+  })
+})

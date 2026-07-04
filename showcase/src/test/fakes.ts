@@ -97,7 +97,18 @@ export class FakeNode implements AudioNodeLike {
     this.connections.push(destination as FakeNode)
     return destination
   }
-  disconnect() {
+  disconnect(destination?: AudioNodeLike | AudioParamLike) {
+    if (destination) {
+      // Targeted form: sever only the edge to that node/param.
+      if (destination instanceof FakeParam) {
+        const at = this.paramConnections.indexOf(destination)
+        if (at >= 0) this.paramConnections.splice(at, 1)
+      } else {
+        const at = this.connections.indexOf(destination as FakeNode)
+        if (at >= 0) this.connections.splice(at, 1)
+      }
+      return
+    }
     this.disconnected = true
     this.connections = []
     this.paramConnections = []

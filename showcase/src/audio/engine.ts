@@ -132,7 +132,7 @@ interface LiveDetunedSource {
  *  (a real, audible, audio-rate connection — not the literal per-category
  *  mechanism, honestly noted here and in IMPLEMENTATION_DETAILS.json). */
 type SynthVoiceLive =
-  | { kind: 'multi'; detuned: LiveDetunedSource[]; oscCtrlParam: AudioParamLike }
+  | { kind: 'multi'; detuned: LiveDetunedSource[]; spreadDivisor: number; oscCtrlParam: AudioParamLike }
   | { kind: 'super'; detuned: LiveDetunedSource[]; oscCtrlParam: AudioParamLike }
   | { kind: 'fm'; modGain: AudioParamLike; carrierFrequency: number; oscCtrlParam: AudioParamLike }
   | { kind: 'sync'; square: boolean; oscillator: OscillatorNodeLike; peak: number; oscCtrlParam: AudioParamLike }
@@ -178,6 +178,10 @@ interface Voice {
   synthFallback: boolean
   sources: VoiceSource[]
   ownedNodes: AudioNodeLike[]
+  /** Per-voice nodes fed by channel.lfo.depth / channel.vibrato.depth —
+   *  cleanup disconnects the channel side or those edges leak. */
+  lfoFeeds: AudioNodeLike[]
+  vibratoFeeds: AudioNodeLike[]
   gain: GainNodeLike
   cleanupTimer: number | null
   organLive: OrganVoiceLive | null
@@ -1152,6 +1156,11 @@ export class PianoEngine {
     const state = this.state
     rampTo(this.masterGain.gain, mappings.levelToGain(state.masterVolume) * 0.9, now)
 
+    // KB HOLD off: everything the hold was carrying (keys already lifted)
+    // releases now, and the held stacks shrink back to the keys still down.
+    if (this.lastKbHold && !state.kbHold) this.releaseKbHoldVoices()
+    this.lastKbHold = state.kbHold
+
     // SUSTPED off: the damper is no longer routed to that section — release
     // anything it was holding there.
     for (const voice of [...this.voices.values()]) {
@@ -1177,7 +1186,8 @@ export class PianoEngine {
       const channel = this.channels[layer]
       const layerState = state.layers[layer]
       const chain = state.chains[layer]
-      const audible = layerState.enabled && state.piano.sectionOn
+      const solo = state.soloLayer
+      const audible = layerState.enabled && state.piano.sectionOn && (!solo || (solo.section === 'piano' && solo.layer === layer))
       rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
 
       // Timbre voicing (family-aware).
@@ -1227,7 +1237,8 @@ export class PianoEngine {
       for (const layer of ['A', 'B'] as const) {
         const channel = this.organChannels[layer]
         const layerState = state.organ.layers[layer]
-        const audible = layerState.enabled && state.organ.sectionOn
+        const organSolo = state.soloLayer
+        const audible = layerState.enabled && state.organ.sectionOn && (!organSolo || (organSolo.section === 'organ' && organSolo.layer === layer))
         rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
         channel.scanner.update({ type: state.organ.vibratoType }, layerState.vibrato, now)
       }
@@ -1265,7 +1276,8 @@ export class PianoEngine {
       for (const layer of SYNTH_LAYER_IDS) {
         const channel = this.synthChannels[layer]
         const layerState = state.synth.layers[layer]
-        const audible = layerState.enabled && state.synth.sectionOn
+        const synthSolo = state.soloLayer
+        const audible = layerState.enabled && state.synth.sectionOn && (!synthSolo || (synthSolo.section === 'synth' && synthSolo.layer === layer))
         rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
 
         const synthChain = state.synthChains[layer]
@@ -1376,10 +1388,11 @@ export class PianoEngine {
         switch (live.kind) {
           case 'multi': {
             const cents = multiDetuneCents(oscCtrl)
-            const count = live.detuned.length
-            const step = count > 1 ? (2 * cents) / (count - 1) : 0
+            // Same spread formula as voice build (8ve divides over the full
+            // 4-oscillator stack even though the octave osc isn't detuned).
+            const step = live.spreadDivisor > 0 ? (2 * cents) / live.spreadDivisor : 0
             live.detuned.forEach(({ source }, i) => {
-              source.baseDetune = count > 1 ? -cents + step * i : 0
+              source.baseDetune = live.spreadDivisor > 0 ? -cents + step * i : 0
               rampTo(source.node.detune, source.baseDetune + bend * 100 + pitchCents, now)
             })
             break
@@ -1469,8 +1482,9 @@ export class PianoEngine {
       // S&H steps at a fixed 16 Hz base rate; scale playbackRate so faster
       // Rate settings step faster, matching the oscillator waveforms' feel.
       rampTo(channel.lfo.sh.playbackRate, frequencyHz / mappings.lfoRateHz(64), now)
-      const depth = (lfo.amount / 127) * (lfo.destination === 'Filter Freq' ? 4000 : lfo.destination === 'Osc Pitch' ? 60 : 40)
-      rampTo(channel.lfo.depth.gain, lfo.destination ? depth : 0, now)
+      // Normalized amount — each voice's destination-scale gain applies the
+      // unit range (cents / Hz / index) it was built for.
+      rampTo(channel.lfo.depth.gain, lfo.destination ? lfo.amount / 127 : 0, now)
     }
   }
 
@@ -1810,6 +1824,8 @@ export class PianoEngine {
       synthFallback: false,
       sources: [],
       ownedNodes: [],
+      lfoFeeds: [],
+      vibratoFeeds: [],
       gain,
       cleanupTimer: null,
       organLive: null,
@@ -2185,7 +2201,10 @@ export class PianoEngine {
           sources.push(source)
           if (!octaveUp) detuned.push({ source })
         }
-        synthLive = { kind: 'multi', detuned, oscCtrlParam: oscCtrlGain!.gain }
+        // 8ve excludes the octave oscillator from `detuned`, so the live
+        // retarget needs the BUILD's spread divisor (count - 1), not the
+        // detuned array length.
+        synthLive = { kind: 'multi', detuned, spreadDivisor: count - 1, oscCtrlParam: oscCtrlGain!.gain }
         break
       }
       case 'Super': {
@@ -2475,7 +2494,7 @@ export class PianoEngine {
       ownedNodes.push(scaler)
       return scaler
     })
-    this.connectSynthLfoDestination(channel, layerState.lfo.destination, {
+    this.connectSynthLfoDestination(context, voice, channel, layerState.lfo.destination, {
       oscillators: oscillatorNodes,
       filters: synthFilter?.filters ?? [],
       oscCtrlParam: isSamplesMode ? null : (synthLive?.oscCtrlParam ?? null),
@@ -2500,6 +2519,7 @@ export class PianoEngine {
       vibratoRamp.gain.setTargetAtTime(1, now, delaySeconds / 4)
     }
     ownedNodes.push(vibratoRamp)
+    voice.vibratoFeeds.push(vibratoRamp)
     channel.vibrato.depth.connect(vibratoRamp)
     for (const osc of oscillatorNodes) vibratoRamp.connect(osc.detune)
     for (const scaler of pitchScalers) vibratoRamp.connect(scaler)
@@ -2524,6 +2544,8 @@ export class PianoEngine {
    * Filter Freq target, so those combinations are silent no-ops.
    */
   private connectSynthLfoDestination(
+    context: AudioContextLike,
+    voice: Voice,
     channel: SynthChannel,
     destination: SynthLfoDestination | null,
     targets: {
@@ -2535,13 +2557,24 @@ export class PianoEngine {
       pitchScalers: GainNodeLike[]
     },
   ): void {
+    if (!destination) return
+    // The channel depth gain carries a NORMALIZED amount (0..1); this
+    // per-voice gain applies the destination's unit scale, so voices built
+    // for the OLD destination keep their own scale when the destination
+    // changes mid-note (the depth would otherwise ramp 60 -> 4000 on a
+    // still-connected detune param).
+    const scale = context.createGain()
+    scale.gain.value = destination === 'Filter Freq' ? 4000 : destination === 'Osc Pitch' ? 60 : 40
+    voice.ownedNodes.push(scale)
+    voice.lfoFeeds.push(scale)
+    channel.lfo.depth.connect(scale)
     if (destination === 'Osc Pitch') {
-      for (const osc of targets.oscillators) channel.lfo.depth.connect(osc.detune)
-      for (const scaler of targets.pitchScalers) channel.lfo.depth.connect(scaler)
+      for (const osc of targets.oscillators) scale.connect(osc.detune)
+      for (const scaler of targets.pitchScalers) scale.connect(scaler)
     } else if (destination === 'Filter Freq') {
-      for (const filter of targets.filters) channel.lfo.depth.connect(filter.frequency)
-    } else if (destination === 'Osc Ctrl' && targets.oscCtrlParam) {
-      channel.lfo.depth.connect(targets.oscCtrlParam)
+      for (const filter of targets.filters) scale.connect(filter.frequency)
+    } else if (targets.oscCtrlParam) {
+      scale.connect(targets.oscCtrlParam)
     }
   }
 
@@ -2702,6 +2735,9 @@ export class PianoEngine {
     for (const voice of this.voices.values()) {
       if (voice.midi !== midi) continue
       voice.keyDown = false
+      // KB HOLD (manual p. 36): synth notes keep sounding after keys are
+      // lifted; the release happens when KB HOLD is turned off.
+      if (voice.section === 'synth' && this.state.kbHold) continue
       if (voice.sostenuto) continue
       const sustain = this.effectiveSustainLevel(voice.section)
       if (sustain >= SUSTAIN_DOWN) {
@@ -2724,6 +2760,32 @@ export class PianoEngine {
    * priority, releasing the currently-sounding note returns to the next
    * most-recently-held note per the priority setting.
    */
+  private lastKbHold = false
+
+  /** KB HOLD released: synth voices whose keys are up release (respecting
+   *  the damper), and the held stacks keep only physically-down keys. */
+  private releaseKbHoldVoices(): void {
+    const downMidis = new Set<number>()
+    for (const voice of this.voices.values()) {
+      if (voice.section === 'synth' && voice.keyDown) downMidis.add(voice.midi)
+    }
+    for (const voice of [...this.voices.values()]) {
+      if (voice.section !== 'synth' || voice.keyDown || voice.sostenuto || voice.sustained) continue
+      if (this.effectiveSustainLevel('synth') >= SUSTAIN_DOWN) {
+        voice.sustained = true
+        continue
+      }
+      this.releaseVoice(voice, this.releaseSecondsFor(voice))
+    }
+    for (const layer of SYNTH_LAYER_IDS) {
+      this.synthHeld[layer] = this.synthHeld[layer].filter((m) => downMidis.has(m))
+      const sounding = this.synthSoundingMidi[layer]
+      if (sounding !== null && !downMidis.has(sounding)) {
+        this.synthSoundingMidi[layer] = this.synthHeld[layer].length > 0 ? this.synthHeld[layer][this.synthHeld[layer].length - 1]! : null
+      }
+    }
+  }
+
   private synthKeyUp(midi: number): void {
     if (this.state.kbHold) return
     for (const layer of SYNTH_LAYER_IDS) {
@@ -3004,11 +3066,33 @@ export class PianoEngine {
         /* detached */
       }
     }
+    // Sever the CHANNEL-side edges into this voice's lfo/vibrato feed gains:
+    // target.disconnect() below only removes OUTGOING edges, so without this
+    // the channel depth gains accumulate dead fan-out per note played.
+    if (voice.section === 'synth' && this.synthChannels) {
+      const channel = this.synthChannels[voice.layer as SynthLayerId]
+      for (const fed of voice.lfoFeeds) {
+        try {
+          channel.lfo.depth.disconnect(fed)
+        } catch {
+          /* already detached */
+        }
+      }
+      for (const fed of voice.vibratoFeeds) {
+        try {
+          channel.vibrato.depth.disconnect(fed)
+        } catch {
+          /* already detached */
+        }
+      }
+    }
     this.releasingVoices.delete(voice)
     // Free-list recycle: empty the arrays in place and drop every AudioNode
     // reference so pooled bookkeeping objects never pin graph nodes.
     voice.sources.length = 0
     voice.ownedNodes.length = 0
+    voice.lfoFeeds.length = 0
+    voice.vibratoFeeds.length = 0
     voice.organLive = null
     voice.synthLive = null
     voice.synthFilter = null

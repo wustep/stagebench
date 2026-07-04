@@ -16,7 +16,9 @@ export interface AudioParamLike {
 
 export interface AudioNodeLike {
   connect(destination: AudioNodeLike | AudioParamLike): unknown
-  disconnect(): void
+  /** Argless: sever every outgoing edge. With a destination: sever only the
+   *  edge to that node (used to release channel->voice feeds on cleanup). */
+  disconnect(destination?: AudioNodeLike | AudioParamLike): void
 }
 
 export interface GainNodeLike extends AudioNodeLike {

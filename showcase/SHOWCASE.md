@@ -1695,3 +1695,65 @@ starved and colliding:
   showcase overlay header (src/App.tsx).
 - Gates: typecheck, lint, build, verify:layout 12/12, tests 498/498; root
   gallery typecheck + lint green.
+
+### 42 — Five-lens sweep fixes, photo-true synth boxes, shared press state (2026-07-04)
+
+**Workflow round 2** (state/audio/honesty/prints/spec lenses; 30 raw
+findings, 29 adversarially confirmed — several with executed repro tests).
+22 fixed this iteration:
+
+- *State:* cancelling a Store after toggling Live Mode no longer strands a
+  bank index on the 8-slot Live array (crash on next STORE + silently
+  dropped auto-store edits) — storePending now records and restores the
+  origin bank mode. GLOBAL Delay/Comp/Reverb is now truly global: entering
+  Global mirrors onto the synth chains too, and edits to a global unit fan
+  to piano A/B + organ + synth A/B/C regardless of FX focus (manual p. 48).
+  The LFO destination cycle wraps back to Off instead of pinning at
+  Filter Freq.
+- *Honesty:* the program SOLO button now performs the manual's Solo — a
+  non-destructive monitor latch (live gain gate in the engine; Layer
+  buttons retarget it, Solo/Shift-Exit release it) — with UNDO on its
+  printed Shift pairing (plain press used to destructively UNDO).
+  Shift+OSC ENVELOPE / Shift+FILTER ENVELOPE now do their printed
+  VELOCITY ▿ functions (both audible, both were unreachable);
+  ENV TO PITCH ▿ moved to its printed home Shift+PITCH/SMP; FX FOCUS
+  PIANO/SYNTH plain presses focus/cycle only — GROUP ▿ is Shift+press
+  (the old cycle could destructively copy chains on a plain press).
+- *Audio:* KB HOLD actually holds now — synth voices survive key-up and
+  release when the hold disengages (with damper interplay + held-stack
+  reconciliation). Switching the LFO destination mid-note no longer drives
+  the old target at the new destination's depth scale (per-voice
+  unit-scale gains; the channel depth is normalized). Voice cleanup severs
+  the channel→voice LFO/vibrato feed edges (per-note graph leak). The
+  Amp Sim LP24/HP24 modes read the Gain/Res knob as resonance; Wah is the
+  spec's resonant low-pass sweep (band-pass stays A-Wah's character);
+  Multi Saw 8ve's live retarget uses the build's spread divisor (first
+  edit no longer detunes the stack).
+- *Prints:* PAN ▾ under Synth Layer C; AUX KB LEDs beside the layer
+  letters; filled ▾ on the hold-marks (ON/SET, TAP/SET, PSTICK/RNG);
+  SECTION EDIT/PASTE unified to ⇟; static RANGE [ENV]; plain LAYER INIT;
+  ninth drawbar legend '2 2/3'.
+- *Spec:* specs/nord-stage-4.visual.json horizontalSections corrected to
+  the photo-measured fractions (band-scan documented in the file).
+
+**Deferred, logged for a next round** (medium/low, higher regression risk):
+morph capture layer-mismatch for id-encoded destinations; store-change
+cancelling in-flight filter/pitch envelopes (needs param-diff guards);
+Amp/EQ layer-level placement vs the spec's signal order. Kept as
+documented adaptations: relocated Shift gestures for filter tracking, LFO
+clock-sync, arp direction, and the ARP RUN ◂ MST CLK print.
+
+**User-directed visual batch** (photo-verified against nord-stage-4-73):
+faders now sit LEFT of their LED ladders; LFO box rebuilt to the photo's
+quadrants including its missing second (destination) button — now a real
+functional control; FILTER's ENV AMT knob moved top-right, its ON switch
+DARK; AMP's ENVELOPE switch horizontal; the synth display dials sit lower
+behind elbow leader lines; ROTARY column distributes with MORPH at the
+bottom; MASTER LEVEL wears the photo's bold open arc clear of its label;
+PROGRAM's band no longer clips the 1-4 LEDs; the deck's right margin
+corrected from the 88's 4.6% logo gap to the 73's ~1.8% — Layer Effects
+gets the reclaimed width and HANDMADE IN SWEDEN sits beside the grid.
+
+**Magnifier presses**: momentary press state moved into the shared
+presentation store (data-pressed mirrors :active), so buttons visibly
+press in the lens clone and section-zoom overlay too; regression test.

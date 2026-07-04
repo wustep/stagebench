@@ -1,6 +1,6 @@
 import { memo, useCallback, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { getControl } from '../model/hardware'
-import { PresentationStore, usePresentationToggle, usePresentationValue } from '../state/presentation'
+import { PresentationStore, usePresentationPressed, usePresentationToggle, usePresentationValue } from '../state/presentation'
 
 /**
  * Panel hardware widgets. Every widget is pointer- and keyboard-operable and
@@ -276,6 +276,7 @@ export interface PanelButtonProps {
 export const PanelButton = memo(function PanelButton({ store, id, className, children, led = 'none', holdAction }: PanelButtonProps) {
   const control = getControl(id)
   const lit = usePresentationToggle(store, id)
+  const pressed = usePresentationPressed(store, id)
   const latching = control.latching === true
   const holdTimer = useRef<number | null>(null)
   const held = useRef(false)
@@ -300,37 +301,51 @@ export const PanelButton = memo(function PanelButton({ store, id, className, chi
     }, HOLD_MS)
   }
 
-  const onPointerDown = holdAction ? startHold : undefined
+  // Momentary press visuals go through the SHARED store (not just CSS
+  // :active) so the magnifier lens clone and section-zoom render of this
+  // same control travel with the press too.
+  const onPointerDown = () => {
+    store.pressControl(id)
+    if (holdAction) startHold()
+  }
 
-  const onPointerUp = holdAction ? clearHoldTimer : undefined
+  const onPointerUp = () => {
+    store.releaseControl(id)
+    if (holdAction) clearHoldTimer()
+  }
 
   // Keyboard hold parity: holding Enter/Space for HOLD_MS performs the same
   // SOLO gesture as a pointer hold. preventDefault suppresses the browser's
   // native key-activation click (Enter fires it on keydown, before the hold
   // could elapse); a quick press toggles from keyup instead.
-  const onKeyDown = holdAction
-    ? (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        if (event.repeat) return
-        startHold()
-      }
-    : undefined
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    if (!event.repeat) store.pressControl(id)
+    if (!holdAction) return
+    event.preventDefault()
+    if (event.repeat) return
+    startHold()
+  }
 
-  const onKeyUp = holdAction
-    ? (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        if (held.current) {
-          // The hold already fired the solo action; swallow the release.
-          held.current = false
-          return
-        }
-        if (holdTimer.current !== null) {
-          clearHoldTimer()
-          store.toggle(id)
-        }
-      }
-    : undefined
+  const onKeyUp = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    store.releaseControl(id)
+    if (!holdAction) return
+    if (held.current) {
+      // The hold already fired the solo action; swallow the release.
+      held.current = false
+      return
+    }
+    if (holdTimer.current !== null) {
+      clearHoldTimer()
+      store.toggle(id)
+    }
+  }
+
+  const onBlur = () => {
+    store.releaseControl(id)
+    if (holdAction) clearHoldTimer()
+  }
 
   const onClick = () => {
     // A hold already fired the solo action; suppress the trailing click toggle.
@@ -350,12 +365,14 @@ export const PanelButton = memo(function PanelButton({ store, id, className, chi
       aria-label={control.label}
       aria-pressed={latching ? lit : undefined}
       data-lit={latching && lit ? 'true' : undefined}
+      data-pressed={pressed ? 'true' : undefined}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
+      onPointerCancel={onPointerUp}
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
-      onBlur={holdAction ? clearHoldTimer : undefined}
+      onBlur={onBlur}
       onClick={onClick}
     >
       {led !== 'none' && <span className={`btn-led led-${led}`} data-on={latching && lit ? 'true' : 'false'} aria-hidden="true" />}

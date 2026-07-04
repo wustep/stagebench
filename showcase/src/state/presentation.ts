@@ -676,6 +676,29 @@ export class PresentationStore {
     for (const listener of this.listeners) listener()
   }
 
+  /* ---------------------------------------------------- pressed visuals -- */
+
+  // Momentary press state lives in the SHARED store (not component-local
+  // CSS :active) so every parallel render of the same control — the
+  // magnifier lens clone, the section-zoom overlay — shows the cap travel
+  // of a press wherever it happens.
+  private pressedIds = new Set<string>()
+
+  pressControl(id: string): void {
+    if (this.pressedIds.has(id)) return
+    this.pressedIds.add(id)
+    for (const listener of this.listeners) listener()
+  }
+
+  releaseControl(id: string): void {
+    if (!this.pressedIds.delete(id)) return
+    for (const listener of this.listeners) listener()
+  }
+
+  isPressed(id: string): boolean {
+    return this.pressedIds.has(id)
+  }
+
   toggle(id: string): void {
     const control = getControl(id)
     const wiring = this.wiring
@@ -687,6 +710,13 @@ export class PresentationStore {
       // paste targets instead of performing their normal action (the
       // pointer-first adaptation of the hardware's hold-combos).
       if (store.getState().monCopy !== null && this.monCopyPress(store, id)) return
+      if (!shift && store.getState().soloLayer) {
+        const soloTarget = /^(piano|organ|synth)-layer-([abc])$/.exec(id)
+        if (soloTarget) {
+          store.retargetProgramSolo(soloTarget[1] as 'piano' | 'organ' | 'synth', soloTarget[2]!.toUpperCase() as 'A' | 'B' | 'C')
+          return
+        }
+      }
       switch (id) {
         case 'shift-2':
           // Second physical Shift/Exit button: delegates to the one modifier.
@@ -798,9 +828,10 @@ export class PresentationStore {
           return
         case 'osc-pitch-smp':
           // PITCH/SMP (manual p. 28 "Pitch and Fine Tune"): latches the
-          // Synth OLED dials 1/2 onto Osc Pitch semitones / Fine Tune cents,
-          // mirroring the envelope/vibrato-menu dial-repurposing pattern.
-          store.setSynthOscPitchEdit(!store.getState().synthOscPitchEdit)
+          // Synth OLED dials 1/2 onto Osc Pitch semitones / Fine Tune cents.
+          // Shift = the printed ENV TO PITCH ▿ beneath this button.
+          if (shift) store.toggleOscEnvToPitch()
+          else store.setSynthOscPitchEdit(!store.getState().synthOscPitchEdit)
           return
         case 'synth-mode':
           store.cycleSynthLayerMode()
@@ -821,14 +852,23 @@ export class PresentationStore {
           else store.cycleSynthFilterType()
           return
         case 'filter-envelope':
-          // Shift + FILTER ENVELOPE = drive stage (same pairing convention).
-          if (shift) store.cycleSynthFilterDrive()
+          // Shift + FILTER ENVELOPE = the printed VELOCITY ▿ (manual p. 32).
+          if (shift) store.toggleSynthFilterEnvVelocity()
           else store.setSynthEnvEdit(store.getState().synthEnvEdit === 'filter' ? null : 'filter')
           return
         case 'osc-envelope':
-          // Shift + OSC ENVELOPE = Env To Pitch retarget (same convention).
-          if (shift) store.toggleOscEnvToPitch()
-          else store.setSynthEnvEdit(store.getState().synthEnvEdit === 'osc' ? null : 'osc')
+          // Shift + OSC ENVELOPE = the printed VELOCITY ▿ (manual p. 29).
+          if (shift) {
+            const focusedSynth = store.getState().synth
+            store.setSynthOscEnvelope({ velocity: !focusedSynth.layers[focusedSynth.focusedLayer].oscEnvelope.velocity })
+          } else {
+            store.setSynthEnvEdit(store.getState().synthEnvEdit === 'osc' ? null : 'osc')
+          }
+          return
+        case 'lfo-destination':
+          // The hardware's destination button (manual p. 34): cycles
+          // Off -> Osc Pitch -> Osc Ctrl -> Filter Freq -> Off.
+          store.cycleSynthLfoDestination()
           return
         case 'lfo-waveform':
           // Shift + LFO WAVEFORM = master-clock rate sync (Shift + Rate knob
@@ -961,7 +1001,10 @@ export class PresentationStore {
           else store.cycleProgView()
           return
         case 'solo-undo':
-          store.undoProgramChange()
+          // SOLO (manual quick guide): latch solo monitoring; UNDO is the
+          // Shift pairing printed under the switch.
+          if (shift) store.undoProgramChange()
+          else store.toggleProgramSolo()
           return
         case 'section-edit':
           // LAYER INIT = Shift + Section Edit (manual p. 43): opens the init
@@ -1082,30 +1125,41 @@ export class PresentationStore {
           store.toggleAllFxOff()
           return
         case 'fx-focus-piano': {
-          // Cycle: focus A -> focus B -> Group (A+B) -> focus A …
           const state = store.getState()
+          // GROUP ▿ is the printed Shift pairing (manual p. 46) — its
+          // destructive copy never rides a plain press.
+          if (shift) {
+            store.toggleFxGroupPiano()
+            return
+          }
+          // A plain press while grouped leaves Group (keeping focus); then
+          // presses grab piano FX focus / cycle A-B.
           if (state.fxGroupPiano) {
             store.toggleFxGroupPiano()
-            store.setFocusedLayer('A')
-          } else if (state.focusedLayer === 'A') {
-            store.setFocusedLayer('B')
-          } else {
-            store.toggleFxGroupPiano()
+            return
           }
+          if (state.fxSection !== 'piano') store.setFocusedLayer(state.focusedLayer)
+          else store.setFocusedLayer(state.focusedLayer === 'A' ? 'B' : 'A')
           return
         }
         case 'fx-focus-synth': {
-          // Cycle: focus A -> focus B -> focus C -> Group (A+B+C) -> focus A …
           const state = store.getState()
+          // GROUP ▿ is the printed Shift pairing (manual p. 46).
+          if (shift) {
+            store.toggleFxGroupSynth()
+            return
+          }
+          // A plain press while grouped leaves Group (keeping focus); then
+          // presses grab synth FX focus / cycle A-B-C.
           if (state.fxGroupSynth) {
             store.toggleFxGroupSynth()
-            store.setSynthFxFocus('A')
-          } else if (state.fxSection !== 'synth' || state.synth.focusedLayer === 'A') {
-            store.setSynthFxFocus('B')
-          } else if (state.synth.focusedLayer === 'B') {
-            store.setSynthFxFocus('C')
+            return
+          }
+          if (state.fxSection !== 'synth') {
+            store.setSynthFxFocus(state.synth.focusedLayer)
           } else {
-            store.toggleFxGroupSynth()
+            const next = state.synth.focusedLayer === 'A' ? 'B' : state.synth.focusedLayer === 'B' ? 'C' : 'A'
+            store.setSynthFxFocus(next)
           }
           return
         }
@@ -1187,6 +1241,11 @@ export class PresentationStore {
         case 'shift':
           // Shift/Exit first aborts an ongoing Store or naming step (manual p. 13)…
           if (store.cancelStoreFlow()) return
+          // …then releases the Solo monitor latch (manual quick guide)…
+          if (store.getState().soloLayer) {
+            store.toggleProgramSolo()
+            return
+          }
           // …then clears a pending Num Pad page digit (manual p. 44)…
           if (store.clearNumPadPending()) return
           // …then unlatches the Mon/Copy or Paste mode (manual p. 43)…
@@ -1297,6 +1356,11 @@ export function usePresentationValue(store: PresentationStore, id: string): numb
 
 export function usePresentationToggle(store: PresentationStore, id: string): boolean {
   return useSyncExternalStore(store.subscribe, () => store.getToggle(id))
+}
+
+/** Momentary pressed state shared across parallel renders (lens/zoom). */
+export function usePresentationPressed(store: PresentationStore, id: string): boolean {
+  return useSyncExternalStore(store.subscribe, () => store.isPressed(id))
 }
 
 /** LED-index-mapped morph range for a control with `ledCount` LEDs spanning

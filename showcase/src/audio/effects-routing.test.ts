@@ -172,7 +172,7 @@ describe('effects.routing', () => {
     expect(engine.diagnostics().rotary).toBeTruthy()
   })
 
-  it('the panel focus button cycles Piano A -> B -> Group and lights the FX Focus LEDs', () => {
+  it('the panel focus button cycles Piano A/B; GROUP is the printed Shift pairing (manual p. 46)', () => {
     renderApp()
     const focusButton = screen.getByRole('button', { name: 'Piano FX Focus Group' })
     const focusLeds = () =>
@@ -183,9 +183,15 @@ describe('effects.routing', () => {
     fireEvent.click(focusButton)
     expect(focusLeds()).toEqual(['false', 'true'])
     fireEvent.click(focusButton)
-    expect(focusLeds()).toEqual(['true', 'true']) // group
+    expect(focusLeds()).toEqual(['true', 'false']) // plain presses never enter Group
+    // GROUP ▿ = Shift + press (the latch persists); a second shifted press
+    // leaves Group with the focus unchanged.
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(focusButton)
+    expect(focusLeds()).toEqual(['true', 'true'])
     fireEvent.click(focusButton)
     expect(focusLeds()).toEqual(['true', 'false'])
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' })) // unlatch
   })
 
   it('Shift+On toggles Global mode from the real panel and lights the GLOBAL tag', () => {
