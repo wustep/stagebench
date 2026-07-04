@@ -1757,3 +1757,15 @@ gets the reclaimed width and HANDMADE IN SWEDEN sits beside the grid.
 **Magnifier presses**: momentary press state moved into the shared
 presentation store (data-pressed mirrors :active), so buttons visibly
 press in the lens clone and section-zoom overlay too; regression test.
+
+**Subagent polish pass** (11 fix clusters, photo-verified over 7
+screenshot rounds): FILTER box rework with a truthfully-wired VELOCITY
+LED, waveform-cluster and VOICE clearances, LFX horizontal ON rockers +
+honest variation/MST-CLK/GLOBAL in-tag LEDs, restored header band tabs
+(a regression had dropped their light fill), low display dials, program
+band padding, framed-switch clearances everywhere.
+
+- Gates: typecheck, lint, build, verify:layout 12/12; full suite 498/499 —
+  the one failure is the known parallel-run compressor-render flake
+  (passes 12/12 isolated every time; spun off as its own task); bench
+  publish checks green.
