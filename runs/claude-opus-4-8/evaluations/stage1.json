@@ -6,16 +6,16 @@
   "status": "complete",
   "evaluator": "independent-agent (opus-4.8)",
   "evaluatedAt": "2026-07-04T00:00:00.000Z",
-  "summary": "A strong, honest Phase 1. The desktop capture is a faithful reproduction of the 73-key Nord Stage 4: continuous red chassis, correct left-to-right section order (Master/wheels/Rotary, Organ, Piano, central Program OLED, Synth OLED, Layer Effects), full E1-E7 keybed with correct 43-white/30-black pattern, red drawbar LED ladders with correct footage labels, and Program+Synth as the only two primary OLEDs. The control inventory is deep (140 stable-ID controls across all six sections). The one dependable piano voice is honest real-time additive synthesis through a single AudioContext -> master gain -> limiter -> destination, with truthful IMPLEMENTATION_DETAILS declaring no recorded samples. The note lifecycle (velocity, release, retrigger, sustain, deterministic oldest-first stealing, cleanup) is real and asserted via a fake-backend on measurable tone events. Every panel control is genuinely decorative (presentation-only store that mutates no audio/system state) and this is stated to the user in the status bar. All four gates pass; both captures render with zero console messages/page errors. Main gaps: narrow view uses horizontal scroll rather than reflow (whole surface not visible at once), a slightly muted chassis hue, and minor keybed bevel/rail simplifications, all disclosed honestly in the visual audit.",
-  "score": 88.5,
-  "rawScore": 88.5,
+  "summary": "A strong, honest Phase 1. The desktop capture renders one continuous deep-red chassis with the correct left-to-right section order (Performance/wheels -> Organ -> Piano -> Program+OLED -> Synth+OLED -> Layer Effects), a 54/46 deck/keybed split, and an exact 73-key E1-E7 keybed (43 white + 30 black, verified in code and math). Program and Synth carry the only two primary OLEDs, satisfying that hard gate. Section landmarks are dense and faithful: nine footage-labelled drawbars with LED ladders, piano selectors, the central program navigation cluster, the dense synth deck, and the effects column. The main visual gap is section widths: the code uses the coarse fractions from prompts/stage1.md (piano 0.15, program 0.09, synth 0.21) which the current specs/nord-stage-4.visual.json (corrected 2026-07-04) now overrides with piano 0.085, program 0.125, synth 0.25 at tolerance 0.025 — so Piano renders visibly too wide and Program too narrow vs the reference photo, though the candidate faithfully followed the prompt values it was given. Audio is honest real-time additive synthesis, declared truthfully as generated (not recorded) in IMPLEMENTATION_DETAILS.json, matching webAudioBackend.ts. The note lifecycle is excellent: one shared NoteRouter funnels pointer/multitouch/computer-keyboard/MIDI through a PianoEngine with velocity-squared gain, per-note release, CC64 sustain hold, deterministic oldest-first voice stealing at 16 voices, and blur/disconnect/unmount cleanup. All panel controls are presentation-only in a normalized ControlStore that touches no audio, and tests explicitly prove a toggled button/turned knob creates zero tones. The status bar states the honesty contract in plain text. Tests are deterministic and assert against the real engine/router boundary through an injectable fake backend (velocity direction, sustain hold, stealing, cleanup, MIDI denied/disconnected, repeat suppression). Narrow (390x844) preserves true proportions via horizontal scroll rather than reflow, disclosed honestly, so the whole surface is not visible in one frame. Captures record zero console errors and zero page errors.",
+  "score": 87.1,
+  "rawScore": 87.1,
   "categories": [
     {
       "id": "visualFidelity",
       "label": "Complete visual fidelity",
       "weight": 45,
-      "score": 83.8,
-      "contribution": 37.7,
+      "score": 71.3,
+      "contribution": 32.1,
       "criteria": [
         {
           "id": "silhouetteGeometry",
@@ -24,21 +24,23 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "stage1-desktop.png: continuous deep-red chassis, correct deck/keybed split, full-width white/black keybed, wheels and Rotary group on far-left red area matching reference/nord-stage-4-73.jpg",
-            "src/model/keybed.ts:13-18 declares variant stage-4-73, totalKeys 73, whiteKeys 43, blackKeys 30, lowMidi 28 (E1) / highMidi 100 (E7)",
-            "stage1-visual-audit.md:59-72 honestly discloses deviations: slightly muted maroon hue, rear/top I/O rail not modeled, keybed rendered without front-lip bevel"
+            "Desktop capture (evidence/stage1-desktop.png) shows one continuous deep-red chassis, dark control decks, full white keybed at bottom, and a deck/keybed split; src/model/controls.ts encodes the 0.54/0.46 split via SECTIONS fractions and App.tsx builds the deck grid from them.",
+            "Keybed geometry is exact: src/model/keybed.ts (E1 MIDI 28 -> E7 MIDI 100) with a build-time invariant throwing unless white=43/black=30, verified by independent math (73 keys, 43 white, 30 black) matching specs/nord-stage-4.variants.json stage-4-73.",
+            "Section widths use the coarse prompt values (performance .13/organ .21/piano .15/program .09/synth .21/effects .21) but the current specs/nord-stage-4.visual.json (corrected 2026-07-04, tolerance 0.025) is piano .085/program .125/synth .25 — Piano renders visibly wider and Program narrower than the reference-73 photo.",
+            "Reference top rear rail (Monitor/Headphones/Out jacks) and corner mounting brackets are not modeled; the render begins at the control deck, disclosed as a deliberate deviation in stage1-visual-audit.md."
           ]
         },
         {
           "id": "hardwareInventory",
           "label": "Complete hardware inventory and placement",
           "weight": 35,
-          "rating": 4,
-          "score": 100,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "grep of src/model/controls.ts: 140 controls distributed across all six sections (effects 33, synth 36, organ 19, piano 20, program 15, performance 9)",
-            "tests/App.test.tsx:31 asserts exactly two OLED displays, in Program and Synth (the only primary OLED gate)",
-            "stage1-desktop.png shows nine drawbars with footage labels, B3 Percussion, Vib/Chorus, Piano Select model list, dense Synth deck, and full Layer Effects column matching the reference"
+            "src/model/controls.ts defines a normalized inventory with stable `${section}-${slug}` IDs across all six sections including nine drawbars with correct footage labels (16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5' 1 1/3' 1'), B3 percussion, piano selectors, the program navigation cluster, and the dense synth Osc/Filter/Env/LFO/Arp groups.",
+            "OLED_SECTIONS is exactly ['program','synth'] and tests/App.test.tsx asserts exactly two [data-oled] displays keyed 'program'/'synth' — the only primary OLED hard gate is met (confirmed in the desktop capture).",
+            "Effects column carries Mod 1, Mod 2, Amp Sim/EQ, Delay, Comp, Reverb plus FX Focus source list; the audit honestly flags that the two modulation blocks are labelled Mod 1/Mod 2 where the reference silk-screen reads Effect 1/Effect 2.",
+            "Section placement/order matches the reference, but the Piano-wide / Program-narrow width error above compresses the central program cluster relative to the photo."
           ]
         },
         {
@@ -48,21 +50,23 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "stage1-desktop.png: dark control decks, red metal chassis, red LED drawbar ladders, two green-lit OLEDs (A:11 Nord Stage / Super Saw), 'nord stage 4 / HAMMER ACTION 73' branding lower-left",
-            "stage1-visual-audit.md:60-70 notes muted hue and Mod 1/Mod 2 label vs reference Effect 1/Effect 2 silk-screen; inventory equivalent",
-            "Legends, section headers, and LED/OLED hierarchy legible in capture"
+            "Capture shows red metal chassis, dark inset section plates, black indexed knobs, vertical fader/drawbar caps with red LED ladders, green section-header LEDs, and blue-green OLEDs with white legends — matching the reference material palette.",
+            "Italic 'nord stage 4' / 'HAMMER ACTION 73' branding is rendered on the exposed far-left chassis as required by the performance sectionLandmarks.",
+            "stage1-visual-audit.md honestly notes the chassis hue is a slightly more muted maroon than the reference's brighter saturated Nord red, and that white keys lack the subtle front-lip bevel shading.",
+            "Reference synth/effects panels are a distinct blue-grey inset; the render uses a darker neutral grey plate, a minor material simplification."
           ]
         },
         {
           "id": "responsiveRetention",
           "label": "Narrow retention",
           "weight": 15,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "stage1-narrow.png (390x844): chassis, Organ section, drawbar LEDs and left of keybed all render at true proportions with honest status bar pinned below",
-            "stage1-visual-audit.md:52-57 documents deliberate horizontal-scroll strategy rather than a faked responsive collapse; whole surface not visible in one frame",
-            "stage1-capture.json: narrow capture has empty consoleMessages and pageErrors"
+            "styles.css @media(max-width:720px) keeps true proportions and switches the chassis to overflow-x:auto with a 1000px min-width deck/keybed rather than reflowing, so no controls are clipped or lost and the keybed stays playable.",
+            "The narrow capture (evidence/stage1-narrow.png, 390x844) shows only the far-left chassis + Organ section + start of the keybed; the full surface is not inspectable in a single frame and requires horizontal scrolling.",
+            "stage1-capture.json records the 390x844 narrow capture with zero console messages and zero page errors; the honest status bar remains pinned below.",
+            "The horizontal-scroll approach is disclosed in stage1-visual-audit.md as a deliberate trade rather than a faked collapse, but it is a basic responsive treatment for the 'remains inspectable' requirement."
           ]
         }
       ]
@@ -71,19 +75,20 @@
       "id": "basicPiano",
       "label": "Basic Piano functionality",
       "weight": 25,
-      "score": 91.3,
-      "contribution": 22.8,
+      "score": 100,
+      "contribution": 25,
       "criteria": [
         {
           "id": "unifiedInputs",
           "label": "Unified playable inputs",
           "weight": 35,
-          "rating": 3,
-          "score": 75,
+          "rating": 4,
+          "score": 100,
           "evidence": [
-            "src/input/noteRouter.ts:48-97 one shared note lifecycle with per-owner tags (pointer/touch/kbd/midi), co-ownership dedup, per-owner release, and panic()",
-            "tests/inputIntegration.test.tsx: MIDI plays notes + connected status, MIDI unsupported/denied paths, computer-key mapping with autorepeat suppression, release on window blur",
-            "tests/midi.test.ts:85 asserts device disconnect releases sustain and reports disconnected"
+            "src/input/noteRouter.ts is a single shared lifecycle funneling pointer (`pointer:<id>`), independent multitouch, computer keyboard (`kbd:<midi>`), and MIDI (`midi`) through one engine, with per-owner release proving multi-touch independence (tests/noteRouter.test.ts 'lifting one finger keeps the other note').",
+            "tests/inputIntegration.test.tsx renders App with a fake MIDI provider and asserts note on/off from MIDI, MIDI 'connected' status, and keyboard OS-autorepeat suppression via e.repeat guard.",
+            "tests/midi.test.ts asserts denied (provider rejects -> 'denied') and disconnect (onstatechange -> 'disconnected' + sustain released) paths without any physical device.",
+            "useKeyboardInput and App wire window blur to release keyboard/MIDI-owned notes; 'releases keyboard notes on window blur' asserts activeToneCount returns to 0."
           ]
         },
         {
@@ -93,9 +98,10 @@
           "rating": 4,
           "score": 100,
           "evidence": [
-            "src/audio/pianoEngine.ts:83-169 velocity->gain squared curve, per-note release, retrigger steals same pitch, sustain holds released voices until pedal lift, deterministic stealOldest by monotonic order",
-            "tests/pianoEngine.test.ts:73-113 asserts monotonic velocity gain, sustain hold/release, oldest-first stealing at limit=3, on real fake-backend tone events",
-            "tests/App.test.tsx:138 stops all owned voices on unmount; noteRouter.panic() hard-stops on blur/disconnect"
+            "PianoEngine.velocityToGain maps velocity on a squared curve; tests/pianoEngine.test.ts 'velocity scales peak gain monotonically' asserts loud > soft peakRamp on the fake backend.",
+            "Sustain holds released keys until pedal-up ('sustain holds released notes until the pedal lifts') and does not hold still-down keys; noteOff schedules a ramp-to-0 then stop (per-note release).",
+            "Deterministic oldest-first stealing verified at maxVoices=3 ('deterministically steals the oldest voice at the polyphony limit'), and retrigger steals the same pitch's prior voice (one voice per pitch).",
+            "allNotesOff / dispose / router.panic hard-stop every voice; tests assert activeVoiceCount and backend.activeToneCount return to 0 on all-notes-off, dispose, and App unmount, and toggling panel controls creates zero tones."
           ]
         },
         {
@@ -105,9 +111,10 @@
           "rating": 4,
           "score": 100,
           "evidence": [
-            "IMPLEMENTATION_DETAILS.json:6-16 declares generated additive synthesis, sampleSources [], 'There are NO recorded samples in this phase'",
-            "src/audio/webAudioBackend.ts:1-9,96-103 single AudioContext, master gain -> DynamicsCompressor limiter -> destination; comment states honest synthesis not a recording",
-            "tests/App.test.tsx:132 'reports the synthesized voice as ready, not as a recording'; pianoEngine.ts:71 markReady only after voice is genuinely ready, with idle/loading/error/fallback states"
+            "IMPLEMENTATION_DETAILS.json declares the voice as generated additive synthesis (triangle fundamental + detuned sine + octave/twelfth partials) with 'There are NO recorded samples in this phase' and sampleSources: [] — matching webAudioBackend.ts WebAudioTone.",
+            "One AudioContext -> master gain -> DynamicsCompressor soft-limiter -> single destination; the voice is dependable and audible (velocity-scaled envelope), a legitimate one-voice piano-like source.",
+            "StatusBar reports 'Piano ready (synthesized voice)' and a labeled 'Silent fallback (no audio device)' state; usePiano enters fallback (silent but still tracking notes) when AudioContext is unavailable and never reports the primary voice ready in that case.",
+            "tests/App.test.tsx 'reports the synthesized voice as ready, not as a recording' asserts the truthful status chip text."
           ]
         }
       ]
@@ -116,19 +123,20 @@
       "id": "interaction",
       "label": "Surface interaction and honesty",
       "weight": 15,
-      "score": 86.3,
-      "contribution": 12.9,
+      "score": 100,
+      "contribution": 15,
       "criteria": [
         {
           "id": "physicalInteraction",
           "label": "Control movement and feedback",
           "weight": 55,
-          "rating": 3,
-          "score": 75,
+          "rating": 4,
+          "score": 100,
           "evidence": [
-            "tests/App.test.tsx:50-71 every decorative control exposes accessible name via data-control-id; knobs/faders are ARIA sliders with value text; keys are buttons with pressed state",
-            "src/state/controlStore.ts:59-80 set/toggle/cycle move knobs, buttons, selectors and emit presentation state",
-            "stage1-desktop.png shows all control kinds rendered (knobs, wheels, faders, drawbars, encoders, buttons, selectors)"
+            "Every control kind has an accessible primitive: Knob.tsx exposes role=slider with aria-valuemin/max/now/valuetext and arrow/home/end keyboard plus pointer drag; Keybed keys are <button> with aria-pressed reflecting active state.",
+            "tests/App.test.tsx asserts a knob updates aria-valuenow on ArrowUp, a selector cycles its option in its aria-label (Grand -> Upright), and keys toggle aria-pressed on pointer down/up.",
+            "ControlView dispatches knob/fader/drawbar/button/selector/encoder/wheel; tests/controls.test.ts (7 cases) and tests/controlStore.test.ts (6 cases) exercise the normalized inventory and store transitions.",
+            "accessibility.controls test iterates all CONTROLS and asserts each non-LED/OLED control has a data-control-id element with a non-empty accessible name."
           ]
         },
         {
@@ -138,9 +146,10 @@
           "rating": 4,
           "score": 100,
           "evidence": [
-            "src/state/controlStore.ts:1-9 header: changing a value changes NOTHING sonic or systemic; keybed/sustain are the sole functional paths and do not read this store",
-            "tests/App.test.tsx:104 'toggling a decorative button does not create any audio'; :112 knob updates its own value only",
-            "IMPLEMENTATION_DETAILS.json:22 no decorative control produces audio or mutates program/effect state (honesty contract); status bar states 'All panel controls are decorative.'"
+            "ControlStore is presentation-only and set/toggle/cycle only mutate normalized values; the piano keybed/sustain path never reads from it (usePiano/NoteRouter are independent).",
+            "tests/App.test.tsx 'toggling a decorative button does not create any audio' and 'a knob responds to keyboard and updates its own value only' both assert backend.tones stays length 0.",
+            "IMPLEMENTATION_DETAILS.json decorativeControls summary and the audit both state every panel control outside keybed/sustain is inert; no display reports unimplemented behavior as working.",
+            "Encoder ControlView onStep is an intentional no-op on shared state (endless dials track only local detent), avoiding any false program/model state change."
           ]
         }
       ]
@@ -159,9 +168,10 @@
           "rating": 4,
           "score": 100,
           "evidence": [
-            "Clean separation: src/model (keybed/controls), src/input (noteRouter/midi/keyboardMap), src/audio (types boundary + webAudio/fake backends + pianoEngine), src/state, src/components",
-            "src/audio/types.ts injectable AudioBackend boundary; fakeBackend.ts enables deterministic tests with real tone-event assertions",
-            "10 test files with meaningful behavioral assertions (pianoEngine, noteRouter, midi, keyboardMap, inputIntegration, controlStore, App); feature-matrix covers 11/11 required features"
+            "Clean separation: src/model (typed keybed/controls with stable IDs + build invariants), src/state (ControlStore), src/audio (injectable AudioBackend interface with web + fake adapters), src/input (noteRouter/midi/keyboardMap), src/hooks, src/components.",
+            "Tests assert behavior across the real engine/router boundary via createFakeBackend recording tone events (not mocks): velocity direction, sustain hold, oldest-first stealing, cleanup counts, MIDI parsing/denied/disconnect, repeat suppression.",
+            "All 10 feature-matrix IDs map to non-empty test files (tests/feature-matrix.json); 10 test files present (pianoEngine, noteRouter, midi, keyboardMap, controls, controlStore, keybed, App, inputIntegration) with substantive it-blocks each.",
+            "midi.ts and audio types.ts are fully injectable so tests need no device/network/real audio, per BENCHMARK.md deterministic-boundary requirement."
           ]
         },
         {
@@ -171,9 +181,10 @@
           "rating": 4,
           "score": 100,
           "evidence": [
-            "verifications/stage1.json: test/typecheck/lint/build all passed",
-            "stage1-capture.json: desktop and narrow captures both have empty consoleMessages and pageErrors arrays",
-            "Cleanup on blur/disconnect/unmount asserted (noteRouter.panic, engine.dispose, App unmount test)"
+            "package.json exposes non-interactive test (vitest run), typecheck (tsc --noEmit), lint (oxlint), and build (tsc --noEmit && vite build) scripts as required.",
+            "stage1-capture.json shows both 1440x900 and 390x844 captures with consoleMessages: [] and pageErrors: [] — clean runtime.",
+            "usePiano tears down on unmount (router.panic + engine.dispose) and App wires window blur cleanup; ensureRunning resumes the context on first gesture (autoplay-safe).",
+            "WebAudioTone releases nodes on osc.onended after the scheduled stop and the backend decrements activeToneCount, so node/voice counts return to baseline after play."
           ]
         }
       ]
@@ -187,28 +198,28 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "durationMs": 2460,
+        "durationMs": 3523,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "durationMs": 1046,
+        "durationMs": 1451,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "durationMs": 340,
+        "durationMs": 434,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "durationMs": 1202,
+        "durationMs": 1400,
         "detail": "Passed"
       },
       {
@@ -220,9 +231,17 @@
     ]
   },
   "issues": [
-    "Narrow (390x844) layout relies on horizontal scroll rather than reflow, so the full hardware surface is not visible in a single frame (disclosed in stage1-visual-audit.md).",
-    "Chassis hue is a slightly muted maroon rather than the reference's more saturated Nord red.",
-    "Minor material simplifications: keybed rendered without front-lip bevel; rear/top I/O rail not modeled (out of scope for the playable front surface).",
-    "Layer Effects modulation blocks labeled Mod 1 / Mod 2 where the reference silk-screen reads Effect 1 / Effect 2 (control inventory is equivalent)."
+    {
+      "severity": "minor",
+      "detail": "Section widths follow the coarse prompt values (piano 0.15, program 0.09, synth 0.21) while the current specs/nord-stage-4.visual.json (corrected 2026-07-04, tolerance 0.025) specifies piano 0.085, program 0.125, synth 0.25; Piano renders visibly too wide and Program too narrow vs reference/nord-stage-4-73.jpg. The candidate faithfully followed the prompt it was given."
+    },
+    {
+      "severity": "minor",
+      "detail": "Narrow (390x844) uses horizontal scroll rather than reflow, so only the far-left chassis + Organ + keybed start are visible in a single frame; inspection of the full surface requires scrolling. Disclosed honestly in stage1-visual-audit.md."
+    },
+    {
+      "severity": "trivial",
+      "detail": "Effects modulation blocks are labelled Mod 1 / Mod 2 where the reference silk-screen reads Effect 1 / Effect 2 (inventory equivalent); chassis hue is a slightly muted maroon vs the brighter Nord red."
+    }
   ]
 }

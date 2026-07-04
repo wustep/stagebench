@@ -2,27 +2,16 @@
   "rubricVersion": "3.1.0",
   "runId": "claude-fable-5",
   "stage": 2,
-  "stageName": "Piano library and working effects",
-  "status": "complete",
   "evaluator": "independent-agent (opus-4.8)",
   "evaluatedAt": "2026-07-04T00:00:00.000Z",
   "summary": "A strong, honest Phase 2 artifact. The three required sample sets are genuinely recorded, redistributable, offline audio: public/samples/grand holds 90 real MP3s (30 roots x 3 distinct velocity layers, ~300KB each, ID3/MPEG verified), and public/samples/{upright,electric} hold 19 real MP3s each; md5 confirms grand/upright/electric and grand's three velocity layers are all distinct files, and render-library.test.ts proves the three are audibly distinct (similarity < 0.8, zero-crossing spread > 1.15) through the real graph. IMPLEMENTATION_DETAILS.json declares provenance/licenses truthfully (Salamander CC BY 3.0; MIDI-JS Soundfonts MIT) and honestly flags single-layer velocity shaping and generated reverb/resonance/pedal-noise buffers as DSP, never as recordings. The audio graph is exemplary: one AudioContext, per-layer voice buses -> timbre/dynComp/level -> ordered Mod1->Mod2->Delay->AmpEq->Comp->Reverb -> master gain -> limiter -> one destination, with a single shared rotary tapped post-reverb (Reverb-before-Rotary). All seven effect units are real Web Audio DSP with rendered-audio distinctness tests plus click-free crossfade bypass, and effects-routing/graph tests traverse actual node connectivity rather than metadata. Tests cross the boundary via node-web-audio-api OfflineAudioContext (~250 cases). The one real gap: only three of six piano types have a model; Clav/Digital/Misc report 'Piano not found' and play nothing where honest synthesis was allowed and would have completed the required 'six types with at least one model each' scope. Captures are clean (zero console/page errors) and surface fidelity vs the 73 reference is retained with no drift.",
-  "score": 97.4,
-  "rawScore": 97.4,
   "categories": [
     {
       "id": "visualRetention",
-      "label": "Visual and interaction retention",
-      "weight": 10,
-      "score": 100,
-      "contribution": 10,
       "criteria": [
         {
           "id": "surfaceRetention",
-          "label": "Surface fidelity retention",
-          "weight": 60,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "stage2-desktop.png: continuous red chassis, six ordered sections (Organ/Piano/center Program/Synth/Layer Effects) matching reference/nord-stage-4-73.jpg layout, 73-key E-E keybed, correct materials and OLED placements (Program + Synth only).",
             "stage2-narrow.png: full chassis and keybed at 390x844 with no clipping or lost controls; instrument fully visible.",
@@ -32,10 +21,7 @@
         },
         {
           "id": "functionalHardwareState",
-          "label": "Piano/effect hardware state",
-          "weight": 40,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "effects-routing.test.ts 'the panel focus button cycles Piano A -> B -> Group and lights the FX Focus LEDs' asserts focus-cell LED data-on states through the real DOM.",
             "effects-routing.test.ts 'Shift+On toggles Global mode ... lights the GLOBAL tag' verifies .red-tag.lit on the reverb box.",
@@ -47,17 +33,10 @@
     },
     {
       "id": "pianoLibrary",
-      "label": "Piano library and performance",
-      "weight": 35,
-      "score": 92.5,
-      "contribution": 32.4,
       "criteria": [
         {
           "id": "instrumentBreadth",
-          "label": "Distinct Piano instruments",
-          "weight": 30,
           "rating": 3,
-          "score": 75,
           "evidence": [
             "On disk: public/samples/grand = 90 real MP3s (file: 'MPEG ADTS layer III ... 44.1 kHz Stereo', ~300KB each), upright/electric = 19 each; md5 confirms grand/upright/electric c4 and grand c4-l1/l2/l3 are all distinct files (genuinely recorded, not generated).",
             "render-library.test.ts 'the three instruments are audibly distinct' asserts pairwise similarity < 0.8 and zero-crossing spread > 1.15 through the real OfflineAudioContext graph; 'different notes select different recorded roots' proves no uniform pitch-shifting.",
@@ -67,10 +46,7 @@
         },
         {
           "id": "twoLayerBehavior",
-          "label": "Two-layer Piano behavior",
-          "weight": 25,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "layers.test.ts: enabling B doubles voice ownership (each layer owns its own voice into its own bus), noteOff releases both, and 'per-layer octave shift selects different recorded roots' checks a new zone buffer rather than a blind rate change.",
             "graph.test.ts 'voices from both layers enter their own buses' verifies per-layer voice-gain connectivity to A.voiceBus and B.voiceBus.",
@@ -80,10 +56,7 @@
         },
         {
           "id": "pianoControls",
-          "label": "Detailed Piano controls",
-          "weight": 25,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "render-piano-controls.test.ts proves rendered-audio change for velocity direction, KB Touch (Light>Heavy), timbre brightness (Soft<Off<Bright), Dyn Comp (soft raised), unison stereo width >1.5x, master volume scaling+mute, soft release decay, string resonance (>0.02 diff) and pitch bend.",
             "engine.ts implements these on the real graph: timbre shelves (timbreGains), dynComp threshold/ratio/makeup (lines 527-532), resonance send following damper (line 535), unison detuned/panned copies (buildSampleSources lines 704-729).",
@@ -93,10 +66,7 @@
         },
         {
           "id": "inputsReliability",
-          "label": "Input and fallback reliability",
-          "weight": 20,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "feature-matrix piano.basic-inputs + midi.test.ts (23 cases): pointer, independent multi-touch, mapped keys with repeat suppression, CC64/CC66/CC67, hot-plug/disconnect/denied/unsupported MIDI.",
             "render-library.test.ts 'primary sample failure produces the labeled synthesized fallback, still audible' (engineStatus 'fallback', rms > 0.003); fallback.test.ts covers total+partial failure never reporting ready.",
@@ -108,17 +78,10 @@
     },
     {
       "id": "effectsAudio",
-      "label": "Effects and signal graph",
-      "weight": 30,
-      "score": 100,
-      "contribution": 30,
       "criteria": [
         {
           "id": "sharedGraph",
-          "label": "Shared graph and gain staging",
-          "weight": 25,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "graph.test.ts 'creates exactly one AudioContext with exactly one destination' and 'no engine path bypasses the shared master output' (single node into destination is the limiter, fed by master gain).",
             "graph.test.ts 'wires each layer bus through the documented effect order into the master' traverses real connections voiceBus->timbre->level->mod1..reverb->master with the rotary tap post-reverb.",
@@ -128,10 +91,7 @@
         },
         {
           "id": "effectCoverage",
-          "label": "Audible effect coverage",
-          "weight": 45,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "effects.ts implements real DSP for every unit: Mod1 (StereoPanner/LFO tremolo/ring-mod/wah envelope-follower), Mod2 (all-pass phaser/vibe, modulated-delay flanger/chorus/ensemble/spin), Delay (feedback loop with in-loop filter+analog shaper+modulated micro-delay), AmpEq (waveshaper drive + LP24/HP24 two-stage filter + 3-band EQ), Comp (DynamicsCompressor), Reverb (Convolver with generated IRs), Rotary (dual-band doppler/amp/pan with inertia).",
             "render-effects.test.ts (28 cases) proves each family measurably changes rendered audio: tremolo fluctuation >1.3x, A-Pan side-swing >2x, phaser/chorus similarity <0.985, delay repeats+feedback length, LP24 darkening <0.5x, compressor range <0.8x, reverb tail >1.5x, rotary swing count fast>1.8x slow.",
@@ -141,10 +101,7 @@
         },
         {
           "id": "routingControl",
-          "label": "Routing and control",
-          "weight": 30,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "effects-routing.test.ts: per-layer focused targeting, Group copy-on-entry editing both layers, Global (Shift+On) mirroring Delay/Comp/Reverb, unit On engaging wet crossfade and bypass restoring dry (gain.value 1), dry/wet moving the actual crossfade, All FX Off bypass+restore across chains.",
             "effects-routing.test.ts 'the Delay feedback filter/effect processes REPEATS only, never the dry path' traverses the loop to find the lowpass loop filter and asserts the dry path has no filter.",
@@ -156,17 +113,10 @@
     },
     {
       "id": "systemBehavior",
-      "label": "System behavior and UX",
-      "weight": 10,
-      "score": 100,
-      "contribution": 10,
       "criteria": [
         {
           "id": "audibleFeedback",
-          "label": "Audible/visible feedback",
-          "weight": 50,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "stage2-visual-audit.md lines 42-61: browser pass confirmed panel selections and effect toggles produced immediate display/LED feedback and matching live-signal change with an AnalyserNode on the real master gain (26/26 flows pass).",
             "effects-routing.test.ts focus/global/tap-tempo tests tie panel button clicks to both LED state and oled-edit-line text (e.g. 'Delay Tempo 50x ms').",
@@ -176,10 +126,7 @@
         },
         {
           "id": "failureStress",
-          "label": "Failure and stress behavior",
-          "weight": 50,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "midi.test.ts covers denied/disconnected/unsupported MIDI while keyboard/pointer input keeps working (also shown in stage2-desktop.png status strip: 'MIDI permission denied').",
             "render-library.test.ts + fallback.test.ts: total and partial asset failure enter a labeled playable synthesized fallback and never report ready; offlineAssets({fail:true}) drives the rendered proof.",
@@ -191,17 +138,10 @@
     },
     {
       "id": "engineeringQuality",
-      "label": "Engineering quality",
-      "weight": 15,
-      "score": 100,
-      "contribution": 15,
       "criteria": [
         {
           "id": "audioArchitecture",
-          "label": "Audio architecture",
-          "weight": 45,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "Clean boundaries: engine.ts (voices/layers/master), effects.ts (EffectUnit<S> shell with dry/wet+bypass), library.ts (sample specs/zone selection), boundaries.ts injectable AudioBoundary/AssetBoundary/timers.",
             "PianoEngine.buildChannel constructs a reusable per-layer LayerChannel (bus, timbre, dynComp, level, res, ordered units, toMaster/toRotary) — extensible to Organ/Synth in Phase 3 by feeding new sources into the same buses.",
@@ -211,10 +151,7 @@
         },
         {
           "id": "realBoundaryTests",
-          "label": "Real-boundary tests",
-          "weight": 30,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "offline.ts renders the full engine graph through a REAL Web Audio implementation (OfflineAudioContext) decoding the bundled MP3s from disk, returning measured channels — genuine boundary crossing, not mocks.",
             "render-library/render-effects/render-piano-controls (43 rendered cases) assert signal relationships (rms/similarity/highBandRatio/zeroCrossing) proving source distinction, control direction, effect processing, bypass and routing.",
@@ -224,10 +161,7 @@
         },
         {
           "id": "performanceMaintainability",
-          "label": "Performance and maintainability",
-          "weight": 25,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "feature-matrix.json regression.phase1 retains all 13 Phase 1 test files; ~250 total test cases across 24 files.",
             "engine.ts bounds memory (truncateBuffer 6.5s cap), reuses shared buffers (sampleCache, pedalThump, reverb impulse Map), and ramps parameters to avoid clicks; voice GC via injected timers.",
@@ -238,46 +172,6 @@
       ]
     }
   ],
-  "technicalGate": {
-    "passed": true,
-    "scoreCap": null,
-    "checks": [
-      {
-        "id": "test",
-        "label": "test",
-        "passed": true,
-        "durationMs": 33085,
-        "detail": "Passed"
-      },
-      {
-        "id": "typecheck",
-        "label": "typecheck",
-        "passed": true,
-        "durationMs": 1571,
-        "detail": "Passed"
-      },
-      {
-        "id": "lint",
-        "label": "lint",
-        "passed": true,
-        "durationMs": 401,
-        "detail": "Passed"
-      },
-      {
-        "id": "build",
-        "label": "build",
-        "passed": true,
-        "durationMs": 1863,
-        "detail": "Passed"
-      },
-      {
-        "id": "artifact",
-        "label": "Built phase artifact",
-        "passed": true,
-        "detail": "dist/index.html present"
-      }
-    ]
-  },
   "issues": [
     {
       "severity": "moderate",

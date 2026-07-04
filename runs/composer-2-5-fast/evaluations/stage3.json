@@ -4,41 +4,41 @@
   "stage": 3,
   "stageName": "Complete Stage 4 system",
   "status": "complete",
-  "evaluator": "independent-evaluator (Composer)",
-  "evaluatedAt": "2026-07-04T08:10:00.000Z",
-  "summary": "Phase 3 delivers a credible full-system Stage 4: 32 program slots with Live mode, splits/scenes/morph/clock/transpose/panic, live organ and synth engines integrated through the inherited single-AudioContext graph, and an unsupported-controls audit. All gates pass (74/74 tests, 38/38 feature IDs). Inherited weaknesses remain: piano Grand/Upright/Electric are still synthesized buffers (sampleSources: 0), visual surface is schematic CSS from Phase 1, and LFO/rotary polish is simplified. Program round-trips and cross-engine integration are tested with rendered-audio assertions on organ/synth distinctions.",
-  "score": 72.1,
-  "rawScore": 72.1,
+  "evaluator": "independent-agent (opus-4.8)",
+  "evaluatedAt": "2026-07-04T00:00:00.000Z",
+  "summary": "A genuinely distinct, honestly-declared audio core sits atop a Program/performance layer that is implemented as tested pure functions but is entirely disconnected from the rendered instrument. Organ (B3/Vox/Farf/Pipe additive) and Synth (Pure/Sync/Multi/Super/FM-H) engines are real, category-distinct topologies wired to the keybed through one shared AudioContext and effect path, with real-boundary rendered-audio tests. But createProgramSystem/saveToCurrentSlot/selectProgram, addMorphDestination/clearMorphSource, bpmFromTapTimes, and engine.panic() are never imported or called by App/instrument/components: the panel's program buttons, Store, list view, scene toggles, morph-assign, split, tap-tempo, and Panic are silent no-ops, and several read keys mismatch their control IDs (program-split-on vs program-split, scene-i-active vs scene-i, unread synth-filter-type). All four technical gates pass. Visual fidelity is low versus the reference (generic slider grid, no LED drawbar graphs, truncated labels), narrow layout loses controls, and the Phase 2 and Phase 3 desktop captures are pixel-identical.",
+  "score": 52.9,
+  "rawScore": 52.9,
   "categories": [
     {
       "id": "visualRetention",
       "label": "Final visual fidelity",
       "weight": 5,
-      "score": 75,
-      "contribution": 3.8,
+      "score": 25,
+      "contribution": 1.3,
       "criteria": [
         {
           "id": "referenceRetention",
           "label": "Reference and regression retention",
           "weight": 50,
-          "rating": 3,
-          "score": 75,
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "Stage3 visual audit confirms 54/46 deck/keybed split, six-section layout, and Phase 1–2 chassis preserved.",
-            "Sealed captures at 1440×900 and 390×844 report zero console errors; regression.phase1 and regression.phase2 mapped in feature matrix.",
-            "Materials/typography remain simplified CSS from Phase 1 — structure retained, photo fidelity not improved."
+            "stage3-desktop.png is byte-identical to stage2-desktop.png (both 132439 bytes) and stage3-narrow.png identical to stage2-narrow.png (19803 bytes) per capture.json — no visible Phase 3 surface change captured.",
+            "Versus reference/nord-stage-4-73.jpg the deck is a flat generic grid of range-slider knobs and buttons with truncated captions ('Piano Layer A En…', 'Master Fader Assig…'); the reference's clustered mini-controls, red LED drawbar graphs, and OLED program lists are absent.",
+            "Six sections are present in the documented order (Performance/Organ/Piano/Program/Synth/Layer Effects) with two OLEDs (Program, Synth), preserving gross layout and the deck/keybed split from Phase 1-2."
           ]
         },
         {
           "id": "completeHardwareState",
           "label": "Complete hardware state fidelity",
           "weight": 50,
-          "rating": 3,
-          "score": 75,
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "Program OLED shows page.button and name; Synth OLED shows waveform category; split/scene/morph LEDs wired in integration tests.",
-            "Organ drawbar LEDs, model selectors, and synth layer groups reflect state through control bindings.",
-            "Spec-excluded controls listed in unsupported-controls.ts and stay decorative."
+            "Program section renders program-btn-1..8, program-store, program-store-as, program-live-mode, program-scene-i/ii, program-split, program-morph-wheel/pedal, program-dial (hardware.ts:154-168) but none drive program state — programs.ts is never imported outside its own file/test (grep of src).",
+            "Scene/split/clock hardware state cannot reflect through the panel: control IDs program-scene-i/program-scene-ii/program-split do not match the keys read in presentationToAudioState (program-scene-i-active, program-split-on, program-clock-bpm), so those toggles change nothing.",
+            "Working state feedback is limited to the Program/Synth OLED text and per-control aria values; there are no split LEDs, dirty indicator, morph indicators, or drawbar LED graphs bound to real state in the rendered UI."
           ]
         }
       ]
@@ -47,29 +47,33 @@
       "id": "featureCompletion",
       "label": "Complete feature system",
       "weight": 35,
-      "score": 75,
-      "contribution": 26.3,
+      "score": 43.3,
+      "contribution": 15.2,
       "criteria": [
         {
           "id": "programWorkflows",
           "label": "Programs and Live Mode",
           "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "programs.test.ts covers 32-slot navigation (pages/dial/list), Store/Store As, dirty indicator, edit-discard, and 8 Live auto-store slots.",
-            "Eight factory programs shipped; round-trip serialization restores supported state fields."
+            "programs.ts implements 32 slots + 8 Live, Store/Store As with naming, dirty/edit-discard (selectProgram/saveToCurrentSlot/autoStoreLive) and 8 factory seeds, all covered by 11 tests in programs.test.ts.",
+            "None of it is reachable from the instrument: App.tsx -> Instrument -> SectionPanel -> DecorativeControl only calls instrument.interactControl, and useInstrument (state/instrument.ts) never imports programs.ts — createProgramSystem/loadCurrentSlot/selectProgram appear only inside programs.ts and its test (grep).",
+            "Clicking program-btn-1, program-store, program-live-mode, or program-dial merely toggles/sets a presentation value that presentationToAudioState ignores; there is no numeric list-view UI mounted at all.",
+            "Round-trip is therefore proven only at the pure-function level, not exercised through the running instrument as the rubric guidance requires."
           ]
         },
         {
           "id": "performanceSystems",
           "label": "Layers, splits, scenes, and morphs",
           "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "integration.test.ts exercises splits at documented positions, Off/±6/±12 crossfades, zone assignment, Scenes I/II, morph wheel/pedal assign/clear.",
-            "Master clock BPM, transpose ±6, and Panic covered in morph-clock and integration tests."
+            "Zones/splits (zones.ts: 11 positions C2-C7, Off/±6/±12 crossfades), morph interpolation (morph-clock.ts), and scenes are implemented and unit-tested (integration.test.ts).",
+            "Disconnected from the UI: addMorphDestination/clearMorphSource/bpmFromTapTimes are referenced only in morph-clock.ts + tests; there is no split-point editor, no morph-assign flow, and program-split/program-scene-* buttons are no-ops due to ID mismatches with the reader.",
+            "Transpose is the one performance control genuinely bound from the panel (program-transpose knob -> performance.transpose, clamped ±6 in control-bindings.ts:110).",
+            "Panic is not wired: engine.panic() is never called from useInstrument and there is no perf-panic click handler; tap-tempo clock (program-clock-bpm) is read but no control emits that key."
           ]
         },
         {
@@ -79,19 +83,23 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "organ.test.ts covers two-layer note lifecycle, B3/Vox/Farf/Pipe spectral distinctions via signalsDiffer, drawbar level changes, percussion, vibrato/chorus toggles.",
-            "Shared effect chain and rotary slow/fast routing tested with rendered audio."
+            "spawnOrganVoice (organ-voice.ts) implements per-model harmonic ratios and base waveforms (B3 sawtooth, Vox square, Farf boolean-drawbar square, Pipe sine), B3 percussion (2nd/3rd, soft/fast), key-click noise burst, and vib/chorus LFO; wired to the keybed via noteOn and a shared organ effect chain.",
+            "organ.test.ts proves distinct B3/Vox/Farf/Pipe spectra, drawbar changes altering rendered audio (signalsDiffer), percussion raising earlyRms, rotary routing changing the signal, and voice cleanup to zero.",
+            "Organ drawbars (organ-drawbar-1..9), model select, percussion, key-click, and rotary route ARE bound through presentationToAudioState (control-bindings.ts:67-85), so the organ plays and responds from the panel.",
+            "Gaps: vib/chorus C1-C3 vs V1-V3 depth is coarsely approximated, rotary acceleration is a shared ramp, and organ hardware-state feedback (drawbar LED graphs) is not rendered."
           ]
         },
         {
           "id": "synthSystem",
           "label": "Complete Synth system",
           "weight": 27,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "synth.test.ts covers three layers, Pure/Sync/Multi/Super/FM-H waveform distinctions, filter/envelope parameter effects, poly/mono/legato, glide, unison, deterministic arp/gate.",
-            "LFO settings stored and partially exercised via filter/resonance; full LFO audio modulation simplified per candidate audit."
+            "createSynthOscillators (synth-voice.ts) gives five categorically distinct topologies: single osc (Pure), hard-sync master+waveshaper (Sync), detuned Multi/Super stacks with count scaling on Osc Ctrl, and FM operator pair — category-correct Osc Ctrl (categoryOscCtrlEffect returns 0 for Pure).",
+            "createSynthFilter implements LP12/LP24/HP/BP with tracking, resonance, tanh drive; synth.test.ts proves category distinctness, filter freq/type/resonance and unison changes in rendered audio.",
+            "Panel gaps: synth-filter-type control exists (hardware.ts:189) but presentationToAudioState never reads it, and waveform category/voice-mode are not applied from the panel — synthCategoryFromPresentation/voiceModeFromPresentation are exported but never called, so category/filter-type only change via loaded programs, which themselves are unreachable.",
+            "Arp is shallow: scheduleArp spawns notes on an interval but never releases them (no note-off in the timer) risking stuck voices, and arp direction/hold/run/clock-sync are proven only for the pure buildArpSequence, not as rendered timed audio."
           ]
         }
       ]
@@ -100,8 +108,8 @@
       "id": "audioIntegration",
       "label": "Audio quality and integration",
       "weight": 30,
-      "score": 67.5,
-      "contribution": 20.3,
+      "score": 76.3,
+      "contribution": 22.9,
       "criteria": [
         {
           "id": "distinctEngines",
@@ -110,19 +118,22 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Organ models and synth waveform families produce measurably distinct offline-rendered signals in dedicated tests.",
-            "Piano types remain synthesized OfflineAudioContext profiles — audibly distinct but not recorded sample sets."
+            "Engines are not renamed generic oscillators: organ uses additive harmonic stacks with per-model ratio tables (B3_RATIOS/VOX_RATIOS/PIPE_RATIOS) and Farf's binary drawbars; synth uses distinct sync/FM/supersaw topologies.",
+            "signalsDiffer assertions confirm B3 vs Vox vs Farf vs Pipe and Pure vs Sync and Multi vs FM-H render measurably different spectra (organ.test.ts, synth.test.ts).",
+            "Distinctness is proven for the sound engines that play from the keybed; it is not, however, reachable through the disconnected program/patch-selection UI, so audible variety in normal use depends on the few panel-bound controls."
           ]
         },
         {
           "id": "sharedRouting",
           "label": "Inherited graph and effects integration",
           "weight": 35,
-          "rating": 3,
-          "score": 75,
+          "rating": 4,
+          "score": 100,
           "evidence": [
-            "IMPLEMENTATION_DETAILS declares one AudioContext: piano A/B buses, shared organ chain, synth A/B/C chains, shared Rotary, master gain/limiter.",
-            "integration.test.ts verifies organ and synth voices route through inherited effect graph without second context."
+            "PianoEngine builds one AudioContext with piano A/B, organ (shared), and synth A/B/C buses each feeding a LayerEffectChain into a single mixBus -> masterGain -> DynamicsCompressor limiter -> context.destination (engine.ts:82-124).",
+            "A single SharedRotary instance is fed by all effect chains; integration.test.ts asserts getAudioContext() is identical across piano/organ/synth playback and organ layers share one chain.",
+            "Master level and per-layer levels are set via setTargetAtTime ramps with morph applied through applyMorphToValue; nothing bypasses the master path.",
+            "Minor smell: resolveEffectsForLayer('B') has a dead branch that always returns the global effects object, so per-layer-B effect differentiation is nominal."
           ]
         },
         {
@@ -132,8 +143,10 @@
           "rating": 2,
           "score": 50,
           "evidence": [
-            "Test suite ~49s at seal; sample synthesis at init dominates startup.",
-            "Rotary acceleration uses shared ramp approximation; layered play cleanup tested but musical polish/latency not deeply profiled."
+            "MAX_POLYPHONY=32 with deterministic oldest-voice stealing, ramped attack/release, and a -3dB/20:1 limiter guard against clipping; allNotesOff/dispose return voice count to zero (organ.test.ts, engine.test.ts).",
+            "Capture console shows only benign repeated 'AudioContext was not allowed to start' autoplay warnings and no pageErrors (stage3-capture.json).",
+            "Arp scheduling never issues note-off for arp-spawned voices (scheduleArp in engine.ts), so held arp play accumulates voices until stealing kicks in — a latency/CPU and stuck-note risk under sustained integrated play.",
+            "Layered/split musical quality cannot be exercised through the UI because splits/scenes/programs are not wired, limiting demonstrable real-use load behavior."
           ]
         }
       ]
@@ -142,40 +155,44 @@
       "id": "systemBehavior",
       "label": "Full-system behavior",
       "weight": 20,
-      "score": 75,
-      "contribution": 15,
+      "score": 40,
+      "contribution": 8,
       "criteria": [
         {
           "id": "roundTripIntegration",
           "label": "Canonical state round-trip",
           "weight": 30,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "programs.test.ts round-trips piano layers, effects params, splits, scenes, morph assignments, and focus state across save/load.",
-            "system.integration feature ID mapped to programs.test.ts and integration.test.ts."
+            "audioToSerializable/applySerializableToAudio serialize all supported state except Master Level (honestly documented) and programs.test.ts proves slot round-trip restores piano/organ/synth/effects/split/scene/morph/clock fields.",
+            "Round-trip is never driven by the instrument: no UI path calls loadCurrentSlot/saveToCurrentSlot, so a user cannot save then reload a program and observe restored state.",
+            "restorePrograms/persistPrograms handle localStorage with 32/8 length guards, but persistence too is only invoked in tests, not from the mounted app."
           ]
         },
         {
           "id": "hardwareBindings",
           "label": "Required hardware bindings",
           "weight": 30,
-          "rating": 3,
-          "score": 75,
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "hardware.bindings tested via integration.test.ts; unsupported-controls.ts documents spec-excluded panel IDs.",
-            "No silent no-op claims on required controls — excluded items honestly decorative."
+            "The hardware.bindings test (integration.test.ts:123) only checks that isFunctionalControl(id) returns true, and isFunctionalControl merely prefix-matches ('program-'/'synth-'/'organ-'/'fx-') without proving any behavior — a rubber stamp.",
+            "Many prefix-'passing' controls are silent no-ops: program-btn-1..8, program-store/store-as, program-live-mode, program-scene-i/ii, program-split, program-morph-wheel/pedal, perf-panic, and synth-filter-type either read a mismatched key or are never read by presentationToAudioState.",
+            "The spec-excluded list (unsupported-controls.ts) is small (5 IDs) and does not account for the many program/performance controls that render but do nothing — those are undeclared no-op fallbacks, which the rubric scores 0.",
+            "Genuinely bound controls do exist (master level, mod wheel, transpose, piano type/level/octave, organ drawbars/model/percussion, synth level/osc-ctrl/filter-freq/res), so the layer is partially functional rather than wholly broken."
           ]
         },
         {
           "id": "workflowIntegration",
           "label": "Cross-system workflows",
           "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "Integration tests combine program change with split/scene state, morph interpolation, and multi-engine focus routing.",
-            "Panic clears voices across piano/organ/synth paths."
+            "Engines can be layered from the keybed (noteOn fans out to piano A/B, organ A/B, synth A/B/C with zone/scene gating in engine.ts:350-399), so simultaneous multi-engine play works when layers are enabled via their bound enables.",
+            "Cross-system workflows that define Phase 3 — selecting a program, switching scenes, assigning a morph, editing a split, tapping the clock, hitting Panic — are not operable from the running instrument, so the pieces do not function as one system for a user.",
+            "Scene gating and morph are honored inside applyState only if state is mutated programmatically; the panel controls that should mutate them are disconnected."
           ]
         },
         {
@@ -185,8 +202,10 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "All Phase 1–2 test files retained and green; regression.phase2 mapped to engine.test.ts and integration.test.ts.",
-            "Verification: 38/38 required features, four package gates pass."
+            "Phase 1-2 tests are retained in feature-matrix.json (visual/key/interaction/accessibility/piano/effects IDs all present) and the verification record shows test/typecheck/lint/build all passed.",
+            "Piano library, two-layer behavior, velocity controls, pedals, fallback, and the effects graph/routing/processing remain covered by engine.test.ts (23 tests) with real offline-render assertions.",
+            "Narrow retention regressed: stage3-narrow.png collapses most controls into a few blobs with only two OLEDs legible, so responsive inspection of the surface is degraded rather than merely reflowed.",
+            "Inherited Phase 2 note: Grand/Upright/Electric remain synthesized (honestly declared), which is honest but does not meet the Phase 2 recorded-sample requirement — carried forward here."
           ]
         }
       ]
@@ -195,40 +214,46 @@
       "id": "engineeringQuality",
       "label": "Engineering quality",
       "weight": 10,
-      "score": 68.8,
-      "contribution": 6.9,
+      "score": 56.3,
+      "contribution": 5.6,
       "criteria": [
         {
           "id": "architecture",
           "label": "System architecture",
           "weight": 40,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "Clear module boundaries: programs.ts, organ-voice.ts, synth-voice.ts, zones.ts, morph-clock.ts, program-types.ts.",
-            "Canonical serializable program state with control-bindings wiring panel to engines."
+            "Clear module boundaries: audio/ (engine, per-engine voices, effects-chain, zones, morph-clock, program-types), model/ (hardware, keyboard), state/ (programs, control-bindings, instrument), input/, components/ — with injectable AudioContext/timing/MIDI boundaries.",
+            "One-context routing, serializable program state, and per-engine voice modules are well-factored and extensible.",
+            "The central architectural flaw is that the state/program/performance layer is not connected to the presentation layer: useInstrument routes everything through a single presentationToAudioState mapping and never owns a ProgramSystemState, so an entire designed subsystem is dead relative to the UI.",
+            "Dead/loose ends: resolveEffectsForLayer's no-op branch, exported-but-unused synthCategoryFromPresentation/voiceModeFromPresentation, and control-ID/read-key mismatches indicate incomplete integration."
           ]
         },
         {
           "id": "testsMaintainability",
           "label": "Tests and maintainability",
           "weight": 35,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "74 tests across 9 files; feature matrix maps every Phase 1–3 ID.",
-            "Rendered-audio helpers reused from Phase 2; dedicated organ/synth/program/integration test modules."
+            "Audio tests are real-boundary and deterministic (renderOffline + rms/earlyRms/signalsDiffer), meaningfully proving engine distinctness, filter/drawbar/percussion/rotary effects, and cleanup — a genuine strength.",
+            "Coverage is skewed to pure functions and engine internals; there is essentially no UI-integration test (App.test.tsx is 1 trivial test), so the disconnection between controls and the program/performance workflow went unproven.",
+            "The hardware.bindings test asserts a prefix predicate rather than actual canonical behavior, giving false assurance for controls that do nothing.",
+            "Naming and modularity are otherwise clean and consistent (typed program-types, per-engine files), aiding maintainability."
           ]
         },
         {
           "id": "runtimePerformance",
           "label": "Runtime performance",
           "weight": 25,
-          "rating": 2,
-          "score": 50,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "Seal test duration ~50s; 252 KB JS bundle.",
-            "Zero capture console errors; voice cleanup tests pass but load-time synthesis remains costly."
+            "Captures report no page errors at 1440x900 and 390x844; only benign autoplay AudioContext warnings appear (stage3-capture.json).",
+            "Voice/timer cleanup is handled (allNotesOff clears arp interval and sustained notes; dispose closes context and disconnects nodes) and tests confirm voice counts return to baseline.",
+            "setTargetAtTime ramps on levels/master avoid zipper noise and the limiter caps output; React state updates are memoized in useInstrument.",
+            "Residual risk: arp-spawned voices are never explicitly released, so long arp runs can grow node/voice counts until stealing intervenes."
           ]
         }
       ]
@@ -242,28 +267,28 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "durationMs": 45599,
+        "durationMs": 50505,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "durationMs": 1456,
+        "durationMs": 1183,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "durationMs": 421,
+        "durationMs": 402,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "durationMs": 1948,
+        "durationMs": 1381,
         "detail": "Passed"
       },
       {
@@ -275,15 +300,10 @@
     ]
   },
   "issues": [
-    {
-      "severity": "major",
-      "category": "audioIntegration",
-      "description": "Piano Grand/Upright/Electric remain synthesized buffers (sampleSources: 0), inherited from Phase 2."
-    },
-    {
-      "severity": "minor",
-      "category": "featureCompletion",
-      "description": "Synth LFO audio modulation and organ rotary acceleration are simplified relative to the manual spec."
-    }
+    "Program/performance subsystem (programs.ts, morph assignment, tap-clock, Panic) is fully implemented and unit-tested but never imported by App/instrument/components — program buttons, Store/Store As, Live mode, list view, scenes, morph-assign, split editor, tap-tempo, and Panic are non-functional from the running instrument.",
+    "Control-ID vs read-key mismatches make several panel controls silent no-ops: program-split (read as program-split-on), program-scene-i/ii (read as *-active), program-clock-bpm (no emitting control), and synth-filter-type is never read.",
+    "hardware.bindings test only checks a prefix predicate (isFunctionalControl) and does not prove canonical behavior, so many no-op controls pass; undeclared no-op fallbacks are not listed as unsupported.",
+    "Arp scheduling (scheduleArp) spawns notes on a timer but never issues note-off for them, risking stuck/accumulating voices under sustained arp play.",
+    "Visual fidelity is low versus reference (generic slider grid, truncated labels, no LED drawbar graphs); Phase 2 and Phase 3 captures are byte-identical and narrow layout drops most controls."
   ]
 }

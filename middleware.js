@@ -5,6 +5,9 @@ const AUTH_PATH = '/__stagebench/auth'
 const COOKIE_NAME = 'stagebench_session'
 const LOGIN_RATE_LIMIT_ID = 'stagebench-login'
 const SESSION_SECONDS = 60 * 60 * 24 * 7
+
+const EXTRAS_PATH = '/secret'
+const EXTRAS_COOKIE = 'stagebench_extras'
 const encoder = new TextEncoder()
 
 const securityHeaders = {
@@ -127,6 +130,58 @@ function loginPage(returnTo, error = '') {
 </html>`
 }
 
+function extrasPage({ unlocked = false, error = '' } = {}) {
+  const errorMarkup = error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''
+  const body = unlocked
+    ? `<p>Extra models are unlocked in this browser. They'll now show up on the gallery.</p>
+        <a class="back" href="/">&larr; Back to the gallery</a>`
+    : `<p>Enter the access password again to reveal extra models on the gallery.</p>
+        <form action="${EXTRAS_PATH}" method="post">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" autofocus required />
+          <button type="submit">Unlock extra models</button>
+        </form>
+        ${errorMarkup}`
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>Secret · Stagebench</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background: #0d0b0b; color: #fff; }
+      * { box-sizing: border-box; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; background: linear-gradient(135deg, #0d0b0b, #171313 58%, #0d0b0b); }
+      main { width: min(100%, 420px); border: 1px solid rgba(255,255,255,.34); background: #171313; box-shadow: 0 8px 0 rgba(0,0,0,.55); }
+      header { padding: 18px 20px; border-bottom: 1px solid #443939; color: #a8e982; font: 700 12px/1.2 ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+      section { padding: 28px 20px 24px; }
+      h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -.025em; }
+      p { margin: 0 0 22px; color: #c9bebe; font-size: 14px; line-height: 1.55; }
+      label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+      input { width: 100%; height: 48px; border: 1px solid #706363; border-radius: 0; padding: 0 13px; background: #0d0b0b; color: #fff; font: inherit; outline: none; }
+      input:focus { border-color: #fff; box-shadow: 0 0 0 2px #f1b800; }
+      button { width: 100%; height: 46px; margin-top: 12px; border: 0; border-radius: 0; background: #a8e982; color: #171313; font: 800 13px/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+      button:hover { background: #bdf59a; }
+      .error { margin: 12px 0 0; color: #ffb7aa; font-weight: 700; }
+      .back { color: #a8e982; font-weight: 700; text-decoration: none; }
+      .back:hover { text-decoration: underline; }
+      footer { padding: 13px 20px; border-top: 1px solid #443939; color: #8f8282; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>Stagebench · secret</header>
+      <section>
+        <h1>Extra models</h1>
+        ${body}
+      </section>
+      <footer>Unlocking is remembered securely for seven days, in this browser only.</footer>
+    </main>
+  </body>
+</html>`
+}
+
 function htmlResponse(html, status = 401, headers = {}) {
   return new Response(html, {
     status,
@@ -189,6 +244,51 @@ export async function handleRequest(request, options = {}) {
   const session = getCookie(request, COOKIE_NAME)
   if (!(await isValidSession(session, password))) {
     return htmlResponse(loginPage(safeReturnTo(requestedPath)))
+  }
+
+  if (url.pathname === EXTRAS_PATH) {
+    const extrasPassword = `${password}::extras`
+
+    if (request.method === 'POST') {
+      const form = await request.formData()
+      const rateLimit = options.checkRateLimit ?? checkRateLimit
+
+      try {
+        const { rateLimited, error } = await rateLimit(LOGIN_RATE_LIMIT_ID, { request })
+        if (rateLimited) {
+          return htmlResponse(
+            extrasPage({ error: 'Too many attempts. Try again in up to one hour.' }),
+            429,
+            { 'Retry-After': '3600' },
+          )
+        }
+        if (error === 'not-found') throw new Error(`Missing firewall rate limit: ${LOGIN_RATE_LIMIT_ID}`)
+      } catch (error) {
+        console.error('Stagebench extras rate limit failed', error)
+        return htmlResponse(
+          extrasPage({ error: 'Authentication is temporarily unavailable. Please try again later.' }),
+          503,
+        )
+      }
+
+      if (String(form.get('password') ?? '') !== password) {
+        return htmlResponse(extrasPage({ error: 'Incorrect password.' }))
+      }
+
+      const extrasSession = await createSession(extrasPassword)
+      return new Response(null, {
+        status: 303,
+        headers: {
+          ...securityHeaders,
+          Location: '/',
+          'Set-Cookie': `${EXTRAS_COOKIE}=${extrasSession}; Max-Age=${SESSION_SECONDS}; Path=/; Secure; SameSite=Lax`,
+        },
+      })
+    }
+
+    const extrasSession = getCookie(request, EXTRAS_COOKIE)
+    const unlocked = await isValidSession(extrasSession, extrasPassword)
+    return htmlResponse(extrasPage({ unlocked }), 200)
   }
 
   return next({

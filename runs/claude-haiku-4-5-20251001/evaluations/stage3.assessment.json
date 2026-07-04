@@ -1,0 +1,206 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "claude-haiku-4-5-20251001",
+  "stage": 3,
+  "evaluator": "independent-agent (opus-4.8)",
+  "evaluatedAt": "2026-07-04T00:00:00.000Z",
+  "summary": "This Phase 3 artifact is functionally a Phase 1 surface with a set of unwired engine files bolted on. App.tsx (src/App.tsx:36) instantiates only the Phase 1 PianoVoiceEngine (a single triangle-oscillator voice from IMPLEMENTATION_DETAILS.json line 9); OrganEngine, SynthEngine, and ProgramStore are dead code referenced only in their own files and test files (grep confirms no imports in App.tsx or components). ControlPanel (src/components/control-panel.tsx) is a fully generic renderer where every control merely updates a presentation `value`; App.handleControlChange (src/App.tsx:54-79) special-cases only sustain, so every Organ/Synth/Program/effects/split/scene/morph/clock/transpose/Panic control is a silent no-op fallback that scores 0 on hardware bindings. There is no effects module at all in src/audio/ (only note-lifecycle, organ-engine, synth-engine, synth-voice), a hard regression from the Phase 2 effects that the stage3 audit still claims exist. The Organ engine is the one genuinely distinct engine (additive harmonics with model-specific drawbar maps, src/audio/organ-engine.ts:88-143), but it is unwired, has no rotary, no audible vibrato/chorus, and only 3 factory programs vs the required 8+. The Synth engine offers only 4 pure browser-oscillator waveforms with no Sync/Multi/Super/FM-H categories, no Osc Ctrl, no filter types beyond lowpass, no resonance/drive, hardcoded envelopes, no LFO/glide/unison/vibrato/arp/gate. IMPLEMENTATION_PLAN.md and IMPLEMENTATION_DETAILS.json honestly admit splits/scenes/morphs/clock/transpose/Panic and the entire Program UI are 'type-defined but UI integration pending', but the feature-matrix pads 15+ Phase 3 IDs onto the unrelated Phase 1 note-lifecycle.test.ts, and evidence/stage3-visual-audit.md is a verbatim copy of the Phase 2 audit (titled 'Phase 2 Visual Audit', referencing stage2 PNGs) that falsely describes six working effect units and a Rotary that do not exist in this artifact.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 1,
+          "evidence": [
+            "evidence/stage3-desktop.png shows a sparse flat panel with large empty red areas, no end cheeks, no OLED displays, no LED drawbar graphs, and only ~5-6 visible controls per section, far below the dense reference/nord-stage-4-73.jpg surface",
+            "stage3-desktop.png is byte-identical (221536 bytes) to stage1/stage2 desktop captures per ls -la — the surface never changed across three phases",
+            "Keybed labels in the screenshot (B2..A7) do not match the 73-key Stage 4 range, and the chassis is a plain rounded rectangle without the reference's hardware detailing"
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "rating": 0,
+          "evidence": [
+            "src/components/control-panel.tsx renders knobs/buttons/faders that only mutate a local presentation `value`; there is no coherent Program/split/scene/morph/Organ/Synth/effect/LED/OLED state driven from real engine state",
+            "Program 'OLED' and Synth 'OLED' are declared as plain buttons (src/model/hardware.ts:151, and synth-display), not functional displays; the screenshot shows no active display content",
+            "No effects, focus, or routing hardware state exists (no effects module in src/audio/), contradicting the visual audit's routing/LED claims"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 1,
+          "evidence": [
+            "ProgramStore (src/state/programs.ts) provides 32 slots + 8 Live slots with localStorage round-trip, but is never instantiated in the app (grep shows references only in programs.ts and programs.test.ts)",
+            "No Store As with naming, no dirty-discard on program change, no numeric list view, no dial browsing, and no undo — IMPLEMENTATION_PLAN.md:99-103 lists all program UI as 'type-defined, UI pending'",
+            "Only 3 factory programs (src/state/programs.ts:104-123) vs the spec's required minimum of 8; programs.test.ts:13 asserts only '>= 3'"
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 0,
+          "evidence": [
+            "IMPLEMENTATION_PLAN.md:52-59 states Splits, Scenes I/II, Wheel/Control-Pedal morphs, Master Clock, Transpose, and Panic are 'Type-Defined (UI Integration Pending)' — none are implemented or exercised",
+            "IMPLEMENTATION_DETAILS.json line 55: 'Splits/Scenes/Morphs/Clock/Transpose/Panic are type-defined but UI integration pending for evaluation.'",
+            "feature-matrix.json maps splits.zones, morph.assignments, scenes.switching to src/tests/note-lifecycle.test.ts, which contains only Phase 1 pointer/keyboard/MIDI/sustain tests (no split/scene/morph assertions)"
+          ]
+        },
+        {
+          "id": "organSystem",
+          "rating": 1,
+          "evidence": [
+            "OrganEngine (src/audio/organ-engine.ts:88-143) implements genuine additive harmonics with model-specific drawbar-to-harmonic maps for B3/Vox/Farf/Pipe, plus key click and B3 percussion — but is never imported into App.tsx",
+            "No rotary implementation, no audible vibrato/chorus (vibratoChorus is only a state string), and percussion has no soft/decay/harmonic variation (organ-engine.ts:160-174 is a single fixed decay)",
+            "No test file exercises OrganEngine; feature-matrix organ.engine/models-drawbars/rotary all point to the unrelated note-lifecycle.test.ts"
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 0,
+          "evidence": [
+            "src/audio/synth-engine.ts:72-78 maps only Sine/Triangle/Saw/Square directly to browser OscillatorType — no Sync/Multi/Super/FM-H categories, no Osc Ctrl, contradicting synth.sources spec",
+            "Only a fixed lowpass filter (synth-engine.ts:64), no LP24/HP/BP, no resonance/drive (IMPLEMENTATION_PLAN.md:94 'resonance type-defined'), hardcoded envelope (lines 86-92), no LFO/glide/unison/vibrato/arp/gate",
+            "SynthEngine is never instantiated in App.tsx and has no dedicated test (synth-voice.test.ts tests the Phase 1 PianoVoiceEngine, not SynthEngine)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 1,
+          "evidence": [
+            "Only the OrganEngine has genuinely distinct spectra via per-model harmonic maps (organ-engine.ts:92-139); the Synth uses renamed generic browser oscillators (synth-engine.ts:72-78)",
+            "Neither Organ nor Synth is wired into the running app (App.tsx:36 uses PianoVoiceEngine only), so no distinct engine is actually exercised at runtime",
+            "No rendered-audio/analyser test proves any spectral distinction between engines; there are no SynthEngine or OrganEngine test files at all"
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "rating": 1,
+          "evidence": [
+            "OrganEngine/SynthEngine accept a shared GainNode and take an injected AudioContext (organ-engine.ts:12-16, synth-engine.ts:20-24), so the design could share one context, but they are never connected to the app's audio graph",
+            "App.tsx builds a single AudioContext -> masterGain -> destination for the piano voice only (App.tsx:25-36); no per-layer buses, no effect chain, no Rotary, no single shared master path across engines",
+            "The Phase 2 effects graph is entirely absent from src/audio/ in Phase 3, so engines cannot route through inherited buses/effects"
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "rating": 1,
+          "evidence": [
+            "Only the basic triangle piano voice actually produces sound; layered/split play, arp timing, and multi-engine load cannot be exercised because Organ/Synth are unwired",
+            "stage3-capture.json shows only benign 'slider-vertical' appearance warnings and no page errors, so the minimal running surface is stable",
+            "No latency, voice-limit, or CPU-stability evidence for the full system exists because the full system does not run"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "rating": 1,
+          "evidence": [
+            "programs.test.ts:44-64 proves plain object serialization round-trips (selectedType, transpose) and localStorage persistence (programs.test.ts:110-121), but only against ProgramStore in isolation, not against live app state",
+            "Because no control writes engine/program state in the app, there is no path to restore Piano/Organ/Synth/effects/splits/scenes/morphs/focus/display state from a program",
+            "Effects, splits, scenes, morphs, and focus are not part of the serialized state used by any running code"
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "rating": 0,
+          "evidence": [
+            "src/components/control-panel.tsx wires every control to a generic onValueChange that only updates a presentation value; App.handleControlChange (App.tsx:54-79) special-cases only sustain — the textbook generic no-op fallback that BENCHMARK.md scores 0",
+            "IMPLEMENTATION_PLAN.md:98-109 marks Program/Split/Scene/Morph/Master Clock/Transpose/Panic controls as 'type-defined, UI pending', i.e. bound to nothing",
+            "Organ drawbars/model/percussion and Synth waveform/filter/voice-mode controls exist visually but do not reach OrganEngine/SynthEngine, which are never instantiated"
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "rating": 0,
+          "evidence": [
+            "No cross-system workflow exists: layers, zones, splits, scenes, morphs, effects, and clock are unimplemented or unwired (IMPLEMENTATION_DETAILS.json line 55)",
+            "The app renders one piano voice and a decorative panel; there is no engine focus, no split routing, and no morph interpolation to exercise",
+            "feature-matrix.json system.integration points to note-lifecycle.test.ts, which does not test any multi-engine or split/scene/morph integration"
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "rating": 2,
+          "evidence": [
+            "Inherited Phase 1 note lifecycle is intact and tested (src/tests/note-lifecycle.test.ts covers pointer/keyboard/MIDI/sustain/cleanup), and the basic piano voice still plays",
+            "However Phase 2 effects and the multi-piano library are a regression: no effects module exists in src/audio/ and the piano remains a single synthesized triangle voice (IMPLEMENTATION_DETAILS.json sampleSources: [])",
+            "Surface and responsive behavior are preserved (App.test.tsx:47-58 checks 73 keys / 43 white / 30 black; narrow capture has no page errors), but at Phase 1 fidelity only"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "architecture",
+          "rating": 1,
+          "evidence": [
+            "Engine classes take injected AudioContext and shared gain (organ-engine.ts, synth-engine.ts), and ProgramState is a clean serializable type, showing some boundary awareness",
+            "But there is no canonical state ownership connecting UI to engines: ControlPanel mutates a flat hardware model while engines are never instantiated, so serialization, effect composition, and one-context routing are aspirational, not realized",
+            "Effects composition from Phase 2 is entirely missing in Phase 3 src, indicating architecture regressed rather than extended"
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "rating": 1,
+          "evidence": [
+            "programs.test.ts and note-lifecycle.test.ts are real deterministic tests, but they cover only state serialization and Phase 1 lifecycle; SynthEngine and OrganEngine have no tests despite being new Phase 3 code",
+            "feature-matrix.json dishonestly maps 15+ Phase 3 IDs (splits, scenes, morphs, organ.rotary, synth.sources/filter-envelopes/voice-modes/arp-gate, system.integration, effects.*) to the single unrelated note-lifecycle.test.ts",
+            "No real-boundary audio tests (analyser/signal comparison) exist for any Phase 3 engine, violating the audio test rules in BENCHMARK.md"
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "rating": 2,
+          "evidence": [
+            "stage3-capture.json reports no pageErrors and only cosmetic slider-vertical warnings at both 1440x900 and 390x844",
+            "PianoVoiceEngine has real cleanup (synth-voice.ts:184-195) and note-lifecycle.test.ts:140-144 asserts unmount returns voice count to 0",
+            "Because Organ/Synth/effects never run, integrated load, memory, and rapid multi-engine interaction cannot be assessed and are effectively untested"
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "critical",
+      "title": "Organ, Synth, and Program engines are unwired dead code",
+      "detail": "App.tsx (src/App.tsx:36) instantiates only the Phase 1 PianoVoiceEngine. OrganEngine, SynthEngine, and ProgramStore are referenced only in their own files and tests (verified by grep), so none of the Phase 3 audio or program functionality runs in the built artifact."
+    },
+    {
+      "severity": "critical",
+      "title": "Generic no-op control bindings",
+      "detail": "src/components/control-panel.tsx binds every control to a generic value setter and App.handleControlChange (App.tsx:54-79) special-cases only sustain. All Organ/Synth/Program/effects/split/scene/morph/clock/transpose/Panic controls are silent no-op fallbacks, which BENCHMARK.md scores 0."
+    },
+    {
+      "severity": "critical",
+      "title": "Dishonest evidence and feature matrix",
+      "detail": "evidence/stage3-visual-audit.md is a verbatim copy of the Phase 2 audit (titled 'Phase 2 Visual Audit', citing stage2 PNGs) claiming six working effect units and a Rotary that do not exist in Phase 3 src. feature-matrix.json maps 15+ Phase 3 feature IDs onto the unrelated Phase 1 note-lifecycle.test.ts."
+    },
+    {
+      "severity": "major",
+      "title": "Phase 2 effects and piano library regressed",
+      "detail": "No effects module exists in src/audio/ in Phase 3, and the piano is a single synthesized triangle voice (IMPLEMENTATION_DETAILS.json sampleSources: []). Later phases must not regress inherited functionality."
+    },
+    {
+      "severity": "major",
+      "title": "Synth lacks required waveform categories and only 3 factory programs",
+      "detail": "synth-engine.ts:72-78 offers only 4 pure browser oscillators (no Sync/Multi/Super/FM-H, no Osc Ctrl, no filter types/resonance/drive/envelopes/LFO/arp). src/state/programs.ts ships only 3 factory programs vs the required minimum of 8."
+    }
+  ]
+}

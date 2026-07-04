@@ -2,16 +2,16 @@
 
 - Run: `claude-opus-4-8`
 - Status: complete
-- Aggregate: **86/100**
+- Aggregate: **88/100**
 - Coverage: 3/3 phases
 
 ## Phase scores
 
 | Phase | Scope | Score |
 | --- | --- | ---: |
-| 1 | Complete surface and basic piano | 88 |
+| 1 | Complete surface and basic piano | 87 |
 | 2 | Piano library and working effects | 87 |
-| 3 | Complete Stage 4 system | 84 |
+| 3 | Complete Stage 4 system | 88 |
 
 ## Implementation details
 
@@ -63,25 +63,24 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 
 ## Phase 1: Complete surface and basic piano
 
-**88/100**
+**87/100**
 
-A strong, honest Phase 1. The desktop capture is a faithful reproduction of the 73-key Nord Stage 4: continuous red chassis, correct left-to-right section order (Master/wheels/Rotary, Organ, Piano, central Program OLED, Synth OLED, Layer Effects), full E1-E7 keybed with correct 43-white/30-black pattern, red drawbar LED ladders with correct footage labels, and Program+Synth as the only two primary OLEDs. The control inventory is deep (140 stable-ID controls across all six sections). The one dependable piano voice is honest real-time additive synthesis through a single AudioContext -> master gain -> limiter -> destination, with truthful IMPLEMENTATION_DETAILS declaring no recorded samples. The note lifecycle (velocity, release, retrigger, sustain, deterministic oldest-first stealing, cleanup) is real and asserted via a fake-backend on measurable tone events. Every panel control is genuinely decorative (presentation-only store that mutates no audio/system state) and this is stated to the user in the status bar. All four gates pass; both captures render with zero console messages/page errors. Main gaps: narrow view uses horizontal scroll rather than reflow (whole surface not visible at once), a slightly muted chassis hue, and minor keybed bevel/rail simplifications, all disclosed honestly in the visual audit.
+A strong, honest Phase 1. The desktop capture renders one continuous deep-red chassis with the correct left-to-right section order (Performance/wheels -> Organ -> Piano -> Program+OLED -> Synth+OLED -> Layer Effects), a 54/46 deck/keybed split, and an exact 73-key E1-E7 keybed (43 white + 30 black, verified in code and math). Program and Synth carry the only two primary OLEDs, satisfying that hard gate. Section landmarks are dense and faithful: nine footage-labelled drawbars with LED ladders, piano selectors, the central program navigation cluster, the dense synth deck, and the effects column. The main visual gap is section widths: the code uses the coarse fractions from prompts/stage1.md (piano 0.15, program 0.09, synth 0.21) which the current specs/nord-stage-4.visual.json (corrected 2026-07-04) now overrides with piano 0.085, program 0.125, synth 0.25 at tolerance 0.025 — so Piano renders visibly too wide and Program too narrow vs the reference photo, though the candidate faithfully followed the prompt values it was given. Audio is honest real-time additive synthesis, declared truthfully as generated (not recorded) in IMPLEMENTATION_DETAILS.json, matching webAudioBackend.ts. The note lifecycle is excellent: one shared NoteRouter funnels pointer/multitouch/computer-keyboard/MIDI through a PianoEngine with velocity-squared gain, per-note release, CC64 sustain hold, deterministic oldest-first voice stealing at 16 voices, and blur/disconnect/unmount cleanup. All panel controls are presentation-only in a normalized ControlStore that touches no audio, and tests explicitly prove a toggled button/turned knob creates zero tones. The status bar states the honesty contract in plain text. Tests are deterministic and assert against the real engine/router boundary through an injectable fake backend (velocity direction, sustain hold, stealing, cleanup, MIDI denied/disconnected, repeat suppression). Narrow (390x844) preserves true proportions via horizontal scroll rather than reflow, disclosed honestly, so the whole surface is not visible in one frame. Captures record zero console errors and zero page errors.
 
 ### Category scores
 
 | Category | Weight | Score |
 | --- | ---: | ---: |
-| Complete visual fidelity | 45% | 83 |
-| Basic Piano functionality | 25% | 91 |
-| Surface interaction and honesty | 15% | 86 |
+| Complete visual fidelity | 45% | 71 |
+| Basic Piano functionality | 25% | 100 |
+| Surface interaction and honesty | 15% | 100 |
 | Engineering quality | 15% | 100 |
 
 ### Priority issues
 
-- Narrow (390x844) layout relies on horizontal scroll rather than reflow, so the full hardware surface is not visible in a single frame (disclosed in stage1-visual-audit.md).
-- Chassis hue is a slightly muted maroon rather than the reference's more saturated Nord red.
-- Minor material simplifications: keybed rendered without front-lip bevel; rear/top I/O rail not modeled (out of scope for the playable front surface).
-- Layer Effects modulation blocks labeled Mod 1 / Mod 2 where the reference silk-screen reads Effect 1 / Effect 2 (control inventory is equivalent).
+- Section widths follow the coarse prompt values (piano 0.15, program 0.09, synth 0.21) while the current specs/nord-stage-4.visual.json (corrected 2026-07-04, tolerance 0.025) specifies piano 0.085, program 0.125, synth 0.25; Piano renders visibly too wide and Program too narrow vs reference/nord-stage-4-73.jpg. The candidate faithfully followed the prompt it was given.
+- Narrow (390x844) uses horizontal scroll rather than reflow, so only the far-left chassis + Organ + keybed start are visible in a single frame; inspection of the full surface requires scrolling. Disclosed honestly in stage1-visual-audit.md.
+- Effects modulation blocks are labelled Mod 1 / Mod 2 where the reference silk-screen reads Effect 1 / Effect 2 (inventory equivalent); chassis hue is a slightly muted maroon vs the brighter Nord red.
 
 ### Technical gate
 
@@ -91,7 +90,7 @@ Passed.
 
 **87/100**
 
-A very strong, honest Phase 2. Six selectable Piano types: Grand/Upright/Electric are genuinely recorded multi-sampled sets (30 real MP3 root notes each, ~20-25KB per file, FluidR3_GM via gleitz/midi-js-soundfonts, CC-BY-3.0, full provenance in IMPLEMENTATION_DETAILS + per-set manifest.json + LICENSE), loaded offline via real createBufferSource + playbackRate pitch-shift (<=1 semitone). Clav/Digital/Misc are honest synthesis, correctly declared. The single-velocity-layer limitation is disclosed truthfully rather than faked as multi-layer. The audio graph is the real deal: one BaseAudioContext, per-layer buses A/B, ordered chain Mod1->Mod2->Delay->Amp/EQ->Comp->Reverb, shared post-reverb Rotary, master gain -> DynamicsCompressor limiter -> one destination, with To-Rotary reroute and per-layer voice ownership/stealing. Effects are real Web Audio subgraphs and are asserted on rendered signals via OfflineAudioContext (tremolo amplitude vs bypass, stereo width, delay repeats + in-loop feedback filtering, reverb tails growing Booth->Cathedral, rotary moving stereo, per-unit bypass, chain order, To-Rotary routing). Piano controls (KB Touch, Dyn Comp, Timbre, Unison, Soft Release, per-layer level/octave/SUSTPED) all change rendered audio and are tested. Organ/Synth/Program stay honestly decorative and this is asserted (controlBindings test confirms no binding). All four gates pass. Console shows only benign autoplay-policy warnings (AudioContext needs a user gesture); zero page errors. Main gaps: narrow layout still relies on horizontal scroll; recorded sets are a single velocity layer (honestly disclosed but a fidelity ceiling); effect visual-state feedback is functional but modest.
+A strong, honest Phase 2. Grand/Upright/Electric are genuinely recorded, distinct, offline-bundled CC-BY sample sets (30 real MP3 root notes each, distinct hashes) with complete provenance; Clav/Digital/Misc are honestly declared synthesis. The audio graph is textbook: one AudioContext, per-layer buses, the exact documented ordered chain (Mod1->Mod2->Delay->Amp/EQ->Comp->Reverb), shared Rotary after reverb, master gain -> limiter -> one destination, StrictMode-safe context ownership and clean teardown. All seven effect units are real Web Audio subgraphs with distinct per-type processing, working bypass/dry-wet, an in-loop delay feedback filter, and To Rotary rerouting. 126 real-boundary OfflineAudioContext tests pass (no mocks) and typecheck/lint are clean. The visual surface is faithfully retained from Phase 1. The main gap: String Res is a spec-required performance control that is stored but never bound to audio (effectively decorative), and IMPLEMENTATION_DETAILS mildly overstates that all functional piano controls change audio.
 
 ### Category scores
 
@@ -105,10 +104,10 @@ A very strong, honest Phase 2. Six selectable Piano types: Grand/Upright/Electri
 
 ### Priority issues
 
-- Recorded Grand/Upright/Electric sets are a single velocity layer per root note; dynamic timbre is gain/filter-shaped at play time rather than multi-layer recorded (disclosed honestly, but a fidelity ceiling vs the real instrument).
-- Narrow (390x844) layout still relies on horizontal scroll rather than reflow, inheriting the Phase-1 limitation.
-- Effect/parameter visual-state feedback is functional but modest relative to the sonic depth; richer display readouts would strengthen audibleFeedback.
-- Reverb impulse responses are generated (seeded PRNG) rather than recorded IRs (disclosed, acceptable, but not convolved real spaces).
+- String Res is listed in piano.json scope.required and is carried into PerformanceParams.stringRes and bound in controlBindings, but it never affects any audio node — the control is effectively decorative, and no test asserts it changes audio.
+- IMPLEMENTATION_DETAILS.json states 'all functional Piano controls ... change rendered audio' and lists String Res under functional.piano, a mild overstatement given String Res produces no audible change.
+- Narrow (390x844) retention relies on horizontal scroll inside the chassis container rather than reflow, so the right-hand sections (incl. much of Layer Effects) are off-screen until scrolled.
+- Recorded sets bundle a single velocity layer per root note (honestly declared); acceptable per spec but below true multi-velocity fidelity.
 
 ### Technical gate
 
@@ -116,27 +115,26 @@ Passed.
 
 ## Phase 3: Complete Stage 4 system
 
-**84/100**
+**88/100**
 
-An ambitious and largely complete Phase 3 that ships the full Stage 4 system through the single inherited Phase-2 audio graph and backs almost everything with real-boundary tests. Organ: four spectrally distinct engines (B3 tonewheel with drawbar-footage sine partials + leakage + key click + single-trigger percussion; Vox odd-harmonic reed; Farf buzzy register switches; Pipe flute ranks), nine drawbars driving each model's spectrum, vibrato/chorus depth scaling, and rotary routing that accelerates slow->fast into the shared post-reverb rotary. Synth: five genuinely different oscillator constructions (Pure single wave, Sync hard-sync, Multi detuned-saw stack, Super 7-voice supersaw, FM-H 2-op FM) with category-correct Osc Ctrl, LP12/LP24/HP/BP filters with tracking/res/drive, osc/filter/amp envelopes, a 5-waveform/3-destination LFO with clock sync, poly/mono/legato + glide + unison + vibrato, and a deterministic arpeggiator/gate driven by an injectable MasterClock (tap + dial). The Program system is a serializable ControlStore+PerformanceStore snapshot: 32 slots (4 pages x 8) plus 8 auto-storing Live slots, dial/page/list browsing, Store/Store As with naming, truthful dirty (E) and edit-discard, plus splits (zones/points/crossfades), Layer Scenes I/II, Wheel + Control-Pedal morphs (assign/interpolate/clear), Master Clock, Transpose +/-6, and Panic — all round-tripping losslessly with Master Level correctly excluded. All engines run in one AudioContext to one destination, and the honesty contract holds: Organ/Synth engines are declared honest synthesis (no recordings), every functional control is bound, and the only decorative controls are explicitly enumerated spec-exclusions. The corrected status strip truthfully states everything is live. All four gates pass; 38/38 features covered; zero page errors (console shows only benign autoplay-policy warnings). Main gaps: cosmetic text overflow/crowding in the central Program OLED strip at 1440px, recorded pianos remain single-velocity-layer (inherited), and the narrow layout keeps the horizontal-scroll strategy.
+A strong, substantially complete Phase 3 system. All four package gates pass (168 tests across 19 files, typecheck clean, capture shows only the standard autoplay warning and zero page errors). Organ and Synth engines are genuinely distinct honest synthesis (declared truthfully in IMPLEMENTATION_DETAILS.json), not renamed generic oscillators, and all three sections render through one AudioContext into a single destination. Programs (32 + 8 Live), Store/Store As/dirty/edit-discard, splits/zones/crossfades, two scenes, and Wheel/Control-Pedal morphs are fully wired with real-time interpolation and lossless JSON round-trip. The most material gap: the deterministic Arpeggiator/Gate is implemented and unit-tested as a standalone class but is NOT instantiated or driven inside the live AudioEngine note flow, so run/rate/direction/range/hold do not audibly sequence held notes in the running instrument (state + algorithm only). Minor honesty-neutral gaps: synth filter drive is computed then discarded (void drive), and LFO 'ctrl' destination maps to cutoff. Panel styling uses dark section plates where the reference uses blue-grey, but silhouette, chassis, keybed, inventory, and ordering are faithful.
 
 ### Category scores
 
 | Category | Weight | Score |
 | --- | ---: | ---: |
 | Final visual fidelity | 5% | 75 |
-| Complete feature system | 35% | 75 |
+| Complete feature system | 35% | 87 |
 | Audio quality and integration | 30% | 92 |
 | Full-system behavior | 20% | 86 |
 | Engineering quality | 10% | 93 |
 
 ### Priority issues
 
-- Cosmetic layout crowding in the central Program OLED strip at 1440px: the Synth 'Super Saw' readout overflows slightly and the Store/Live/Split labels overlap their buttons in the capture (disclosed as a known gap; does not obscure function).
-- Recorded Grand/Upright/Electric pianos remain a single recorded velocity layer (inherited from Phase 2); dynamic timbre is gain/filter-shaped, honestly disclosed.
-- Narrow (390x844) layout continues to rely on horizontal scroll rather than reflow (inherited from Phase 1/2).
-- A set of spec-excluded controls (A.T. morph, Num Pad, Shift menus, organ Preset, Extern/Samples synth modes) are honestly listed as unsupported rather than implemented — correct per the honesty contract, but a scope boundary versus the full hardware.
-- Extreme sustained-polyphony CPU/voice-load and long-run stability are not independently profiled in the sealed evidence beyond the passing test suite and clean captures.
+- Arpeggiator/Gate not wired into the live AudioEngine: the deterministic Arpeggiator class (clock.ts) is fully implemented and unit-tested but never instantiated in synthNoteOn or the App/input layer, so ARP RUN/RATE/RANGE/DIR/SYNC/HOLD set state without audibly sequencing held notes in the running instrument. This is the main functional gap against synth.arp-gate.
+- Synth filter drive knob is computed then discarded (void drive in synthEngine.configureFilter), so the drive control does not shape the filter/amp signal despite being declared functional.
+- LFO 'ctrl' destination maps to cutoff rather than Osc Ctrl (applyLfo), a minor fidelity approximation.
+- Deck section plates render dark where reference/nord-stage-4-73.jpg uses blue-grey panels; silhouette/inventory/ordering are otherwise faithful. Synth OLED 'Super Saw' label overflows slightly at 1440px (self-noted, cosmetic).
 
 ### Technical gate
 

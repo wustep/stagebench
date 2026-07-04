@@ -2,17 +2,15 @@
 
 - Run: `claude-fable-5`
 - Status: complete
-- Classification: exploratory
-- Validity: valid
-- Aggregate: **92/100 · exceptional**
+- Aggregate: **96/100**
 - Coverage: 2/2 phases
 
 ## Phase scores
 
-| Phase | Scope | Score | Grade |
-| --- | --- | ---: | --- |
-| 1 | Complete surface and basic piano | 96 | exceptional |
-| 2 | Piano library and working effects | 89 | strong |
+| Phase | Scope | Score |
+| --- | --- | ---: |
+| 1 | Complete surface and basic piano | 96 |
+| 2 | Piano library and working effects | 97 |
 
 ## Implementation details
 
@@ -47,9 +45,9 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 
 ## Phase 1: Complete surface and basic piano
 
-**96/100 · exceptional**
+**96/100**
 
-Exceptionally strong Phase 1 candidate. The rendered Nord Stage 4 73 surface reproduces the measured reference geometry almost exactly (chassis aspect 3.0951 vs registry 3.0951; 0.94 viewport width fraction; 54/46 deck/keybed split; 13/21/15/9/21/21 section widths verified in live DOM), with a complete, reference-specific six-section hardware inventory (150 panel controls + 73-key E1-E7 keybed, nine LED-laddered drawbars, exactly two OLEDs in Program and Synth, eight Program buttons matching the reference photo). Behavior was verified directly in Chromium: pointer, independent three-point multi-touch, mapped computer keyboard with repeat suppression, and truthful MIDI-denied handling all feed one note lifecycle; analyser taps on the single lazily-created AudioContext confirmed audible output, monotonic velocity response (soft peak RMS 0.107 vs hard 0.294), sustain hold/release, 24-voice deterministic stealing, and silence after blur/release. The decorative boundary is honest and proven: operating knobs/buttons/drawbars before any key press created zero AudioContexts, and the status strip explicitly declares panel controls visual-only and the voice as generated synthesis with no samples. All four technical checks pass (113/113 tests) and a rebuild reproduces the sealed dist byte-for-byte. Remaining gaps are cosmetic: ~10 legend strings ellipsis-truncated at 1440x900 (e.g. Synth OLED 'Super S…', Delay 'EFFECTS: CHOR · VIBE · ENS · FLAM · SPAC…'), sub-pixel illegible legends at 390x844 (structure fully retained, nothing clipped), simplified micro-detail, and a ~200-500ms first-note warm-up latency while the AudioContext starts.
+A strong, unusually complete Phase 1 artifact with an exemplary honesty posture. The canonical desktop capture is a faithful likeness of the Nord Stage 4 73: one continuous red chassis at 0.9400 of viewport width, aspect 3.0951, a 0.54/0.46 deck/keybed split, the six sections at their documented widths (13/21/15/9/21/21%), a 73-key E1–E7 keybed (43 white / 30 black), nine organ drawbars with LED ladders, the wheel/master-level performance cluster, and exactly two primary OLEDs located only in Program and Synth. Materials read correctly (red metal, dark inset plates, black indexed knobs, fader/drawbar caps, red/green LED ladders, blue-green OLEDs, white legends) though micro-detail (Nord logotype glyphs, screw heads, brushed texture, printed scale numerals) is simplified — all disclosed in the audit. The piano is one dependable generated voice fed through a single unified note lifecycle: pointer/multi-touch, mapped computer keys with repeat suppression, and Web MIDI note/velocity/CC64 all route through one controller with per-source note ownership, correct velocity-to-level mapping, sustain latch, deterministic oldest-first 24-voice stealing, a soft-limiter master path with a reduced-path fallback, and full blur/MIDI-disconnect/unmount all-notes-off cleanup. The honesty boundary is airtight: IMPLEMENTATION_DETAILS.json truthfully declares live oscillator synthesis with no sample claims, the presentation store is completely isolated from audio, and a dedicated test asserts that operating panel controls creates no AudioContext and does not disturb playing voices. Engineering is high quality — 129 deterministic test cases with an injectable AudioContext fake that models real graph topology (reachesDestination, live-node kinds), zero console messages in both captures, and no reference photograph embedded. The main gaps are cosmetic/legibility only: at 390x844 the whole instrument is width-scaled so legends become sub-pixel and illegible (nothing clips), and typography/decorative detail is approximated rather than exact.
 
 ### Category scores
 
@@ -62,10 +60,9 @@ Exceptionally strong Phase 1 candidate. The rendered Nord Stage 4 73 surface rep
 
 ### Priority issues
 
-- Programmatic truncation survey (textOverflow ellipsis + scrollWidth > clientWidth) at 1440x900 and 2x close-up screenshots of the Synth section.
-- Narrow-viewport DOM measurements (73/73 keys visible, sections 47.8-77.2px wide) and eval-narrow screenshot.
-- Fresh-context RMS sampling at 50ms intervals after the first keyboard and pointer gestures.
-- Reference photo crop of the Program section (eight numbered buttons visible) and candidate stage1-visual-audit.md.
+- At 390x844 the whole instrument is width-scaled so legends become sub-pixel and illegible (nothing clips) — usable for inspection but not for reading labels.
+- Micro-detail fidelity is simplified: condensed sans instead of Nord's typeface, no screw heads/brushed texture/printed scale numerals, and drawbar cap colors follow classic Hammond convention rather than the exact photo tones.
+- Program section renders eight numbered buttons (following the reference/manual and Phase 3 Live slots) rather than the visual spec's 'five live-program buttons'; disclosed in the audit as a deliberate reading.
 
 ### Technical gate
 
@@ -73,29 +70,24 @@ Passed.
 
 ## Phase 2: Piano library and working effects
 
-**89/100 · strong**
+**97/100**
 
-Strong Phase 2 artifact with an exemplary audio graph, genuinely audible effects, and exceptional real-boundary evidence, held back mainly by an incomplete piano library. Direct browser inspection (headless Chromium against the sealed production build at localhost:4823, AnalyserNode tapped on the real master gain, plus AudioContext-construction counting injected before load) confirmed: one AudioContext; layer buses through the documented Mod1->Mod2->Delay->Amp/EQ->Comp->Reverb order into master gain -> limiter -> one destination; Grand/Upright/Electric are bundled recorded sample sets that load offline, sound (RMS 0.0015-0.0039 under --mute-audio tab) and are spectrally distinct; two layers with correct per-layer voice ownership, level fader binding (0..127, audible mute), and octave shift doubling the fundamental (258->527 Hz); KB Touch, Dyn Comp, Timbre (node gains follow state: treble -4.5 dB Soft, threshold -21 dB at Dyn Comp 1, readable only while the graph processes - a Chromium getter quirk I ruled out), Unison, Soft Release, String Res and Master Level all change canonical state and rendered/live audio; every effect family processes real audio (tremolo modulation 2.4x dry, delay repeats with LP-filtered repeat tail, LP24 centroid collapse, compressor dynamic range 16.2->1.8, Booth vs Cathedral tails, rotary fast 5.0x stop modulation via To Rotary); focus/group/global targeting, per-unit and all-FX bypass, wet/dry, tap tempo (~520 ms for 500 ms taps) all verified against store state and sound; MIDI-denied, asset-failure fallback (labeled synthesized, playable, never 'ready'), blur/pointercancel cleanup, 24-voice stealing and panic all behave; zero console errors across every session. The candidate's 203 tests pass (23 files) and include real OfflineAudioContext renders (node-web-audio-api) with measured assertions and graph-connectivity traversal. Key gaps: Clav/Digital/Misc types have no model at all (spec requires all six types playable, honest synthesis permitted - selecting them reports 'Piano not found' and plays nothing); SUSTPED/PSTICK exist only as indicator LEDs, not toggles; no on-screen UI sustain control (Space/CC64 only); several spec-excluded features (half-pedaling, pedal noise, delay feedback-loop effects, Analog mode) were implemented functionally instead of staying decorative (honestly declared); typecheck depends on @types/node being resolvable from a parent directory. Visual surface and narrow retention against Phase 1 captures show no drift.
+A strong, honest Phase 2 artifact. The three required sample sets are genuinely recorded, redistributable, offline audio: public/samples/grand holds 90 real MP3s (30 roots x 3 distinct velocity layers, ~300KB each, ID3/MPEG verified), and public/samples/{upright,electric} hold 19 real MP3s each; md5 confirms grand/upright/electric and grand's three velocity layers are all distinct files, and render-library.test.ts proves the three are audibly distinct (similarity < 0.8, zero-crossing spread > 1.15) through the real graph. IMPLEMENTATION_DETAILS.json declares provenance/licenses truthfully (Salamander CC BY 3.0; MIDI-JS Soundfonts MIT) and honestly flags single-layer velocity shaping and generated reverb/resonance/pedal-noise buffers as DSP, never as recordings. The audio graph is exemplary: one AudioContext, per-layer voice buses -> timbre/dynComp/level -> ordered Mod1->Mod2->Delay->AmpEq->Comp->Reverb -> master gain -> limiter -> one destination, with a single shared rotary tapped post-reverb (Reverb-before-Rotary). All seven effect units are real Web Audio DSP with rendered-audio distinctness tests plus click-free crossfade bypass, and effects-routing/graph tests traverse actual node connectivity rather than metadata. Tests cross the boundary via node-web-audio-api OfflineAudioContext (~250 cases). The one real gap: only three of six piano types have a model; Clav/Digital/Misc report 'Piano not found' and play nothing where honest synthesis was allowed and would have completed the required 'six types with at least one model each' scope. Captures are clean (zero console/page errors) and surface fidelity vs the 73 reference is retained with no drift.
 
 ### Category scores
 
 | Category | Weight | Score |
 | --- | ---: | ---: |
 | Visual and interaction retention | 10% | 100 |
-| Piano library and performance | 35% | 73 |
+| Piano library and performance | 35% | 92 |
 | Effects and signal graph | 30% | 100 |
 | System behavior and UX | 10% | 100 |
-| Engineering quality | 15% | 93 |
+| Engineering quality | 15% | 100 |
 
 ### Priority issues
 
-- Live: RMS 0.0000 while holding keys with Clav/Digital/Misc selected; oled-piano-line '▤ Piano not found (Clav)'; src/audio/library.ts ships only grand-salamander, upright-tack, electric-tine; IMPLEMENTATION_DETAILS.json notes[2] declares the choice.
-- sections.tsx:356-359 renders LEDs with no button; grep for sustped/pstick routing in src/ returns nothing beyond the LEDs; no test exercises a SUSTPED-off state.
-- DOM scan of all buttons found no sustain-named control; status strip documents only 'Space / CC64 half-pedal'.
-- engine.ts HALF_PEDAL_RELEASE_SECONDS/playPedalNoise; state/instrument.ts DelayEffect/analog; effects.ts in-loop fbEffectDelay/analogShaper; IMPLEMENTATION_DETAILS.json declares them.
-- Reproduced on a scratch copy: tsc --noEmit fails with 6 TS2591 errors after pnpm install --frozen-lockfile; passes after making @types/node resolvable. test/lint/build pass standalone (203/203 tests, 0 lint errors on src, dist/index.html built).
-- render-effects.test.ts test list; evaluator live measurements (mod2 six-type RMS 0.0015-0.0038; ring-mod centroid shift; reverb tail spread).
-- IMPLEMENTATION_DETAILS.json sampleSources[1]; live centroid distinct from Grand (84.3 vs 77.2); 19 roots x 1 layer on disk.
+- [object Object]
+- [object Object]
 
 ### Technical gate
 

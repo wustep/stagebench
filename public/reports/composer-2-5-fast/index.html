@@ -51,13 +51,13 @@
     <small>Stagebench evaluation · rubric 3.1.0</small>
     <h1>Composer 2.5 Fast</h1>
     <p>Evidence-backed evaluation of visual fidelity, feature completion, interaction, audio behavior, and engineering quality. Scores use phase-specific weights and automated technical gates.</p>
-    <div class="aggregate"><strong>69</strong><span>/100</span></div>
+    <div class="aggregate"><strong>58</strong><span>/100</span></div>
   </header>
   <main>
     <section class="overview">
       <h2>Run overview</h2>
-      <p>Run <code>composer-2-5-fast</code> · complete · 3/3 selected phases evaluated · generated Jul 4, 2026, 8:08 AM UTC</p>
-      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th></tr></thead><tbody><tr><td>Phase 1</td><td>Complete surface and basic piano</td><td><strong>71</strong>/100</td></tr><tr><td>Phase 2</td><td>Piano library and working effects</td><td><strong>63</strong>/100</td></tr><tr><td>Phase 3</td><td>Complete Stage 4 system</td><td><strong>72</strong>/100</td></tr></tbody></table>
+      <p>Run <code>composer-2-5-fast</code> · complete · 3/3 selected phases evaluated · generated Jul 4, 2026, 7:15 PM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th></tr></thead><tbody><tr><td>Phase 1</td><td>Complete surface and basic piano</td><td><strong>68</strong>/100</td></tr><tr><td>Phase 2</td><td>Piano library and working effects</td><td><strong>58</strong>/100</td></tr><tr><td>Phase 3</td><td>Complete Stage 4 system</td><td><strong>52</strong>/100</td></tr></tbody></table>
     </section>
     <section class="overview implementation-details" id="implementation-details">
       <div class="section-intro">
@@ -92,28 +92,28 @@
   <section class="stage-report" id="stage-1">
     <header class="stage-heading">
       <div><span>Phase 1</span><h2>Complete surface and basic piano</h2></div>
-      <div class="stage-score"><strong>71</strong><span>/100</span></div>
+      <div class="stage-score"><strong>68</strong><span>/100</span></div>
     </header>
 
-    <p class="summary">Solid Phase 1 pass with correct geometry, a complete decorative control inventory, and a dependable synthesized piano voice backed by real audio tests. The six-section layout, 54/46 deck/keybed split, 73-key E1–E7 keybed, and Program/Synth-only OLED placement match the spec. Visual fidelity is functional but schematic: controls render as generic CSS sliders/buttons rather than reference-faithful Nord hardware, and narrow viewports hide section headers below 480px. All four technical gates pass (26/26 tests); capture harness reports zero console errors at 1440×900 and 390×844.</p>
+    <p class="summary">A structurally honest but visually thin Phase 1. The chassis silhouette, red/dark-inset palette, 54/46 deck-keybed split, and a full 73-key E-E keybed (43 white / 30 black, correct black-key pattern and 61% height) are all in place, and a real dual-oscillator additive piano voice (triangle + sine overtone, velocity-scaled AD envelope) is truthfully declared as synthesis in IMPLEMENTATION_DETAILS.json with no recorded-sample claims. The honesty boundary is clean: every panel control is a presentation-only range/switch/button that only mutates a normalized presentation-state map, the two OLEDs (Program + Synth only) show static &#039;Init Program&#039;/&#039;Init Synth&#039; with no fabricated feature reporting, and a test verifies toggling an Organ switch leaves &#039;Piano: ready&#039; unchanged. The note lifecycle is complete and well-factored across injectable audio/MIDI/timing boundaries: pointer/multitouch/computer-key (with repeat suppression via e.repeat and code-keyed held set) / MIDI note+velocity+CC64 sustain, denied/disconnected MIDI ignored, deterministic oldest-voice stealing at a 32-voice cap, sustain latch, and blur/disconnect/unmount all-notes-off cleanup. The dominant weakness is visual fidelity: sections are rendered as a uniform flex-wrap grid of identical dark label-boxes with text captions, which is exactly the &#039;single undifferentiated control grid&#039; / &#039;uniform repeated knob matrix&#039; the visual spec lists as forbidden for organ, synth, and effects. There is no drawbar-bank rendering, no LED ladders, no distinct knob/dial industrial forms, and the program dial is a tiny slider. Section widths use the older 13/21/15/9/21/21 fractions (piano too wide, program/synth too narrow) that the current visual spec explicitly corrected as photo-contradicted, though the stage-1 prompt still instructed those values. A second real gap is test depth: the entire Web Audio backend is mocked with no-op oscillator/gain nodes and a MockOfflineAudioContext whose startRendering returns a fixed 440Hz sine regardless of input, so no test proves rendered output differs from silence or that velocity/sustain move the actual signal; the unused measureOutputLevel helper would return a constant under those mocks. Audio behavior is asserted only through voice-count and gain-math checks.</p>
 
     <div class="report-columns">
       <section>
         <h3>Category scores</h3>
         <table>
           <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
-          <tbody><tr><td>Complete visual fidelity</td><td>45%</td><td><strong>66</strong></td><td>29</td></tr><tr><td>Basic Piano functionality</td><td>25%</td><td><strong>75</strong></td><td>18</td></tr><tr><td>Surface interaction and honesty</td><td>15%</td><td><strong>75</strong></td><td>11</td></tr><tr><td>Engineering quality</td><td>15%</td><td><strong>75</strong></td><td>11</td></tr></tbody>
+          <tbody><tr><td>Complete visual fidelity</td><td>45%</td><td><strong>61</strong></td><td>27</td></tr><tr><td>Basic Piano functionality</td><td>25%</td><td><strong>75</strong></td><td>18</td></tr><tr><td>Surface interaction and honesty</td><td>15%</td><td><strong>86</strong></td><td>12</td></tr><tr><td>Engineering quality</td><td>15%</td><td><strong>61</strong></td><td>9</td></tr></tbody>
         </table>
       </section>
       <section>
         <h3>What worked</h3>
-        <ul class="findings"><li><strong>Silhouette, chassis, and geometry</strong><span>Candidate audit and hardware tests confirm 54/46 deck/keybed split and six sections at 13/21/15/9/21/21% in the documented order.</span></li><li><strong>Complete hardware inventory and placement</strong><span>163 panel controls with stable `data-control-id` values; hardware model tests assert ≥140 unique IDs, nine organ drawbars, performance wheels, and eight program buttons.</span></li><li><strong>Unified playable inputs</strong><span>Keybed tests cover pointer down/up/cancel and keyboard focus; engine tests exercise computer-key mapping with repeat suppression (`KeyA` held twice → one pressed note).</span></li><li><strong>Voice lifecycle and performance</strong><span>Engine tests verify note start/release cleanup, repeated/overlapping notes on one key, and `allNotesOff` clearing every voice.</span></li></ul>
+        <ul class="findings"><li><strong>Decorative-control boundary</strong><span>interactControl only calls setControlValue -&gt; setPresentation (a plain presentation-state map in state/instrument.ts); no control handler touches the PianoEngine, audio graph, or note lifecycle.</span></li><li><strong>Silhouette, chassis, and geometry</strong><span>Continuous red chassis with 54/46 deck/keybed split (VERTICAL_ALLOCATION.deck 0.54, keybed 0.46) applied via flex-basis in instrument.tsx; desktop capture shows one unbroken red body with the keybed as the lower band.</span></li><li><strong>Narrow retention</strong><span>Narrow capture at 390x844 shows the complete chassis, both OLEDs, and the full keybed with no clipping or horizontal overflow (capture.json narrow has empty consoleMessages/pageErrors).</span></li><li><strong>Unified playable inputs</strong><span>All four input paths funnel through one NoteLifecycle/PianoEngine: pointer (keybed.tsx handlePointerDown with setPointerCapture and y-based velocity), independent multitouch (per-pointerId map, test asserts C4/D4 independent aria-pressed), computer keys, and MIDI.</span></li></ul>
       </section>
     </div>
 
     <section class="issues">
       <h3>Priority issues</h3>
-      <ol><li>[object Object]</li><li>[object Object]</li></ol>
+      <ol><li>Panel sections render as a uniform flex-wrap grid of identical dark label-boxes with no drawbar bank, LED ladders, or distinct knob/dial forms, matching the visual spec&#039;s explicitly forbidden &#039;single undifferentiated control grid&#039; / &#039;uniform repeated knob matrix&#039; for organ, synth, and effects.</li><li>Section widths use the pre-correction fractions (13/21/15/9/21/21) that the current visual spec flags as photo-contradicted (piano too wide, program/synth too narrow); the stage-1 prompt still lists those older values, so the candidate followed its prompt but drifts from the authoritative reference photo.</li><li>All audio tests run against no-op mock nodes and a MockOfflineAudioContext returning a fixed sine, so no test proves rendered output differs from silence or that velocity/sustain/release change the actual signal; the real measureOutputLevel helper is unused. Voice behavior is asserted only via counts and gain math.</li></ol>
     </section>
 
     <section>
@@ -137,25 +137,25 @@
       <td><strong>Silhouette, chassis, and geometry</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Candidate audit and hardware tests confirm 54/46 deck/keybed split and six sections at 13/21/15/9/21/21% in the documented order.</li><li>73-key E1–E7 keybed (43 white / 30 black, 61% black-key height) rendered on a continuous red chassis with end cheeks; desktop capture fills ~97% viewport width with no scroll.</li><li>Chassis uses variant aspect ratio 3.095 via `min(97vw, calc(97vh * 3.095))`; silhouette reads as a Stage 4 study but lacks photo-exact rails, branding placement, and micro-geometry.</li></ul></td>
+      <td><ul><li>Continuous red chassis with 54/46 deck/keybed split (VERTICAL_ALLOCATION.deck 0.54, keybed 0.46) applied via flex-basis in instrument.tsx; desktop capture shows one unbroken red body with the keybed as the lower band.</li><li>Keybed geometry is accurate: 73 keys, 43 white / 30 black, black keys at 61% height and positioned by white-key offsets (keybed.tsx left calc), matching variants.json blackKeyHeightFraction 0.61.</li><li>Desktop width uses min(97vw, calc(97vh * 3.095)) targeting the 3.0951 aspect ratio and 88-97% width band; capture at 1440x900 shows no vertical scroll.</li><li>Section-order left-to-right (performance, organ, piano, program, synth, effects) matches the photo, but relative widths use the pre-correction fractions (piano 0.15 vs current spec 0.085, program 0.09 vs 0.125, synth 0.21 vs 0.25), so proportions drift from the photographed deck.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Complete hardware inventory and placement</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>163 panel controls with stable `data-control-id` values; hardware model tests assert ≥140 unique IDs, nine organ drawbars, performance wheels, and eight program buttons.</li><li>Primary OLED displays exist only in Program (&#039;Init Program&#039;) and Synth (&#039;Init Synth&#039;) sections; organ drawbar LED ladders, piano type selectors, effects matrix, and synth oscillator/filter groups are present as landmarks.</li><li>Controls use responsive flex-wrap grids rather than photo-exact absolute coordinates; density and grouping are credible but not reference-traced.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>All six sections and ~163 stable data-control-id controls are present, and displays are correctly restricted to exactly two (program-oled, synth-oled), satisfying &#039;Program/Synth as the only primary OLEDs&#039;.</li><li>Rendering is a uniform flex-wrap grid of identical dark label-boxes (panel-controls: display flex, flex-wrap wrap in styles.css), which matches the visual spec&#039;s forbidden &#039;single undifferentiated control grid&#039; (effects), &#039;uniform repeated knob matrix&#039; (synth), and &#039;generic equal-width control grid&#039; (organ).</li><li>Landmarks are logically enumerated but not visually rendered: nine drawbars appear as generic range sliders with no drawbar bank or LED ladders, the program dial is a small slider not a large dial, and knobs are visually indistinguishable from buttons in the desktop capture.</li><li>Section header labels (&#039;PERFORMANCE CONTROLS&#039;, &#039;ORGAN&#039;, &#039;PIANO&#039;...) are shown as page-style titles the real panel does not carry, reinforcing a generic-form impression.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Materials, color, typography, and displays</strong></td>
       <td>2/4</td>
       <td>50</td>
-      <td><ul><li>Desktop capture shows simplified flat CSS controls (gray slider tracks, white rectangular buttons) on a red deck — the material family is recognizable but far from the reference&#039;s dark inset panels, indexed knobs, LED ladders, and condensed legends.</li><li>Section titles are generic uppercase labels; Nord logotype, tan pitch stick, green LED states, and blue-green OLED typography from the reference photo are absent or approximated.</li><li>Candidate audit documents intentional simplification of knob/fader industrial design and micro-typography.</li></ul></td>
+      <td><ul><li>Reference colors are used from spec: chassis #79232c/#721f29, panel #3c424d, key blacks/whites, and OLED blue-green (--oled-bg / --oled-text) render as dark insets on red with teal OLED text.</li><li>Branding &#039;NORD STAGE 4&#039; is present top-left in the performance area, and white uppercase legends are applied to captions and headers.</li><li>Control materials are flat: buttons are plain #2a2a2a rounded rects, faders/knobs are native range inputs with accent-color, LEDs are small dots; there is no dimensional knob/fader/drawbar treatment, so material hierarchy is weak versus the photo.</li><li>No page errors and no marketing hero; the light neutral product-study background is used as specified.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Narrow retention</strong></td>
-      <td>2/4</td>
-      <td>50</td>
-      <td><ul><li>Narrow capture at 390×844 completes with zero page errors and zero console messages; chassis and all 73 keys remain on-screen.</li><li>CSS hides section headers and control captions below 480px to prevent clipping — instrument is inspectable but panel legends are largely illegible at narrow width.</li><li>Candidate uses a slightly taller narrow aspect (3.095/1.15) to preserve keybed legibility; structure retained but &#039;legible state&#039; is only partially met.</li></ul></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Narrow capture at 390x844 shows the complete chassis, both OLEDs, and the full keybed with no clipping or horizontal overflow (capture.json narrow has empty consoleMessages/pageErrors).</li><li>A max-width:480px media query switches the instrument to width 98vw and aspect 3.095/1.15 and hides panel headers and control captions to prevent clipping while keeping controls inspectable.</li><li>Controls remain present and operable at narrow width (still real DOM buttons/sliders), though captions are hidden so state legibility is reduced to LED/position cues only.</li><li>Keybed keys stay proportional and full-range at narrow width; the instrument remains a single inspectable unit rather than reflowing or breaking.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -168,19 +168,19 @@
       <td><strong>Unified playable inputs</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Keybed tests cover pointer down/up/cancel and keyboard focus; engine tests exercise computer-key mapping with repeat suppression (`KeyA` held twice → one pressed note).</li><li>Injectable `createMockMidiPort` drives note-on/note-off and CC64 sustain through the shared `NoteLifecycle`; MIDI denied/disconnected paths are implemented in `src/input/midi.ts`.</li><li>Status strip reports &#039;Piano: ready · Voices: 0&#039; after load; all input sources route through one lifecycle controller.</li></ul></td>
+      <td><ul><li>All four input paths funnel through one NoteLifecycle/PianoEngine: pointer (keybed.tsx handlePointerDown with setPointerCapture and y-based velocity), independent multitouch (per-pointerId map, test asserts C4/D4 independent aria-pressed), computer keys, and MIDI.</li><li>Computer-key repeat is suppressed at both the OS layer (e.repeat early-return in instrument.ts) and the model layer (computerKeysHeld set keyed by code), with a test proving a second KeyDown does not add a second voice.</li><li>MIDI handling parses note-on (vel&gt;0), note-off, note-on-vel-0-as-off, and CC64 sustain; attachMidiHandlers returns a no-op detach for &#039;disconnected&#039;/&#039;denied&#039; ports and a test confirms those events are ignored.</li><li>Focus loss cleanup is wired (window blur -&gt; blurCleanup -&gt; computerKeyCancelAll + allNotesOff) and unmount disposes the lifecycle; tests exercise blur cleanup but rely on mocked audio nodes.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Voice lifecycle and performance</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Engine tests verify note start/release cleanup, repeated/overlapping notes on one key, and `allNotesOff` clearing every voice.</li><li>Sustain tests hold voices after key release and release on pedal up; polyphony test fills 33 notes and asserts deterministic oldest-voice stealing at limit 32.</li><li>Velocity scaling and blur/disconnect cleanup are covered in engine tests with injectable timing boundaries.</li></ul></td>
+      <td><ul><li>Engine implements velocity (velocityToGain (v/127)^1.4), attack/decay AD envelope, per-note release, repeated/overlapping same-note handling (releaseVoiceForNote before re-trigger), and a 32-voice cap with deterministic oldest-voice stealing by startedAt.</li><li>Sustain latch is correct: noteOff while pedal held moves the note into sustainedNotes and keeps the voice; setSustain(false) releases them, with a test asserting voice count stays 1 then drops to 0.</li><li>allNotesOff and dispose release every voice and clear sustain state, and a stealing test with polyphony:2 confirms the active count never exceeds the cap.</li><li>Because tests run against no-op mock oscillator/gain nodes, lifecycle correctness is proven only at the voice-bookkeeping level, not on rendered audio (no attack/decay duration or steal audibility is measured).</li></ul></td>
     </tr>
     <tr>
       <td><strong>Basic source and status honesty</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>IMPLEMENTATION_DETAILS.json truthfully declares Phase 1 additive synthesis (triangle + sine overtone, AD envelope) with zero sample sources.</li><li>Verification digest confirms `sampleSources: 0` and generated strategy text matches the JSON.</li><li>Phase 1 scope allows a declared synthesis voice; no fake sample claims.</li></ul></td>
+      <td><ul><li>IMPLEMENTATION_DETAILS.json truthfully declares Phase 1 audio as &#039;honest additive synthesis (triangle + sine overtone oscillators with AD envelope)&#039;, sampleSources empty, with a note that recorded sets are Phase 2 scope.</li><li>engine.ts backs this claim: real createOscillator triangle + sine-overtone-x2 with velocity-scaled gain envelope into a masterGain(0.35) to destination, i.e. one dependable audible voice, not a buffer presented as a recording.</li><li>Status honesty is present: constructor sets &#039;ready&#039; (or &#039;error&#039; when forceError), noteOn returns -1 in error, and the surface prints &#039;Piano: ready/error ... Voices: N&#039;; a fallback status type exists though no asset-failure fallback path is needed in Phase 1.</li><li>No false provenance or recording claims anywhere; visual-audit.md and the details file both restate the synthesis-not-samples choice.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -193,13 +193,13 @@
       <td><strong>Control movement and feedback</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Every panel control type (knob, fader, drawbar, button, wheel, display) is modeled in `CONTROLS` with accessible names and section ownership.</li><li>Keybed tests assert aria-pressed state on pointer interaction; decorative control movement updates presentation state in the hardware model.</li><li>163 controls respond to pointer and keyboard activation without breaking layout.</li></ul></td>
+      <td><ul><li>Every control kind is operable and exposes state: buttons toggle aria-pressed, toggles/LEDs are role=switch with aria-checked, faders/drawbars/knobs/wheels/stick/encoder are role=slider range inputs with aria-valuemin/max/now, and displays are role=status.</li><li>Keys depress via pointer/keyboard with aria-pressed reflected and is-pressed styling; a test confirms pointer down/up flips aria-pressed and multitouch is independent.</li><li>A test iterates every control in CONTROLS and asserts a matching data-control-id exists in the DOM, and clicking a decorative switch flips aria-checked.</li><li>Focus-visible outlines are defined for both buttons and range inputs, giving visible keyboard focus; captions provide accessible names though they are hidden below 480px.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Decorative-control boundary</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Phase 1 contract excludes panel audio/system changes; only keybed notes and sustain input are functional.</li><li>IMPLEMENTATION_DETAILS and status strip scope panel controls as visual-only for this phase.</li><li>No panel knob/button tests assert audio graph mutation — decorative boundary is honest.</li></ul></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>interactControl only calls setControlValue -&gt; setPresentation (a plain presentation-state map in state/instrument.ts); no control handler touches the PianoEngine, audio graph, or note lifecycle.</li><li>OLEDs render fixed &#039;Init Program&#039; / &#039;Init Synth&#039; strings from createPresentationState and are never updated by any control, so no display reports unimplemented behavior as working.</li><li>A test toggles the Organ B3 switch and asserts aria-checked flips to true while &#039;Piano: ready&#039; remains, proving controls change presentation only and not audio/system state.</li><li>Only keybed note and CC64 sustain reach the engine; the honesty contract &#039;controls work canonically or visibly do nothing&#039; is satisfied with no fabricated success.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -210,15 +210,15 @@
             <tbody>
     <tr>
       <td><strong>Data structure and tests</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Normalized typed hardware model (`src/model/hardware.ts`) with stable IDs; keyboard geometry in `src/model/keyboard.ts`.</li><li>Feature matrix maps all 11 Phase 1 IDs to five non-empty test files; verification confirms 11/11 coverage.</li><li>Injectable audio/MIDI/timing boundaries in `src/audio/boundaries.ts` keep tests deterministic without network or devices.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Clean separation and stable IDs: normalized CONTROLS/SECTIONS/KEYBED data model, injectable AudioContextFactory/TimingBoundary/MidiInputPort boundaries, and PianoEngine/NoteLifecycle decoupled from React state.</li><li>Feature-matrix.json maps all eleven Phase 1 IDs to non-empty test files covering key-count, layout, inventory, key interaction, decorative controls, accessibility, and the four piano feature IDs.</li><li>The entire audio backend is mocked with no-op MockOscillatorNode/MockGainNode and a MockOfflineAudioContext whose startRendering returns a fixed 440Hz sine irrespective of input, so audio tests are pure state/count assertions and never cross a real signal boundary.</li><li>measureOutputLevel (a real OfflineAudioContext RMS helper) exists in engine.ts but is imported by no test, and the velocity test asserts only velocityToGain math, so no test proves output differs from silence or that velocity/sustain change rendered audio.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Runtime quality</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Sealed verification: test/typecheck/lint/build all passed; 26/26 tests in ~2.9s.</li><li>Playwright capture reports zero console messages and zero page errors at desktop and narrow profiles.</li><li>Production build produces `dist/index.html` (211 KB JS bundle); preview at `/previews/composer-2-5-fast/stage1/index.html`.</li></ul></td>
+      <td><ul><li>Both canonical captures record empty consoleMessages and empty pageErrors at 1440x900 and 390x844 (capture.json), indicating a clean runtime with no thrown errors.</li><li>Cleanup is thorough: blur -&gt; allNotesOff, MIDI detach on effect teardown, and a lifecycle dispose on unmount, so voices and listeners return to baseline.</li><li>ensureStarted resumes the AudioContext on first key press (gesture-gated), and status is surfaced as &#039;Piano: ready · Voices: N&#039; in the live status line.</li><li>The four package gates (test/typecheck/lint/build) are wired with a committed lockfile and dist/index.html present; runtime stability under repeated interaction is supported by the pointer-capture and per-pointer bookkeeping, though not stress-tested.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -227,28 +227,28 @@
   <section class="stage-report" id="stage-2">
     <header class="stage-heading">
       <div><span>Phase 2</span><h2>Piano library and working effects</h2></div>
-      <div class="stage-score"><strong>63</strong><span>/100</span></div>
+      <div class="stage-score"><strong>58</strong><span>/100</span></div>
     </header>
 
-    <p class="summary">Phase 2 extends Phase 1 with a working dual-layer piano engine, per-layer effect chains, and Master Level on one AudioContext — all four gates pass (38/38 tests) with rendered-audio assertions. The decorative boundary for Organ/Synth/Program is preserved. The main gap is sample provenance: Grand/Upright/Electric are programmatically synthesized OfflineAudioContext buffers (sampleSources: 0), honestly declared but not bundled recorded sample sets as the piano spec requires. Effects processing, bypass, and layer routing are tested; global-mode and exhaustive per-type variant coverage are partial.</p>
+    <p class="summary">A genuinely connected, honest audio phase built on a thin, schematic surface. The shared graph is real and correct — one AudioContext, per-layer Piano A/B buses, an ordered Mod1→Mod2→Delay→Amp/EQ→Comp→Reverb chain, To-Rotary send, master gain and limiter, one destination — with real dry/wet crossfades, per-unit and all-effects bypass, delay feedback+filter, and panel controls actually wired into the engine via presentationToAudioState/updateState. Real-boundary offline-render tests prove instrument distinction, velocity, layers, master level, SUSTPED, fallback, reverb wet, and combined bypass. The decisive limitation for this phase is honesty-correct but requirement-missing: Grand/Upright/Electric are OfflineAudioContext-synthesized tone sets, truthfully declared as &#039;synthesized&#039; (sampleSources: []), not the bundled recorded sample sets the phase requires — so instrumentBreadth is capped low though it is NOT the 0 reserved for generated buffers presented as recordings. Secondary gaps: within-unit effect types are largely undifferentiated (Mod1&#039;s six types collapse to one tremolo; Amp&#039;s seven types are drive-scaled; LP24/HP24 not real filters), no tests exercise Mod1/Mod2/Delay/Amp/Comp individually or per-type distinction, both layers always share one effect-state object (resolveEffectsForLayer returns the same fx in every branch), and the surface is a wireframe far from the reference photo with a narrow layout that collapses to unusable overlap.</p>
 
     <div class="report-columns">
       <section>
         <h3>Category scores</h3>
         <table>
           <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
-          <tbody><tr><td>Visual and interaction retention</td><td>10%</td><td><strong>75</strong></td><td>7</td></tr><tr><td>Piano library and performance</td><td>35%</td><td><strong>60</strong></td><td>21</td></tr><tr><td>Effects and signal graph</td><td>30%</td><td><strong>56</strong></td><td>16</td></tr><tr><td>System behavior and UX</td><td>10%</td><td><strong>75</strong></td><td>7</td></tr><tr><td>Engineering quality</td><td>15%</td><td><strong>68</strong></td><td>10</td></tr></tbody>
+          <tbody><tr><td>Visual and interaction retention</td><td>10%</td><td><strong>50</strong></td><td>5</td></tr><tr><td>Piano library and performance</td><td>35%</td><td><strong>53</strong></td><td>18</td></tr><tr><td>Effects and signal graph</td><td>30%</td><td><strong>56</strong></td><td>16</td></tr><tr><td>System behavior and UX</td><td>10%</td><td><strong>62</strong></td><td>6</td></tr><tr><td>Engineering quality</td><td>15%</td><td><strong>75</strong></td><td>11</td></tr></tbody>
         </table>
       </section>
       <section>
         <h3>What worked</h3>
-        <ul class="findings"><li><strong>Surface fidelity retention</strong><span>Stage2 visual audit confirms 73-key keybed, six-section layout, ~150 decorative controls, and Program/Synth OLED placement unchanged from Phase 1.</span></li><li><strong>Piano/effect hardware state</strong><span>Piano type LEDs, layer enable/level/octave, and performance toggles wired via control-bindings to audio state.</span></li><li><strong>Two-layer Piano behavior</strong><span>Engine tests cover layer A/B enable, focus, level fader binding, and per-layer voice ownership.</span></li><li><strong>Detailed Piano controls</strong><span>Tests assert KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res alter rendered RMS or envelope timing.</span></li></ul>
+        <ul class="findings"><li><strong>Two-layer Piano behavior</strong><span>engine.ts noteOn iterates layers A and B, applies per-layer octave shift and level, and tracks per-layer voice ownership; getActiveVoiceCountForLayer confirms it in the &#039;both layers independent ownership&#039; test (A=1, B=1, total 2).</span></li><li><strong>Input and fallback reliability</strong><span>engine.test.ts exercises pointer, computer-key (with repeat suppression), and MIDI note/velocity/CC64 sustain through the real engine, plus denied/disconnected MIDI ignored; instrument.ts wires all three plus blur cleanup.</span></li><li><strong>Shared graph and gain staging</strong><span>engine.ts builds one context: layerInputs A/B → LayerEffectChain → layerLevel → mixBus → masterGain → limiter (DynamicsCompressor threshold -3, ratio 20) → single context.destination; the shared Rotary also feeds mixBus.</span></li><li><strong>Failure and stress behavior</strong><span>Denied/disconnected MIDI is ignored (tested), forced sample failure enters a labeled playable fallback without reporting &#039;ready&#039; (tested), and forceError yields status &#039;error&#039; with noteOn returning -1.</span></li></ul>
       </section>
     </div>
 
     <section class="issues">
       <h3>Priority issues</h3>
-      <ol><li>[object Object]</li><li>[object Object]</li></ol>
+      <ol><li>Phase-2 hard requirement unmet (but declared honestly): Grand/Upright/Electric are OfflineAudioContext-synthesized tone sets, not bundled recorded sample sets. samples.ts stamps provenance &#039;synthesized&#039; and IMPLEMENTATION_DETAILS.json sets sampleSources: [] and calls them &#039;not recordings&#039; — so this is not the score-0 case of generated buffers presented as recordings, but the required recorded/redistributable-file provenance is absent, capping instrumentBreadth.</li><li>Within-unit effect-type distinction is largely unimplemented: Mod1&#039;s six spec types collapse to one sine tremolo (only Ring Mod boosts depth), Amp/EQ&#039;s seven types are drive-scaled with LP24/HP24 not realized as filters, and no rendered test proves per-type audible difference, so the spec&#039;s &#039;every listed effect type audibly distinct&#039; is not satisfied.</li><li>resolveEffectsForLayer returns the same fx object in every branch, so Piano A and B always share one effect-state; group/global-mode flags exist but do not change per-chain state, and there are no rendered tests for focus/group/global routing.</li><li>The surface is a schematic wireframe far from reference/nord-stage-4-73.jpg (plain sliders/labeled boxes rather than knobs/rockers/LED ladders/drawbars), and the 390x844 narrow layout collapses the deck into overlapping, truncated controls.</li><li>The live component never calls engine.dispose() on unmount (only lifecycle.dispose), so the AudioContext is not closed — a resource-cleanup gap not covered by tests.</li></ol>
     </section>
 
     <section>
@@ -270,15 +270,15 @@
             <tbody>
     <tr>
       <td><strong>Surface fidelity retention</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Stage2 visual audit confirms 73-key keybed, six-section layout, ~150 decorative controls, and Program/Synth OLED placement unchanged from Phase 1.</li><li>Sealed verification passed with 20/20 feature IDs including regression.phase1 mapped to inherited Phase 1 test files.</li><li>Capture harness reports zero console errors at desktop and narrow profiles.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>stage2-desktop.png is near-identical to stage1-desktop.png (only the Piano type LED and Program OLED text changed: &#039;Grand Model&#039; vs &#039;Init Program&#039;), so Phase 1 surface is retained without regression at 1440x900.</li><li>Absolute fidelity vs reference/nord-stage-4-73.jpg is low: sections are plain HTML sliders and text-labeled rectangles, not the Nord&#039;s knobs, rocker switches, LED ladders, drawbars, and dense legends; six ordered sections and the 73-key keybed are present but schematic.</li><li>stage2-narrow.png (390x844) collapses the deck into overlapping, truncated boxes that are effectively unusable for inspection, though the red chassis and full keybed survive.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Piano/effect hardware state</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Piano type LEDs, layer enable/level/octave, and performance toggles wired via control-bindings to audio state.</li><li>Effects knobs and bypass toggles update focused piano layer parameters; Master Level scales master gain.</li><li>Status bar shows load state and active voice count.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>control-bindings.ts maps panel IDs to audio state (piano-type-led-*, piano-layer-a/b-*, fx-*-bypass, fx-*-type/rate/amount/mix, fx-all-bypass, perf-master-level) and instrument.ts routes functional controls through presentationToAudioState→engine.updateState.</li><li>Type selection updates the Program OLED text (&#039;&lt;Type&gt; Model&#039;) and the active type LED, giving coherent visual feedback for the selected piano type.</li><li>Focus/target and per-layer effect state are only weakly represented: resolveEffectsForLayer returns the same fx object in every branch, so A/B effect state is shared, and the schematic panel exposes little distinct per-unit on/target display beyond generic sliders.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -291,25 +291,25 @@
       <td><strong>Distinct Piano instruments</strong></td>
       <td>1/4</td>
       <td>25</td>
-      <td><ul><li>IMPLEMENTATION_DETAILS.json declares sampleSources: 0; Grand/Upright/Electric are OfflineAudioContext-generated buffers, not bundled recordings.</li><li>Rendered-audio tests assert six types produce measurably distinct signals (signalsDiffer), and strategy text is truthful about synthesis.</li><li>Meets audibly-distinct/offline honesty but fails the recorded-sample-set requirement that drives Phase 2 piano library scoring.</li></ul></td>
+      <td><ul><li>samples.ts synthesizes all six sets via OfflineAudioContext (renderTone/buildSet) and stamps provenance: &#039;synthesized&#039;; IMPLEMENTATION_DETAILS.json lists them under generatedSources with sampleSources: [] and states Grand/Upright/Electric are &#039;audibly distinct synthesized sample sets — not recordings&#039; — honest, but NOT the bundled recorded sample sets the phase requires.</li><li>This is honesty-correct (not the score-0 case of generated buffers presented as recordings), but the required recorded/redistributable-file provenance for Grand/Upright/Electric is absent, so the requirement is substantially unmet.</li><li>Distinction is shallow: 5 root notes (C2–C6) x 2 velocity layers per type, differing only by harmonic-ratio/decay/brightness profiles; the engine.test.ts &#039;six piano types distinct&#039; test passes via signalsDiffer but this reflects synthesized profile differences, not sampled instruments.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Two-layer Piano behavior</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Engine tests cover layer A/B enable, focus, level fader binding, and per-layer voice ownership.</li><li>SUSTPED honored per layer; octave shift changes playback rate/root selection in tests.</li></ul></td>
+      <td><ul><li>engine.ts noteOn iterates layers A and B, applies per-layer octave shift and level, and tracks per-layer voice ownership; getActiveVoiceCountForLayer confirms it in the &#039;both layers independent ownership&#039; test (A=1, B=1, total 2).</li><li>Layer enable/level are real: &#039;respects layer enable and level&#039; renders onlyA vs both and asserts rms(both) &gt; rms(onlyA); layerInputs gain ramps to 0 when a layer is disabled or section is off.</li><li>Cleanup is sound (releaseVoice cancels/ramps gain and stops sources; blur/allNotesOff clear voices), but octave is derived from a single knob mapping and both layers share type selection (piano-type-led sets A and B together), a modest depth gap.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Detailed Piano controls</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Tests assert KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res alter rendered RMS or envelope timing.</li><li>Master Level changes master output gain through the limiter path.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>velocityToGain implements KB Touch (Heavy/Medium/Light) and Dyn Comp (Off/1/2/3) curves; the &#039;KB Touch and Dyn Comp change output&#039; test renders and asserts signalsDiffer, and &#039;master level scales output&#039; asserts rms(high) &gt; rms(low).</li><li>Unison (pan spread + detune), String Res (added sub-oscillator), and Soft Release (longer release except Clav) are wired in spawnVoice/applyUnison and affect the graph, so several controls are canonically audible.</li><li>Timbre is crude (timbreRate returns small playbackRate nudges from a 4-entry map, not a per-type-family timbre) and only KB Touch/Dyn Comp/master have dedicated rendered assertions — Unison, String Res, Soft Release, and Timbre are not individually verified by rendered-audio tests.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Input and fallback reliability</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Inherited Phase 1 input tests remain green: pointer, keyboard repeat suppression, MIDI mock port with CC64 sustain.</li><li>Fallback voice test enters labeled synth fallback when sample load is forced to fail.</li></ul></td>
+      <td><ul><li>engine.test.ts exercises pointer, computer-key (with repeat suppression), and MIDI note/velocity/CC64 sustain through the real engine, plus denied/disconnected MIDI ignored; instrument.ts wires all three plus blur cleanup.</li><li>Sustain honors per-layer SUSTPED: &#039;honors SUSTPED per layer&#039; asserts layer A holds and layer B releases after setSustain(true)+noteOff; polyphony limit 32 with deterministic oldest-voice stealing.</li><li>Fallback is truthful: forceSampleFail yields status &#039;fallback&#039; (never &#039;ready&#039;), fallback triangle buffer still plays (noteOn &gt; 0); soft/sostenuto beyond simple sustain is not claimed, and the engine AudioContext is not closed on component unmount (only lifecycle.dispose), a minor cleanup gap.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -322,19 +322,19 @@
       <td><strong>Shared graph and gain staging</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>effects.graph tests assert one AudioContext, ordered Mod1→Reverb chain, shared Rotary, master gain/limiter, and voice cleanup to zero.</li><li>Per-layer buses feed independent effect chains before mix bus.</li></ul></td>
+      <td><ul><li>engine.ts builds one context: layerInputs A/B → LayerEffectChain → layerLevel → mixBus → masterGain → limiter (DynamicsCompressor threshold -3, ratio 20) → single context.destination; the shared Rotary also feeds mixBus.</li><li>Gain staging uses short setTargetAtTime ramps (RAMP=0.012–0.015) on master, layer inputs, layer level, and every wet/dry to avoid clicks; masterGain scales with Master Level (value/127*0.7).</li><li>Cleanup: dispose() stops LFOs, disconnects chains/rotary/masterGain and closes the context; renderOffline/measureOutputLevel prove the whole path renders non-silent audio offline, but the live component never calls engine.dispose() on unmount.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Audible effect coverage</strong></td>
       <td>2/4</td>
       <td>50</td>
-      <td><ul><li>effects.processing tests prove bypass/wet-dry and measurable signal change for representative units.</li><li>Not every named type variant (e.g. all six Mod1 types) has individual rendered-audio assertions.</li></ul></td>
+      <td><ul><li>All seven units are real, connected nodes (not labels): Mod1 LFO→wet-gain AM, Mod2 short modulated delay+feedback, Delay (delay+filtered feedback), Amp WaveShaper drive + 3-band EQ, Compressor (DynamicsCompressor), Reverb ConvolverNode, shared Rotary LFO tremolo — so disconnected-node/label score-0 does not apply.</li><li>Only reverb has a dedicated rendered assertion (&#039;reverb wet changes rendered signal&#039;, signalsDiffer + rms&gt;0) plus a combined mod1+delay vs all-bypass difference test; Mod1, Mod2, Delay, Amp/EQ, and Compressor are not individually proven to process audio by tests.</li><li>Within-unit type distinction is largely unimplemented: Mod1&#039;s six spec types collapse to one sine tremolo (only type===2 boosts depth), Amp&#039;s seven types only scale drive by type*0.15 (LP24/HP24 not real filters, To Rotary handled separately), and no test proves any per-type audible difference the spec&#039;s &#039;every listed type audibly distinct&#039; requires.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Routing and control</strong></td>
       <td>2/4</td>
       <td>50</td>
-      <td><ul><li>Focus follows layer focus; group bypass and all-effects bypass tested.</li><li>Global mode toggles for Delay/Compressor/Reverb referenced but simplified relative to full spec panel inventory.</li></ul></td>
+      <td><ul><li>Signal order matches the spec (Mod1→Mod2→Delay→Amp/EQ→Comp→Reverb, Reverb before Rotary), per-unit dry/wet and bypass are real crossfades, all-effects bypass routes input→bypassGain around the chain, and Delay has a genuine filtered feedback loop (delayNode→filter→feedback→delayNode).</li><li>To Rotary is wired: &#039;to rotary routes layer into shared rotary&#039; asserts getEffectChain(&#039;A&#039;).isToRotary()===true and the chain zeroes its own layerLevel and opens toRotarySend into the shared Rotary input.</li><li>Routing depth is limited: resolveEffectsForLayer returns the same fx object in every branch so both layers always share one effect-state (no truly independent per-layer params), group/global-mode flags exist in state but do not change which state each chain receives, and focus-follows-layer, group, and global routing have no rendered-audio tests.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -345,15 +345,15 @@
             <tbody>
     <tr>
       <td><strong>Audible/visible feedback</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Rendered-audio tests use AnalyserNode/offline RMS utilities; effect on produces higher RMS than bypass.</li><li>Type and layer changes produce non-identical signals.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Functional controls immediately update audio via setControlValue/interactControl→syncEngineFromPresentation→engine.updateState, and the status bar shows &#039;Piano: ready · Voices: N&#039; reflecting active voice count.</li><li>Type selection produces coherent LED + OLED text feedback (&#039;&lt;Type&gt; Model&#039;); master level, layer level/enable, and effect wet/bypass changes are audible via the shared graph.</li><li>Visual feedback is thin because the surface is schematic — most effect/perf controls are generic sliders/boxes without distinct LED, meter, or value displays, so &#039;coherent display + LED + sound&#039; feedback is partial.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Failure and stress behavior</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Forced sample failure enters labeled fallback without reporting primary library ready.</li><li>Polyphony stealing and all-notes-off cleanup tests pass after rapid note bursts.</li></ul></td>
+      <td><ul><li>Denied/disconnected MIDI is ignored (tested), forced sample failure enters a labeled playable fallback without reporting &#039;ready&#039; (tested), and forceError yields status &#039;error&#039; with noteOn returning -1.</li><li>Focus loss is handled (window blur → blurCleanup stops all owned voices; sustain reset), and a 32-voice cap with deterministic oldest-voice stealing plus a master limiter guards against runaway polyphony/clipping.</li><li>Rapid effect-parameter changes ramp smoothly via setTargetAtTime, but there is no explicit test for rapid effect-change stress or sustained layered-polyphony clipping recovery.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -366,19 +366,19 @@
       <td><strong>Audio architecture</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Clear separation: samples.ts, effects-chain.ts, engine.ts orchestrator, control-bindings.ts.</li><li>IMPLEMENTATION_PLAN includes signal graph diagram and hard-gate checklist.</li></ul></td>
+      <td><ul><li>Clean boundaries: samples.ts (SampleLibrary), effects-chain.ts (LayerEffectChain + SharedRotary), engine.ts (voice/layer/bus/master), boundaries.ts injectable AudioContextFactory/TimingBoundary, and state/control-bindings.ts separating presentation from audio state.</li><li>Injectable platform APIs make tests deterministic offline (OfflineAudioContext factory, mock MIDI port, timing boundary) with no network/device dependency.</li><li>Extensibility for Phase 3 is reasonable (per-layer chains, shared Rotary, resolvable effect state), though resolveEffectsForLayer is a no-op stub and per-layer independent effect params are not yet modeled, which will need rework for Organ/Synth chains.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Real-boundary tests</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>node-web-audio-api enables deterministic rendered-audio tests in Vitest/jsdom.</li><li>Feature matrix maps all Phase 2 IDs including regression.phase1 to real test files.</li></ul></td>
+      <td><ul><li>Tests cross the real Web Audio boundary via renderOffline/OfflineAudioContext.startRendering() and signal-analysis helpers (rms, earlyRms, signalsDiffer) rather than mocks — instrument distinction, velocity direction, layer level, master level, SUSTPED, fallback, reverb wet, and bypass difference are all asserted on rendered signals.</li><li>Voice/cleanup behavior is asserted on the real engine (active voice counts to 0 after release/all-notes-off/blur; per-layer ownership counts).</li><li>Coverage gaps weaken it: no rendered test isolates Mod1/Mod2/Delay/Amp/Comp, no per-type-distinction test, and no routing test for focus/group/global or delay-feedback audibility — several required effects.processing/effects.routing behaviors rely on inspection, not measurement.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Performance and maintainability</strong></td>
-      <td>2/4</td>
-      <td>50</td>
-      <td><ul><li>Test suite ~25s dominated by six-type sample synthesis at engine init.</li><li>234 KB production bundle; architecture readable but sample generation at load adds startup cost.</li></ul></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Code is compact and consistently named with low duplication; feature-matrix.json retains all Phase 1 IDs and adds every Phase 2 ID mapped to real, non-empty test files, and Phase 1 lifecycle/inputs/status tests remain present (regression.phase1).</li><li>Voice cleanup cancels scheduled values, ramps gain, and stops sources with guarded try/catch; ramps avoid clicks and the limiter protects the master path.</li><li>Maintainability caveats: resolveEffectsForLayer is dead branching, timbreRate/effect-type mappings are ad hoc magic-number tables, and the live component leaks the AudioContext on unmount (no engine.dispose), so render/audio stability under long sessions is not fully guaranteed.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -387,28 +387,28 @@
   <section class="stage-report" id="stage-3">
     <header class="stage-heading">
       <div><span>Phase 3</span><h2>Complete Stage 4 system</h2></div>
-      <div class="stage-score"><strong>72</strong><span>/100</span></div>
+      <div class="stage-score"><strong>52</strong><span>/100</span></div>
     </header>
 
-    <p class="summary">Phase 3 delivers a credible full-system Stage 4: 32 program slots with Live mode, splits/scenes/morph/clock/transpose/panic, live organ and synth engines integrated through the inherited single-AudioContext graph, and an unsupported-controls audit. All gates pass (74/74 tests, 38/38 feature IDs). Inherited weaknesses remain: piano Grand/Upright/Electric are still synthesized buffers (sampleSources: 0), visual surface is schematic CSS from Phase 1, and LFO/rotary polish is simplified. Program round-trips and cross-engine integration are tested with rendered-audio assertions on organ/synth distinctions.</p>
+    <p class="summary">A genuinely distinct, honestly-declared audio core sits atop a Program/performance layer that is implemented as tested pure functions but is entirely disconnected from the rendered instrument. Organ (B3/Vox/Farf/Pipe additive) and Synth (Pure/Sync/Multi/Super/FM-H) engines are real, category-distinct topologies wired to the keybed through one shared AudioContext and effect path, with real-boundary rendered-audio tests. But createProgramSystem/saveToCurrentSlot/selectProgram, addMorphDestination/clearMorphSource, bpmFromTapTimes, and engine.panic() are never imported or called by App/instrument/components: the panel&#039;s program buttons, Store, list view, scene toggles, morph-assign, split, tap-tempo, and Panic are silent no-ops, and several read keys mismatch their control IDs (program-split-on vs program-split, scene-i-active vs scene-i, unread synth-filter-type). All four technical gates pass. Visual fidelity is low versus the reference (generic slider grid, no LED drawbar graphs, truncated labels), narrow layout loses controls, and the Phase 2 and Phase 3 desktop captures are pixel-identical.</p>
 
     <div class="report-columns">
       <section>
         <h3>Category scores</h3>
         <table>
           <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
-          <tbody><tr><td>Final visual fidelity</td><td>5%</td><td><strong>75</strong></td><td>3</td></tr><tr><td>Complete feature system</td><td>35%</td><td><strong>75</strong></td><td>26</td></tr><tr><td>Audio quality and integration</td><td>30%</td><td><strong>67</strong></td><td>20</td></tr><tr><td>Full-system behavior</td><td>20%</td><td><strong>75</strong></td><td>15</td></tr><tr><td>Engineering quality</td><td>10%</td><td><strong>68</strong></td><td>6</td></tr></tbody>
+          <tbody><tr><td>Final visual fidelity</td><td>5%</td><td><strong>25</strong></td><td>1</td></tr><tr><td>Complete feature system</td><td>35%</td><td><strong>43</strong></td><td>15</td></tr><tr><td>Audio quality and integration</td><td>30%</td><td><strong>76</strong></td><td>22</td></tr><tr><td>Full-system behavior</td><td>20%</td><td><strong>40</strong></td><td>8</td></tr><tr><td>Engineering quality</td><td>10%</td><td><strong>56</strong></td><td>5</td></tr></tbody>
         </table>
       </section>
       <section>
         <h3>What worked</h3>
-        <ul class="findings"><li><strong>Reference and regression retention</strong><span>Stage3 visual audit confirms 54/46 deck/keybed split, six-section layout, and Phase 1–2 chassis preserved.</span></li><li><strong>Complete hardware state fidelity</strong><span>Program OLED shows page.button and name; Synth OLED shows waveform category; split/scene/morph LEDs wired in integration tests.</span></li><li><strong>Programs and Live Mode</strong><span>programs.test.ts covers 32-slot navigation (pages/dial/list), Store/Store As, dirty indicator, edit-discard, and 8 Live auto-store slots.</span></li><li><strong>Layers, splits, scenes, and morphs</strong><span>integration.test.ts exercises splits at documented positions, Off/±6/±12 crossfades, zone assignment, Scenes I/II, morph wheel/pedal assign/clear.</span></li></ul>
+        <ul class="findings"><li><strong>Inherited graph and effects integration</strong><span>PianoEngine builds one AudioContext with piano A/B, organ (shared), and synth A/B/C buses each feeding a LayerEffectChain into a single mixBus -&gt; masterGain -&gt; DynamicsCompressor limiter -&gt; context.destination (engine.ts:82-124).</span></li><li><strong>Complete Organ system</strong><span>spawnOrganVoice (organ-voice.ts) implements per-model harmonic ratios and base waveforms (B3 sawtooth, Vox square, Farf boolean-drawbar square, Pipe sine), B3 percussion (2nd/3rd, soft/fast), key-click noise burst, and vib/chorus LFO; wired to the keybed via noteOn and a shared organ effect chain.</span></li><li><strong>Distinct engine behavior</strong><span>Engines are not renamed generic oscillators: organ uses additive harmonic stacks with per-model ratio tables (B3_RATIOS/VOX_RATIOS/PIPE_RATIOS) and Farf&#039;s binary drawbars; synth uses distinct sync/FM/supersaw topologies.</span></li><li><strong>Inherited regression reliability</strong><span>Phase 1-2 tests are retained in feature-matrix.json (visual/key/interaction/accessibility/piano/effects IDs all present) and the verification record shows test/typecheck/lint/build all passed.</span></li></ul>
       </section>
     </div>
 
     <section class="issues">
       <h3>Priority issues</h3>
-      <ol><li>[object Object]</li><li>[object Object]</li></ol>
+      <ol><li>Program/performance subsystem (programs.ts, morph assignment, tap-clock, Panic) is fully implemented and unit-tested but never imported by App/instrument/components — program buttons, Store/Store As, Live mode, list view, scenes, morph-assign, split editor, tap-tempo, and Panic are non-functional from the running instrument.</li><li>Control-ID vs read-key mismatches make several panel controls silent no-ops: program-split (read as program-split-on), program-scene-i/ii (read as *-active), program-clock-bpm (no emitting control), and synth-filter-type is never read.</li><li>hardware.bindings test only checks a prefix predicate (isFunctionalControl) and does not prove canonical behavior, so many no-op controls pass; undeclared no-op fallbacks are not listed as unsupported.</li><li>Arp scheduling (scheduleArp) spawns notes on a timer but never issues note-off for them, risking stuck/accumulating voices under sustained arp play.</li><li>Visual fidelity is low versus reference (generic slider grid, truncated labels, no LED drawbar graphs); Phase 2 and Phase 3 captures are byte-identical and narrow layout drops most controls.</li></ol>
     </section>
 
     <section>
@@ -430,15 +430,15 @@
             <tbody>
     <tr>
       <td><strong>Reference and regression retention</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Stage3 visual audit confirms 54/46 deck/keybed split, six-section layout, and Phase 1–2 chassis preserved.</li><li>Sealed captures at 1440×900 and 390×844 report zero console errors; regression.phase1 and regression.phase2 mapped in feature matrix.</li><li>Materials/typography remain simplified CSS from Phase 1 — structure retained, photo fidelity not improved.</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>stage3-desktop.png is byte-identical to stage2-desktop.png (both 132439 bytes) and stage3-narrow.png identical to stage2-narrow.png (19803 bytes) per capture.json — no visible Phase 3 surface change captured.</li><li>Versus reference/nord-stage-4-73.jpg the deck is a flat generic grid of range-slider knobs and buttons with truncated captions (&#039;Piano Layer A En…&#039;, &#039;Master Fader Assig…&#039;); the reference&#039;s clustered mini-controls, red LED drawbar graphs, and OLED program lists are absent.</li><li>Six sections are present in the documented order (Performance/Organ/Piano/Program/Synth/Layer Effects) with two OLEDs (Program, Synth), preserving gross layout and the deck/keybed split from Phase 1-2.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Complete hardware state fidelity</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Program OLED shows page.button and name; Synth OLED shows waveform category; split/scene/morph LEDs wired in integration tests.</li><li>Organ drawbar LEDs, model selectors, and synth layer groups reflect state through control bindings.</li><li>Spec-excluded controls listed in unsupported-controls.ts and stay decorative.</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Program section renders program-btn-1..8, program-store, program-store-as, program-live-mode, program-scene-i/ii, program-split, program-morph-wheel/pedal, program-dial (hardware.ts:154-168) but none drive program state — programs.ts is never imported outside its own file/test (grep of src).</li><li>Scene/split/clock hardware state cannot reflect through the panel: control IDs program-scene-i/program-scene-ii/program-split do not match the keys read in presentationToAudioState (program-scene-i-active, program-split-on, program-clock-bpm), so those toggles change nothing.</li><li>Working state feedback is limited to the Program/Synth OLED text and per-control aria values; there are no split LEDs, dirty indicator, morph indicators, or drawbar LED graphs bound to real state in the rendered UI.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -449,27 +449,27 @@
             <tbody>
     <tr>
       <td><strong>Programs and Live Mode</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>programs.test.ts covers 32-slot navigation (pages/dial/list), Store/Store As, dirty indicator, edit-discard, and 8 Live auto-store slots.</li><li>Eight factory programs shipped; round-trip serialization restores supported state fields.</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>programs.ts implements 32 slots + 8 Live, Store/Store As with naming, dirty/edit-discard (selectProgram/saveToCurrentSlot/autoStoreLive) and 8 factory seeds, all covered by 11 tests in programs.test.ts.</li><li>None of it is reachable from the instrument: App.tsx -&gt; Instrument -&gt; SectionPanel -&gt; DecorativeControl only calls instrument.interactControl, and useInstrument (state/instrument.ts) never imports programs.ts — createProgramSystem/loadCurrentSlot/selectProgram appear only inside programs.ts and its test (grep).</li><li>Clicking program-btn-1, program-store, program-live-mode, or program-dial merely toggles/sets a presentation value that presentationToAudioState ignores; there is no numeric list-view UI mounted at all.</li><li>Round-trip is therefore proven only at the pure-function level, not exercised through the running instrument as the rubric guidance requires.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Layers, splits, scenes, and morphs</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>integration.test.ts exercises splits at documented positions, Off/±6/±12 crossfades, zone assignment, Scenes I/II, morph wheel/pedal assign/clear.</li><li>Master clock BPM, transpose ±6, and Panic covered in morph-clock and integration tests.</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Zones/splits (zones.ts: 11 positions C2-C7, Off/±6/±12 crossfades), morph interpolation (morph-clock.ts), and scenes are implemented and unit-tested (integration.test.ts).</li><li>Disconnected from the UI: addMorphDestination/clearMorphSource/bpmFromTapTimes are referenced only in morph-clock.ts + tests; there is no split-point editor, no morph-assign flow, and program-split/program-scene-* buttons are no-ops due to ID mismatches with the reader.</li><li>Transpose is the one performance control genuinely bound from the panel (program-transpose knob -&gt; performance.transpose, clamped ±6 in control-bindings.ts:110).</li><li>Panic is not wired: engine.panic() is never called from useInstrument and there is no perf-panic click handler; tap-tempo clock (program-clock-bpm) is read but no control emits that key.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Complete Organ system</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>organ.test.ts covers two-layer note lifecycle, B3/Vox/Farf/Pipe spectral distinctions via signalsDiffer, drawbar level changes, percussion, vibrato/chorus toggles.</li><li>Shared effect chain and rotary slow/fast routing tested with rendered audio.</li></ul></td>
+      <td><ul><li>spawnOrganVoice (organ-voice.ts) implements per-model harmonic ratios and base waveforms (B3 sawtooth, Vox square, Farf boolean-drawbar square, Pipe sine), B3 percussion (2nd/3rd, soft/fast), key-click noise burst, and vib/chorus LFO; wired to the keybed via noteOn and a shared organ effect chain.</li><li>organ.test.ts proves distinct B3/Vox/Farf/Pipe spectra, drawbar changes altering rendered audio (signalsDiffer), percussion raising earlyRms, rotary routing changing the signal, and voice cleanup to zero.</li><li>Organ drawbars (organ-drawbar-1..9), model select, percussion, key-click, and rotary route ARE bound through presentationToAudioState (control-bindings.ts:67-85), so the organ plays and responds from the panel.</li><li>Gaps: vib/chorus C1-C3 vs V1-V3 depth is coarsely approximated, rotary acceleration is a shared ramp, and organ hardware-state feedback (drawbar LED graphs) is not rendered.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Complete Synth system</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>synth.test.ts covers three layers, Pure/Sync/Multi/Super/FM-H waveform distinctions, filter/envelope parameter effects, poly/mono/legato, glide, unison, deterministic arp/gate.</li><li>LFO settings stored and partially exercised via filter/resonance; full LFO audio modulation simplified per candidate audit.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>createSynthOscillators (synth-voice.ts) gives five categorically distinct topologies: single osc (Pure), hard-sync master+waveshaper (Sync), detuned Multi/Super stacks with count scaling on Osc Ctrl, and FM operator pair — category-correct Osc Ctrl (categoryOscCtrlEffect returns 0 for Pure).</li><li>createSynthFilter implements LP12/LP24/HP/BP with tracking, resonance, tanh drive; synth.test.ts proves category distinctness, filter freq/type/resonance and unison changes in rendered audio.</li><li>Panel gaps: synth-filter-type control exists (hardware.ts:189) but presentationToAudioState never reads it, and waveform category/voice-mode are not applied from the panel — synthCategoryFromPresentation/voiceModeFromPresentation are exported but never called, so category/filter-type only change via loaded programs, which themselves are unreachable.</li><li>Arp is shallow: scheduleArp spawns notes on an interval but never releases them (no note-off in the timer) risking stuck voices, and arp direction/hold/run/clock-sync are proven only for the pure buildArpSequence, not as rendered timed audio.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -482,19 +482,19 @@
       <td><strong>Distinct engine behavior</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>Organ models and synth waveform families produce measurably distinct offline-rendered signals in dedicated tests.</li><li>Piano types remain synthesized OfflineAudioContext profiles — audibly distinct but not recorded sample sets.</li></ul></td>
+      <td><ul><li>Engines are not renamed generic oscillators: organ uses additive harmonic stacks with per-model ratio tables (B3_RATIOS/VOX_RATIOS/PIPE_RATIOS) and Farf&#039;s binary drawbars; synth uses distinct sync/FM/supersaw topologies.</li><li>signalsDiffer assertions confirm B3 vs Vox vs Farf vs Pipe and Pure vs Sync and Multi vs FM-H render measurably different spectra (organ.test.ts, synth.test.ts).</li><li>Distinctness is proven for the sound engines that play from the keybed; it is not, however, reachable through the disconnected program/patch-selection UI, so audible variety in normal use depends on the few panel-bound controls.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Inherited graph and effects integration</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>IMPLEMENTATION_DETAILS declares one AudioContext: piano A/B buses, shared organ chain, synth A/B/C chains, shared Rotary, master gain/limiter.</li><li>integration.test.ts verifies organ and synth voices route through inherited effect graph without second context.</li></ul></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>PianoEngine builds one AudioContext with piano A/B, organ (shared), and synth A/B/C buses each feeding a LayerEffectChain into a single mixBus -&gt; masterGain -&gt; DynamicsCompressor limiter -&gt; context.destination (engine.ts:82-124).</li><li>A single SharedRotary instance is fed by all effect chains; integration.test.ts asserts getAudioContext() is identical across piano/organ/synth playback and organ layers share one chain.</li><li>Master level and per-layer levels are set via setTargetAtTime ramps with morph applied through applyMorphToValue; nothing bypasses the master path.</li><li>Minor smell: resolveEffectsForLayer(&#039;B&#039;) has a dead branch that always returns the global effects object, so per-layer-B effect differentiation is nominal.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Musical quality, latency, and load</strong></td>
       <td>2/4</td>
       <td>50</td>
-      <td><ul><li>Test suite ~49s at seal; sample synthesis at init dominates startup.</li><li>Rotary acceleration uses shared ramp approximation; layered play cleanup tested but musical polish/latency not deeply profiled.</li></ul></td>
+      <td><ul><li>MAX_POLYPHONY=32 with deterministic oldest-voice stealing, ramped attack/release, and a -3dB/20:1 limiter guard against clipping; allNotesOff/dispose return voice count to zero (organ.test.ts, engine.test.ts).</li><li>Capture console shows only benign repeated &#039;AudioContext was not allowed to start&#039; autoplay warnings and no pageErrors (stage3-capture.json).</li><li>Arp scheduling never issues note-off for arp-spawned voices (scheduleArp in engine.ts), so held arp play accumulates voices until stealing kicks in — a latency/CPU and stuck-note risk under sustained integrated play.</li><li>Layered/split musical quality cannot be exercised through the UI because splits/scenes/programs are not wired, limiting demonstrable real-use load behavior.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -505,27 +505,27 @@
             <tbody>
     <tr>
       <td><strong>Canonical state round-trip</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>programs.test.ts round-trips piano layers, effects params, splits, scenes, morph assignments, and focus state across save/load.</li><li>system.integration feature ID mapped to programs.test.ts and integration.test.ts.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>audioToSerializable/applySerializableToAudio serialize all supported state except Master Level (honestly documented) and programs.test.ts proves slot round-trip restores piano/organ/synth/effects/split/scene/morph/clock fields.</li><li>Round-trip is never driven by the instrument: no UI path calls loadCurrentSlot/saveToCurrentSlot, so a user cannot save then reload a program and observe restored state.</li><li>restorePrograms/persistPrograms handle localStorage with 32/8 length guards, but persistence too is only invoked in tests, not from the mounted app.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Required hardware bindings</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>hardware.bindings tested via integration.test.ts; unsupported-controls.ts documents spec-excluded panel IDs.</li><li>No silent no-op claims on required controls — excluded items honestly decorative.</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>The hardware.bindings test (integration.test.ts:123) only checks that isFunctionalControl(id) returns true, and isFunctionalControl merely prefix-matches (&#039;program-&#039;/&#039;synth-&#039;/&#039;organ-&#039;/&#039;fx-&#039;) without proving any behavior — a rubber stamp.</li><li>Many prefix-&#039;passing&#039; controls are silent no-ops: program-btn-1..8, program-store/store-as, program-live-mode, program-scene-i/ii, program-split, program-morph-wheel/pedal, perf-panic, and synth-filter-type either read a mismatched key or are never read by presentationToAudioState.</li><li>The spec-excluded list (unsupported-controls.ts) is small (5 IDs) and does not account for the many program/performance controls that render but do nothing — those are undeclared no-op fallbacks, which the rubric scores 0.</li><li>Genuinely bound controls do exist (master level, mod wheel, transpose, piano type/level/octave, organ drawbars/model/percussion, synth level/osc-ctrl/filter-freq/res), so the layer is partially functional rather than wholly broken.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Cross-system workflows</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Integration tests combine program change with split/scene state, morph interpolation, and multi-engine focus routing.</li><li>Panic clears voices across piano/organ/synth paths.</li></ul></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>Engines can be layered from the keybed (noteOn fans out to piano A/B, organ A/B, synth A/B/C with zone/scene gating in engine.ts:350-399), so simultaneous multi-engine play works when layers are enabled via their bound enables.</li><li>Cross-system workflows that define Phase 3 — selecting a program, switching scenes, assigning a morph, editing a split, tapping the clock, hitting Panic — are not operable from the running instrument, so the pieces do not function as one system for a user.</li><li>Scene gating and morph are honored inside applyState only if state is mutated programmatically; the panel controls that should mutate them are disconnected.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Inherited regression reliability</strong></td>
       <td>3/4</td>
       <td>75</td>
-      <td><ul><li>All Phase 1–2 test files retained and green; regression.phase2 mapped to engine.test.ts and integration.test.ts.</li><li>Verification: 38/38 required features, four package gates pass.</li></ul></td>
+      <td><ul><li>Phase 1-2 tests are retained in feature-matrix.json (visual/key/interaction/accessibility/piano/effects IDs all present) and the verification record shows test/typecheck/lint/build all passed.</li><li>Piano library, two-layer behavior, velocity controls, pedals, fallback, and the effects graph/routing/processing remain covered by engine.test.ts (23 tests) with real offline-render assertions.</li><li>Narrow retention regressed: stage3-narrow.png collapses most controls into a few blobs with only two OLEDs legible, so responsive inspection of the surface is degraded rather than merely reflowed.</li><li>Inherited Phase 2 note: Grand/Upright/Electric remain synthesized (honestly declared), which is honest but does not meet the Phase 2 recorded-sample requirement — carried forward here.</li></ul></td>
     </tr></tbody>
           </table>
         </section>
@@ -536,21 +536,21 @@
             <tbody>
     <tr>
       <td><strong>System architecture</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>Clear module boundaries: programs.ts, organ-voice.ts, synth-voice.ts, zones.ts, morph-clock.ts, program-types.ts.</li><li>Canonical serializable program state with control-bindings wiring panel to engines.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Clear module boundaries: audio/ (engine, per-engine voices, effects-chain, zones, morph-clock, program-types), model/ (hardware, keyboard), state/ (programs, control-bindings, instrument), input/, components/ — with injectable AudioContext/timing/MIDI boundaries.</li><li>One-context routing, serializable program state, and per-engine voice modules are well-factored and extensible.</li><li>The central architectural flaw is that the state/program/performance layer is not connected to the presentation layer: useInstrument routes everything through a single presentationToAudioState mapping and never owns a ProgramSystemState, so an entire designed subsystem is dead relative to the UI.</li><li>Dead/loose ends: resolveEffectsForLayer&#039;s no-op branch, exported-but-unused synthCategoryFromPresentation/voiceModeFromPresentation, and control-ID/read-key mismatches indicate incomplete integration.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Tests and maintainability</strong></td>
-      <td>3/4</td>
-      <td>75</td>
-      <td><ul><li>74 tests across 9 files; feature matrix maps every Phase 1–3 ID.</li><li>Rendered-audio helpers reused from Phase 2; dedicated organ/synth/program/integration test modules.</li></ul></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Audio tests are real-boundary and deterministic (renderOffline + rms/earlyRms/signalsDiffer), meaningfully proving engine distinctness, filter/drawbar/percussion/rotary effects, and cleanup — a genuine strength.</li><li>Coverage is skewed to pure functions and engine internals; there is essentially no UI-integration test (App.test.tsx is 1 trivial test), so the disconnection between controls and the program/performance workflow went unproven.</li><li>The hardware.bindings test asserts a prefix predicate rather than actual canonical behavior, giving false assurance for controls that do nothing.</li><li>Naming and modularity are otherwise clean and consistent (typed program-types, per-engine files), aiding maintainability.</li></ul></td>
     </tr>
     <tr>
       <td><strong>Runtime performance</strong></td>
-      <td>2/4</td>
-      <td>50</td>
-      <td><ul><li>Seal test duration ~50s; 252 KB JS bundle.</li><li>Zero capture console errors; voice cleanup tests pass but load-time synthesis remains costly.</li></ul></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Captures report no page errors at 1440x900 and 390x844; only benign autoplay AudioContext warnings appear (stage3-capture.json).</li><li>Voice/timer cleanup is handled (allNotesOff clears arp interval and sustained notes; dispose closes context and disconnects nodes) and tests confirm voice counts return to baseline.</li><li>setTargetAtTime ramps on levels/master avoid zipper noise and the limiter caps output; React state updates are memoized in useInstrument.</li><li>Residual risk: arp-spawned voices are never explicitly released, so long arp runs can grow node/voice counts until stealing intervenes.</li></ul></td>
     </tr></tbody>
           </table>
         </section>

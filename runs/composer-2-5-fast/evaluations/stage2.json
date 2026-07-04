@@ -4,41 +4,41 @@
   "stage": 2,
   "stageName": "Piano library and working effects",
   "status": "complete",
-  "evaluator": "independent-evaluator (Composer)",
-  "evaluatedAt": "2026-07-04T08:00:00.000Z",
-  "summary": "Phase 2 extends Phase 1 with a working dual-layer piano engine, per-layer effect chains, and Master Level on one AudioContext — all four gates pass (38/38 tests) with rendered-audio assertions. The decorative boundary for Organ/Synth/Program is preserved. The main gap is sample provenance: Grand/Upright/Electric are programmatically synthesized OfflineAudioContext buffers (sampleSources: 0), honestly declared but not bundled recorded sample sets as the piano spec requires. Effects processing, bypass, and layer routing are tested; global-mode and exhaustive per-type variant coverage are partial.",
-  "score": 63.2,
-  "rawScore": 63.2,
+  "evaluator": "independent-agent (opus-4.8)",
+  "evaluatedAt": "2026-07-04T00:00:00.000Z",
+  "summary": "A genuinely connected, honest audio phase built on a thin, schematic surface. The shared graph is real and correct — one AudioContext, per-layer Piano A/B buses, an ordered Mod1→Mod2→Delay→Amp/EQ→Comp→Reverb chain, To-Rotary send, master gain and limiter, one destination — with real dry/wet crossfades, per-unit and all-effects bypass, delay feedback+filter, and panel controls actually wired into the engine via presentationToAudioState/updateState. Real-boundary offline-render tests prove instrument distinction, velocity, layers, master level, SUSTPED, fallback, reverb wet, and combined bypass. The decisive limitation for this phase is honesty-correct but requirement-missing: Grand/Upright/Electric are OfflineAudioContext-synthesized tone sets, truthfully declared as 'synthesized' (sampleSources: []), not the bundled recorded sample sets the phase requires — so instrumentBreadth is capped low though it is NOT the 0 reserved for generated buffers presented as recordings. Secondary gaps: within-unit effect types are largely undifferentiated (Mod1's six types collapse to one tremolo; Amp's seven types are drive-scaled; LP24/HP24 not real filters), no tests exercise Mod1/Mod2/Delay/Amp/Comp individually or per-type distinction, both layers always share one effect-state object (resolveEffectsForLayer returns the same fx in every branch), and the surface is a wireframe far from the reference photo with a narrow layout that collapses to unusable overlap.",
+  "score": 58.2,
+  "rawScore": 58.2,
   "categories": [
     {
       "id": "visualRetention",
       "label": "Visual and interaction retention",
       "weight": 10,
-      "score": 75,
-      "contribution": 7.5,
+      "score": 50,
+      "contribution": 5,
       "criteria": [
         {
           "id": "surfaceRetention",
           "label": "Surface fidelity retention",
           "weight": 60,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "Stage2 visual audit confirms 73-key keybed, six-section layout, ~150 decorative controls, and Program/Synth OLED placement unchanged from Phase 1.",
-            "Sealed verification passed with 20/20 feature IDs including regression.phase1 mapped to inherited Phase 1 test files.",
-            "Capture harness reports zero console errors at desktop and narrow profiles."
+            "stage2-desktop.png is near-identical to stage1-desktop.png (only the Piano type LED and Program OLED text changed: 'Grand Model' vs 'Init Program'), so Phase 1 surface is retained without regression at 1440x900.",
+            "Absolute fidelity vs reference/nord-stage-4-73.jpg is low: sections are plain HTML sliders and text-labeled rectangles, not the Nord's knobs, rocker switches, LED ladders, drawbars, and dense legends; six ordered sections and the 73-key keybed are present but schematic.",
+            "stage2-narrow.png (390x844) collapses the deck into overlapping, truncated boxes that are effectively unusable for inspection, though the red chassis and full keybed survive."
           ]
         },
         {
           "id": "functionalHardwareState",
           "label": "Piano/effect hardware state",
           "weight": 40,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "Piano type LEDs, layer enable/level/octave, and performance toggles wired via control-bindings to audio state.",
-            "Effects knobs and bypass toggles update focused piano layer parameters; Master Level scales master gain.",
-            "Status bar shows load state and active voice count."
+            "control-bindings.ts maps panel IDs to audio state (piano-type-led-*, piano-layer-a/b-*, fx-*-bypass, fx-*-type/rate/amount/mix, fx-all-bypass, perf-master-level) and instrument.ts routes functional controls through presentationToAudioState→engine.updateState.",
+            "Type selection updates the Program OLED text ('<Type> Model') and the active type LED, giving coherent visual feedback for the selected piano type.",
+            "Focus/target and per-layer effect state are only weakly represented: resolveEffectsForLayer returns the same fx object in every branch, so A/B effect state is shared, and the schematic panel exposes little distinct per-unit on/target display beyond generic sliders."
           ]
         }
       ]
@@ -47,8 +47,8 @@
       "id": "pianoLibrary",
       "label": "Piano library and performance",
       "weight": 35,
-      "score": 60,
-      "contribution": 21,
+      "score": 53.8,
+      "contribution": 18.8,
       "criteria": [
         {
           "id": "instrumentBreadth",
@@ -57,9 +57,9 @@
           "rating": 1,
           "score": 25,
           "evidence": [
-            "IMPLEMENTATION_DETAILS.json declares sampleSources: 0; Grand/Upright/Electric are OfflineAudioContext-generated buffers, not bundled recordings.",
-            "Rendered-audio tests assert six types produce measurably distinct signals (signalsDiffer), and strategy text is truthful about synthesis.",
-            "Meets audibly-distinct/offline honesty but fails the recorded-sample-set requirement that drives Phase 2 piano library scoring."
+            "samples.ts synthesizes all six sets via OfflineAudioContext (renderTone/buildSet) and stamps provenance: 'synthesized'; IMPLEMENTATION_DETAILS.json lists them under generatedSources with sampleSources: [] and states Grand/Upright/Electric are 'audibly distinct synthesized sample sets — not recordings' — honest, but NOT the bundled recorded sample sets the phase requires.",
+            "This is honesty-correct (not the score-0 case of generated buffers presented as recordings), but the required recorded/redistributable-file provenance for Grand/Upright/Electric is absent, so the requirement is substantially unmet.",
+            "Distinction is shallow: 5 root notes (C2–C6) x 2 velocity layers per type, differing only by harmonic-ratio/decay/brightness profiles; the engine.test.ts 'six piano types distinct' test passes via signalsDiffer but this reflects synthesized profile differences, not sampled instruments."
           ]
         },
         {
@@ -69,19 +69,21 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Engine tests cover layer A/B enable, focus, level fader binding, and per-layer voice ownership.",
-            "SUSTPED honored per layer; octave shift changes playback rate/root selection in tests."
+            "engine.ts noteOn iterates layers A and B, applies per-layer octave shift and level, and tracks per-layer voice ownership; getActiveVoiceCountForLayer confirms it in the 'both layers independent ownership' test (A=1, B=1, total 2).",
+            "Layer enable/level are real: 'respects layer enable and level' renders onlyA vs both and asserts rms(both) > rms(onlyA); layerInputs gain ramps to 0 when a layer is disabled or section is off.",
+            "Cleanup is sound (releaseVoice cancels/ramps gain and stops sources; blur/allNotesOff clear voices), but octave is derived from a single knob mapping and both layers share type selection (piano-type-led sets A and B together), a modest depth gap."
           ]
         },
         {
           "id": "pianoControls",
           "label": "Detailed Piano controls",
           "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "Tests assert KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res alter rendered RMS or envelope timing.",
-            "Master Level changes master output gain through the limiter path."
+            "velocityToGain implements KB Touch (Heavy/Medium/Light) and Dyn Comp (Off/1/2/3) curves; the 'KB Touch and Dyn Comp change output' test renders and asserts signalsDiffer, and 'master level scales output' asserts rms(high) > rms(low).",
+            "Unison (pan spread + detune), String Res (added sub-oscillator), and Soft Release (longer release except Clav) are wired in spawnVoice/applyUnison and affect the graph, so several controls are canonically audible.",
+            "Timbre is crude (timbreRate returns small playbackRate nudges from a 4-entry map, not a per-type-family timbre) and only KB Touch/Dyn Comp/master have dedicated rendered assertions — Unison, String Res, Soft Release, and Timbre are not individually verified by rendered-audio tests."
           ]
         },
         {
@@ -91,8 +93,9 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Inherited Phase 1 input tests remain green: pointer, keyboard repeat suppression, MIDI mock port with CC64 sustain.",
-            "Fallback voice test enters labeled synth fallback when sample load is forced to fail."
+            "engine.test.ts exercises pointer, computer-key (with repeat suppression), and MIDI note/velocity/CC64 sustain through the real engine, plus denied/disconnected MIDI ignored; instrument.ts wires all three plus blur cleanup.",
+            "Sustain honors per-layer SUSTPED: 'honors SUSTPED per layer' asserts layer A holds and layer B releases after setSustain(true)+noteOff; polyphony limit 32 with deterministic oldest-voice stealing.",
+            "Fallback is truthful: forceSampleFail yields status 'fallback' (never 'ready'), fallback triangle buffer still plays (noteOn > 0); soft/sostenuto beyond simple sustain is not claimed, and the engine AudioContext is not closed on component unmount (only lifecycle.dispose), a minor cleanup gap."
           ]
         }
       ]
@@ -111,8 +114,9 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "effects.graph tests assert one AudioContext, ordered Mod1→Reverb chain, shared Rotary, master gain/limiter, and voice cleanup to zero.",
-            "Per-layer buses feed independent effect chains before mix bus."
+            "engine.ts builds one context: layerInputs A/B → LayerEffectChain → layerLevel → mixBus → masterGain → limiter (DynamicsCompressor threshold -3, ratio 20) → single context.destination; the shared Rotary also feeds mixBus.",
+            "Gain staging uses short setTargetAtTime ramps (RAMP=0.012–0.015) on master, layer inputs, layer level, and every wet/dry to avoid clicks; masterGain scales with Master Level (value/127*0.7).",
+            "Cleanup: dispose() stops LFOs, disconnects chains/rotary/masterGain and closes the context; renderOffline/measureOutputLevel prove the whole path renders non-silent audio offline, but the live component never calls engine.dispose() on unmount."
           ]
         },
         {
@@ -122,8 +126,9 @@
           "rating": 2,
           "score": 50,
           "evidence": [
-            "effects.processing tests prove bypass/wet-dry and measurable signal change for representative units.",
-            "Not every named type variant (e.g. all six Mod1 types) has individual rendered-audio assertions."
+            "All seven units are real, connected nodes (not labels): Mod1 LFO→wet-gain AM, Mod2 short modulated delay+feedback, Delay (delay+filtered feedback), Amp WaveShaper drive + 3-band EQ, Compressor (DynamicsCompressor), Reverb ConvolverNode, shared Rotary LFO tremolo — so disconnected-node/label score-0 does not apply.",
+            "Only reverb has a dedicated rendered assertion ('reverb wet changes rendered signal', signalsDiffer + rms>0) plus a combined mod1+delay vs all-bypass difference test; Mod1, Mod2, Delay, Amp/EQ, and Compressor are not individually proven to process audio by tests.",
+            "Within-unit type distinction is largely unimplemented: Mod1's six spec types collapse to one sine tremolo (only type===2 boosts depth), Amp's seven types only scale drive by type*0.15 (LP24/HP24 not real filters, To Rotary handled separately), and no test proves any per-type audible difference the spec's 'every listed type audibly distinct' requires."
           ]
         },
         {
@@ -133,8 +138,9 @@
           "rating": 2,
           "score": 50,
           "evidence": [
-            "Focus follows layer focus; group bypass and all-effects bypass tested.",
-            "Global mode toggles for Delay/Compressor/Reverb referenced but simplified relative to full spec panel inventory."
+            "Signal order matches the spec (Mod1→Mod2→Delay→Amp/EQ→Comp→Reverb, Reverb before Rotary), per-unit dry/wet and bypass are real crossfades, all-effects bypass routes input→bypassGain around the chain, and Delay has a genuine filtered feedback loop (delayNode→filter→feedback→delayNode).",
+            "To Rotary is wired: 'to rotary routes layer into shared rotary' asserts getEffectChain('A').isToRotary()===true and the chain zeroes its own layerLevel and opens toRotarySend into the shared Rotary input.",
+            "Routing depth is limited: resolveEffectsForLayer returns the same fx object in every branch so both layers always share one effect-state (no truly independent per-layer params), group/global-mode flags exist in state but do not change which state each chain receives, and focus-follows-layer, group, and global routing have no rendered-audio tests."
           ]
         }
       ]
@@ -143,18 +149,19 @@
       "id": "systemBehavior",
       "label": "System behavior and UX",
       "weight": 10,
-      "score": 75,
-      "contribution": 7.5,
+      "score": 62.5,
+      "contribution": 6.3,
       "criteria": [
         {
           "id": "audibleFeedback",
           "label": "Audible/visible feedback",
           "weight": 50,
-          "rating": 3,
-          "score": 75,
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "Rendered-audio tests use AnalyserNode/offline RMS utilities; effect on produces higher RMS than bypass.",
-            "Type and layer changes produce non-identical signals."
+            "Functional controls immediately update audio via setControlValue/interactControl→syncEngineFromPresentation→engine.updateState, and the status bar shows 'Piano: ready · Voices: N' reflecting active voice count.",
+            "Type selection produces coherent LED + OLED text feedback ('<Type> Model'); master level, layer level/enable, and effect wet/bypass changes are audible via the shared graph.",
+            "Visual feedback is thin because the surface is schematic — most effect/perf controls are generic sliders/boxes without distinct LED, meter, or value displays, so 'coherent display + LED + sound' feedback is partial."
           ]
         },
         {
@@ -164,8 +171,9 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Forced sample failure enters labeled fallback without reporting primary library ready.",
-            "Polyphony stealing and all-notes-off cleanup tests pass after rapid note bursts."
+            "Denied/disconnected MIDI is ignored (tested), forced sample failure enters a labeled playable fallback without reporting 'ready' (tested), and forceError yields status 'error' with noteOn returning -1.",
+            "Focus loss is handled (window blur → blurCleanup stops all owned voices; sustain reset), and a 32-voice cap with deterministic oldest-voice stealing plus a master limiter guards against runaway polyphony/clipping.",
+            "Rapid effect-parameter changes ramp smoothly via setTargetAtTime, but there is no explicit test for rapid effect-change stress or sustained layered-polyphony clipping recovery."
           ]
         }
       ]
@@ -174,8 +182,8 @@
       "id": "engineeringQuality",
       "label": "Engineering quality",
       "weight": 15,
-      "score": 68.8,
-      "contribution": 10.3,
+      "score": 75,
+      "contribution": 11.3,
       "criteria": [
         {
           "id": "audioArchitecture",
@@ -184,8 +192,9 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Clear separation: samples.ts, effects-chain.ts, engine.ts orchestrator, control-bindings.ts.",
-            "IMPLEMENTATION_PLAN includes signal graph diagram and hard-gate checklist."
+            "Clean boundaries: samples.ts (SampleLibrary), effects-chain.ts (LayerEffectChain + SharedRotary), engine.ts (voice/layer/bus/master), boundaries.ts injectable AudioContextFactory/TimingBoundary, and state/control-bindings.ts separating presentation from audio state.",
+            "Injectable platform APIs make tests deterministic offline (OfflineAudioContext factory, mock MIDI port, timing boundary) with no network/device dependency.",
+            "Extensibility for Phase 3 is reasonable (per-layer chains, shared Rotary, resolvable effect state), though resolveEffectsForLayer is a no-op stub and per-layer independent effect params are not yet modeled, which will need rework for Organ/Synth chains."
           ]
         },
         {
@@ -195,19 +204,21 @@
           "rating": 3,
           "score": 75,
           "evidence": [
-            "node-web-audio-api enables deterministic rendered-audio tests in Vitest/jsdom.",
-            "Feature matrix maps all Phase 2 IDs including regression.phase1 to real test files."
+            "Tests cross the real Web Audio boundary via renderOffline/OfflineAudioContext.startRendering() and signal-analysis helpers (rms, earlyRms, signalsDiffer) rather than mocks — instrument distinction, velocity direction, layer level, master level, SUSTPED, fallback, reverb wet, and bypass difference are all asserted on rendered signals.",
+            "Voice/cleanup behavior is asserted on the real engine (active voice counts to 0 after release/all-notes-off/blur; per-layer ownership counts).",
+            "Coverage gaps weaken it: no rendered test isolates Mod1/Mod2/Delay/Amp/Comp, no per-type-distinction test, and no routing test for focus/group/global or delay-feedback audibility — several required effects.processing/effects.routing behaviors rely on inspection, not measurement."
           ]
         },
         {
           "id": "performanceMaintainability",
           "label": "Performance and maintainability",
           "weight": 25,
-          "rating": 2,
-          "score": 50,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "Test suite ~25s dominated by six-type sample synthesis at engine init.",
-            "234 KB production bundle; architecture readable but sample generation at load adds startup cost."
+            "Code is compact and consistently named with low duplication; feature-matrix.json retains all Phase 1 IDs and adds every Phase 2 ID mapped to real, non-empty test files, and Phase 1 lifecycle/inputs/status tests remain present (regression.phase1).",
+            "Voice cleanup cancels scheduled values, ramps gain, and stops sources with guarded try/catch; ramps avoid clicks and the limiter protects the master path.",
+            "Maintainability caveats: resolveEffectsForLayer is dead branching, timbreRate/effect-type mappings are ad hoc magic-number tables, and the live component leaks the AudioContext on unmount (no engine.dispose), so render/audio stability under long sessions is not fully guaranteed."
           ]
         }
       ]
@@ -221,28 +232,28 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "durationMs": 25081,
+        "durationMs": 29792,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "durationMs": 1199,
+        "durationMs": 1280,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "durationMs": 340,
+        "durationMs": 577,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "durationMs": 1321,
+        "durationMs": 1478,
         "detail": "Passed"
       },
       {
@@ -256,13 +267,23 @@
   "issues": [
     {
       "severity": "major",
-      "category": "pianoLibrary",
-      "description": "Grand/Upright/Electric are synthesized buffers, not bundled recorded sample sets (sampleSources: 0); truthful declaration limits rubric score on instrumentBreadth."
+      "detail": "Phase-2 hard requirement unmet (but declared honestly): Grand/Upright/Electric are OfflineAudioContext-synthesized tone sets, not bundled recorded sample sets. samples.ts stamps provenance 'synthesized' and IMPLEMENTATION_DETAILS.json sets sampleSources: [] and calls them 'not recordings' — so this is not the score-0 case of generated buffers presented as recordings, but the required recorded/redistributable-file provenance is absent, capping instrumentBreadth."
+    },
+    {
+      "severity": "major",
+      "detail": "Within-unit effect-type distinction is largely unimplemented: Mod1's six spec types collapse to one sine tremolo (only Ring Mod boosts depth), Amp/EQ's seven types are drive-scaled with LP24/HP24 not realized as filters, and no rendered test proves per-type audible difference, so the spec's 'every listed effect type audibly distinct' is not satisfied."
     },
     {
       "severity": "minor",
-      "category": "effectsAudio",
-      "description": "Effect type enumeration and global routing controls are partially implemented relative to the full effects spec."
+      "detail": "resolveEffectsForLayer returns the same fx object in every branch, so Piano A and B always share one effect-state; group/global-mode flags exist but do not change per-chain state, and there are no rendered tests for focus/group/global routing."
+    },
+    {
+      "severity": "minor",
+      "detail": "The surface is a schematic wireframe far from reference/nord-stage-4-73.jpg (plain sliders/labeled boxes rather than knobs/rockers/LED ladders/drawbars), and the 390x844 narrow layout collapses the deck into overlapping, truncated controls."
+    },
+    {
+      "severity": "minor",
+      "detail": "The live component never calls engine.dispose() on unmount (only lifecycle.dispose), so the AudioContext is not closed — a resource-cleanup gap not covered by tests."
     }
   ]
 }

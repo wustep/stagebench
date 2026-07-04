@@ -1,17 +1,17 @@
-# GPT5.5-high isolated target 3 stage-4-73 — Stagebench evaluation
+# GPT 5.5 High — Stagebench evaluation
 
 - Run: `gpt5-5-high`
 - Status: complete
-- Aggregate: **50/100**
+- Aggregate: **57/100**
 - Coverage: 3/3 phases
 
 ## Phase scores
 
 | Phase | Scope | Score |
 | --- | --- | ---: |
-| 1 | Complete surface and basic piano | 73 |
-| 2 | Piano library and working effects | 44 |
-| 3 | Complete Stage 4 system | 43 |
+| 1 | Complete surface and basic piano | 78 |
+| 2 | Piano library and working effects | 50 |
+| 3 | Complete Stage 4 system | 50 |
 
 ## Implementation details
 
@@ -55,25 +55,24 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 
 ## Phase 1: Complete surface and basic piano
 
-**73/100**
+**78/100**
 
-Strong Phase 1 artifact with a credible full Nord Stage 4 73 surface, exact 73-key keybed, clean runtime, and honest generated-synthesis piano source. Main gaps are simplified micro-detail, very small narrow rendering, shallow real-boundary tests, unexercised MIDI/multitouch evidence, and a basic triangle oscillator voice rather than a more piano-like source.
+A compact, honest, and well-structured Phase 1 submission. The desktop capture is a faithful recreation of the Stage 4 73: one continuous red chassis at the correct 3.0951 aspect ratio, a 73-key E1-E7 keybed (43 white / 30 black, verified in hardware.ts and asserted in tests), all six sections in the documented order at the documented widths (13/21/15/9/21/21), nine organ drawbars with green LED ladders, blue-green OLEDs limited to Program and Synth, a wood-toned pitch stick, and white legends on dark inset panels. The basic piano is a genuine live-synthesized triangle-wave voice with velocity scaling, per-voice release envelopes, sustain hold/release, bounded 18-voice polyphony, and deterministic released-first/oldest voice stealing, all fed through one note lifecycle shared by pointer (with per-pointerId tracking), computer keyboard (repeat-suppressed, spacebar sustain), and Web MIDI (note/velocity plus CC64), with blur/disconnect/unmount all-notes-off cleanup. Honesty is exemplary: IMPLEMENTATION_DETAILS.json declares the voice as generated Web Audio synthesis with no sample claims, the Synth OLED literally reads 'Decorative / No synth audio', the status strip states 'Panel controls decorative in Phase 1', and no control fakes state. Weaknesses are modest: the surface reproduces grouping and density but not the reference's fine legend text and control-shape detail; decorative knobs/faders only step forward on activation rather than dragging; the entire test suite lives in a single file with real but shallow coverage (the audio engine is asserted via a fake node so signal is not measured, and multitouch-independence and the MIDI note-on path are exercised only in-app, not unit-tested); and hardware.ts line 179 has a dead no-op ternary. At 390x844 the whole instrument is retained without clipping but is very dense and its legends are barely legible.
 
 ### Category scores
 
 | Category | Weight | Score |
 | --- | ---: | ---: |
-| Complete visual fidelity | 45% | 71 |
-| Basic Piano functionality | 25% | 75 |
+| Complete visual fidelity | 45% | 75 |
+| Basic Piano functionality | 25% | 81 |
 | Surface interaction and honesty | 15% | 86 |
-| Engineering quality | 15% | 61 |
+| Engineering quality | 15% | 75 |
 
 ### Priority issues
 
-- Narrow layout preserves the full instrument but renders controls and legends extremely small (3.4px labels at 390x844), limiting usable inspection and legible state.
-- Candidate tests do not directly exercise Web MIDI note/CC64, denied/disconnected MIDI behavior, independent multitouch, or actual audio rendering.
-- The generated voice is a simple triangle oscillator with envelopes; it is honest and playable but only a basic approximation of a piano-like source.
-- Overlapping same-key ownership is not fully represented in visual state because active keys are tracked by keyId Set rather than per input owner.
+- [object Object]
+- [object Object]
+- [object Object]
 
 ### Technical gate
 
@@ -81,26 +80,25 @@ Passed.
 
 ## Phase 2: Piano library and working effects
 
-**44/100**
+**50/100**
 
-Phase 2 preserves a recognizable Stage 4 73 surface and implements a useful generated two-layer piano shell with keyboard/pointer/MIDI input, stateful layer controls, and deterministic Float32Array probe processors for piano controls and effects. The artifact misses the main Phase 2 piano hard gate: IMPLEMENTATION_DETAILS.json declares sampleSources: [] and explicitly says Grand/Upright/Electric are generated approximations, not bundled recorded sample sets. A second major issue is that live played notes bypass the effect processors: noteOn builds oscillator/filter/gain voices directly into layer buses and master, while Mod/Delay/Amp/Compressor/Reverb/Rotary processing exists only in renderProbe(). Current pnpm test also fails with a timeout in the surface inventory test, while typecheck, lint, and build pass.
+Phase 2 retains an excellent Phase-1 surface and honestly declares its Grand/Upright/Electric sets as generated approximations rather than faking recordings, so the honesty contract is intact and instrumentBreadth is a fidelity gap (rating 1) not a zero. The decisive weakness is architectural: the entire effect chain (Mod 1/2, Delay, Amp/EQ, Compressor, Reverb, Rotary) plus the richer per-type additive piano synthesis exist only inside a test-only renderProbe() and are NEVER inserted into the live audible graph. Live playback is oscillator -> filter -> gain -> layer bus -> master gain/limiter -> destination with no effect nodes, so no effect is audible when the keyboard is played. Tests exercise the parallel Float32Array probe (and node counts on a FakeAudioContext), never an OfflineAudioContext or the real live path, so they prove math but not audible behavior. Effects and controls therefore land near the disconnected-node failure the rubric penalizes.
 
 ### Category scores
 
 | Category | Weight | Score |
 | --- | ---: | ---: |
 | Visual and interaction retention | 10% | 65 |
-| Piano library and performance | 35% | 48 |
-| Effects and signal graph | 30% | 31 |
-| System behavior and UX | 10% | 50 |
-| Engineering quality | 15% | 42 |
+| Piano library and performance | 35% | 53 |
+| Effects and signal graph | 30% | 38 |
+| System behavior and UX | 10% | 62 |
+| Engineering quality | 15% | 48 |
 
 ### Priority issues
 
-- Required recorded piano sample sets are absent: IMPLEMENTATION_DETAILS.json declares sampleSources: [] and lists Grand, Upright, and Electric as generated approximations, not recordings.
-- Effects are not connected to live keybed audio: noteOn voices connect oscillator -> filter -> gain -> layer bus -> master; Mod/Delay/Amp/Compressor/Reverb/Rotary processing exists only in renderProbe().
-- Required test gate fails: pnpm test fails because the surface inventory test times out after 5000ms; 12 of 13 tests pass.
-- Functional control coverage is incomplete: piano.section-on and piano.model-select are marked functional but do not implement canonical behavior; UI sustain pedal input is missing beyond SUSTPED routing toggles.
+- Effects are disconnected from live audio. processEffects and all applyXxx DSP are invoked only inside renderProbe() (verified by grep); the live graph is oscillator->filter->gain->layer bus->master gain/limiter->destination with no effect nodes. No Mod/Delay/Amp/Compressor/Reverb/Rotary processing is audible when the keyboard is played, contradicting the Phase-2 requirement for real audible effect processing and the claimed ordered effect path.
+- Required bundled recorded Grand/Upright/Electric sample sets are absent (sampleSources: []); they are honestly declared as generated approximations. Honesty contract preserved, but the piano-library hard gate is unmet.
+- Tests validate a parallel offline probe and FakeAudioContext node counts, never an OfflineAudioContext or the real live path, so they cannot detect that effects and most performance controls are inaudible live.
 
 ### Technical gate
 
@@ -108,28 +106,27 @@ Passed.
 
 ## Phase 3: Complete Stage 4 system
 
-**43/100**
+**50/100**
 
-The sealed artifact has a credible retained Nord Stage 4 surface, passing package gates, and a sizable serialized Stage 3 state/probe model for programs, organ, synth, splits, scenes, morphs, and effects. It falls well short of the complete system contract: Grand/Upright/Electric are explicitly generated approximations rather than the required recorded sample sets; live browser key/MIDI playback still uses only the piano engine; organ and synth are represented by deterministic probes instead of being mixed into the actual Web Audio note path; Store As naming lacks a panel UI; many hardware bindings are state-only or shallow; and the runtime displays non-finite synth RMS.
+Phase 3 delivers a broad, serializable canonical state model (32 programs + 8 Live slots, splits at the 11 documented positions, scenes, Wheel/Control-Pedal morphs, master clock, transpose, Panic, full Organ and Synth parameter trees) and preserves a credible, reference-faithful surface. However, the audio integration is fundamentally broken/dishonest: the ONLY audio nodes created in the whole app are piano oscillators in pianoEngine.ts. Organ and Synth never touch the AudioContext — their renderOrganProbe/renderSynthProbe functions are pure offline Float32Array math used only to compute a status-string number, never routed to output. Playing any key produces only a piano voice regardless of section focus, yet the UI status claims 'Organ routed through the shared Stage 4 effects graph' and 'Audio: piano + organ X + synth Y' — a false success claim. That synth number renders as literal 'Infinity' in the shipped capture (a real numeric bug). The live piano itself is a single BiquadFilter-per-oscillator; the 'generated buffer' libraries and the entire effects graph (Mod/Delay/Reverb/Rotary) are offline math not connected live, so Phase 2 audio also regressed. Every one of the 38 feature IDs maps to a single App.test.tsx, and the organ/synth/integration tests assert only on offline probes and a hardcoded integrationSnapshot() literal, proving no real routing.
 
 ### Category scores
 
 | Category | Weight | Score |
 | --- | ---: | ---: |
-| Final visual fidelity | 5% | 62 |
-| Complete feature system | 35% | 50 |
-| Audio quality and integration | 30% | 33 |
-| Full-system behavior | 20% | 36 |
-| Engineering quality | 10% | 50 |
+| Final visual fidelity | 5% | 75 |
+| Complete feature system | 35% | 62 |
+| Audio quality and integration | 30% | 32 |
+| Full-system behavior | 20% | 50 |
+| Engineering quality | 10% | 47 |
 
 ### Priority issues
 
-- src/pianoEngine.ts sampleLibrary and IMPLEMENTATION_DETAILS.json explicitly declare generated approximations/not recordings; the visual audit lists this as a known deviation.
-- App.startKey and MIDI note handlers call pianoEngine.noteOn only; visual audit states Organ/Synth live browser key playback is represented by state/probes while the live Web Audio path remains piano-focused.
-- integrationSnapshot declares a shared path, but the actual Web Audio graph is built in createPianoEngine for piano layer buses; Organ/Synth focus buttons only update status text.
-- Store As naming exists only as storeAsProgram helper, split editing toggles fixed C3/C4/C5 points, morph assignment is hardcoded/clear-only, and master clock tap/dial controls are not visibly implemented.
-- Sealed desktop capture and interactive preview status both show synth RMS as Infinity.
-- All required feature IDs map to one App.test.tsx; many assertions target state helpers and deterministic probes instead of the real browser UI/audio graph, and one test codifies the generated-sample deviation.
+- CRITICAL/HONESTY: Organ and Synth never create audio nodes; grep confirms all createOscillator/createGain/createBiquadFilter calls live only in pianoEngine.ts and App.tsx only calls the piano engine's noteOn. renderOrganProbe/renderSynthProbe are offline math used solely for a status-string number. Playing any key sounds a piano voice regardless of section.
+- HONESTY: The UI falsely claims non-existent behavior — status message 'Organ routed through the shared Stage 4 effects graph' (App.tsx line 599) and footer 'Audio: piano + organ X + synth Y' (line 770) present organ/synth audio that never plays.
+- BUG: renderSynthProbe returns Infinity for the default working state (reproduced), so the shipped stage3-desktop.png footer reads 'synth Infinity'.
+- PHASE 2 REGRESSION: The live effects graph (Mod/Delay/Reverb/Rotary/EQ) and the declared 'generated buffer' piano libraries are offline-only math in renderProbe; live piano is a single BiquadFilter oscillator, so those effects and sample-style voices are not audible in the running app.
+- TESTS: All 38 feature IDs map to one App.test.tsx; organ/synth/integration are validated via offline probes and a hardcoded integrationSnapshot() literal, not real audio-graph routing.
 
 ### Technical gate
 

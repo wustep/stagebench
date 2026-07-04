@@ -2,27 +2,16 @@
   "rubricVersion": "3.1.0",
   "runId": "claude-fable-5",
   "stage": 1,
-  "stageName": "Complete surface and basic piano",
-  "status": "complete",
   "evaluator": "independent-agent (opus-4.8)",
   "evaluatedAt": "2026-07-04T00:00:00.000Z",
   "summary": "A strong, unusually complete Phase 1 artifact with an exemplary honesty posture. The canonical desktop capture is a faithful likeness of the Nord Stage 4 73: one continuous red chassis at 0.9400 of viewport width, aspect 3.0951, a 0.54/0.46 deck/keybed split, the six sections at their documented widths (13/21/15/9/21/21%), a 73-key E1–E7 keybed (43 white / 30 black), nine organ drawbars with LED ladders, the wheel/master-level performance cluster, and exactly two primary OLEDs located only in Program and Synth. Materials read correctly (red metal, dark inset plates, black indexed knobs, fader/drawbar caps, red/green LED ladders, blue-green OLEDs, white legends) though micro-detail (Nord logotype glyphs, screw heads, brushed texture, printed scale numerals) is simplified — all disclosed in the audit. The piano is one dependable generated voice fed through a single unified note lifecycle: pointer/multi-touch, mapped computer keys with repeat suppression, and Web MIDI note/velocity/CC64 all route through one controller with per-source note ownership, correct velocity-to-level mapping, sustain latch, deterministic oldest-first 24-voice stealing, a soft-limiter master path with a reduced-path fallback, and full blur/MIDI-disconnect/unmount all-notes-off cleanup. The honesty boundary is airtight: IMPLEMENTATION_DETAILS.json truthfully declares live oscillator synthesis with no sample claims, the presentation store is completely isolated from audio, and a dedicated test asserts that operating panel controls creates no AudioContext and does not disturb playing voices. Engineering is high quality — 129 deterministic test cases with an injectable AudioContext fake that models real graph topology (reachesDestination, live-node kinds), zero console messages in both captures, and no reference photograph embedded. The main gaps are cosmetic/legibility only: at 390x844 the whole instrument is width-scaled so legends become sub-pixel and illegible (nothing clips), and typography/decorative detail is approximated rather than exact.",
-  "score": 96.1,
-  "rawScore": 96.1,
   "categories": [
     {
       "id": "visualFidelity",
-      "label": "Complete visual fidelity",
-      "weight": 45,
-      "score": 91.3,
-      "contribution": 41.1,
       "criteria": [
         {
           "id": "silhouetteGeometry",
-          "label": "Silhouette, chassis, and geometry",
-          "weight": 30,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "stage1-desktop.png shows one continuous red chassis with correct deck/keybed proportion and 73-key E1–E7 keybed; matches reference/nord-stage-4-73.jpg silhouette closely.",
             "stage1-visual-audit.md:9-16 measured: width fraction 0.9400 (req 0.88–0.97), aspect 3.0951 (registry 3.0951), deck/keys 0.5400/0.4600, section widths 13/21/15/9/21/21% verified in DOM, 73 keys (43 white/30 black), black-key height 0.61.",
@@ -32,10 +21,7 @@
         },
         {
           "id": "hardwareInventory",
-          "label": "Complete hardware inventory and placement",
-          "weight": 35,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "stage1-desktop.png: all six sections present with reference landmarks — Rotary Speaker strip, nine organ drawbars with LED graphs, Piano Select with type LEDs, Program strip with encoder/numbered buttons, dense Synth groups (LFO/Osc/Filter/Amp), Layer Effects matrix.",
             "stage1-visual-audit.md:16 automated audit: 150 modeled panel controls (26 knobs, 5 encoders, 7 faders, 9 drawbars, 1 wheel, 1 pitch stick, 101 buttons) plus 73 keys all in-bounds, no overlaps.",
@@ -45,10 +31,7 @@
         },
         {
           "id": "materialsTypography",
-          "label": "Materials, color, typography, and displays",
-          "weight": 20,
           "rating": 3,
-          "score": 75,
           "evidence": [
             "stage1-desktop.png shows red metal chassis, dark blue-gray inset plates, black indexed knobs, fader/drawbar caps, red & green LED ladders, blue-green OLEDs, white legends, and 'nord stage 4 / HAMMER ACTION 73' branding.",
             "src/model/variant.ts COLORS defines chassisMid #79232c, panelBlueGray #3c424d, key tones — consistent materials palette.",
@@ -58,10 +41,7 @@
         },
         {
           "id": "responsiveRetention",
-          "label": "Narrow retention",
-          "weight": 15,
           "rating": 3,
-          "score": 75,
           "evidence": [
             "stage1-narrow.png at 390x844 shows the complete chassis, all six sections and all 73 keys visible with no clipping.",
             "stage1-visual-audit.md:18-21: narrow width fraction 0.97, aspect 3.0952, deck/keys 0.5399/0.46, no document scroll, per-control visibility audit passes.",
@@ -73,17 +53,10 @@
     },
     {
       "id": "basicPiano",
-      "label": "Basic Piano functionality",
-      "weight": 25,
-      "score": 100,
-      "contribution": 25,
       "criteria": [
         {
           "id": "unifiedInputs",
-          "label": "Unified playable inputs",
-          "weight": 35,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "src/input/controller.ts InstrumentController routes pointer/keyboard/midi through one noteOn/noteOff with per-source held-note ownership (a note held by two sources releases only when both release).",
             "src/input/midi.ts handles NOTE_ON (velocity 0 → note-off), NOTE_OFF, CC64 sustain, hot-plug via onstatechange, and denied/unsupported/disconnected states with cleanup (onDisconnectCleanup → allNotesOff).",
@@ -93,10 +66,7 @@
         },
         {
           "id": "voiceLifecycle",
-          "label": "Voice lifecycle and performance",
-          "weight": 40,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "src/audio/engine.ts noteOn applies a velocity curve (peak = 0.04 + 0.32*vel^1.5), retrigger quick-release, deterministic oldest-seq voice stealing at MAX_POLYPHONY=24, and per-voice timer-based cleanup.",
             "engine.setSustain latches released keys (sustained flag) and releases them on pedal-up; allNotesOff quick-releases every voice for blur/midi-disconnect/unmount.",
@@ -106,10 +76,7 @@
         },
         {
           "id": "honestBasicSource",
-          "label": "Basic source and status honesty",
-          "weight": 25,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "IMPLEMENTATION_DETAILS.json:6 declares 'Generated live synthesis (no recorded samples)... Piano-like by design and honestly not a sampled piano', sampleSources [] and generatedSources listing src/audio/engine.ts.",
             "engine.ts:106 status message 'Basic piano voice ready (generated synthesis — no samples).' matches the declaration; idle/loading/ready/fallback/error states all present (EngineStatus).",
@@ -121,17 +88,10 @@
     },
     {
       "id": "interaction",
-      "label": "Surface interaction and honesty",
-      "weight": 15,
-      "score": 100,
-      "contribution": 15,
       "criteria": [
         {
           "id": "physicalInteraction",
-          "label": "Control movement and feedback",
-          "weight": 55,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "decorative-controls.test.tsx exercises knob (aria-valuenow 0→127), drawbar (min 0/max 8, pointer and keyboard), fader, wheel, spring-loaded stick (returns to 0), and latching button (aria-pressed + data-lit) by both pointer and keyboard.",
             "accessibility.test.tsx (feature-matrix accessibility.controls) asserts every control exposes accessible name, correct role, value min/max/now, toggle state, focusability, and keyboard operation.",
@@ -141,10 +101,7 @@
         },
         {
           "id": "decorativeBoundary",
-          "label": "Decorative-control boundary",
-          "weight": 45,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "src/state/presentation.ts PresentationStore holds only visual position/lit state with 'no connection to the audio engine, no canonical instrument state' — structurally isolated.",
             "decorative-controls.test.tsx:91 'operating panel controls never creates audio or voices (decorative honesty)' asserts getContext() is null after panel interaction; :107-120 asserts panel controls do not silence/alter playing keybed voices (oscillator count and master gain unchanged).",
@@ -156,17 +113,10 @@
     },
     {
       "id": "engineeringQuality",
-      "label": "Engineering quality",
-      "weight": 15,
-      "score": 100,
-      "contribution": 15,
       "criteria": [
         {
           "id": "structureTests",
-          "label": "Data structure and tests",
-          "weight": 55,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "Clean module separation: src/model (variant/hardware/keys), src/state/presentation, src/input (controller/midi/keymap), src/audio (engine/boundaries), src/components — input and audio decoupled via injectable boundaries.",
             "129 it() test cases across model, components, input, and audio; injectable AudioContext/timers/MIDI fakes (src/test/fakes.ts, src/audio/boundaries.ts) let tests run without devices, network, or audio output.",
@@ -176,10 +126,7 @@
         },
         {
           "id": "runtime",
-          "label": "Runtime quality",
-          "weight": 45,
           "rating": 4,
-          "score": 100,
           "evidence": [
             "stage1-capture.json: both desktop and narrow captures report consoleMessages [] and pageErrors []; audit:63 confirms zero console messages during the full interaction pass (favicon 404 fixed).",
             "engine.dispose closes the context and returns to idle so React StrictMode mount/cleanup/mount cycles stay sound (engine.ts:293-306).",
@@ -190,46 +137,6 @@
       ]
     }
   ],
-  "technicalGate": {
-    "passed": true,
-    "scoreCap": null,
-    "checks": [
-      {
-        "id": "test",
-        "label": "test",
-        "passed": true,
-        "durationMs": 8419,
-        "detail": "Passed"
-      },
-      {
-        "id": "typecheck",
-        "label": "typecheck",
-        "passed": true,
-        "durationMs": 1584,
-        "detail": "Passed"
-      },
-      {
-        "id": "lint",
-        "label": "lint",
-        "passed": true,
-        "durationMs": 916,
-        "detail": "Passed"
-      },
-      {
-        "id": "build",
-        "label": "build",
-        "passed": true,
-        "durationMs": 1987,
-        "detail": "Passed"
-      },
-      {
-        "id": "artifact",
-        "label": "Built phase artifact",
-        "passed": true,
-        "detail": "dist/index.html present"
-      }
-    ]
-  },
   "issues": [
     "At 390x844 the whole instrument is width-scaled so legends become sub-pixel and illegible (nothing clips) — usable for inspection but not for reading labels.",
     "Micro-detail fidelity is simplified: condensed sans instead of Nord's typeface, no screw heads/brushed texture/printed scale numerals, and drawbar cap colors follow classic Hammond convention rather than the exact photo tones.",
