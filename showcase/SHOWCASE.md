@@ -1769,3 +1769,24 @@ band padding, framed-switch clearances everywhere.
   the one failure is the known parallel-run compressor-render flake
   (passes 12/12 isolated every time; spun off as its own task); bench
   publish checks green.
+
+### 43 — Header band anatomy per the photo closeup (2026-07-04)
+
+User-directed corrections from a header crop of the product photo:
+
+- **FX FOCUS and ON print ABOVE their LEDs** (stacked columns), not inline.
+- **The tall band tab ends right after the ON switch**; SOLO ▾ prints on
+  the thin continuation strip, which aligns to the band's BOTTOM edge with
+  red chassis above it and rounded step corners (the strip was previously
+  top-aligned).
+- **Section ON switches sit on solid BLACK rectangular housings** with hard
+  black borders (the housing had gone soft).
+- **PIANO is one full-width band** (no step — the plate is too narrow),
+  radii matching the plate corners; the side gaps are gone.
+- **LAYER SCENE II / PEDAL live in a FILLED navy box** like the photo (was
+  an outline over red), and **LIVE MODE wears the photo's light gray pill
+  cap** (the "dark cap" note in the markup was wrong — the closeup shows
+  a light pill).
+- Gates: typecheck, lint, build, verify:layout 12/12, full suite 499/499
+  (the parallel-run compressor flake even behaved this run — still tracked
+  separately); bench publish checks green.
