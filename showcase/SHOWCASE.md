@@ -1524,3 +1524,32 @@ LFO `TRIANGLE` / VOICE `PRI OFF` / `PATTERN` direction readouts; numeric
 model adaptation, candidate for a future pass).
 
 - Gates: typecheck, lint, verify:layout 12/12, tests 494/494.
+
+### 36 — Print-style pass: cap colors, box-title cartouches, TAP/SET tab (2026-07-03)
+
+User-directed fixes, each verified against a fresh reference-photo crop:
+
+- **Drawbar caps are black + white only** (photo at 2x: the sub-octave pair
+  is charcoal-black, not Hammond brown — placement unchanged: white at
+  8'/4'/2'/1'). The dead `cap-brown` style is deleted.
+- **Box titles no longer paint gray blocks.** Base `.group-box-title` is now
+  a smaller, snug stadium pill that blends with the plate; the synth
+  sub-boxes (MODE/LFO/OSCILLATORS/FILTER/AMP + UNISON) wear the photo's
+  dark cartouche — white text on a panel-navy pill with a thin light
+  outline; the effect-box titles (MOD 1/2, DELAY, AMP SIM/EQ, COMP, REVERB)
+  drop to 0.3cqw and disappear into their border break like the print.
+- **Program-strip tabs match the photo**: MORPH ASSIGN / SPLIT / MST CLK /
+  TRANSP titles are dark text on small light tabs; **PRESET LIBRARY is a
+  maroon tab with white text** (the previous dark-red-on-light was
+  backwards).
+- **TAP/SET sub-box is the photo's light blue-gray rounded tab** with dark
+  TAP/SET ▾ / ANALOG ▿ print (was a transparent outlined box).
+
+Audit round 2 (left end, keybed, morph strip, TRANSP column, magnifier):
+one deviation confirmed and kept — the separate PANIC button (photo: PANIC
+is the Shift print under the single TRANSP switch; manual p. 40
+"Shift+Transp"). It stays because it is a declared, tested adaptation
+(Shift+Transp is taken by the transpose dial-edit latch), logged here as a
+candidate for a canonical hold-to-set rework.
+
+- Gates: typecheck, lint, verify:layout 12/12, tests 494/494.

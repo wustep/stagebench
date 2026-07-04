@@ -275,7 +275,10 @@ function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; i
   const id = `organ-drawbar-${index + 1}`
   const value = usePresentationValue(store, id)
   const range = usePresentationMorphRange(store, id, 8)
-  const color = [0, 1].includes(index) ? 'brown' : [2, 3, 5, 8].includes(index) ? 'white' : 'black'
+  // Reference photo: the Stage 4's drawbar caps are only charcoal-black and
+  // white (classic B3 placement, but the sub-octave pair is black — not the
+  // Hammond brown).
+  const color = [2, 3, 5, 8].includes(index) ? 'white' : 'black'
   return (
     <div className="drawbar-column">
       <Legend className="drawbar-name">{DRAWBAR_LEGENDS[index]}</Legend>
