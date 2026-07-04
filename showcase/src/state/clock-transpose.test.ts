@@ -54,6 +54,44 @@ describe('system.clock-transpose — panel', () => {
     expect(screen.queryByTestId('oled-clock-line')).toBeNull()
   })
 
+  it('clock edit mode: PROG 3 cycles KBS and PROG 4 toggles Pedal Tap (manual p. 41)', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Master Clock Tap/Set' }))
+    expect(screen.getByTestId('oled-clock-line').textContent).toMatch(/KBS OFF/)
+    const prog3 = screen.getByRole('button', { name: 'Program 3' })
+    fireEvent.click(prog3)
+    expect(screen.getByTestId('oled-clock-line').textContent).toMatch(/KBS ON/)
+    fireEvent.click(prog3)
+    expect(screen.getByTestId('oled-clock-line').textContent).toMatch(/KBS SOFT/)
+    fireEvent.click(prog3)
+    expect(screen.getByTestId('oled-clock-line').textContent).toMatch(/KBS OFF/)
+    const prog4 = screen.getByRole('button', { name: 'Program 4' })
+    fireEvent.click(prog4)
+    expect(screen.getByTestId('oled-clock-line').textContent).toMatch(/PED ●/)
+    fireEvent.click(prog4)
+    expect(screen.getByTestId('oled-clock-line').textContent).toMatch(/PED ○/)
+  })
+
+  it('Pedal Tap re-assigns the sustain pedal to tap tempo: 4 presses set the BPM, the damper stays up', () => {
+    const { timers } = renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Master Clock Tap/Set' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Program 4' })) // Pedal Tap on
+    const pedal = screen.getByRole('button', { name: 'Sustain Pedal' })
+    for (let i = 0; i < 4; i++) {
+      fireEvent.click(pedal)
+      expect(pedal.getAttribute('aria-pressed')).toBe('false') // re-assigned: never sustains
+      timers.now += 400
+    }
+    expect(screen.getByTestId('oled-clock-line').textContent).toMatch(/150 BPM/) // 400 ms taps
+    // Pedal Tap off: the pedal is a damper again.
+    fireEvent.click(screen.getByRole('button', { name: 'Program 4' }))
+    fireEvent.click(pedal)
+    expect(pedal.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(pedal)
+  })
+
   it('the TRANSP button toggles and lights; holding opens the editor; Shift+press is PANIC', () => {
     renderApp()
     const button = screen.getByRole('button', { name: 'Transpose On/Set' })
@@ -166,9 +204,11 @@ describe('system.clock-transpose — engine', () => {
     expect(engine.layerVoiceCount('A', 'organ')).toBe(1)
   })
 
-  it('master clock and transpose are program state and round-trip', () => {
+  it('master clock (BPM, KBS, Pedal Tap) and transpose are program state and round-trip', () => {
     const store = new InstrumentStore()
     store.setMasterClockBpm(90)
+    store.cycleMasterClockKbs() // Off -> On
+    store.toggleMasterClockPedalTap()
     store.setTransposeSemitones(3)
     store.toggleTranspose()
     expect(store.getState().programs.dirty).toBe(true)
@@ -176,9 +216,13 @@ describe('system.clock-transpose — engine', () => {
     store.storePress() // store into 1.1
     store.selectProgram(3)
     expect(store.getState().masterClock.bpm).toBe(120)
+    expect(store.getState().masterClock.kbs).toBe('Off')
+    expect(store.getState().masterClock.pedalTap).toBe(false)
     expect(store.getState().transpose.on).toBe(false)
     store.selectProgram(0)
     expect(store.getState().masterClock.bpm).toBe(90)
+    expect(store.getState().masterClock.kbs).toBe('On')
+    expect(store.getState().masterClock.pedalTap).toBe(true)
     expect(store.getState().transpose.on).toBe(true)
     expect(store.getState().transpose.semitones).toBe(3)
   })

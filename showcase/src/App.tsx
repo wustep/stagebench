@@ -116,10 +116,27 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     engine.attachStore(instrument)
     const controller = new InstrumentController(engine)
     const store = new PresentationStore({ instrument, controller, now: panelClock })
+    const clock = panelClock ?? (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()))
+    // Pedal Tap (manual p. 41): while enabled, the sustain pedal is
+    // re-assigned to tap tempo — presses feed the Mst Clk tap estimator
+    // (edge-detected, so continuous CC64 streams tap once per press) and the
+    // damper stays up. Every sustain input path routes through here.
+    let tapPedalDown = false
+    const sustainInput = (value: boolean | number): void => {
+      if (instrument.getState().masterClock.pedalTap) {
+        const down = typeof value === 'boolean' ? value : value >= 0.5
+        if (down && !tapPedalDown) instrument.tapMasterClock(clock())
+        tapPedalDown = down
+        if (controller.isSustainDown()) controller.setSustain(false)
+        return
+      }
+      tapPedalDown = false
+      controller.setSustain(value)
+    }
     const midi = new MidiInputManager({
       noteOn: (note, velocity) => controller.noteOn(note, velocity, 'midi'),
       noteOff: (note) => controller.noteOff(note, 'midi'),
-      setSustain: (value) => controller.setSustain(value),
+      setSustain: (value) => sustainInput(value),
       setSostenuto: (down) => controller.setSostenuto(down),
       setSoft: (down) => controller.setSoft(down),
       setControlPedal: (value) => instrument.setMorphSource('pedal', value * 127),
@@ -136,12 +153,12 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         instrument.setExternalClock(null)
       },
     })
-    return { engine, controller, midi, store, instrument, storage }
+    return { engine, controller, midi, store, instrument, storage, sustainInput }
     // The instrument system is created once per mounted app.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { engine, controller, midi, store, instrument } = system
+  const { engine, controller, midi, store, instrument, sustainInput } = system
   const engineStatus = useEngineStatus(engine)
   const midiStatus = useMidiStatus(midi)
   const pedals = usePedals(controller)
@@ -306,7 +323,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         event.preventDefault()
         if (!event.repeat) {
           spaceSustainDown = true
-          controller.setSustain(true)
+          sustainInput(true)
         }
         return
       }
@@ -335,11 +352,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       if (event.code === SUSTAIN_KEY_CODE) {
         if (spaceSustainDown) {
           spaceSustainDown = false
-          controller.setSustain(false)
+          sustainInput(false)
           return
         }
         if (!isInteractiveTarget(event.target)) {
-          controller.setSustain(false)
+          sustainInput(false)
           return
         }
       }
@@ -369,7 +386,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
     }
-  }, [controller])
+  }, [controller, sustainInput])
 
   // Unmount cleanup: stop every owned voice and release the audio graph.
   useEffect(() => () => controller.dispose(), [controller])
@@ -495,7 +512,15 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             data-testid="sustain-pedal"
             aria-pressed={pedals.sustain}
             aria-label="Sustain Pedal"
-            onClick={() => controller.setSustain(!controller.isSustainDown())}
+            onClick={() => {
+              // Pedal Tap re-assigns the pedal: a click is one full press.
+              if (instrument.getState().masterClock.pedalTap) {
+                sustainInput(true)
+                sustainInput(false)
+                return
+              }
+              sustainInput(!controller.isSustainDown())
+            }}
           >
             <span className="chrome-dot" aria-hidden="true" />
             Sustain Pedal

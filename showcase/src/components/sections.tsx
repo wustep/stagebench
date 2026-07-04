@@ -736,10 +736,11 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
     ? [
         <span key="ck1" className="oled-slot" data-testid="oled-clock-line">
           ♩ MST CLK {state.masterClock.bpm} BPM — DELAY {chainForFocused.delay.mstClk ? '●' : '○'} · MOD1{' '}
-          {chainForFocused.mod1.mstClk ? '●' : '○'}
+          {chainForFocused.mod1.mstClk ? '●' : '○'} · KBS {state.masterClock.kbs.toUpperCase()} · PED{' '}
+          {state.masterClock.pedalTap ? '●' : '○'}
         </span>,
         <span key="ck2" className="oled-slot">
-          dial: BPM · TAP: 4+ taps · PROG 1/2: sync
+          dial: BPM · TAP: 4+ · PROG 1/2: sync · 3: KBS · 4: ped tap
         </span>,
       ]
     : null

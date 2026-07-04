@@ -274,6 +274,8 @@ describe('programs.snapshot-hygiene — loads are complete and latch-free (audit
         delete snapshot.split
         delete snapshot.morph
       }
+      // Slot 2: a masterClock persisted before KBS / Pedal Tap existed.
+      if (i === 2) snapshot.masterClock = { bpm: 98 }
       return { name: slot.name, snapshot }
     })
     const rawLive = seed.getState().programs.live.map((slot) => ({ name: slot.name, snapshot: slot.snapshot }))
@@ -288,6 +290,9 @@ describe('programs.snapshot-hygiene — loads are complete and latch-free (audit
     expect(store.getState().masterClock.bpm).toBe(120) // default, not 207 leaked
     expect(store.getState().split.on).toBe(false) // default, not the previous program's
     expect(store.getState().morph.wheel).toEqual([])
+    // A { bpm }-only masterClock (pre-KBS payload) backfills the new fields.
+    store.selectProgram(2)
+    expect(store.getState().masterClock).toEqual({ bpm: 98, kbs: 'Off', pedalTap: false })
   })
 
   it('edits between the two STORE presses are captured, not silently dropped', () => {

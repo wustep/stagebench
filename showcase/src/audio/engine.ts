@@ -1627,12 +1627,37 @@ export class PianoEngine {
       }
     }
     if (this.synthChannels && state.synth.sectionOn) {
+      // KBS (manual p. 41): a key pressed while NO synth key was held
+      // re-syncs the running arpeggiator — checked before dispatch adds
+      // this key to the held stacks.
+      const keyboardWasSilent = SYNTH_LAYER_IDS.every((layer) => this.synthHeld[layer].length === 0)
+      let synthKeyLanded = false
       for (const layer of SYNTH_LAYER_IDS) {
         if (!state.synth.layers[layer].enabled) continue
         const zoneGain = zoneGainFor(state.split, state.synth.layers[layer].zone, midi)
-        if (zoneGain > 0.005) this.synthKeyDown(layer, midi, clamped, zoneGain)
+        if (zoneGain > 0.005) {
+          this.synthKeyDown(layer, midi, clamped, zoneGain)
+          synthKeyLanded = true
+        }
+      }
+      if (synthKeyLanded && keyboardWasSilent && this.arpRunning && state.masterClock.kbs !== 'Off') {
+        this.kbsResync(state.masterClock.kbs)
       }
     }
+  }
+
+  /** KBS re-sync (manual p. 41). On: the clock restarts NOW — the pattern's
+   *  first step sounds on the key press and the beat re-anchors to it. Soft:
+   *  the pattern restarts from its first step, but at the NEXT beat — the
+   *  clock phase (and everything else synced to it) is left untouched. */
+  private kbsResync(mode: 'On' | 'Soft'): void {
+    this.arpStepIndex = 0
+    if (mode === 'Soft') return
+    if (this.arpTimer !== null) {
+      this.boundary.timers.clearTimeout(this.arpTimer)
+      this.arpTimer = null
+    }
+    this.runArpStep()
   }
 
   /**

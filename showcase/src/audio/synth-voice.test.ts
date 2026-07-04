@@ -716,6 +716,103 @@ describe('synth.arp — deterministic scheduler', () => {
   })
 })
 
+describe('synth.arp — KBS keyboard sync (manual p. 41)', () => {
+  it('KBS On: the first key on a silent keyboard restarts the clock — the step sounds NOW', () => {
+    const { engine, store, timers, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setArpRate(127) // step = 200 ms
+    store.cycleMasterClockKbs() // Off -> On
+    expect(store.getState().masterClock.kbs).toBe('On')
+    store.toggleArpRun()
+    timers.advance(50) // scheduler mid-interval, keyboard silent
+
+    let before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    const immediate = voiceSourcesFor(context, before)
+    expect(immediate).toHaveLength(1) // sounded on the key press, not the old grid
+
+    // The beat re-anchored to the key press: the next step is a full
+    // interval later, not on the old scheduler's phase.
+    before = context.nodes.length
+    timers.advance(60000 / 300 - 2)
+    expect(voiceSourcesFor(context, before)).toHaveLength(0)
+    timers.advance(4)
+    expect(voiceSourcesFor(context, before)).toHaveLength(1)
+    engine.noteOff(60)
+  })
+
+  it('KBS Soft: the pattern restarts from step one at the NEXT beat — clock phase untouched', () => {
+    const { engine, store, timers, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setArpRate(127)
+    store.cycleMasterClockKbs() // Off -> On
+    store.cycleMasterClockKbs() // On -> Soft
+    expect(store.getState().synth.arp.run).toBe(false)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    engine.noteOn(67, 0.8)
+    let before = context.nodes.length
+    timers.advance(60000 / 300 + 1) // step: sounds 60, step index moves to 1
+    const first = voiceSourcesFor(context, before)
+    expect(first).toHaveLength(1)
+    const rootHz = first[0]!.frequency.value
+
+    // New phrase mid-interval: release everything, press again.
+    engine.noteOff(60)
+    engine.noteOff(64)
+    engine.noteOff(67)
+    timers.advance(50)
+    before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    engine.noteOn(67, 0.8)
+    expect(voiceSourcesFor(context, before)).toHaveLength(0) // Soft: nothing sounds early
+
+    // The next beat sounds the FIRST step (60) again — without KBS the
+    // preserved step counter would have sounded 64 here.
+    timers.advance(60000 / 300)
+    const next = voiceSourcesFor(context, before)
+    expect(next).toHaveLength(1)
+    expect(next[0]!.frequency.value).toBeCloseTo(rootHz, 3)
+    engine.noteOff(60)
+    engine.noteOff(64)
+    engine.noteOff(67)
+  })
+
+  it('KBS Off keeps the step counter across a new phrase (the pre-KBS behavior)', () => {
+    const { engine, store, timers, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setArpRate(127)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    engine.noteOn(67, 0.8)
+    let before = context.nodes.length
+    timers.advance(60000 / 300 + 1) // sounds 60, index -> 1
+    const rootHz = voiceSourcesFor(context, before)[0]!.frequency.value
+
+    engine.noteOff(60)
+    engine.noteOff(64)
+    engine.noteOff(67)
+    timers.advance(50)
+    before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    engine.noteOn(67, 0.8)
+    timers.advance(60000 / 300)
+    const next = voiceSourcesFor(context, before)
+    expect(next).toHaveLength(1)
+    expect(next[0]!.frequency.value / rootHz).toBeCloseTo(Math.pow(2, 4 / 12), 3) // 64: the counter kept walking
+    engine.noteOff(60)
+    engine.noteOff(64)
+    engine.noteOff(67)
+  })
+})
+
 describe('synth.arp — MST CLK substitution', () => {
   it('Shift + ARP RUN toggles master-clock rate substitution', () => {
     const { store } = makeSystem()

@@ -59,7 +59,6 @@ export class PresentationStore {
   private listeners = new Set<Listener>()
   private wiring: PanelWiring | null
   private tapTimes: number[] = []
-  private mstTapTimes: number[] = []
   private readonly now: () => number
   private morphRangeCache = new Map<string, { start: number; end: number; range: { from: number; to: number } }>()
 
@@ -1047,17 +1046,7 @@ export class PresentationStore {
             store.setClockEdit(!store.getState().clockEdit)
             return
           }
-          const time = this.now()
-          this.mstTapTimes = this.mstTapTimes.filter((t) => time - t < 3000)
-          this.mstTapTimes.push(time)
-          if (this.mstTapTimes.length >= 4) {
-            const intervals: number[] = []
-            for (let i = 1; i < this.mstTapTimes.length; i++) intervals.push(this.mstTapTimes[i]! - this.mstTapTimes[i - 1]!)
-            const average = intervals.reduce((a, b) => a + b, 0) / intervals.length
-            store.setMasterClockBpm(Math.round(60000 / average))
-          } else {
-            store.setLastEdit('Mst Clk: tap 4+ times to set')
-          }
+          store.tapMasterClock(this.now())
           return
         }
         case 'transpose-onset':
@@ -1082,10 +1071,13 @@ export class PresentationStore {
         case 'program-8': {
           const button = Number(id.slice('program-'.length)) - 1
           if (store.getState().clockEdit) {
-            // Clock-edit mode: PROG 1 syncs the Delay, PROG 2 syncs Mod 1.
+            // Clock-edit mode (manual p. 40-41): PROG 1 syncs the Delay,
+            // PROG 2 syncs Mod 1, PROG 3 cycles KBS, PROG 4 toggles Pedal Tap.
             if (button === 0) store.toggleDelayClockSync()
             else if (button === 1) store.toggleMod1ClockSync()
-            else store.setLastEdit('Mst Clk Edit — PROG 1: delay · PROG 2: mod 1')
+            else if (button === 2) store.cycleMasterClockKbs()
+            else if (button === 3) store.toggleMasterClockPedalTap()
+            else store.setLastEdit('Mst Clk Edit — PROG 1: delay · 2: mod 1 · 3: KBS · 4: ped tap')
             return
           }
           if (store.getState().splitEdit) {

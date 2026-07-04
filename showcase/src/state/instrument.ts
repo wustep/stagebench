@@ -445,9 +445,18 @@ export interface ScenesState {
   }
 }
 
+/** KBS — Master Clock Keyboard Sync (manual p. 41): Off, On (the clock
+ *  restarts when a key is pressed on a silent keyboard) or Soft (the running
+ *  pattern restarts from its first step at the next beat, without moving the
+ *  clock phase). */
+export type MasterClockKbs = 'Off' | 'On' | 'Soft'
+
 /** Master Clock (manual p. 40): 30..300 BPM, syncs Delay time and Mod 1 rate per chain. */
 export interface MasterClockState {
   bpm: number // 30..300
+  kbs: MasterClockKbs
+  /** Pedal Tap (manual p. 41): the sustain pedal is re-assigned to tap tempo. */
+  pedalTap: boolean
 }
 
 /** Transpose (manual p. 40): shifts sounding pitch; keyboard-zone routing keeps following the played key. */
@@ -847,7 +856,7 @@ function baseInstrumentState(): InstrumentState {
       stored: { pianoA: true, pianoB: false, organA: true, organB: false, synthA: true, synthB: false, synthC: false },
     },
     morph: { wheel: [], pedal: [] },
-    masterClock: { bpm: 120 },
+    masterClock: { bpm: 120, kbs: 'Off', pedalTap: false },
     transpose: { on: false, semitones: 0 },
     splitEdit: null,
     clockEdit: false,
@@ -1004,6 +1013,8 @@ const PROGRAMS_STORAGE_KEY = 'stagebench.programs.v1'
 export class InstrumentStore {
   private state: InstrumentState = initialInstrumentState()
   private listeners = new Set<Listener>()
+  /** MST CLK tap-tempo history (rolling 3 s window; panel TAP + Pedal Tap). */
+  private mstTapTimes: number[] = []
   private readonly storage: StorageBoundary | null
   /** Pending trailing write for Live-mode auto-store (see schedulePersist). */
   private persistTimer: ReturnType<typeof setTimeout> | null = null
@@ -1319,7 +1330,42 @@ export class InstrumentStore {
       return
     }
     const clamped = Math.max(30, Math.min(300, Math.round(bpm)))
-    this.patch({ masterClock: { bpm: clamped } }, `Mst Clk ${clamped} BPM`)
+    this.patch({ masterClock: { ...this.state.masterClock, bpm: clamped } }, `Mst Clk ${clamped} BPM`)
+  }
+
+  /** MST CLK TAP (manual p. 40): 4+ taps within a rolling 3 s window set the
+   *  BPM to the average tap interval. `timeMs` comes from the caller's
+   *  monotonic clock (panel button or Pedal Tap) so tests stay deterministic. */
+  tapMasterClock(timeMs: number): void {
+    this.mstTapTimes = this.mstTapTimes.filter((t) => timeMs - t < 3000)
+    this.mstTapTimes.push(timeMs)
+    if (this.mstTapTimes.length >= 4) {
+      const intervals: number[] = []
+      for (let i = 1; i < this.mstTapTimes.length; i++) intervals.push(this.mstTapTimes[i]! - this.mstTapTimes[i - 1]!)
+      const average = intervals.reduce((a, b) => a + b, 0) / intervals.length
+      this.setMasterClockBpm(Math.round(60000 / average))
+    } else {
+      this.setLastEdit('Mst Clk: tap 4+ times to set')
+    }
+  }
+
+  /** KBS (manual p. 41), cycled from the Mst Clk edit screen: Off → On → Soft. */
+  cycleMasterClockKbs(): void {
+    const order: MasterClockKbs[] = ['Off', 'On', 'Soft']
+    const next = order[(order.indexOf(this.state.masterClock.kbs) + 1) % order.length]!
+    this.patch(
+      { masterClock: { ...this.state.masterClock, kbs: next } },
+      `Mst Clk KBS ${next}${next === 'On' ? ' — keys restart the clock' : next === 'Soft' ? ' — pattern restarts on the beat' : ''}`,
+    )
+  }
+
+  /** Pedal Tap (manual p. 41): re-assigns the sustain pedal to tap tempo. */
+  toggleMasterClockPedalTap(): void {
+    const next = !this.state.masterClock.pedalTap
+    this.patch(
+      { masterClock: { ...this.state.masterClock, pedalTap: next } },
+      next ? 'Mst Clk Pedal Tap On — sustain pedal taps the tempo' : 'Mst Clk Pedal Tap Off — pedal sustains again',
+    )
   }
 
   /** External MIDI clock lock (manual p. 40): follows the estimated device
@@ -1345,7 +1391,7 @@ export class InstrumentStore {
     if (on === this.state.clockEdit) return
     this.patch(
       { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null } : {}) },
-      on ? 'Mst Clk Edit — dial: BPM · PROG 1/2: delay/mod1 sync' : 'Mst Clk Edit closed',
+      on ? 'Mst Clk Edit — dial: BPM · PROG: sync/KBS/ped tap' : 'Mst Clk Edit closed',
     )
   }
 
@@ -3632,11 +3678,19 @@ function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
     B: synthChains?.B ?? defaultChain(),
     C: synthChains?.C ?? defaultChain(),
   }
+  // Programs persisted before KBS / Pedal Tap existed store only { bpm }.
+  const partialClock = cloned.masterClock as Partial<MasterClockState>
+  const normalizedClock: MasterClockState = {
+    bpm: partialClock.bpm ?? 120,
+    kbs: partialClock.kbs ?? 'Off',
+    pedalTap: partialClock.pedalTap ?? false,
+  }
   return {
     ...cloned,
     ...(normalizedOrgan ? { organ: normalizedOrgan } : {}),
     ...(normalizedSynth ? { synth: normalizedSynth } : {}),
     synthChains: normalizedSynthChains,
+    masterClock: normalizedClock,
     fxGroupSynth: cloned.fxGroupSynth ?? false,
     kbHold: cloned.kbHold ?? false,
   }
