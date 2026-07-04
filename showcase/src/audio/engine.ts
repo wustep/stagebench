@@ -1206,6 +1206,10 @@ export class PianoEngine {
       delay.mstClk ? { ...delay, tempo: mappings.msToDelayTempo(beatMs * mappings.clockDelayDivision(delay.tempo).beats) } : delay
     const syncMod1 = <T extends { mstClk: boolean; rate: number }>(mod1: T): T =>
       mod1.mstClk ? { ...mod1, rate: mappings.hzToLfoRate(1000 / (beatMs * mappings.clockRateDivision(mod1.rate).beats)) } : mod1
+    // PED mode (manual p. 49): the control pedal drives the Wah sweep. The
+    // live pedal position is injected outside the state object so pedal
+    // moves never dirty program state.
+    const pedal = state.morphValues.pedal / 127
 
     for (const layer of ['A', 'B'] as const) {
       const channel = this.channels[layer]
@@ -1237,6 +1241,7 @@ export class PianoEngine {
 
       // Ordered effect chain (families process real audio; allFxOff bypasses everything).
       const fxOn = !state.allFxOff
+      channel.units.mod1.setPedal?.(pedal)
       channel.units.mod1.update(syncMod1(chain.mod1), fxOn && chain.mod1.on, now)
       channel.units.mod2.update(chain.mod2, fxOn && chain.mod2.on, now)
       channel.units.delay.update(syncDelay(chain.delay), fxOn && chain.delay.on, now)
@@ -1271,6 +1276,7 @@ export class PianoEngine {
       const organChain = this.organChain!
       const organFxState = state.organChain
       const organFxOn = !state.allFxOff
+      organChain.units.mod1.setPedal?.(pedal)
       organChain.units.mod1.update(syncMod1(organFxState.mod1), organFxOn && organFxState.mod1.on, now)
       organChain.units.mod2.update(organFxState.mod2, organFxOn && organFxState.mod2.on, now)
       organChain.units.delay.update(syncDelay(organFxState.delay), organFxOn && organFxState.delay.on, now)
@@ -1300,6 +1306,7 @@ export class PianoEngine {
         rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
 
         const synthChain = state.synthChains[layer]
+        channel.units.mod1.setPedal?.(pedal)
         channel.units.mod1.update(syncMod1(synthChain.mod1), fxOn && synthChain.mod1.on, now)
         channel.units.mod2.update(synthChain.mod2, fxOn && synthChain.mod2.on, now)
         channel.units.delay.update(syncDelay(synthChain.delay), fxOn && synthChain.delay.on, now)
@@ -2848,8 +2855,11 @@ export class PianoEngine {
       if (voice.midi !== midi) continue
       voice.keyDown = false
       // KB HOLD (manual p. 36): synth notes keep sounding after keys are
-      // lifted; the release happens when KB HOLD is turned off.
-      if (voice.section === 'synth' && this.state.kbHold) continue
+      // lifted; the release happens when KB HOLD is turned off. An EXCLUDEd
+      // layer (Shift + KB Hold) opts out and releases normally.
+      if (voice.section === 'synth' && this.state.kbHold && !this.state.synth.layers[voice.layer as SynthLayerId].kbHoldExclude) {
+        continue
+      }
       if (voice.sostenuto) continue
       const sustain = this.effectiveSustainLevel(voice.section)
       if (sustain >= SUSTAIN_DOWN) {
@@ -2899,8 +2909,10 @@ export class PianoEngine {
   }
 
   private synthKeyUp(midi: number): void {
-    if (this.state.kbHold) return
     for (const layer of SYNTH_LAYER_IDS) {
+      // KB HOLD keeps the layer's held stack after key-up — unless the
+      // layer is EXCLUDEd (manual p. 36), which releases like normal.
+      if (this.state.kbHold && !this.state.synth.layers[layer].kbHoldExclude) continue
       const held = this.synthHeld[layer]
       const index = held.indexOf(midi)
       if (index < 0) continue

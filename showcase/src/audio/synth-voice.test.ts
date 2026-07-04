@@ -502,6 +502,21 @@ describe('synth.arp — deterministic scheduler', () => {
     expect(heard.has(64)).toBe(true)
   })
 
+  it('KB HOLD EXCLUDE (Shift + KB Hold) lets the focused layer release on key-up (manual p. 36)', () => {
+    const { engine, store } = makeSystem()
+    engine.ensureStarted()
+    store.toggleKbHold()
+    engine.noteOn(60, 0.8)
+    engine.noteOff(60)
+    expect(engine.isNoteActive(60)).toBe(true) // KB HOLD keeps it sounding
+    store.toggleKbHoldExclude() // focused layer A opts out
+    expect(store.getState().synth.layers.A.kbHoldExclude).toBe(true)
+    engine.noteOn(64, 0.8)
+    engine.noteOff(64)
+    expect(engine.isNoteActive(64)).toBe(false) // excluded: releases normally
+    expect(engine.isNoteActive(60)).toBe(true) // the earlier held note keeps ringing
+  })
+
   it('Gate mode modulates the sounding voice gain without starting new voices', () => {
     const { engine, store, timers, getContext } = makeSystem()
     engine.ensureStarted()

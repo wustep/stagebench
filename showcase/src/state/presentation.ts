@@ -726,12 +726,12 @@ export class PresentationStore {
         case 'piano-layer-a':
           // SUSTPED = Shift + Layer A (manual p. 23): routes the sustain pedal to this section.
           if (shift) store.togglePianoSustped()
-          else store.toggleLayerEnabled('A')
+          else store.pressLayer('A') // click = focus/enable; hold = off (manual p. 12/18)
           return
         case 'piano-layer-b':
           // PSTICK = Shift + Layer B (manual p. 23): pitch stick bends this section ±2 semitones.
           if (shift) store.togglePianoPstick()
-          else store.toggleLayerEnabled('B')
+          else store.pressLayer('B')
           return
         case 'organ-on':
           // Shift + click SOLOs the Organ section (manual p. 18 pattern).
@@ -741,11 +741,11 @@ export class PresentationStore {
         case 'organ-layer-a':
           // Same Shift pattern as Piano (manual p. 18): SUSTPED = Shift + Layer A.
           if (shift) store.toggleOrganSustped()
-          else store.toggleOrganLayerEnabled('A')
+          else store.pressOrganLayer('A')
           return
         case 'organ-layer-b':
           if (shift) store.toggleOrganPstick()
-          else store.toggleOrganLayerEnabled('B')
+          else store.pressOrganLayer('B')
           return
         case 'organ-model':
           store.cycleOrganModel()
@@ -796,15 +796,15 @@ export class PresentationStore {
         case 'synth-layer-a':
           // SUSTPED = Shift + Layer A (manual p. 18/23 pattern, applied to Synth).
           if (shift) store.toggleSynthSustped()
-          else store.toggleSynthLayerEnabled('A')
+          else store.pressSynthLayer('A')
           return
         case 'synth-layer-b':
           // PSTICK = Shift + Layer B.
           if (shift) store.toggleSynthPstick()
-          else store.toggleSynthLayerEnabled('B')
+          else store.pressSynthLayer('B')
           return
         case 'synth-layer-c':
-          store.toggleSynthLayerEnabled('C')
+          store.pressSynthLayer('C')
           return
         case 'synth-octave-down':
           // KB ZONE ◂ = Shift + Octave Down (manual p. 39 pattern, applied to Synth).
@@ -908,7 +908,10 @@ export class PresentationStore {
           else store.cycleArpMode()
           return
         case 'kb-hold':
-          store.toggleKbHold()
+          // EXCLUDE = Shift + KB Hold (manual p. 36): opts the focused
+          // synth layer out of the hold.
+          if (shift) store.toggleKbHoldExclude()
+          else store.toggleKbHold()
           return
         case 'piano-type': {
           // INFO = Shift + Piano Select (manual p. 25: "Pressing INFO
@@ -1180,7 +1183,9 @@ export class PresentationStore {
           else store.toggleUnitOn('reverb')
           return
         case 'mod1-variation':
-          store.cycleMod1Type()
+          // PED = Shift + Selector (manual p. 49): pedal-controlled wah.
+          if (shift) store.toggleMod1Ped()
+          else store.cycleMod1Type()
           return
         case 'mod2-variation':
           store.cycleMod2Type()
@@ -1192,7 +1197,9 @@ export class PresentationStore {
           store.cycleDelayEffect()
           return
         case 'delay-filter':
-          store.cycleDelayFilter()
+          // PING PONG = Shift + Filter (manual p. 51): L/R alternating repeats.
+          if (shift) store.toggleDelayPingPong()
+          else store.cycleDelayFilter()
           return
         case 'delay-tap': {
           // ONE physical TAP/SET button (reference photo): tap tempo on

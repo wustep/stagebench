@@ -115,3 +115,50 @@ describe('piano.layers', () => {
     expect(engine.heldVoiceCount()).toBe(0)
   })
 })
+
+describe('layer buttons — press vs hold (manual p. 12/18)', () => {
+  it('a press focuses an active layer (never mutes it) and enables an off layer', () => {
+    const { store } = makeSystem()
+    store.setLayerEnabled('B', true) // focus follows the newly-enabled B
+    store.pressLayer('A')
+    expect(store.getState().layers.A.enabled).toBe(true) // still on
+    expect(store.getState().focusedLayer).toBe('A') // press = focus
+    store.holdOffLayer('B')
+    expect(store.getState().layers.B.enabled).toBe(false) // hold = off
+    store.pressLayer('B')
+    expect(store.getState().layers.B.enabled).toBe(true) // press re-enables
+  })
+
+  it('the hold refuses to silence the section: the last active layer stays on', () => {
+    const { store } = makeSystem()
+    store.holdOffLayer('A')
+    expect(store.getState().layers.A.enabled).toBe(true)
+    expect(store.getState().lastEdit).toMatch(/only active Layer/)
+  })
+
+  it('holding off the focused layer moves focus to a remaining one', () => {
+    const { store } = makeSystem()
+    store.setLayerEnabled('B', true)
+    store.setFocusedLayer('B')
+    store.holdOffLayer('B')
+    expect(store.getState().focusedLayer).toBe('A')
+  })
+
+  it('Organ and Synth layer buttons share the same press/hold semantics', () => {
+    const { store } = makeSystem()
+    store.pressOrganLayer('B')
+    expect(store.getState().organ.layers.B.enabled).toBe(true)
+    store.pressOrganLayer('B') // active: focuses, never mutes
+    expect(store.getState().organ.layers.B.enabled).toBe(true)
+    store.holdOffOrganLayer('B')
+    expect(store.getState().organ.layers.B.enabled).toBe(false)
+    expect(store.getState().organ.focusedLayer).toBe('A')
+
+    store.pressSynthLayer('C')
+    expect(store.getState().synth.layers.C.enabled).toBe(true)
+    store.holdOffSynthLayer('C')
+    expect(store.getState().synth.layers.C.enabled).toBe(false)
+    store.holdOffSynthLayer('A') // the only remaining active layer
+    expect(store.getState().synth.layers.A.enabled).toBe(true)
+  })
+})

@@ -51,8 +51,8 @@ describe('organ-chain — FX focus follows section-layer presses', () => {
     expect(ledsOf(0)).toEqual(['true']) // focus moved to the shared organ chain
     expect(ledsOf(1)).toEqual(['false', 'false']) // PIANO LEDs dark while focus is on Organ
     fireEvent.click(screen.getByRole('button', { name: 'Piano Layer A On/Off' }))
-    expect(ledsOf(1)).toEqual(['false', 'false']) // A was on; this click switches it off, focus untouched
-    fireEvent.click(screen.getByRole('button', { name: 'Piano Layer A On/Off' })) // switch A back on
+    // A was already on; a click FOCUSES it (manual p. 12/18: a press never
+    // mutes an active layer) — FX focus returns to Piano A.
     expect(ledsOf(1)).toEqual(['true', 'false'])
     expect(ledsOf(0)).toEqual(['false'])
   })

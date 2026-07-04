@@ -41,6 +41,9 @@ export interface EffectUnit<S> {
   readonly input: AudioNodeLike
   readonly output: AudioNodeLike
   update(state: S, on: boolean, now: number): void
+  /** Live control-pedal position 0..1 (Mod 1's PED mode, manual p. 49);
+   *  injected by the engine before each update — never part of `S`. */
+  setPedal?(value: number): void
   dispose(): void
 }
 
@@ -127,6 +130,8 @@ function stopAndDisconnect(nodes: AudioNodeLike[]): void {
 export function createMod1(ctx: AudioContextLike): EffectUnit<Mod1State> {
   const shell = makeShell(ctx)
   let built: { type: Mod1State['type']; nodes: AudioNodeLike[]; apply(state: Mod1State, now: number): void } | null = null
+  /** Control-pedal position 0..1, injected by the engine (PED mode). */
+  let pedalPosition = 0
 
   function build(type: Mod1State['type']): void {
     if (built) stopAndDisconnect(built.nodes)
@@ -197,12 +202,22 @@ export function createMod1(ctx: AudioContextLike): EffectUnit<Mod1State> {
         filter.Q.value = type === 'Wah' ? 6 : 4
         shell.wetIn.connect(filter)
         filter.connect(shell.wetOut)
+        // PED mode (manual p. 49): the sweep source (LFO / envelope
+        // follower) is silenced and the filter position follows the control
+        // pedal instead — an exponential 250..2500 Hz pedal-wah sweep.
+        const pedalFrequency = () => 250 * Math.pow(10, pedalPosition)
         if (type === 'Wah') {
           const lfo = makeLfo(ctx, filter.frequency)
           built = {
             type,
             nodes: [filter, ...lfo.nodes],
             apply(state, now) {
+              if (state.ped) {
+                setParam(lfo.depth.gain, 0, now)
+                setParam(filter.frequency, pedalFrequency(), now)
+                return
+              }
+              setParam(filter.frequency, 600, now)
               setParam(lfo.osc.frequency, mappings.lfoRateHz(state.rate), now)
               setParam(lfo.depth.gain, 480, now)
             },
@@ -225,6 +240,12 @@ export function createMod1(ctx: AudioContextLike): EffectUnit<Mod1State> {
             type,
             nodes: [filter, rectifier, follower, scale],
             apply(state, now) {
+              if (state.ped) {
+                setParam(scale.gain, 0.0001, now)
+                setParam(filter.frequency, pedalFrequency(), now)
+                return
+              }
+              setParam(filter.frequency, 600, now)
               setParam(scale.gain, 800 + (state.rate / 127) * 7000, now)
             },
           }
@@ -244,6 +265,9 @@ export function createMod1(ctx: AudioContextLike): EffectUnit<Mod1State> {
       const blend = state.type === 'Ring Mod' || state.type === 'Wah' || state.type === 'A-Wah'
       const wet = blend ? state.amount / 127 : 1
       shell.setActive(on, blend ? 1 - wet * 0.75 : 0, wet, now)
+    },
+    setPedal(value) {
+      pedalPosition = Math.max(0, Math.min(1, value))
     },
     dispose() {
       if (built) stopAndDisconnect(built.nodes)
@@ -453,9 +477,43 @@ export function createDelay(ctx: AudioContextLike): EffectUnit<DelayState> {
   const fbGain = ctx.createGain()
   fbGain.gain.value = 0.4
 
+  // Ping Pong topology (manual p. 51, Shift + Filter): a second delay B in
+  // series makes each hop land on the other side — tap A pans left, tap B
+  // (one more delay time later) pans right, and the feedback loop is fed
+  // from B so the alternation continues. Gain gates switch between the
+  // centered single-delay wiring and the A→L / B→R wiring without rebuilding
+  // the graph.
+  const delayB = ctx.createDelay(2)
+  delayB.delayTime.value = 0.35
+  const centerTap = ctx.createGain() // plain mode: delay -> wet (centered)
+  centerTap.gain.value = 1
+  const pingATap = ctx.createGain() // ping mode: delay A -> left
+  pingATap.gain.value = 0
+  const toB = ctx.createGain() // ping mode: delay A -> delay B
+  toB.gain.value = 0
+  const panL = ctx.createStereoPanner()
+  panL.pan.value = -0.85
+  const panR = ctx.createStereoPanner()
+  panR.pan.value = 0.85
+  const fbFromA = ctx.createGain() // plain mode feedback source
+  fbFromA.gain.value = 1
+  const fbFromB = ctx.createGain() // ping mode feedback source
+  fbFromB.gain.value = 0
+
   shell.wetIn.connect(delay)
-  delay.connect(shell.wetOut)
-  delay.connect(fbFilter)
+  delay.connect(centerTap)
+  centerTap.connect(shell.wetOut)
+  delay.connect(pingATap)
+  pingATap.connect(panL)
+  panL.connect(shell.wetOut)
+  delay.connect(toB)
+  toB.connect(delayB)
+  delayB.connect(panR)
+  panR.connect(shell.wetOut)
+  delay.connect(fbFromA)
+  delayB.connect(fbFromB)
+  fbFromA.connect(fbFilter)
+  fbFromB.connect(fbFilter)
   fbFilter.connect(analogTone)
   analogTone.connect(analogShaper)
   analogShaper.connect(fbEffectDelay)
@@ -468,6 +526,13 @@ export function createDelay(ctx: AudioContextLike): EffectUnit<DelayState> {
     output: shell.output,
     update(state, on, now) {
       setParam(delay.delayTime, mappings.delayTempoMs(state.tempo) / 1000, now, state.analog ? 0.08 : 0.02)
+      setParam(delayB.delayTime, mappings.delayTempoMs(state.tempo) / 1000, now, state.analog ? 0.08 : 0.02)
+      const ping = state.pingPong
+      setParam(centerTap.gain, ping ? 0.0001 : 1, now)
+      setParam(pingATap.gain, ping ? 1 : 0.0001, now)
+      setParam(toB.gain, ping ? 1 : 0.0001, now)
+      setParam(fbFromA.gain, ping ? 0.0001 : 1, now)
+      setParam(fbFromB.gain, ping ? 1 : 0.0001, now)
       setParam(fbGain.gain, Math.min(0.92, (state.feedback / 127) * 0.92), now)
       switch (state.filter) {
         case 'Off':
@@ -507,7 +572,7 @@ export function createDelay(ctx: AudioContextLike): EffectUnit<DelayState> {
     },
     dispose() {
       stopAndDisconnect(fbLfo.nodes)
-      shell.dispose([delay, fbFilter, analogShaper, analogTone, fbEffectDelay, fbDiffusion, fbGain])
+      shell.dispose([delay, delayB, centerTap, pingATap, toB, panL, panR, fbFromA, fbFromB, fbFilter, analogShaper, analogTone, fbEffectDelay, fbDiffusion, fbGain])
     },
   }
 }

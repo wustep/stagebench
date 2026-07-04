@@ -64,7 +64,16 @@ export const REVERB_TYPES: readonly ReverbType[] = ['Room', 'Stage', 'Booth', 'H
 export const DELAY_FILTERS: readonly DelayFilter[] = ['Off', 'Low Pass', 'High Pass', 'Band Pass']
 export const DELAY_EFFECTS: readonly DelayEffect[] = ['Off', 'Chorus', 'Vibe', 'Ensemble', 'Flam', 'Space']
 
-export interface Mod1State { on: boolean; type: Mod1Type; rate: number; amount: number; mstClk: boolean }
+export interface Mod1State {
+  on: boolean
+  type: Mod1Type
+  rate: number
+  amount: number
+  /** PED (manual p. 49, Shift + Selector): the control pedal drives the
+   *  Wah/A-Wah sweep instead of the LFO / envelope follower. */
+  ped: boolean
+  mstClk: boolean
+}
 export interface Mod2State { on: boolean; type: Mod2Type; rate: number; amount: number }
 export interface DelayState {
   on: boolean
@@ -74,6 +83,8 @@ export interface DelayState {
   filter: DelayFilter
   effect: DelayEffect
   analog: boolean
+  /** Ping Pong (manual p. 51, Shift + Filter): repeats alternate L/R. */
+  pingPong: boolean
   mstClk: boolean
 }
 export interface AmpEqState {
@@ -356,6 +367,9 @@ export interface SynthLayerState {
   lfo: SynthLfoState
   voice: SynthVoiceState
   mode: SynthLayerMode
+  /** EXCLUDE (manual p. 36, Shift + KB Hold): this layer opts out of KB
+   *  Hold — its notes release on key-up even while the hold is on. */
+  kbHoldExclude: boolean
 }
 
 export type ArpMode = 'Arp' | 'Poly' | 'Gate'
@@ -762,6 +776,7 @@ function defaultSynthLayer(enabled: boolean): SynthLayerState {
     lfo: { waveform: 'Triangle', rate: 64, amount: 0, destination: null, mstClk: false },
     voice: defaultSynthVoice(),
     mode: 'Analog',
+    kbHoldExclude: false,
   }
 }
 
@@ -782,9 +797,9 @@ function initOrganLayer(enabled: boolean): OrganLayerState {
 function defaultChain(): EffectChainState {
   // Continuous defaults match the panel's initial knob pose (64 = 12 o'clock).
   return {
-    mod1: { on: false, type: 'Tremolo', rate: 64, amount: 64, mstClk: false },
+    mod1: { on: false, type: 'Tremolo', rate: 64, amount: 64, ped: false, mstClk: false },
     mod2: { on: false, type: 'Chorus', rate: 64, amount: 64 },
-    delay: { on: false, tempo: 64, feedback: 64, mix: 64, filter: 'Off', effect: 'Off', analog: false, mstClk: false },
+    delay: { on: false, tempo: 64, feedback: 64, mix: 64, filter: 'Off', effect: 'Off', analog: false, pingPong: false, mstClk: false },
     ampEq: { on: false, type: 'Neutral EQ', drive: 64, bass: 64, mid: 64, treble: 64, freq: 64 },
     comp: { on: false, amount: 64, fast: false },
     reverb: { on: false, type: 'Hall', mix: 64, bright: true },
@@ -1137,6 +1152,33 @@ export class InstrumentStore {
 
   toggleLayerEnabled(layer: LayerId): void {
     this.setLayerEnabled(layer, !this.state.layers[layer].enabled)
+  }
+
+  /** Canonical Layer-button press (manual p. 12/18): pressing an ACTIVE
+   *  layer's button focuses it for editing — it never mutes it; pressing an
+   *  inactive layer's button switches it on (focus follows). Turning a
+   *  layer OFF is the hold gesture (holdOffLayer). */
+  pressLayer(layer: LayerId): void {
+    if (!this.state.layers[layer].enabled) this.setLayerEnabled(layer, true)
+    else this.setFocusedLayer(layer)
+  }
+
+  /** Hold a Layer button ~½ s (manual p. 18: "Layers are turned OFF by
+   *  holding down a Layer button for a short moment"). The section's last
+   *  active layer stays on, as on the hardware; focus moves to the layer
+   *  that remains. */
+  holdOffLayer(layer: LayerId): void {
+    if (!this.state.layers[layer].enabled) return
+    const other: LayerId = layer === 'A' ? 'B' : 'A'
+    if (!this.state.layers[other].enabled) {
+      this.patch({}, `Piano ${layer} is the only active Layer`)
+      return
+    }
+    const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], enabled: false } }
+    this.patch(
+      { layers, focusedLayer: this.state.focusedLayer === layer ? other : this.state.focusedLayer },
+      `Piano ${layer} Off (hold)`,
+    )
   }
 
   setLayerLevel(layer: LayerId, level: number): void {
@@ -2448,6 +2490,33 @@ export class InstrumentStore {
     )
   }
 
+  /** Canonical Layer-button press for Organ (manual p. 12/18) — see pressLayer. */
+  pressOrganLayer(layer: LayerId): void {
+    if (!this.state.organ.layers[layer].enabled) this.toggleOrganLayerEnabled(layer)
+    else this.setOrganFocusedLayer(layer)
+  }
+
+  /** Hold an Organ Layer button (manual p. 18) — see holdOffLayer. */
+  holdOffOrganLayer(layer: LayerId): void {
+    if (!this.state.organ.layers[layer].enabled) return
+    const other: LayerId = layer === 'A' ? 'B' : 'A'
+    if (!this.state.organ.layers[other].enabled) {
+      this.patch({}, `Organ ${layer} is the only active Layer`)
+      return
+    }
+    const layers = { ...this.state.organ.layers, [layer]: { ...this.state.organ.layers[layer], enabled: false } }
+    this.patch(
+      {
+        organ: {
+          ...this.state.organ,
+          layers,
+          focusedLayer: this.state.organ.focusedLayer === layer ? other : this.state.organ.focusedLayer,
+        },
+      },
+      `Organ ${layer} Off (hold)`,
+    )
+  }
+
   setOrganLayerLevel(layer: LayerId, level: number): void {
     const clamped = clamp(level)
     this.patchOrganLayer(layer, { level: clamped }, `Organ ${layer} Level ${clamped}`)
@@ -2642,6 +2711,27 @@ export class InstrumentStore {
    *  the given synth layer's own chain. */
   setSynthFxFocus(layer: SynthLayerId): void {
     this.patch({ synth: { ...this.state.synth, focusedLayer: layer }, fxSection: 'synth' }, `FX Focus Synth ${layer}`)
+  }
+
+  /** Canonical Layer-button press for Synth (manual p. 12/18) — see pressLayer. */
+  pressSynthLayer(layer: SynthLayerId): void {
+    if (!this.state.synth.layers[layer].enabled) this.toggleSynthLayerEnabled(layer)
+    else this.setSynthFocusedLayer(layer)
+  }
+
+  /** Hold a Synth Layer button (manual p. 18) — see holdOffLayer. */
+  holdOffSynthLayer(layer: SynthLayerId): void {
+    if (!this.state.synth.layers[layer].enabled) return
+    const others = SYNTH_LAYER_IDS.filter((id) => id !== layer && this.state.synth.layers[id].enabled)
+    if (others.length === 0) {
+      this.patch({}, `Synth ${layer} is the only active Layer`)
+      return
+    }
+    const layers = { ...this.state.synth.layers, [layer]: { ...this.state.synth.layers[layer], enabled: false } }
+    this.patchSynth(
+      { layers, focusedLayer: this.state.synth.focusedLayer === layer ? others[0]! : this.state.synth.focusedLayer },
+      `Synth ${layer} Off (hold)`,
+    )
   }
 
   setSynthLayerLevel(layer: SynthLayerId, level: number): void {
@@ -3136,6 +3226,15 @@ export class InstrumentStore {
     this.patch({ kbHold, synth: { ...this.state.synth, arp: { ...this.state.synth.arp, hold: kbHold } } }, `KB Hold ${kbHold ? 'On' : 'Off'}`)
   }
 
+  /** EXCLUDE = Shift + KB Hold (manual p. 36: "If a Layer should not be
+   *  included in the KB Hold functionality, press EXCLUDE"): toggles the
+   *  focused synth layer's opt-out. */
+  toggleKbHoldExclude(): void {
+    const layer = this.state.synth.focusedLayer
+    const kbHoldExclude = !this.state.synth.layers[layer].kbHoldExclude
+    this.patchSynthLayer(layer, { kbHoldExclude }, `KB Hold Exclude ${layer} ${kbHoldExclude ? 'On' : 'Off'}`)
+  }
+
   /* ------------------------------------------------------------ effects -- */
 
   /** The chain the panel currently edits: the shared Organ chain when FX
@@ -3221,6 +3320,14 @@ export class InstrumentStore {
     this.updateUnit(unit, { on } as never, `${unitLabel(unit)} ${on ? 'On' : 'Off'}`)
   }
 
+  /** COMP FAST (manual p. 52: Shift + Amount knob on hardware — a knob
+   *  can't take a shifted press here, so the FAST print is the clickable
+   *  legend, the LAYER INIT ▽ convention): shorter compressor release. */
+  toggleCompFast(): void {
+    const fast = !this.focusedChain().comp.fast
+    this.updateUnit('comp', { fast } as never, `Comp Fast ${fast ? 'On' : 'Off'}`)
+  }
+
   cycleMod1Type(): void {
     const current = this.focusedChain().mod1.type
     const next = MOD1_TYPES[(MOD1_TYPES.indexOf(current) + 1) % MOD1_TYPES.length]!
@@ -3260,6 +3367,22 @@ export class InstrumentStore {
   toggleDelayAnalog(): void {
     const analog = !this.focusedChain().delay.analog
     this.updateUnit('delay', { analog }, `Delay Analog ${analog ? 'On' : 'Off'}`)
+  }
+
+  /** PED = Shift + Mod 1 Selector (manual p. 49): in PED mode the Wah /
+   *  A-Wah filter position follows the control pedal instead of the LFO /
+   *  envelope follower. Kept per-chain like every Mod 1 setting. */
+  toggleMod1Ped(): void {
+    const ped = !this.focusedChain().mod1.ped
+    const type = this.focusedChain().mod1.type
+    const note = type === 'Wah' || type === 'A-Wah' ? '' : ' (drives Wah types)'
+    this.updateUnit('mod1', { ped } as never, `Mod 1 PED ${ped ? 'On' : 'Off'}${note}`)
+  }
+
+  /** PING PONG = Shift + Delay Filter (manual p. 51): repeats alternate L/R. */
+  toggleDelayPingPong(): void {
+    const pingPong = !this.focusedChain().delay.pingPong
+    this.updateUnit('delay', { pingPong }, `Delay Ping Pong ${pingPong ? 'On' : 'Off'}`)
   }
 
   toggleReverbBright(): void {

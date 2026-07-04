@@ -1,6 +1,15 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { fakeAssetBoundary, fakeAudioBoundary, FakeDelayNode, FakeFilter, FakeGain, FakeNode } from '../test/fakes'
+import {
+  fakeAssetBoundary,
+  fakeAudioBoundary,
+  FakeCompressor,
+  FakeDelayNode,
+  FakeFilter,
+  FakeGain,
+  FakeNode,
+  FakeStereoPanner,
+} from '../test/fakes'
 import { renderApp } from '../test/renderApp'
 import { InstrumentStore } from '../state/instrument'
 import { PianoEngine } from './engine'
@@ -138,6 +147,64 @@ describe('effects.routing', () => {
     const dry = input.connections[0]!
     expect(dry.connections.every((n) => n.kind === 'gain')).toBe(true)
     expect(context.nodes.includes(delayNode)).toBe(true)
+  })
+
+  it('PING PONG (Shift + Filter) re-gates repeats onto alternating L/R panners (manual p. 51)', () => {
+    const { store, engine } = makeSystem()
+    store.toggleUnitOn('delay')
+    const input = engine.diagnostics().channels!.A.units.delay.input as FakeNode
+    const wetIn = input.connections[1]! // shell wiring: [dry, wetIn]
+    const delayA = wetIn.connections.find((n) => n.kind === 'delay') as FakeDelayNode
+    // Wiring order off the first delay: [centerTap, pingATap, toB, fbFromA].
+    const [centerTap, pingATap, toB, fbFromA] = delayA.connections as FakeGain[]
+    expect(centerTap!.gain.value).toBe(1) // plain mode: one centered tap
+    expect(pingATap!.gain.value).toBeLessThan(0.001)
+    store.toggleDelayPingPong()
+    expect(store.getState().chains.A.delay.pingPong).toBe(true)
+    expect(centerTap!.gain.value).toBeLessThan(0.001)
+    expect(pingATap!.gain.value).toBe(1) // tap A now feeds the left panner…
+    expect(toB!.gain.value).toBe(1) // …and the series delay B for the right side
+    expect(fbFromA!.gain.value).toBeLessThan(0.001) // feedback re-sourced from B
+    const panL = pingATap!.connections.find((n) => n.kind === 'panner') as FakeStereoPanner
+    expect(panL.pan.value).toBeLessThan(-0.5)
+    const delayB = toB!.connections.find((n) => n.kind === 'delay') as FakeDelayNode
+    const panR = delayB.connections.find((n) => n.kind === 'panner') as FakeStereoPanner
+    expect(panR.pan.value).toBeGreaterThan(0.5)
+    store.toggleDelayPingPong()
+    expect(centerTap!.gain.value).toBe(1) // back to the centered tap
+  })
+
+  it('COMP FAST (the clickable FAST print) shortens the compressor release (manual p. 52)', () => {
+    const { store, engine } = makeSystem()
+    store.toggleUnitOn('comp')
+    const input = engine.diagnostics().channels!.A.units.comp.input as FakeNode
+    const wetIn = input.connections[1]!
+    const comp = wetIn.connections.find((n): n is FakeCompressor => n instanceof FakeCompressor)!
+    expect(comp.release.value).toBeCloseTo(0.3)
+    store.toggleCompFast()
+    expect(store.getState().chains.A.comp.fast).toBe(true)
+    expect(comp.release.value).toBeCloseTo(0.08)
+    store.toggleCompFast()
+    expect(comp.release.value).toBeCloseTo(0.3)
+  })
+
+  it('PED (Shift + Selector) hands the Wah sweep to the control pedal (manual p. 49)', () => {
+    const { store, engine } = makeSystem()
+    store.updateUnit('mod1', { type: 'Wah', on: true })
+    const input = engine.diagnostics().channels!.A.units.mod1.input as FakeNode
+    const wetIn = input.connections[1]!
+    const filter = wetIn.connections.find((n): n is FakeFilter => n instanceof FakeFilter)!
+    expect(filter.frequency.value).toBe(600) // LFO-swept center while PED is off
+    store.toggleMod1Ped()
+    expect(store.getState().chains.A.mod1.ped).toBe(true)
+    expect(filter.frequency.value).toBeCloseTo(250) // pedal at heel
+    store.setMorphSource('pedal', 127)
+    expect(filter.frequency.value).toBeCloseTo(2500) // pedal at toe
+    store.setMorphSource('pedal', 64)
+    expect(filter.frequency.value).toBeGreaterThan(700) // mid-sweep, exponential
+    expect(filter.frequency.value).toBeLessThan(900)
+    store.toggleMod1Ped() // back to the LFO sweep
+    expect(filter.frequency.value).toBe(600)
   })
 
   it('Amp/EQ "To Rotary" routes the layer through the single rotary instance, post-reverb', () => {

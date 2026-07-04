@@ -184,8 +184,9 @@ describe('programs.mon-copy — panel', () => {
     fireEvent.click(shift) // Shift/Exit unlatches Paste (Shift itself stays latched)
     expect(monCopyLed().dataset.on).toBe('false')
     fireEvent.click(shift) // …and a second click drops the Shift latch itself
-    fireEvent.click(layerB) // back to the normal toggle
-    expect(layerB).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(layerB) // back to the normal press: focuses the active layer
+    expect(layerB).toHaveAttribute('aria-pressed', 'true') // stays on (hold = off)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/FX Focus Piano B/)
   })
 
   it('the printed PASTE ⇕ shift-legend latches Paste mode directly', () => {

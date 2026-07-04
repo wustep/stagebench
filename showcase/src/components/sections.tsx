@@ -169,12 +169,15 @@ function LayerFaderColumn({
   buttonId,
   letter,
   focused = false,
+  onHoldOff,
 }: {
   store: PresentationStore
   faderId: string
   buttonId: string
   letter: string
   focused?: boolean
+  /** Hold ≈½ s turns the layer OFF (manual p. 18); a click only focuses/enables. */
+  onHoldOff?: () => void
 }) {
   const level = usePresentationValue(store, faderId)
   const range = usePresentationMorphRange(store, faderId, 9)
@@ -199,7 +202,7 @@ function LayerFaderColumn({
         <Led color="yellow" on={enabled} />
         <Legend>ON/OFF ▾</Legend>
       </span>
-      <PanelButton store={store} id={buttonId} className="pill small blank" />
+      <PanelButton store={store} id={buttonId} className="pill small blank" holdAction={onHoldOff} />
     </div>
   )
 }
@@ -348,6 +351,7 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                 store={store}
                 faderId="organ-level-a"
                 buttonId="organ-layer-a"
+                onHoldOff={() => instrument.holdOffOrganLayer('A')}
                 letter="A"
                 focused={organ.focusedLayer === 'A'}
               />
@@ -355,6 +359,7 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                 store={store}
                 faderId="organ-level-b"
                 buttonId="organ-layer-b"
+                onHoldOff={() => instrument.holdOffOrganLayer('B')}
                 letter="B"
                 focused={organ.focusedLayer === 'B'}
               />
@@ -523,6 +528,7 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
                 store={store}
                 faderId="piano-level-a"
                 buttonId="piano-layer-a"
+                onHoldOff={() => instrument.holdOffLayer('A')}
                 letter="A"
                 focused={state.focusedLayer === 'A' || state.fxGroupPiano}
               />
@@ -530,6 +536,7 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
                 store={store}
                 faderId="piano-level-b"
                 buttonId="piano-layer-b"
+                onHoldOff={() => instrument.holdOffLayer('B')}
                 letter="B"
                 focused={state.focusedLayer === 'B' || state.fxGroupPiano}
               />
@@ -1215,6 +1222,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 store={store}
                 faderId="synth-level-a"
                 buttonId="synth-layer-a"
+                onHoldOff={() => instrument.holdOffSynthLayer('A')}
                 letter="A"
                 focused={synth.focusedLayer === 'A'}
               />
@@ -1222,6 +1230,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 store={store}
                 faderId="synth-level-b"
                 buttonId="synth-layer-b"
+                onHoldOff={() => instrument.holdOffSynthLayer('B')}
                 letter="B"
                 focused={synth.focusedLayer === 'B'}
               />
@@ -1229,6 +1238,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 store={store}
                 faderId="synth-level-c"
                 buttonId="synth-layer-c"
+                onHoldOff={() => instrument.holdOffSynthLayer('C')}
                 letter="C"
                 focused={synth.focusedLayer === 'C'}
               />
@@ -1251,7 +1261,8 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <Legend className="red-tag">KB HOLD</Legend>
                 </span>
                 <PanelButton store={store} id="kb-hold" className="dark tiny" />
-                <Legend className="dim">EXCLUDE ▿</Legend>
+                {/* Wired: Shift + KB Hold excludes the focused layer (manual p. 36). */}
+                <Legend className={`dim ${focused.kbHoldExclude ? 'lit' : ''}`}>EXCLUDE ▿</Legend>
               </span>
               <span className="hold-cell">
                 <span className="tiny-led-row" aria-hidden="true">
@@ -1537,11 +1548,13 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                             readout — the photo prints nothing here). */}
                         <PanelButton store={store} id="voice-mode" className="dark tiny" />
                         {/* Photo: ● LO ▿ ● HI ▿ printed UNDER the button (the
-                            glide-curve shift pair), not under the knob. */}
+                            glide-curve shift pair), not under the knob. The
+                            LEDs report the focused layer's note priority
+                            (Shift + Voice Mode cycles Off → Low → High). */}
                         <span className="tiny-led-row glide-shift-row" aria-hidden="true">
-                          <Led color="red" />
+                          <Led color="red" on={focused.voice.priority === 'Low'} />
                           <Legend className="dim">LO ▿</Legend>
-                          <Led color="red" />
+                          <Led color="red" on={focused.voice.priority === 'High'} />
                           <Legend className="dim">HI ▿</Legend>
                         </span>
                       </span>
@@ -1980,11 +1993,12 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                   )}
                 />
                 <span className="variation-row">
-                  {/* Photo: a round LED left of the variation button (no
-                      variation latch is modeled, so it stays an unlit print). */}
-                  <Led color="red" className="variation-led" />
+                  {/* Photo: a round LED left of the variation button. It
+                      reports PED mode (Shift + Selector, manual p. 49):
+                      the control pedal drives the Wah sweep. */}
+                  <Led color="red" on={chain.mod1.ped} className="variation-led" />
                   <PanelButton store={store} id="mod1-variation" className="dark tiny" />
-                  <Legend className="dim">
+                  <Legend className={`dim ${chain.mod1.ped ? 'lit' : ''}`}>
                     VARIATION <b className="tag-box">PED</b> ▿
                   </Legend>
                 </span>
@@ -2092,7 +2106,8 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                   </span>
                 </span>
                 <PanelButton store={store} id="delay-filter" className="dark tiny" />
-                <Legend className="dim">PING PONG ▿</Legend>
+                {/* Wired: Shift + Filter toggles Ping Pong (manual p. 51). */}
+                <Legend className={`dim ${chain.delay.pingPong ? 'lit' : ''}`}>PING PONG ▿</Legend>
               </span>
               <span className="fx-on-cell delay-on-cell">
                 {/* Photo: Delay/Reverb ON are light HORIZONTAL rockers with
@@ -2156,10 +2171,21 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 </span>
                 <Knob store={store} id="comp-amount" className="small" />
                 <Legend>AMOUNT</Legend>
-                <span className="tiny-led-row" aria-hidden="true">
-                  <Led color="red" on={chain.comp.fast} />
-                  <Legend>FAST</Legend>
-                </span>
+                {/* FAST = Shift + Amount on hardware (manual p. 52); a knob
+                    can't take a shifted press, so the print is the clickable
+                    legend (LAYER INIT ▽ convention) with its LED. */}
+                <button
+                  type="button"
+                  className="legend-button"
+                  aria-label="Comp Fast mode"
+                  aria-pressed={chain.comp.fast}
+                  onClick={() => instrument.toggleCompFast()}
+                >
+                  <span className="tiny-led-row">
+                    <Led color="red" on={chain.comp.fast} />
+                    <Legend>FAST</Legend>
+                  </span>
+                </button>
               </span>
               <span className="fx-on-cell comp-on-cell">
                 <span className="comp-on-row">
