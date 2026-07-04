@@ -521,7 +521,13 @@ body {
   /* Photo: the thin strip aligns to the BAND'S BOTTOM edge — red chassis
      shows above it, right of the tall tab. */
   align-items: flex-end;
-  margin: -0.2cqw -0.35cqw 0.18cqw;
+  /* Pull over the plate's padding AND its 0.07cqw border so the band region
+     meets chassis red on all three sides, and re-paint that red here: the
+     area above the strip is RED in the photo, never plate navy. The two
+     stops re-derive the chassis gradient at this deck height (~7–11% of
+     chassis height) so the patch blends into the surrounding red. */
+  margin: -0.27cqw -0.42cqw 0.18cqw;
+  background: linear-gradient(180deg, #852833 0%, #822731 100%);
 }
 
 .plate-header-tab {
@@ -563,12 +569,17 @@ body {
   flex: 1;
   /* Photo: the strip is about HALF the band's height, bottom-aligned. */
   height: 0.64cqw;
-  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
+  /* Tuck under the tab so no seam opens at the step, and start the
+     gradient at the tab's mid-height tone (the tab's gradient has already
+     run half its course by the strip's top edge) so the two light parts
+     read as ONE surface. */
+  margin-left: -0.14cqw;
+  background: linear-gradient(180deg, #c1c7d3 0%, var(--band-lo) 100%);
   /* Bottom-aligned continuation (photo): red sits above it; the inside
      corner under the step is crisp, the outer end rounds at the plate
      corner. */
   border-radius: 0 0.14cqw 0 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
 }
 
 .plate-header .plate-title {
@@ -1521,11 +1532,13 @@ body {
   --drawbar-cap-h: 1.7cqw;
 }
 
-/* Full-travel recessed slot behind the stem (like the fader tracks). */
+/* Recessed slot behind the stem. Photo: the slot occupies only the LOWER
+   part of the well — its top edge sits beside the ladder's #4 numeral
+   (~24% down), and it runs to the well's bottom. */
 .drawbar::before {
   content: '';
   position: absolute;
-  top: 0;
+  top: 24%;
   bottom: 2%;
   left: 50%;
   width: 0.2cqw;
@@ -1537,7 +1550,7 @@ body {
 
 .drawbar-shaft {
   position: absolute;
-  top: 0;
+  top: 24%;
   left: 50%;
   width: 0.3cqw;
   transform: translateX(-50%);
@@ -2376,7 +2389,7 @@ body {
 }
 
 .deck-section[data-section='piano'] .plate-header {
-  margin: -0.2cqw -0.25cqw 0.18cqw;
+  margin: -0.27cqw -0.32cqw 0.18cqw;
   gap: 0.3cqw;
   padding: 0.08cqw 0.3cqw 0.1cqw;
 }
@@ -3310,11 +3323,22 @@ body {
   padding: 0.02cqw 0.3cqw 0.04cqw;
 }
 
+/* Photo: the fader/AUX KB column only occupies the UPPER part of the plate
+   (faders end at the AUX KB cluster, SUSTPED/PSTICK/PAN prints right below),
+   and the bottom LFO/OSC/FILTER/AMP row runs the plate's FULL width — only
+   the narrow KB HOLD/OCTAVE SHIFT cluster sits left of the LFO box. */
 .synth-body {
   flex: 1;
   min-height: 0;
-  display: flex;
-  gap: 0.35cqw;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  /* Same ~60/40 upper/lower split the old flex layout used. */
+  grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 0.2cqw 0.35cqw;
+}
+
+.synth-body .levels-column {
+  grid-area: 1 / 1;
 }
 
 .layer-pair.triple {
@@ -3341,19 +3365,15 @@ body {
   gap: 0.08cqw;
 }
 
+/* The wrapper dissolves: synth-top and synth-bottom place themselves on
+   .synth-body's grid directly. */
 .synth-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2cqw;
-  min-height: 0;
+  display: contents;
 }
 
 .synth-top {
-  /* Splits the plate height with .synth-bottom at roughly the reference's
-     60/40 so no dead band opens and neither half gets crushed. */
-  flex: 1.45;
+  grid-area: 1 / 2;
+  min-width: 0;
   min-height: 0;
   display: flex;
   gap: 0.15cqw;
@@ -3700,11 +3720,26 @@ body {
 
 
 .synth-bottom {
-  flex: 1;
+  /* Full plate width (photo): the boxes start under the PAN column, left
+     of them only the narrow KB HOLD/OCTAVE SHIFT cluster. */
+  grid-area: 2 / 1 / 3 / 3;
   min-height: 0;
+  min-width: 0;
   display: flex;
   gap: 0.15cqw;
   align-items: stretch;
+}
+
+/* KB HOLD/ARP RUN + OCTAVE SHIFT + KB ZONE column (photo), vertically
+   spread beside the LFO box. */
+.kb-cluster {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 0.1cqw;
+  padding: 0.1cqw 0.05cqw;
 }
 
 .synth-bottom .legend {
@@ -3958,6 +3993,8 @@ body {
   justify-content: space-between;
 }
 
+/* Photo: paired shift-framed switches (Osc, Filter) sit well apart — each
+   red pad is its own island with clear plate showing between them. */
 .button-cell {
   display: flex;
   gap: 0.5cqw;
@@ -3968,12 +4005,6 @@ body {
   display: flex;
   gap: 0.12cqw;
   align-items: flex-end;
-}
-
-/* Photo: paired shift-framed switches (Osc, Filter) sit well apart — each
-   red pad is its own island with clear plate showing between them. */
-.button-cell {
-  gap: 0.5cqw;
 }
 
 /* FILTER ON: the dark vertical switch sits IN FLOW at the box's

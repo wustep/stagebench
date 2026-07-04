@@ -1253,33 +1253,6 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               <Legend>PSTICK/RNG ▾</Legend>
               <Legend className="dim">PAN ▾</Legend>
             </span>
-            <span className="hold-row">
-              <span className="hold-cell">
-                <span className="tiny-led-row" aria-hidden="true">
-                  <Led color="red" on={state.kbHold} />
-                  {/* Boxed red label, as printed on the reference panel. */}
-                  <Legend className="red-tag">KB HOLD</Legend>
-                </span>
-                <PanelButton store={store} id="kb-hold" className="dark tiny" />
-                <Legend className="dim">EXCLUDE ▿</Legend>
-              </span>
-              <span className="hold-cell">
-                <span className="tiny-led-row" aria-hidden="true">
-                  <Legend>ARP RUN</Legend>
-                </span>
-                {/* User direction: ARP RUN wears a RED cap (like STORE). */}
-                <PanelButton store={store} id="arp-run" className="red tiny" />
-                <Legend className={`dim ${synth.arp.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
-              </span>
-            </span>
-            <span className="octave-row">
-              <Legend>◂ OCTAVE SHIFT ▸</Legend>
-              <span className="octave-buttons">
-                <PanelButton store={store} id="synth-octave-down" className="dark tiny" />
-                <PanelButton store={store} id="synth-octave-up" className="dark tiny" />
-              </span>
-            </span>
-            <ZoneLeds state={state} section="synth" />
           </div>
           <div className="synth-main">
             <div className="synth-top">
@@ -1608,6 +1581,38 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               </div>
             </div>
             <div className="synth-bottom">
+              {/* Photo: KB HOLD/ARP RUN, OCTAVE SHIFT and KB ZONE form a
+                  narrow column LEFT of the LFO box, below the AUX KB
+                  cluster — not part of the fader column. */}
+              <div className="kb-cluster">
+                <span className="hold-row">
+                  <span className="hold-cell">
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Led color="red" on={state.kbHold} />
+                      {/* Boxed red label, as printed on the reference panel. */}
+                      <Legend className="red-tag">KB HOLD</Legend>
+                    </span>
+                    <PanelButton store={store} id="kb-hold" className="dark tiny" />
+                    <Legend className="dim">EXCLUDE ▿</Legend>
+                  </span>
+                  <span className="hold-cell">
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Legend>ARP RUN</Legend>
+                    </span>
+                    {/* User direction: ARP RUN wears a RED cap (like STORE). */}
+                    <PanelButton store={store} id="arp-run" className="red tiny" />
+                    <Legend className={`dim ${synth.arp.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
+                  </span>
+                </span>
+                <span className="octave-row">
+                  <Legend>◂ OCTAVE SHIFT ▸</Legend>
+                  <span className="octave-buttons">
+                    <PanelButton store={store} id="synth-octave-down" className="dark tiny" />
+                    <PanelButton store={store} id="synth-octave-up" className="dark tiny" />
+                  </span>
+                </span>
+                <ZoneLeds state={state} section="synth" />
+              </div>
               <GroupBox title="LFO" className="lfo-box">
                 {/* Photo layout, four quadrants: WAVEFORM cluster top-left,
                     MOD AMT knob top-right, RATE/TIME knob bottom-left, the
