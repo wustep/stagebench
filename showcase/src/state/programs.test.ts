@@ -722,3 +722,112 @@ describe('programs.organize — Swap and Move (manual p. 45)', () => {
     expect(store.getState().organize).toBeNull()
   })
 })
+
+describe('programs.broad-undo — UNDO covers the big operations (manual p. 42-43, audit E5)', () => {
+  it('UNDO reverses Layer Init — All and keeps the pre-init edit as an edit', () => {
+    const store = new InstrumentStore()
+    store.cycleKbTouch()
+    store.layerInitAll()
+    expect(store.getState().piano.kbTouch).toBe(0)
+    store.undoProgramChange()
+    expect(store.getState().piano.kbTouch).toBe(1)
+    expect(store.getState().programs.dirty).toBe(true)
+    expect(store.getState().lastEdit).toContain('Undo Layer Init')
+    // One level only: the second press has nothing left.
+    store.undoProgramChange()
+    expect(store.getState().lastEdit).toBe('Nothing to undo')
+  })
+
+  it('UNDO after Layer Init on a clean program restores the clean dirty flag', () => {
+    const store = new InstrumentStore()
+    store.setLayerLevel('A', 77)
+    store.storePress()
+    store.storePress() // stored: clean at level 77
+    store.layerInitPiano()
+    expect(store.getState().layers.A.level).not.toBe(77)
+    store.undoProgramChange()
+    expect(store.getState().layers.A.level).toBe(77)
+    expect(store.getState().programs.dirty).toBe(false)
+  })
+
+  it('leaving the Preset Library with a loaded preset arms UNDO with the pre-browse sound', () => {
+    const store = new InstrumentStore()
+    store.setLayerLevel('A', 71)
+    store.enterPresetBrowse('synth', false)
+    store.dialPreset(127) // actually loads a preset
+    store.exitPresetBrowse(true) // keep it
+    expect(store.getState().synth.sectionOn).toBe(true)
+    store.undoProgramChange()
+    expect(store.getState().layers.A.level).toBe(71)
+    expect(store.getState().synth.sectionOn).toBe(false)
+    expect(store.getState().programs.dirty).toBe(true) // the pre-browse edit is back
+    expect(store.getState().lastEdit).toContain('Undo Preset load')
+  })
+
+  it('leaving the Preset Library WITHOUT loading anything arms nothing', () => {
+    const store = new InstrumentStore()
+    store.enterPresetBrowse('piano', false)
+    store.exitPresetBrowse(true)
+    store.undoProgramChange()
+    expect(store.getState().lastEdit).toBe('Nothing to undo')
+  })
+
+  it('UNDO reverses a layer Paste', () => {
+    const store = new InstrumentStore()
+    store.setLayerLevel('A', 71)
+    store.setMonCopyMode('copy')
+    store.monCopyLayerPress('piano', 'A')
+    store.setMonCopyMode('paste')
+    store.monCopyLayerPress('piano', 'B')
+    expect(store.getState().layers.B.level).toBe(71)
+    store.setMonCopyMode(null)
+    store.undoProgramChange()
+    expect(store.getState().layers.B.level).toBe(100)
+    expect(store.getState().layers.A.level).toBe(71) // the copy source keeps its edit
+    expect(store.getState().lastEdit).toContain('Undo Paste')
+  })
+
+  it('UNDO reverses a Morph clear', () => {
+    const store = new InstrumentStore()
+    store.recordMorphEdit('wheel', 'delay-mix', 'A', 64, 100)
+    store.clearMorph('wheel')
+    expect(store.getState().morph.wheel).toEqual([])
+    store.undoProgramChange()
+    expect(store.getState().morph.wheel).toEqual([{ control: 'delay-mix', layer: 'A', start: 64, end: 100 }])
+  })
+
+  it('UNDO reverses an FX Global capture that overwrote every chain', () => {
+    const store = new InstrumentStore()
+    const organMixBefore = store.getState().organChain.reverb.mix
+    store.updateUnit('reverb', { mix: 90 }, 'test') // focused piano chain A
+    store.toggleFxGlobal('reverb')
+    expect(store.getState().organChain.reverb.mix).toBe(90) // mirrored everywhere
+    store.undoProgramChange()
+    expect(store.getState().organChain.reverb.mix).toBe(organMixBefore)
+    expect(store.getState().fxGlobal.reverb).toBe(false)
+  })
+
+  it('Live mode: UNDO auto-stores the restored sound back into the slot', () => {
+    const store = new InstrumentStore()
+    store.toggleLiveMode()
+    store.setLayerLevel('A', 71) // auto-stored
+    store.layerInitAll() // auto-stored too
+    const current = store.getState().programs.current
+    expect(store.getState().programs.live[current]!.snapshot.layers.A.level).not.toBe(71)
+    store.undoProgramChange()
+    expect(store.getState().layers.A.level).toBe(71)
+    expect(store.getState().programs.live[current]!.snapshot.layers.A.level).toBe(71)
+    expect(store.getState().programs.dirty).toBe(false) // Live is never dirty
+  })
+
+  it('panel: UNDO is Shift + Solo and prints what it undid', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Section Edit' })) // Layer Init screen
+    fireEvent.click(screen.getByRole('button', { name: 'Program 1' })) // All
+    expect(screen.getByTestId('oled-edit-line').textContent).toContain('Layer Init — All')
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solo/Undo' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toContain('Undo Layer Init')
+  })
+})

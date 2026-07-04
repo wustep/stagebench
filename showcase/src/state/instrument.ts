@@ -718,8 +718,11 @@ export interface ProgramsState {
    *  dial = letter (or category while `catSelect`), PAGE = cursor, and the
    *  PROG 1-4 soft buttons are ABC / Cat / Del / Ins. */
   naming: { name: string; cursor: number; category: string | null; catSelect: boolean } | null
-  /** Single-level undo: the edited state discarded by the last program change. */
-  undo: { slot: number; liveMode: boolean; snapshot: ProgramSnapshot } | null
+  /** One-level UNDO (Shift + Solo, manual p. 42-43): the state discarded by
+   *  the last big operation — a program change, a Preset load, Layer Init,
+   *  a Paste, a Morph clear or an FX Group/Global chain capture. `dirty` is
+   *  the flag to restore with it; `label` names the operation on the display. */
+  undo: { slot: number; liveMode: boolean; dirty: boolean; snapshot: ProgramSnapshot; label: string } | null
   /** Numeric list view (Shift + Program dial, manual p. 41). */
   listView: boolean
   /** NUM PAD mode (Shift + Live Mode, manual p. 44): PROGRAM 1-8 enter
@@ -1170,6 +1173,22 @@ export class InstrumentStore {
     // (manual p. 13). Master Level, display text and program bookkeeping do not.
     if (PROGRAM_SNAPSHOT_KEYS.some((key) => key in partial)) next = this.withEditApplied(next)
     this.commit(next)
+  }
+
+  /** Captures the current sound as a one-level UNDO point (manual p. 42-43). */
+  private undoPoint(label: string): NonNullable<ProgramsState['undo']> {
+    const programs = this.state.programs
+    return { slot: programs.current, liveMode: programs.liveMode, dirty: programs.dirty, snapshot: snapshotOf(this.state), label }
+  }
+
+  /** patch() for the big destructive operations the manual's UNDO covers
+   *  (p. 42-43: Layer Init, Paste, Morph clear, FX Group/Global capture):
+   *  arms the undo record with the pre-operation sound before applying the
+   *  edit, so Shift + Solo restores what the operation overwrote. Ordinary
+   *  knob edits stay un-recorded — one level of undo, spent on big moves. */
+  private patchWithUndo(partial: Partial<InstrumentState>, lastEdit: string, label: string): void {
+    const undo = this.undoPoint(label)
+    this.patch({ ...partial, programs: { ...this.state.programs, undo } }, lastEdit)
   }
 
   private withEditApplied(next: InstrumentState): InstrumentState {
@@ -1891,7 +1910,7 @@ export class InstrumentStore {
    *  Organ/Synth sections off, all effect chains reset and off); one
    *  ordinary program edit (dirty flag / Live auto-store apply). */
   layerInitAll(): void {
-    this.patch({ ...snapshotOf(baseInstrumentState()), pianoNotFound: null }, 'Layer Init — All')
+    this.patchWithUndo({ ...snapshotOf(baseInstrumentState()), pianoNotFound: null }, 'Layer Init — All', 'Layer Init')
   }
 
   /** LAYER INIT — Org AB (manual p. 43): both Organ Layers to a default B3
@@ -1900,7 +1919,7 @@ export class InstrumentStore {
    *  which is On. SUSTPED/PSTICK and the section's on/off are performance
    *  routing, not the layers' sound, and stay untouched. */
   layerInitOrganAB(): void {
-    this.patch(
+    this.patchWithUndo(
       {
         organ: {
           ...this.state.organ,
@@ -1913,6 +1932,7 @@ export class InstrumentStore {
         organChain: defaultChain(),
       },
       'Layer Init — Organ AB',
+      'Layer Init',
     )
   }
 
@@ -1925,7 +1945,7 @@ export class InstrumentStore {
   layerInitPiano(): void {
     const layer = this.state.focusedLayer
     const layers = { ...this.state.layers, [layer]: defaultPianoLayer(this.state.layers[layer].enabled) }
-    this.patch(
+    this.patchWithUndo(
       {
         layers,
         piano: {
@@ -1943,6 +1963,7 @@ export class InstrumentStore {
         pianoNotFound: null,
       },
       `Layer Init — Piano ${layer}`,
+      'Layer Init',
     )
   }
 
@@ -1953,13 +1974,14 @@ export class InstrumentStore {
   layerInitSynth(): void {
     const layer = this.state.synth.focusedLayer
     const layers = { ...this.state.synth.layers, [layer]: defaultSynthLayer(this.state.synth.layers[layer].enabled) }
-    this.patch(
+    this.patchWithUndo(
       {
         synth: { ...this.state.synth, layers },
         synthChains: { ...this.state.synthChains, [layer]: defaultChain() },
         fxGroupSynth: false,
       },
       `Layer Init — Synth ${layer}`,
+      'Layer Init',
     )
   }
 
@@ -2008,7 +2030,14 @@ export class InstrumentStore {
     const browse = this.state.presetBrowse
     if (!browse) return
     if (keep) {
-      this.patch({ presetBrowse: null }, 'Preset Library closed')
+      // Leaving with a loaded preset keeps it as an ordinary edit — and arms
+      // UNDO with the pre-browse sound (a Preset load is on the manual's
+      // p. 42 undo list). Leaving without loading changes nothing to undo.
+      const programs = this.state.programs
+      const undo = browse.loaded
+        ? { slot: programs.current, liveMode: programs.liveMode, dirty: browse.preDirty, snapshot: cloneSnapshot(browse.preBrowse), label: 'Preset load' }
+        : programs.undo
+      this.patch({ presetBrowse: null, programs: { ...programs, undo } }, 'Preset Library closed')
       return
     }
     // Routed through patch so a Live slot's auto-store also restores (the
@@ -2274,11 +2303,13 @@ export class InstrumentStore {
     if (next !== this.state) this.commit(next)
   }
 
-  /** Shift + source button clears every assignment of that source (manual p. 39). */
+  /** Shift + source button clears every assignment of that source (manual
+   *  p. 39) — a destructive wipe, so it arms UNDO (manual p. 42). */
   clearMorph(source: MorphSource): void {
-    this.patch(
+    this.patchWithUndo(
       { morph: { ...this.state.morph, [source]: [] }, morphArming: null },
       `Morph ${morphSourceLabel(source)} cleared`,
+      'Morph clear',
     )
   }
 
@@ -2410,9 +2441,7 @@ export class InstrumentStore {
       this.auditionStoreDestination(clamped, programs.liveMode)
       return
     }
-    const undo = programs.dirty
-      ? { slot: programs.current, liveMode: programs.liveMode, snapshot: snapshotOf(this.state) }
-      : programs.undo
+    const undo = programs.dirty ? this.undoPoint('program change') : programs.undo
     const slot = bank[clamped]!
     this.commit({
       ...this.state,
@@ -2724,9 +2753,7 @@ export class InstrumentStore {
       return
     }
     const target = liveMode ? programs.lastLive : programs.lastBank
-    const undo = programs.dirty
-      ? { slot: programs.current, liveMode: programs.liveMode, snapshot: snapshotOf(this.state) }
-      : programs.undo
+    const undo = programs.dirty ? this.undoPoint('program change') : programs.undo
     const bank = liveMode ? programs.live : programs.bank
     const slot = bank[target]!
     this.commit({
@@ -2762,7 +2789,13 @@ export class InstrumentStore {
     this.persistPrograms(this.state)
   }
 
-  /** Single-level undo: restores the edited state a program change discarded. */
+  /** UNDO (Shift + Solo, manual p. 42-43): one level back across the big
+   *  operations — program change, Preset load, Layer Init, Paste, Morph
+   *  clear, FX Group/Global capture. Restores the discarded sound, the slot
+   *  it belonged to and its dirty flag; in Live mode the restored sound
+   *  auto-stores back into its slot like any edit. One level only, and a
+   *  Paste into a program SLOT stays written — undo returns to the sound
+   *  that was loaded, it never rewrites banks (that is Store's job). */
   undoProgramChange(): void {
     const programs = this.state.programs
     const undo = programs.undo
@@ -2770,6 +2803,14 @@ export class InstrumentStore {
       this.setLastEdit('Nothing to undo')
       return
     }
+    // Live mode auto-stores every edit — the restore must land back in the
+    // slot too, or the next program load would bring the undone state back.
+    const live = [...programs.live]
+    if (undo.liveMode) {
+      const slot = live[undo.slot]
+      if (slot) live[undo.slot] = { ...slot, snapshot: cloneSnapshot(undo.snapshot) }
+    }
+    const dirty = undo.liveMode ? false : undo.dirty
     this.commit({
       ...this.state,
       ...cloneSnapshot(undo.snapshot),
@@ -2782,10 +2823,11 @@ export class InstrumentStore {
       splitEdit: null,
       menu: null,
       organize: null,
-      programs: { ...programs, liveMode: undo.liveMode, current: undo.slot, dirty: true, undo: null },
-      lastEdit: `Undo — back to ${programLabel(undo.slot, undo.liveMode)} (edited)`,
+      programs: { ...programs, live, liveMode: undo.liveMode, current: undo.slot, dirty, undo: null },
+      lastEdit: `Undo ${undo.label} — ${programLabel(undo.slot, undo.liveMode)}${dirty ? ' (edited)' : ''}`,
     })
     this.reapplyMorphSources()
+    if (undo.liveMode) this.persistPrograms(this.state)
   }
 
   /* ------------------------------------------------ monitor / copy / paste -- */
@@ -2842,31 +2884,34 @@ export class InstrumentStore {
     const clip = this.state.clipboard
     if (section === 'piano' && clip?.kind === 'piano-layer') {
       const payload = deepClone(clip.payload)
-      this.patch(
+      this.patchWithUndo(
         { layers: { ...this.state.layers, [layer]: payload.layer }, chains: { ...this.state.chains, [layer]: payload.chain } },
         `Pasted → ${label}`,
+        'Paste',
       )
       return
     }
     if (section === 'organ' && clip?.kind === 'organ-layer') {
       const payload = deepClone(clip.payload)
-      this.patch(
+      this.patchWithUndo(
         {
           organ: { ...this.state.organ, layers: { ...this.state.organ.layers, [layer]: payload.layer } },
           organChain: payload.chain,
         },
         `Pasted → ${label}`,
+        'Paste',
       )
       return
     }
     if (section === 'synth' && clip?.kind === 'synth-layer') {
       const payload = deepClone(clip.payload)
-      this.patch(
+      this.patchWithUndo(
         {
           synth: { ...this.state.synth, layers: { ...this.state.synth.layers, [layer]: payload.layer } },
           synthChains: { ...this.state.synthChains, [layer]: payload.chain },
         },
         `Pasted → ${label}`,
+        'Paste',
       )
       return
     }
@@ -2886,6 +2931,9 @@ export class InstrumentStore {
     }
     const clip = this.state.clipboard
     if (clip?.kind === 'effect' && clip.unit === unit) {
+      // Arm the undo point first, then reuse the ordinary updateUnit edit
+      // path (FX focus and Group/Global fan-out apply to the paste too).
+      this.patchPrograms({ undo: this.undoPoint('Paste') })
       this.updateUnit(unit, deepClone(clip.payload) as never, `Pasted → ${unitLabel(unit)}`)
       return
     }
@@ -2904,7 +2952,7 @@ export class InstrumentStore {
     }
     const clip = this.state.clipboard
     if (clip?.kind === 'morph') {
-      this.patch({ morph: { ...this.state.morph, [source]: deepClone(clip.payload) } }, `Pasted → Morph ${morphSourceLabel(source)}`)
+      this.patchWithUndo({ morph: { ...this.state.morph, [source]: deepClone(clip.payload) } }, `Pasted → Morph ${morphSourceLabel(source)}`, 'Paste')
       return
     }
     this.monCopyRefuse()
@@ -2929,11 +2977,14 @@ export class InstrumentStore {
       const bankKey = programs.liveMode ? 'live' : 'bank'
       const bank = [...this.activeBank()]
       bank[index] = deepClone(clip.payload)
+      // UNDO returns to the sound that was loaded before the paste; the
+      // pasted SLOT stays written, like a confirmed Store (manual p. 42).
+      const undo = this.undoPoint('Paste')
       this.commit({
         ...this.state,
         ...cloneSnapshot(clip.payload.snapshot),
         pianoNotFound: null,
-        programs: { ...programs, [bankKey]: bank, current: index, dirty: false },
+        programs: { ...programs, [bankKey]: bank, current: index, dirty: false, undo },
         lastEdit: `Pasted → ${slotLabel} ${clip.payload.name}`,
       })
       this.persistPrograms(this.state)
@@ -3890,15 +3941,17 @@ export class InstrumentStore {
     const fxGroupPiano = !this.state.fxGroupPiano
     if (fxGroupPiano) {
       // Entering group mode applies the focused layer's chain to the group
-      // (manual p.48) and moves FX focus back onto the Piano section.
+      // (manual p.48) and moves FX focus back onto the Piano section. The
+      // capture overwrites the other layer's chain — UNDO-armed (p. 42).
       const focused = this.state.chains[this.state.focusedLayer]
-      this.patch(
+      this.patchWithUndo(
         {
           fxGroupPiano,
           fxSection: 'piano',
           chains: { A: structuredCloneChain(focused), B: structuredCloneChain(focused) },
         },
         'Piano FX Group On',
+        'FX Group',
       )
     } else {
       this.patch({ fxGroupPiano }, 'Piano FX Group Off')
@@ -3911,13 +3964,14 @@ export class InstrumentStore {
     const fxGroupSynth = !this.state.fxGroupSynth
     if (fxGroupSynth) {
       const focused = this.state.synthChains[this.state.synth.focusedLayer]
-      this.patch(
+      this.patchWithUndo(
         {
           fxGroupSynth,
           fxSection: 'synth',
           synthChains: { A: structuredCloneChain(focused), B: structuredCloneChain(focused), C: structuredCloneChain(focused) },
         },
         'Synth FX Group On',
+        'FX Group',
       )
     } else {
       this.patch({ fxGroupSynth }, 'Synth FX Group Off')
@@ -3930,7 +3984,8 @@ export class InstrumentStore {
     if (value) {
       // Entering global mode mirrors the focused layer's unit settings
       // everywhere — piano A/B, the shared Organ chain AND all three synth
-      // chains (manual p. 48: "all Layers of all Sections").
+      // chains (manual p. 48: "all Layers of all Sections"). The mirror
+      // overwrites every other chain's unit — UNDO-armed (p. 42).
       const focused = this.state.chains[this.state.focusedLayer][unit]
       const chains = {
         A: { ...this.state.chains.A, [unit]: { ...focused } },
@@ -3942,7 +3997,7 @@ export class InstrumentStore {
         B: { ...this.state.synthChains.B, [unit]: { ...focused } },
         C: { ...this.state.synthChains.C, [unit]: { ...focused } },
       }
-      this.patch({ fxGlobal, chains, organChain, synthChains }, `${unitLabel(unit)} Global On`)
+      this.patchWithUndo({ fxGlobal, chains, organChain, synthChains }, `${unitLabel(unit)} Global On`, 'FX Global')
     } else {
       this.patch({ fxGlobal }, `${unitLabel(unit)} Global Off`)
     }
