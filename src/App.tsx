@@ -137,21 +137,29 @@ function formatTelemetry(telemetry: RunEntry['telemetry']) {
   if (typeof telemetry.inputTokens === 'number') parts.push(`${formatTokens(telemetry.inputTokens)} tok in`)
   if (typeof telemetry.outputTokens === 'number') parts.push(`${formatTokens(telemetry.outputTokens)} tok out`)
   if (typeof telemetry.reasoningTokens === 'number') parts.push(`${formatTokens(telemetry.reasoningTokens)} reasoning`)
+  if (typeof telemetry.toolCalls === 'number') parts.push(`${telemetry.toolCalls} tool calls`)
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
+// The full phase list for the protocol a run was recorded under. Rendering
+// every protocol phase (not just the recorded stages) keeps the phase columns
+// vertically aligned across rows, so scores can be compared at a glance.
+function getPhaseList(run: RunEntry) {
+  if (!run.legacy || String(run.protocolVersion ?? '').startsWith('3.')) return phaseNames
+  if (run.stages.length === 4) return v2PhaseNames
+  return legacyPhaseNames
+}
+
 function getPhaseName(run: RunEntry, phase: PhaseNumber) {
-  if (!run.legacy || String(run.protocolVersion ?? '').startsWith('3.')) return phaseNames[phase - 1]
-  if (run.stages.length === 4) return v2PhaseNames[phase - 1]
-  return legacyPhaseNames[phase - 1]
+  return getPhaseList(run)[phase - 1]
 }
 
 function getResultClass(run: RunEntry) {
   if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 1, description: 'Runs recorded under earlier protocol versions, kept for reference with their frozen evaluation reports.' }
-  return { id: 'current', label: 'Runs', rank: 0, description: 'Runs recorded under the current benchmark protocol.' }
+  return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: 'Runs recorded under the current benchmark protocol.' }
 }
 
-function StatusLight({ status }: { status: StageStatus | RunEntry['status'] }) {
+function StatusLight({ status }: { status: StageStatus | RunEntry['status'] | 'off' }) {
   return <span className={`status-light status-${status}`} aria-hidden="true" />
 }
 
@@ -188,26 +196,34 @@ function PreviewFrame({
     return () => window.clearTimeout(timeout)
   }, [src])
 
-  if (state === 'error') {
-    return (
-      <div className="preview-error" role="alert">
-        <strong>Preview failed to load</strong>
-        <p>The published build did not respond.</p>
-        <code>{src}</code>
-      </div>
-    )
-  }
-
   return (
-    <iframe
-      className={className}
-      key={frameKey}
-      onError={() => setState('error')}
-      onLoad={() => setState('ready')}
-      scrolling={scrolling}
-      src={src}
-      title={title}
-    />
+    <div className="preview-frame-shell">
+      {state === 'error' ? (
+        <div className="preview-error" role="alert">
+          <strong>Preview failed to load</strong>
+          <p>The published build did not respond.</p>
+          <code>{src}</code>
+        </div>
+      ) : (
+        <>
+          {state === 'loading' && (
+            <div className="preview-loading" role="status">
+              <span aria-hidden="true" className="loading-lights"><i /><i /><i /></span>
+              <span>Loading build</span>
+            </div>
+          )}
+          <iframe
+            className={className}
+            key={frameKey}
+            onError={() => setState('error')}
+            onLoad={() => setState('ready')}
+            scrolling={scrolling}
+            src={src}
+            title={title}
+          />
+        </>
+      )}
+    </div>
   )
 }
 
@@ -290,21 +306,30 @@ function App() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode; ended: boolean }>())
   const pressedKeysRef = useRef(new Set<string>())
+  // The element that opened the current dialog, so focus can return to it on
+  // close. Captured before the dialog mounts (the dialog steals focus).
+  const dialogOpenerRef = useRef<HTMLElement | null>(null)
+  const captureDialogOpener = useCallback(() => {
+    dialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  }, [])
   const visibleRuns = [...runs]
     .sort((left, right) => getResultClass(left).rank - getResultClass(right).rank || right.startedAt.localeCompare(left.startedAt))
   const activeCount = visibleRuns.filter((run) => run.status === 'in-progress').length
+  const legacyCount = visibleRuns.filter((run) => run.legacy).length
+  const currentCount = visibleRuns.length - legacyCount
   const selectedPreviewPath = selectedRun && selectedPhase
     ? getPreviewPath(selectedRun, selectedPhase)
     : undefined
 
   const openPreview = useCallback((run: RunEntry, phase = getLatestPhase(run)) => {
     if (!phase) return
+    captureDialogOpener()
     setSelectedReport(null)
     setSelectedRun(run)
     setSelectedPhase(phase)
     setCopyStatus('idle')
     window.history.pushState({}, '', createViewerUrl(window.location.href, run.id, phase))
-  }, [])
+  }, [captureDialogOpener])
 
   const closePreview = useCallback(() => {
     setSelectedRun(null)
@@ -375,6 +400,35 @@ function App() {
   }, [])
 
   const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen)
+
+  // Move focus into a dialog when it mounts; tabIndex={-1} on the container
+  // keeps it out of the tab order while still accepting programmatic focus.
+  const focusDialog = useCallback((node: HTMLDivElement | null) => {
+    node?.focus()
+  }, [])
+
+  // Return focus to whatever opened the dialog once it closes.
+  useEffect(() => {
+    if (!overlayOpen) return
+    return () => {
+      dialogOpenerRef.current?.focus()
+      dialogOpenerRef.current = null
+    }
+  }, [overlayOpen])
+
+  useEffect(() => {
+    if (!overlayOpen) return
+
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (showcaseOpen) setShowcaseOpen(false)
+      else if (selectedReport) setSelectedReport(null)
+      else if (selectedRun) closePreview()
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [overlayOpen, showcaseOpen, selectedReport, selectedRun, closePreview])
 
   useEffect(() => {
     const syncViewerFromUrl = () => {
@@ -537,7 +591,7 @@ function App() {
           <h2 id="showcase-heading">The evolving Stage 4</h2>
           <p>Seeded from the top-scoring run, then iterated beyond the benchmark rules. Not scored against the gallery.</p>
         </div>
-        <button type="button" className="open-preview showcase-play" onClick={() => { closePreview(); setSelectedReport(null); setShowcaseOpen(true) }}>
+        <button type="button" className="open-preview showcase-play" onClick={() => { captureDialogOpener(); closePreview(); setSelectedReport(null); setShowcaseOpen(true) }}>
           Play <PlayIcon />
         </button>
       </section>
@@ -546,7 +600,11 @@ function App() {
         <div className="run-index-heading">
           <h2>Runs</h2>
           <div className="run-index-meta">
-            <span>{visibleRuns.length} {visibleRuns.length === 1 ? 'run' : 'runs'}</span>
+            <span>
+              {legacyCount > 0
+                ? `${currentCount} current · ${legacyCount} legacy`
+                : `${visibleRuns.length} ${visibleRuns.length === 1 ? 'run' : 'runs'}`}
+            </span>
           </div>
         </div>
 
@@ -555,8 +613,7 @@ function App() {
             {visibleRuns.map((run, index) => {
               const resultClass = getResultClass(run)
               const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
-              // Failed legacy phases stay in run.json but are noise in the gallery.
-              const visibleStages = run.legacy ? run.stages.filter((stage) => stage.status !== 'failed') : run.stages
+              const phaseList = getPhaseList(run)
               return (
               <Fragment key={run.id}>
               {resultClass.id !== previousClass && (
@@ -582,14 +639,20 @@ function App() {
                   {formatTelemetry(run.telemetry) && <p className="run-telemetry">{formatTelemetry(run.telemetry)}</p>}
                 </div>
 
-                <ol className="stage-track" aria-label={`${getRunTitle(run)} phase progress`} style={{ gridTemplateColumns: `repeat(${visibleStages.length}, 1fr)` }}>
-                  {visibleStages.map((stage) => (
-                    <li className={`stage-${stage.status}`} key={stage.number}>
-                      <span>0{stage.number}</span>
-                      <div><StatusLight status={stage.status} /><strong>{getPhaseName(run, stage.number)}</strong></div>
-                      <small>{stage.score !== null ? `${floorScore(stage.score)}/100` : stage.status === 'complete' ? 'evaluation pending' : stage.status}</small>
-                    </li>
-                  ))}
+                <ol className="stage-track" aria-label={`${getRunTitle(run)} phase progress`} style={{ gridTemplateColumns: `repeat(${phaseList.length}, 1fr)` }}>
+                  {phaseList.map((name, phaseIndex) => {
+                    const phase = (phaseIndex + 1) as PhaseNumber
+                    const stage = run.stages.find((candidate) => candidate.number === phase)
+                    const score = stage?.score ?? null
+                    return (
+                      <li className={`stage-${stage?.status ?? 'off'}`} key={phase}>
+                        <span>0{phase}</span>
+                        <div><StatusLight status={stage?.status ?? 'off'} /><strong>{name}</strong></div>
+                        <small>{score !== null ? `${floorScore(score)}/100` : stage ? (stage.status === 'complete' ? 'evaluation pending' : stage.status) : 'not run'}</small>
+                        <span aria-hidden="true" className="stage-meter"><i style={{ width: `${score !== null ? Math.min(100, Math.max(0, score)) : 0}%` }} /></span>
+                      </li>
+                    )
+                  })}
                 </ol>
 
                 <div className="run-actions">
@@ -601,7 +664,7 @@ function App() {
                     <span className="preview-pending">No preview available</span>
                   )}
                   {run.reportPath && (
-                    <button type="button" className="open-report" onClick={() => { closePreview(); setSelectedReport(run) }}>
+                    <button type="button" className="open-report" onClick={() => { captureDialogOpener(); closePreview(); setSelectedReport(run) }}>
                       Evaluation report <span aria-hidden="true">→</span>
                     </button>
                   )}
@@ -637,7 +700,7 @@ function App() {
       </footer>
 
       {selectedRun && selectedPhase && selectedPreviewPath && (
-        <div className="preview-overlay" role="dialog" aria-modal="true" aria-label={`${getRunTitle(selectedRun)} preview`}>
+        <div className="preview-overlay" ref={focusDialog} role="dialog" tabIndex={-1} aria-modal="true" aria-label={`${getRunTitle(selectedRun)} preview`}>
           <div className="preview-header">
             <div className="preview-identity">
               <StatusLight status={selectedRun.status} />
@@ -645,20 +708,27 @@ function App() {
               <span>PHASE {selectedPhase} · {getPhaseName(selectedRun, selectedPhase)}</span>
             </div>
             <div className="preview-tools">
-              <label className="phase-selector">
-                <span>Phase</span>
-                <select
-                  aria-label="Preview phase"
-                  onChange={(event) => changePreviewPhase(Number(event.currentTarget.value) as PhaseNumber)}
-                  value={selectedPhase}
-                >
-                  {selectedRun.stages.map(({ number: phase }) => (
-                    <option disabled={!getPreviewPath(selectedRun, phase)} key={phase} value={phase}>
-                      {phase} · {getPhaseName(selectedRun, phase)}{getPreviewPath(selectedRun, phase) ? '' : ' · unavailable'}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {selectedRun.stages.length > 1 && (
+                <div className="phase-switch" role="group" aria-label="Preview phase">
+                  <span aria-hidden="true">Phase</span>
+                  {selectedRun.stages.map(({ number: phase }) => {
+                    const available = Boolean(getPreviewPath(selectedRun, phase))
+                    return (
+                      <button
+                        aria-label={`Phase ${phase} · ${getPhaseName(selectedRun, phase)}${available ? '' : ' · unavailable'}`}
+                        aria-pressed={phase === selectedPhase}
+                        className={phase === selectedPhase ? 'is-current' : undefined}
+                        disabled={!available}
+                        key={phase}
+                        onClick={() => changePreviewPhase(phase)}
+                        type="button"
+                      >
+                        0{phase}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <button className="copy-link" onClick={copyPreviewLink} type="button">
                 {copyStatus === 'copied' ? 'Link copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy link'}
               </button>
@@ -677,7 +747,7 @@ function App() {
       )}
 
       {showcaseOpen && (
-        <div className="preview-overlay" role="dialog" aria-modal="true" aria-label="Showcase preview">
+        <div className="preview-overlay" ref={focusDialog} role="dialog" tabIndex={-1} aria-modal="true" aria-label="Showcase preview">
           <div className="preview-header">
             <div className="preview-identity">
               <strong>Showcase</strong>
@@ -694,7 +764,7 @@ function App() {
       )}
 
       {selectedReport?.reportPath && (
-        <div className="preview-overlay report-overlay" role="dialog" aria-modal="true" aria-label={`${getRunTitle(selectedReport)} evaluation report`}>
+        <div className="preview-overlay report-overlay" ref={focusDialog} role="dialog" tabIndex={-1} aria-modal="true" aria-label={`${getRunTitle(selectedReport)} evaluation report`}>
           <div className="preview-header">
             <div className="preview-identity report-identity">
               <StatusLight status={selectedReport.status} />

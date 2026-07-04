@@ -936,12 +936,10 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
             <div className="page-block">
               <Legend>◂ PAGE/CAT ▸</Legend>
               <span className="page-buttons">
-                <PanelButton store={store} id="page-left" className="dark tiny">
-                  ◂
-                </PanelButton>
-                <PanelButton store={store} id="page-right" className="dark tiny">
-                  ▸
-                </PanelButton>
+                {/* Blank caps — the ◂ ▸ arrows are panel print above/below,
+                    not cap print (photo). */}
+                <PanelButton store={store} id="page-left" className="dark tiny" />
+                <PanelButton store={store} id="page-right" className="dark tiny" />
               </span>
               <Legend className="dim">◂ BANK ▸</Legend>
             </div>
@@ -951,7 +949,8 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                   <Led color="red" on={programs.liveMode} />
                   <Legend>LIVE MODE</Legend>
                 </span>
-                <PanelButton store={store} id="live-mode" className="pill small" />
+                {/* Dark cap on the photo (not a tan pill). */}
+                <PanelButton store={store} id="live-mode" className="dark tiny" />
                 {/* NUM PAD = Shift + Live Mode (manual p. 44): the LED lights
                     while two-digit page.slot entry is active. */}
                 <span className="tiny-led-row">
@@ -1148,6 +1147,12 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
   // list shows sample-set names instead of the Analog waveform list.
   const sampleSet = SYNTH_SAMPLE_SETS[Math.min(focused.waveform, SYNTH_SAMPLE_SETS.length - 1)] ?? SYNTH_SAMPLE_SETS[0]!
   const displayName = isSamplesMode ? sampleSet.name : wave.name
+  // WAVE soft-caption (reference display: wave number within the category);
+  // dial 3 pages this list, dial 2 pages categories.
+  const categoryWaves = SYNTH_WAVEFORMS.filter((w) => w.category === wave.category)
+  const waveCaption = isSamplesMode
+    ? `${Math.min(focused.waveform, SYNTH_SAMPLE_SETS.length - 1) + 1}/${SYNTH_SAMPLE_SETS.length}`
+    : `${categoryWaves.findIndex((w) => w.name === wave.name) + 1}/${categoryWaves.length}`
   const envelope = focused.ampEnvelope
   const filter = focused.filter
   const oscEnvelope = focused.oscEnvelope
@@ -1278,7 +1283,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                               {fmtSigned(focused.oscPitch.cents)} c <b>FINE TUNE</b>
                             </span>
                             <span>
-                              {focused.lfo.destination ?? 'OFF'} <b>LFO DEST</b>
+                              {waveCaption} <b>WAVE</b>
                             </span>
                           </span>,
                         ]
@@ -1302,7 +1307,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                               {mappings.vibratoAmountDisplay(focused.voice.vibratoAmount).toFixed(1)} <b>AMOUNT</b>
                             </span>
                             <span>
-                              {focused.lfo.destination ?? 'OFF'} <b>LFO DEST</b>
+                              {waveCaption} <b>WAVE</b>
                             </span>
                           </span>,
                         ]
@@ -1336,6 +1341,9 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                           </span>,
                           <b key="w" className="oled-name" data-testid="oled-synth-name-line">
                             {displayName}
+                            {/* The reference display draws the selected wave's
+                                shape beside its name. */}
+                            <WaveGlyph name={wave.name} category={wave.category} samples={isSamplesMode} />
                           </b>,
                           <span key="d" data-testid="oled-synth-ctrl-line">
                             OSC CTRL: {isSamplesMode ? '—' : (focused.oscCtrl / 12.7).toFixed(1)}
@@ -1348,7 +1356,8 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                               {isSamplesMode ? '—' : synthCategoryLabel(wave.category)} <b>CAT</b>
                             </span>
                             <span>
-                              {focused.lfo.destination ?? 'OFF'} <b>LFO DEST</b>
+                              {/* Reference caption row: TYPE / CAT / WAVE. */}
+                              {waveCaption} <b>WAVE</b>
                             </span>
                           </span>,
                         ]
@@ -1402,7 +1411,9 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                       Shift + press (manual p. 37: "SOUND INIT (Shift+Waveform)"). */}
                   <Legend>WAVEFORM</Legend>
                   <Legend className="dim">KEEP EDITS ▿</Legend>
-                  <PanelButton store={store} id="waveform-select" className="framed tiny" />
+                  {/* Vertical switch on the photo, same size as the rest,
+                      inside the printed red shift-frame. */}
+                  <PanelButton store={store} id="waveform-select" className="vertical framed" />
                   <Legend className="dim">SOUND INIT</Legend>
                 </span>
               </div>
@@ -1437,7 +1448,8 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                       <Legend className="dim">{synth.arp.direction} ▿</Legend>
                     </span>
                     <span className="knob-cell">
-                      <Knob store={store} id="arp-range" className="small" />
+                      {/* Red 1-4 arc print like the hardware's octave range. */}
+                      <Knob store={store} id="arp-range" className="small arp-range" scale={['1', '2', '3', '4']} />
                       <Legend>
                         {synth.arp.mode === 'Gate' ? 'HARDNESS' : 'RANGE'} <b className="tag-box">ENV</b>
                       </Legend>
@@ -1451,7 +1463,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                         <Led color="red" on={state.synthArpMenuEdit} />
                         <Legend>MENU</Legend>
                       </span>
-                      <PanelButton store={store} id="arp-menu" className="framed tiny" />
+                      <PanelButton store={store} id="arp-menu" className="vertical framed" />
                       <Legend className="dim">GROUP ▿</Legend>
                     </span>
                   </div>
@@ -1516,27 +1528,62 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                           <Led color="red" on={state.synthVibratoEdit} />
                           <Legend>MENU</Legend>
                         </span>
-                        <PanelButton store={store} id="vibrato-menu" className="framed tiny" />
+                        <PanelButton store={store} id="vibrato-menu" className="vertical framed" />
                       </span>
+                      {/* Blank cap bottom-left (photo); the LED columns above
+                          show the mode. The vertical MENU spans both rows. */}
+                      <PanelButton store={store} id="vibrato-mode" className="dark tiny vibrato-mode-button" />
                     </span>
-                    {/* Blank cap: the LED columns above show the mode. */}
-                    <PanelButton store={store} id="vibrato-mode" className="dark tiny vibrato-mode-button" />
                   </GroupBox>
                 </div>
               </div>
             </div>
             <div className="synth-bottom">
               <GroupBox title="LFO" className="lfo-box">
-                <span className="tiny-led-row" aria-hidden="true">
-                  <Led color="green" on={lfo.destination !== null} />
-                  <Legend>{lfo.waveform.toUpperCase()}</Legend>
+                {/* Reference layout: WAVEFORM button left, the destination
+                    list (OSC PITCH / OSC CTRL / FILTER) printed as a stacked
+                    LED column right; knobs side by side below. */}
+                <span className="lfo-top-row">
+                  <span className="lfo-wave-cell">
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Led color="green" on={lfo.destination !== null} />
+                      <Legend>{lfo.waveform.toUpperCase()}</Legend>
+                    </span>
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Led color="red" />
+                      <Legend>WAVEFORM</Legend>
+                    </span>
+                    <PanelButton store={store} id="lfo-waveform" className="tiny" />
+                    <Legend className="dim">GROUP ▿</Legend>
+                  </span>
+                  <span className="lfo-dest-col">
+                    {/* Clickable printed rows (the LAYER INIT ▽ convention):
+                        the display dials page waves/categories like the
+                        hardware, so destination selection lives here — click
+                        a row to target it, click the lit row for Off (spec
+                        lfo.offState). */}
+                    {(
+                      [
+                        ['Osc Pitch', 'OSC PITCH'],
+                        ['Osc Ctrl', 'OSC CTRL'],
+                        ['Filter Freq', 'FILTER'],
+                      ] as const
+                    ).map(([dest, label], i) => (
+                      <button
+                        key={dest}
+                        type="button"
+                        className="legend-button"
+                        aria-label={`LFO Destination ${label}`}
+                        onClick={() => instrument.selectSynthLfoDestination(lfo.destination === dest ? 0 : i + 1)}
+                      >
+                        <span className="tiny-led-row">
+                          <Led color="red" on={lfo.destination === dest} />
+                          <Legend>{label}</Legend>
+                        </span>
+                      </button>
+                    ))}
+                  </span>
                 </span>
-                <span className="tiny-led-row" aria-hidden="true">
-                  <Led color="red" />
-                  <Legend>WAVEFORM</Legend>
-                </span>
-                <PanelButton store={store} id="lfo-waveform" className="framed tiny" />
-                <Legend className="dim">{lfo.destination ?? 'OFF'} ▿</Legend>
                 {/* Reference: the two LFO knobs sit side by side (RATE/TIME
                     left, MOD AMT right), not stacked. */}
                 <span className="lfo-knob-row">
@@ -1550,7 +1597,6 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     <Legend>MOD AMT</Legend>
                   </span>
                 </span>
-                <Legend className="dim">OSC PITCH · OSC CTRL · FILTER</Legend>
               </GroupBox>
               <GroupBox title="Oscillators" className="osc-box">
                 {/* Reference: '\u25cf PITCH/SMP  \u25cf ENVELOPE' printed above two
@@ -1638,7 +1684,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     <Led color="red" on={state.synthEnvEdit === 'amp'} />
                     <Legend>ENVELOPE</Legend>
                   </span>
-                  <PanelButton store={store} id="amp-envelope" className="framed tiny" />
+                  <PanelButton store={store} id="amp-envelope" className="vertical framed" />
                   {/* VELOCITY ▿ = Shift + ENVELOPE cycles Off/1/2/3.
                       Two-LED encoding (reference print "1 ● 2 ●"): level 1
                       lights LED 1, level 2 lights LED 2, level 3 lights
@@ -1678,6 +1724,38 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
  *  other two-word category names). */
 function synthCategoryLabel(category: string): string {
   return category === 'ShapeSine' ? 'SHAPE SINE' : category.toUpperCase()
+}
+
+/** One-cycle waveform path per shape family, drawn beside the wave name like
+ *  the reference display. Pure shapes get their exact form; synthesis
+ *  categories reuse the closest base shape (Sync/Multi/Super are saw-family,
+ *  FM sine-family), noise a jag, samples a small bars icon. */
+const WAVE_GLYPH_PATHS: Record<string, string> = {
+  sine: 'M0 10 Q 7.5 -6 15 10 T 30 10',
+  triangle: 'M0 10 L 7.5 2 L 22.5 18 L 30 10',
+  saw: 'M0 18 L 15 2 L 15 18 L 30 2 L 30 18',
+  square: 'M0 16 L 0 4 L 15 4 L 15 16 L 30 16 L 30 4',
+  pulse: 'M0 16 L 0 4 L 9 4 L 9 16 L 30 16 L 30 4',
+  noise: 'M0 10 L 4 4 L 8 15 L 12 6 L 16 14 L 20 3 L 24 16 L 27 8 L 30 10',
+  bars: 'M2 18 L 2 8 M 9 18 L 9 4 M 16 18 L 16 11 M 23 18 L 23 6 M 29 18 L 29 13',
+}
+
+function waveGlyphKey(name: string, category: string): string {
+  if (name === 'Sine' || category === 'FM-H' || category === 'FM-I' || category === 'ShapeSine') return 'sine'
+  if (name === 'Triangle') return 'triangle'
+  if (name === 'White Noise') return 'noise'
+  if (name.startsWith('Pulse') || name === 'Shape Pulse') return 'pulse'
+  if (name.includes('Square')) return 'square'
+  return 'saw'
+}
+
+function WaveGlyph({ name, category, samples }: { name: string; category: string; samples: boolean }) {
+  const d = WAVE_GLYPH_PATHS[samples ? 'bars' : waveGlyphKey(name, category)]!
+  return (
+    <svg className="oled-wave-glyph" viewBox="0 0 30 20" aria-hidden="true">
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 /** Signed Osc Pitch readout: leading '+' for >= 0 (e.g. '+7', '-24', '+0'). */
@@ -1907,8 +1985,12 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend className="dim">PING PONG ▿</Legend>
               </span>
               <span className="fx-on-cell delay-on-cell">
-                <Legend>ON</Legend>
-                <PanelButton store={store} id="delay-on" className="pill small blank" led="red" />
+                {/* Photo: the fx ON switches are light vertical rockers. */}
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Legend>ON</Legend>
+                  <Led color="red" on={chain.delay.on} />
+                </span>
+                <PanelButton store={store} id="delay-on" className="rocker fx-on-rocker" />
                 <Legend className={`dim red-tag ${state.fxGlobal.delay ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
             </GroupBox>
@@ -1968,7 +2050,8 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                     <Legend>ON</Legend>
                     <Led color="red" on={chain.comp.on} />
                   </span>
-                  <PanelButton store={store} id="comp-on" className="dark tiny" />
+                  {/* Photo: the fx ON switches are light vertical rockers. */}
+                  <PanelButton store={store} id="comp-on" className="rocker fx-on-rocker" />
                 </span>
                 <Legend className={`dim red-tag ${state.fxGlobal.comp ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
@@ -2059,8 +2142,12 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend>DRY WET</Legend>
               </span>
               <span className="fx-on-cell">
-                <Legend>ON</Legend>
-                <PanelButton store={store} id="reverb-on" className="pill small blank" led="red" />
+                {/* Photo: the fx ON switches are light vertical rockers. */}
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Legend>ON</Legend>
+                  <Led color="red" on={chain.reverb.on} />
+                </span>
+                <PanelButton store={store} id="reverb-on" className="rocker fx-on-rocker" />
                 <Legend className={`dim red-tag ${state.fxGlobal.reverb ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
             </GroupBox>

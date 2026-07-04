@@ -152,6 +152,85 @@ body {
   height: 100%;
 }
 
+/* Inside the lens the rail keeps its layout slot (so the legends land at
+   the true panel spot) but drops its own gradient/border paint — the lens
+   backdrop stays the flat chassis red it always showed. */
+.lens-deck .top-rail {
+  background: none;
+  border-bottom-color: transparent;
+}
+
+/* Cursor clone inside the lens canvas. The real cursor bitmap is not
+   readable from JS, so this is OS-styled SVG artwork (macOS: black arrow
+   with white outline; otherwise Windows-style white with black outline),
+   swapped via data-cursor to mirror the hovered control's CSS cursor.
+   Sizes are native-cursor-scale px; the lens transform magnifies them. */
+.lens-cursor {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.lens-cursor svg {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+
+.lens-cursor svg path {
+  fill: var(--lens-cursor-fill);
+  stroke: var(--lens-cursor-outline);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+.lens-cursor[data-os='mac'] {
+  --lens-cursor-fill: #16181c;
+  --lens-cursor-outline: #fff;
+}
+
+.lens-cursor[data-os='win'] {
+  --lens-cursor-fill: #fff;
+  --lens-cursor-outline: #16181c;
+}
+
+/* The pointing hand is white with a black outline on both OSes. */
+.lens-cursor svg[data-for='pointer'] path {
+  fill: #fff;
+  stroke: #16181c;
+}
+
+/* Per-glyph sizing + hotspot alignment (arrow tip / fingertip / center). */
+.lens-cursor[data-cursor='default'] svg[data-for='default'] {
+  display: block;
+  width: 15px;
+  height: 20px;
+  transform: translate(-1.2px, -1px);
+}
+
+.lens-cursor[data-cursor='pointer'] svg[data-for='pointer'] {
+  display: block;
+  width: 18px;
+  height: 23px;
+  transform: translate(-8.9px, -0.9px);
+}
+
+.lens-cursor[data-cursor='ns-resize'] svg[data-for='ns-resize'] {
+  display: block;
+  width: 12px;
+  height: 22px;
+  transform: translate(-6px, -11px);
+}
+
+.lens-cursor[data-cursor='ew-resize'] svg[data-for='ew-resize'] {
+  display: block;
+  width: 22px;
+  height: 12px;
+  transform: translate(-11px, -6px);
+}
+
 /* "HANDMADE IN SWEDEN..." vertical print on the bare red right margin:
    reads bottom-to-top (vertical-rl rotated 180°), anchored at the panel's
    bottom-right like the hardware print. */
@@ -282,13 +361,34 @@ body {
 }
 
 .black-key[data-pressed='true'] {
-  background: linear-gradient(180deg, #161616 0%, #050505 60%, #1d1d1d 100%);
-  transform: translateY(2.5%) scaleY(0.985);
-  box-shadow: 0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.6);
+  /* Depressed key: never translate the element — that would reveal the white
+     keys behind the cap. The footprint stays anchored and the drop is drawn
+     as the key's own body: a shadowed rear band above the lowered cap, a
+     faint lip where the new (lower) top surface begins, then the cap surface
+     darkened because it tilts away from the light. */
+  background: linear-gradient(
+    180deg,
+    #0a0a0a 0%,
+    #060606 3.8%,
+    #262626 5%,
+    #131313 7.5%,
+    #0b0b0b 32%,
+    #070707 78%,
+    #050505 100%
+  );
+  box-shadow:
+    0 0.08cqw 0.12cqw rgba(0, 0, 0, 0.45),
+    inset 0.12cqw 0 0.1cqw rgba(255, 255, 255, 0.05),
+    inset -0.12cqw 0 0.1cqw rgba(255, 255, 255, 0.05);
 }
 
 .black-key[data-pressed='true']::after {
-  background: linear-gradient(180deg, rgba(10, 10, 10, 0) 0%, #121212 35%, #232323 70%, #141414 100%);
+  /* The nose dips down and away from the viewer: foreshortened and darker. */
+  height: 7%;
+  background: linear-gradient(180deg, rgba(8, 8, 8, 0) 0%, #101010 40%, #1d1d1d 72%, #101010 100%);
+  box-shadow:
+    inset 0.05cqw 0 0.05cqw rgba(255, 255, 255, 0.08),
+    inset -0.05cqw 0 0.05cqw rgba(255, 255, 255, 0.06);
 }
 
 .key:focus-visible {
@@ -441,6 +541,14 @@ body {
   font-family: inherit;
 }
 
+/* Flex container so the button hugs its printed legend: a plain <button>'s
+   13px UA font-size strut would otherwise quadruple the row's height and
+   overflow the dense program rail. */
+.legend-button {
+  display: inline-flex;
+  justify-content: center;
+}
+
 .plate-title-button:focus-visible,
 .legend-button:focus-visible {
   outline: max(2px, 0.15cqw) solid #57b7ff;
@@ -530,14 +638,21 @@ body {
   display: inline-flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 0.09cqw;
+  gap: 0.05cqw;
 }
 
-/* Reference: ladder LEDs are wide rectangular segments, not round dots. */
+/* Reference: ladder LEDs are thin sliver segments at a tight pitch (the
+   photo's meters read as fine yellow-green lines, not chunky pills). */
 .led-ladder .led {
-  width: 0.42cqw;
-  height: 0.17cqw;
-  border-radius: 0.05cqw;
+  width: 0.36cqw;
+  height: 0.085cqw;
+  border-radius: 0.025cqw;
+}
+
+/* Lit meter segments lean yellow-green on the photo, not pure green. */
+.led-ladder .led.led-green[data-on='true'] {
+  background: #b8e04b;
+  box-shadow: 0 0 0.16cqw rgba(170, 215, 65, 0.75);
 }
 
 /* Morph assignment range indicator (manual p. 39): LEDs spanning the
@@ -634,14 +749,15 @@ body {
   max-width: 100%;
 }
 
-.variation-row .panel-button.tiny {
-  min-width: 1.05cqw;
-  min-height: 0.6cqw;
-}
+/* Variation buttons are the same standard switch as everywhere else. */
 
 .variation-row .legend {
   white-space: nowrap;
 }
+
+/* User direction: EVERY rectangular switch is the same size — the Layer
+   Effects section gets no smaller variant (its earlier 1.1 x 0.62 override
+   is gone; the boxes compress their print instead). */
 
 /* Compact selector grids inside the effect boxes (short grid tracks). */
 .fx-box .sel-grid {
@@ -685,17 +801,15 @@ body {
   min-width: 0;
 }
 
-.reverb-top-row .panel-button.tiny {
-  min-width: 0.85cqw;
-  min-height: 0.55cqw;
-}
+/* Reverb BRIGHT/variation buttons stay the standard switch size. */
 
-/* Reverb BRIGHT/DARK: stacked LED legends beside their own dark button.
-   Compact, so the box keeps fitting its grid track. */
+/* Reverb BRIGHT/DARK: stacked LED legends with their dark button BELOW
+   (photo) — the narrow side-by-side Comp|Reverb split has no row slack. */
 .reverb-tone {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.14cqw;
+  gap: 0.08cqw;
 }
 
 .reverb-tone-leds {
@@ -712,8 +826,13 @@ body {
   gap: 0.03cqw;
 }
 
+.reverb-box .sel-row {
+  gap: 0.06cqw;
+}
+
 .reverb-box .sel-row .legend {
-  font-size: 0.22cqw;
+  font-size: 0.21cqw;
+  letter-spacing: 0;
 }
 
 .reverb-box .variation-cell {
@@ -762,7 +881,10 @@ body {
 /* Buttons */
 
 /* Reference: every button is a rounded cap seated in a RECTANGULAR dark
-   housing (the switch bezel), not a floating rounded pill. */
+   housing (the switch bezel), not a floating rounded pill.
+   ONE uniform footprint (measured ~1.55 x 0.95cqw on the photo): every
+   rectangular button on the panel is the same switch, only the cap color
+   differs; vertical variants are the same footprint rotated. */
 .panel-button {
   position: relative;
   display: inline-flex;
@@ -772,15 +894,17 @@ body {
   gap: 0.1cqw;
   border: none;
   margin: 0;
-  padding: 0.09cqw;
+  /* A wider housing reveal: the rounded cap reads slightly smaller than
+     the rectangular base, like the photo. */
+  padding: 0.12cqw;
   border-radius: 0.07cqw;
   background: linear-gradient(180deg, #191b1f 0%, #0b0c0e 100%);
   box-shadow:
     inset 0 0.04cqw 0.05cqw rgba(255, 255, 255, 0.08),
     0 0.1cqw 0.16cqw rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  min-width: 1.7cqw;
-  min-height: 1cqw;
+  min-width: 1.5cqw;
+  min-height: 0.92cqw;
   flex: none;
 }
 
@@ -799,8 +923,8 @@ body {
   align-self: stretch;
   flex: 1;
   background: linear-gradient(180deg, #2c2f35 0%, #17191d 55%, #0f1013 100%);
-  border-radius: 0.34cqw;
-  padding: 0.08cqw 0.24cqw;
+  border-radius: 0.24cqw;
+  padding: 0.06cqw 0.2cqw;
   box-shadow:
     inset 0 0.05cqw 0.06cqw rgba(255, 255, 255, 0.16),
     0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.5);
@@ -865,6 +989,12 @@ body {
 
 /* Red buttons (Store, Arp Run): a RED cap riding the same dark rectangular
    housing as every other button. */
+/* Red switches are red THROUGH — the housing under the cap is dark red,
+   not the black base (photo: Store, Arp Run). */
+.panel-button.red {
+  background: linear-gradient(180deg, #6b1b21 0%, #431014 100%);
+}
+
 .panel-button.red .panel-button-cap {
   background: linear-gradient(180deg, #d5474e 0%, #a3242c 55%, #7e161e 100%);
   color: #f8e6e6;
@@ -873,11 +1003,15 @@ body {
     0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.5);
 }
 
-/* User direction (overrides the photo's red shift-frames): the synth
-   menu/select buttons are STANDARD black cap-on-housing buttons; the
-   printed '● LABEL' rows above the caps carry the indicators. */
+/* Red shift-frame: a printed ring on the PANEL around the standard switch
+   (photo: Waveform/Sound Init, Arp + Vibrato Menu, Osc Pitch/Env, Filter
+   Type/Env, Amp Envelope). Outline paints outside the box, so the switch
+   itself stays the uniform size, and the :active/lit box-shadow overrides
+   can't strip it (focus-visible temporarily replaces it, which is fine). */
 .panel-button.framed {
   border: none;
+  outline: 0.07cqw solid #8c2530;
+  outline-offset: 0.11cqw;
 }
 
 /* Paired '● LABEL' rows above the Oscillators/Filter button pairs. */
@@ -905,19 +1039,19 @@ body {
   letter-spacing: 0;
 }
 
-.deck-section[data-section='program'] .panel-button.red.small {
-  min-height: 0.7cqw;
-}
-
-.panel-button.small {
-  min-width: 1.5cqw;
-  min-height: 0.9cqw;
-}
-
+/* .small / .tiny are legacy names: the hardware uses ONE switch size
+   everywhere (user direction + photo), so they no longer shrink. */
+.panel-button.small,
 .panel-button.tiny {
-  min-width: 1.25cqw;
-  min-height: 0.75cqw;
-  border-radius: 0.18cqw;
+  min-width: 1.5cqw;
+  min-height: 0.92cqw;
+}
+
+/* The photo's vertical switches (Sound Init, Arp/Vibrato Menu, Amp
+   Envelope, FX variation / focus buttons): the SAME switch rotated 90°. */
+.panel-button.vertical {
+  min-width: 0.92cqw;
+  min-height: 1.5cqw;
 }
 
 /* Rockers (Shift/Exit): the light cap rides a slightly darker warm-gray
@@ -985,26 +1119,34 @@ body {
 
 /* Knobs and encoders */
 
+/* Hardware sizing rule: every parameter KNOB on the panel is the same size
+   (~1cqw, measured on the reference); the endless DIALS (model/OLED dials)
+   are one bigger size; PROGRAM VALUE and MASTER LEVEL are the two large
+   dials. `.small` survives only as a legacy alias for the canonical knob. */
 .knob,
-.encoder {
+.knob.small {
   position: relative;
-  width: 1.5cqw;
-  height: 1.5cqw;
+  width: 1.02cqw;
+  height: 1.02cqw;
   flex: none;
   cursor: ns-resize;
   touch-action: none;
 }
 
-.knob.small,
+.encoder,
 .encoder.small {
-  width: 1.15cqw;
-  height: 1.15cqw;
+  position: relative;
+  width: 1.3cqw;
+  height: 1.3cqw;
+  flex: none;
+  cursor: ns-resize;
+  touch-action: none;
 }
 
 .knob.large,
 .encoder.large {
-  width: 2.2cqw;
-  height: 2.2cqw;
+  width: 1.7cqw;
+  height: 1.7cqw;
 }
 
 .knob-cap,
@@ -1078,15 +1220,18 @@ body {
 
 /* Faders */
 
+/* Hardware sizing rule: ONE fader size everywhere; only the organ drawbars
+   are bigger (see .drawbar below). */
 .fader {
   position: relative;
-  width: 0.95cqw;
+  width: 0.8cqw;
   height: 100%;
   min-height: 3.4cqw;
   flex: none;
   cursor: ns-resize;
   touch-action: none;
-  --fader-cap-h: 1.15cqw;
+  /* Flatter cap, like the photo's thin ribbed rubber caps. */
+  --fader-cap-h: 0.95cqw;
 }
 
 .fader-track {
@@ -1125,14 +1270,16 @@ body {
    slot spanning the whole travel, a dark metal stem, and a large cap. */
 .drawbar {
   position: relative;
-  /* Narrow enough that all nine columns + LED frames fit the bank. */
+  /* The hit column stays narrow so nine columns + LED frames fit the bank;
+     the cap paints wider than the column (photo: chunky caps, bigger than
+     the level faders' — measured ~1.15 x 1.7cqw). */
   width: 0.7cqw;
   height: 100%;
   min-height: 3.6cqw;
   flex: none;
   cursor: ns-resize;
   touch-action: none;
-  --drawbar-cap-h: 1.15cqw;
+  --drawbar-cap-h: 1.7cqw;
 }
 
 /* Full-travel recessed slot behind the stem (like the fader tracks). */
@@ -1162,7 +1309,7 @@ body {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
+  width: 1.15cqw;
   height: var(--drawbar-cap-h);
   border-radius: 0.12cqw;
   display: flex;
@@ -1171,6 +1318,23 @@ body {
   box-shadow:
     0 0.14cqw 0.18cqw rgba(0, 0, 0, 0.5),
     inset 0 0.06cqw 0.08cqw rgba(255, 255, 255, 0.25);
+}
+
+/* Fine grooves across the cap's front face (photo: the classic serrated
+   drawbar pull), painted over whichever cap color the column wears. */
+.drawbar-cap::after {
+  content: '';
+  position: absolute;
+  inset: 18% 10%;
+  border-radius: inherit;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 0.14cqw,
+    rgba(0, 0, 0, 0.28) 0.14cqw,
+    rgba(0, 0, 0, 0.28) 0.2cqw
+  );
+  pointer-events: none;
 }
 
 .drawbar-line {
@@ -1205,61 +1369,169 @@ body {
 
 /* Wheels and pitch stick */
 
+/* Slim stadium-shaped slot cut into the chassis. Measured on the product
+   photo: the opening is ~0.68 x 3.7cqw, leaning ~13.5deg counter-clockwise,
+   with a soft shadow cast onto the panel toward the lower right. */
 .wheel {
   position: relative;
-  width: 1.5cqw;
-  height: 4.4cqw;
-  border-radius: 0.3cqw;
-  background: #17100f;
-  box-shadow: inset 0 0.2cqw 0.4cqw rgba(0, 0, 0, 0.8);
+  width: 0.78cqw;
+  height: 3.95cqw;
+  border-radius: 0.36cqw;
+  background: #0c0909;
+  box-shadow:
+    inset 0 0.14cqw 0.2cqw rgba(0, 0, 0, 0.9),
+    inset 0 -0.1cqw 0.18cqw rgba(0, 0, 0, 0.85),
+    0.04cqw 0.08cqw 0.14cqw rgba(25, 5, 8, 0.38);
   overflow: hidden;
   cursor: ns-resize;
   touch-action: none;
   flex: none;
-  /* Reference: the wheel leans only slightly toward the upper-left. */
-  transform: rotate(-8deg);
+  transform: rotate(-13.5deg);
 }
 
+/* The visible crown of the rubber wheel: SMOOTH stippled gray (the real
+   NS4 wheel has no ribs), a bright specular band left of center, a darker
+   gap into the well along the right edge, shadowed ends, and a faint thumb
+   dimple in the lower third. Only the grain tile (sized < 100%) scrolls
+   with the inline background-position the component drives. */
 .wheel-face {
   position: absolute;
-  inset: 6% 18%;
-  border-radius: 0.55cqw;
-  /* Bright ribbed metal like the reference wheel — fine ribs, not chunky. */
+  inset: 3.5% 14% 4.5% 1%;
+  border-radius: 0.3cqw / 0.6cqw;
+  overflow: hidden;
+  background-color: #5f636a;
   background-image:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0.45) 100%),
-    repeating-linear-gradient(180deg, #969aa2 0 3.5%, #60646d 3.5% 7%);
-  background-size: 100% 100%, 100% 240%;
-  box-shadow: 0 0.1cqw 0.25cqw rgba(0, 0, 0, 0.7);
+    linear-gradient(
+      180deg,
+      rgba(6, 5, 5, 0.85) 0%,
+      rgba(30, 26, 26, 0.4) 8%,
+      rgba(255, 255, 255, 0.18) 20%,
+      rgba(255, 255, 255, 0.4) 32%,
+      rgba(255, 255, 255, 0.16) 50%,
+      rgba(58, 30, 28, 0.22) 76%,
+      rgba(10, 6, 6, 0.8) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.24) 0%,
+      rgba(255, 255, 255, 0.55) 20%,
+      rgba(255, 255, 255, 0.6) 30%,
+      rgba(150, 130, 130, 0.1) 50%,
+      rgba(104, 44, 44, 0.45) 72%,
+      rgba(20, 8, 8, 0.78) 100%
+    ),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.88 0 0 0 0 0.9 0 0 0 0 0.94 0 0 0 1 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0 0.35 0.7 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size:
+    100% 100%,
+    100% 100%,
+    0.55cqw 0.55cqw;
+  background-repeat: no-repeat, no-repeat, repeat;
+  box-shadow: 0 0.08cqw 0.18cqw rgba(0, 0, 0, 0.75);
 }
 
+/* The thumb dimple: a shadowed hollow with a bright lower rim that the
+   component rolls up/down the crown with the wheel's value. */
+.wheel-dimple {
+  position: absolute;
+  left: 6%;
+  right: 10%;
+  height: 7%;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: radial-gradient(60% 100% at 55% 42%, rgba(14, 12, 14, 0.6) 0%, rgba(18, 16, 18, 0) 78%);
+  box-shadow: 0 0.05cqw 0.04cqw rgba(216, 214, 218, 0.4);
+  pointer-events: none;
+}
+
+/* Squared black pocket for the pitch stick. Measured on the product photo:
+   ~2.3 x 1.02cqw leaning ~15deg, near-square corners, with the interior
+   barely lit toward the lower right. */
 .pitch-stick {
   position: relative;
-  width: 3.1cqw;
-  height: 1.7cqw;
+  width: 2.5cqw;
+  height: 1.12cqw;
   cursor: ew-resize;
   touch-action: none;
   flex: none;
-  /* Reference: a LANDSCAPE black recessed slot, tilted slightly counter-
-     clockwise; the wooden stick lies side-to-side in its left portion. */
-  transform: rotate(-12deg);
-  background: #14100e;
-  border-radius: 0.25cqw;
-  box-shadow: inset 0 0.15cqw 0.3cqw rgba(0, 0, 0, 0.8);
+  transform: rotate(-15deg);
+  background: linear-gradient(135deg, #060404 0%, #0b0807 55%, #191110 100%);
+  border-radius: 0.09cqw;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0.1cqw 0.16cqw rgba(0, 0, 0, 0.9),
+    0.05cqw 0.1cqw 0.2cqw rgba(25, 5, 8, 0.45);
 }
 
+/* The maple tip poking through the slot: bright grained top face lit from
+   the upper left, a darker end-grain facet on the right tip, rounder left
+   end, and a drop shadow into the pocket. Centered at rest; the component
+   slides it side to side with the bend. */
 .pitch-stick-lever {
   position: absolute;
-  /* Centered at rest; the bend slides it left/right within the slot. The
-     stick is a slimmer wooden dowel than the slot (reference photo). */
-  left: 21%;
-  top: 28%;
-  width: 58%;
-  height: 44%;
-  border-radius: 0.28cqw;
-  background: linear-gradient(180deg, #d3b183 0%, #a97f4c 50%, #6d4e2a 100%);
+  left: 9%;
+  top: 5%;
+  width: 79%;
+  height: 80%;
+  border-radius: 0.2cqw 0.1cqw 0.1cqw 0.22cqw;
+  overflow: hidden;
+  background-color: #c68a40;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.18 0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.4 0 0 0 0 0.21 0 0 0 0 0.04 0 0 0 0.9 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0 0.22 0.45 0.68'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23w)'/%3E%3C/svg%3E"),
+    linear-gradient(
+      168deg,
+      rgba(255, 234, 178, 0.55) 0%,
+      rgba(255, 234, 178, 0.16) 30%,
+      rgba(0, 0, 0, 0) 50%,
+      rgba(104, 56, 14, 0.45) 100%
+    ),
+    repeating-linear-gradient(
+      193deg,
+      rgba(248, 202, 128, 0.42) 0,
+      rgba(248, 202, 128, 0.42) 0.05cqw,
+      rgba(0, 0, 0, 0) 0.1cqw,
+      rgba(122, 68, 22, 0.4) 0.13cqw,
+      rgba(0, 0, 0, 0) 0.17cqw,
+      rgba(224, 160, 84, 0.36) 0.22cqw,
+      rgba(0, 0, 0, 0) 0.29cqw
+    ),
+    repeating-linear-gradient(
+      188deg,
+      rgba(134, 78, 26, 0.32) 0,
+      rgba(134, 78, 26, 0.32) 0.03cqw,
+      rgba(0, 0, 0, 0) 0.12cqw,
+      rgba(255, 214, 142, 0.28) 0.17cqw,
+      rgba(0, 0, 0, 0) 0.21cqw
+    );
+  background-size:
+    1.4cqw 0.7cqw,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
   box-shadow:
-    0 0.16cqw 0.26cqw rgba(0, 0, 0, 0.55),
-    inset 0 0.07cqw 0.09cqw rgba(255, 245, 225, 0.5);
+    0.1cqw 0.14cqw 0.18cqw rgba(0, 0, 0, 0.75),
+    inset 0 0.05cqw 0.07cqw rgba(255, 245, 220, 0.55),
+    inset 0 -0.05cqw 0.08cqw rgba(58, 28, 6, 0.45);
+}
+
+/* Darker end-grain facet on the stick's right tip, edged by a thin specular
+   ridge where it breaks from the top face (reference closeup). */
+.pitch-stick-lever::after {
+  content: '';
+  position: absolute;
+  top: -5%;
+  right: -4%;
+  width: 27%;
+  height: 110%;
+  transform: skewX(-11deg);
+  background: linear-gradient(
+    100deg,
+    rgba(255, 232, 172, 0.55) 0%,
+    rgba(150, 94, 38, 0.5) 14%,
+    rgba(196, 138, 68, 0.45) 45%,
+    rgba(118, 68, 24, 0.55) 100%
+  );
+  box-shadow: inset 0.06cqw 0 0.05cqw rgba(70, 38, 10, 0.5);
 }
 
 /* Focus visibility for all decorative controls */
@@ -1283,6 +1555,15 @@ body {
   font-size: 0.5cqw;
   line-height: 1.3;
   overflow: hidden;
+}
+
+/* Waveform shape drawn beside the wave name (reference display). */
+.oled-wave-glyph {
+  width: 1cqw;
+  height: 0.66cqw;
+  margin-left: 0.3cqw;
+  vertical-align: -0.08cqw;
+  opacity: 0.9;
 }
 
 .oled-line {
@@ -1392,27 +1673,29 @@ body {
   align-items: stretch;
   /* Clear air between MASTER LEVEL and the Rotary strip, with the whole
      column starting a touch lower (reference proportions). */
-  gap: 0.55cqw;
-  padding-top: 0.45cqw;
+  gap: 0.4cqw;
+  padding-top: 0.35cqw;
   min-height: 0;
+}
+
+/* The MASTER LEVEL cluster never squashes below its print + knob. */
+.perf-right .perf-master {
+  flex: none;
 }
 
 .perf-master {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.08cqw;
-  padding-top: 0.1cqw;
+  gap: 0.06cqw;
+  /* Side/bottom padding contains the large dial's printed scale arc, which
+     paints past the knob box (it would otherwise overflow this cell). */
+  padding: 0.02cqw 0.35cqw 0.35cqw;
 }
 
 .perf-master .legend {
-  font-size: 0.3cqw;
+  font-size: 0.28cqw;
   text-align: center;
-}
-
-.perf-master .knob.large {
-  width: 1.7cqw;
-  height: 1.7cqw;
 }
 
 /* Reference: MASTER LEVEL wears a thin printed white ring around the cap. */
@@ -1425,14 +1708,17 @@ body {
   pointer-events: none;
 }
 
-/* Pitch stick high at top-left, mod wheel in its slot below-right (reference). */
+/* Pitch stick upper-left, mod wheel below and to the right. Paddings and
+   offsets measured on the HP73 product photo: the stick well starts ~1.9cqw
+   in from the panel edge with clear red chassis above it, and the wheel
+   well tops out ~2.1cqw below the stick well's top edge. */
 .perf-wheels {
   flex: 1;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 1cqw;
-  padding: 0.25cqw 0 0 0.4cqw;
+  gap: 2cqw;
+  padding: 2.6cqw 0 0 1.3cqw;
 }
 
 .perf-wheel-slot {
@@ -1680,8 +1966,15 @@ body {
 
 .perc-grid {
   display: flex;
-  gap: 0.12cqw;
+  gap: 0.06cqw;
   min-width: 0;
+}
+
+/* Three switches share the narrow percussion box: they split it evenly
+   (a hair under the global size) instead of escaping the box. */
+.perc-cell .panel-button {
+  min-width: 0;
+  align-self: stretch;
 }
 
 .perc-cell {
@@ -1689,16 +1982,16 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.08cqw;
+  flex: 1 1 0;
   min-width: 0;
 }
 
 .perc-cell .legend {
-  font-size: 0.28cqw;
+  font-size: 0.22cqw;
+  letter-spacing: 0;
 }
 
-.perc-cell .panel-button.tiny {
-  min-width: 1cqw;
-}
+/* Percussion buttons keep the uniform switch footprint. */
 
 .perc-on {
   display: inline-flex;
@@ -1751,16 +2044,20 @@ body {
 .drawbar-scale {
   display: inline-flex;
   align-items: stretch;
-  gap: 0.04cqw;
-  padding: 0.12cqw 0.05cqw;
-  border: 0.06cqw solid var(--panel-line);
-  border-radius: 0.14cqw;
-  background: rgba(205, 211, 224, 0.16);
+  gap: 0.05cqw;
+  padding: 0.1cqw 0.05cqw;
+  /* Crisp light outline on the bare plate (photo) — no filled background,
+     which washed the frames out. */
+  border: 0.055cqw solid rgba(214, 219, 230, 0.75);
+  border-radius: 0.12cqw;
+  background: none;
 }
 
+/* Thin sliver segments like the level meters (photo). */
 .drawbar-scale .led {
-  width: 0.26cqw;
-  height: 0.15cqw;
+  width: 0.24cqw;
+  height: 0.09cqw;
+  border-radius: 0.025cqw;
 }
 
 .drawbar-scale-nums {
@@ -1856,8 +2153,13 @@ body {
 }
 
 .deck-section[data-section='piano'] .type-led-grid .legend {
-  width: 1.3cqw;
-  font-size: 0.26cqw;
+  width: 1.25cqw;
+  font-size: 0.25cqw;
+  letter-spacing: 0;
+}
+
+.deck-section[data-section='piano'] .type-led-grid > span {
+  column-gap: 0.1cqw;
 }
 
 .deck-section[data-section='piano'] .group-box {
@@ -1923,6 +2225,11 @@ body {
 .deck-section[data-section='piano'] .acoustics-cell .tiny-led-row .legend {
   white-space: nowrap;
   font-size: 0.22cqw;
+  letter-spacing: 0;
+}
+
+.deck-section[data-section='piano'] .acoustics-cell .tiny-led-row {
+  gap: 0.06cqw;
 }
 
 /* Reference: TIMBRE is a tall dark rocker LEFT of the printed label column
@@ -1934,8 +2241,8 @@ body {
 }
 
 .panel-button.rocker.timbre-rocker {
-  min-width: 0.75cqw;
-  min-height: 1.75cqw;
+  min-width: 0.92cqw;
+  min-height: 1.5cqw;
   background: linear-gradient(180deg, #1c1e22 0%, #0c0d0f 100%);
 }
 
@@ -2051,10 +2358,10 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.24cqw;
+  gap: 0.14cqw;
   /* Top offset so the MORPH ASSIGN band tops align with the neighboring
      plates' light header bands (reference). */
-  padding: 0.07cqw 0.05cqw 0.15cqw;
+  padding: 0.07cqw 0.05cqw 0.08cqw;
 }
 
 /* Right utility rail (reference): Prog View → Mon/Copy stacked, Shift/Exit
@@ -2065,8 +2372,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2cqw;
-  padding-top: 0.1cqw;
+  gap: 0.1cqw;
+  padding-top: 0.05cqw;
 }
 
 .program-rail .rail-cell {
@@ -2081,11 +2388,8 @@ body {
   text-align: center;
 }
 
-.program-rail .panel-button.tiny {
-  min-width: 1.05cqw;
-  min-height: 0.55cqw;
-  padding: 0.06cqw;
-}
+/* Rail buttons: uniform switch footprint (photo: PANIC/UNDO/etc. are the
+   same switch as everything else). */
 
 .program-rail .shift-cluster {
   margin-top: auto;
@@ -2156,8 +2460,8 @@ body {
 }
 
 .deck-section[data-section='program'] .panel-button.tiny {
-  min-width: 1.15cqw;
-  min-height: 0.68cqw;
+  min-width: 1.5cqw;
+  min-height: 0.92cqw;
 }
 
 .deck-section[data-section='program'] .panel-button .panel-button-cap {
@@ -2166,7 +2470,7 @@ body {
 
 .program-top-row .group-box {
   flex-direction: column;
-  padding: 0.4cqw 0.2cqw 0.2cqw;
+  padding: 0.32cqw 0.2cqw 0.12cqw;
 }
 
 .morph-box {
@@ -2216,21 +2520,21 @@ body {
 
 .morph-legend-row .tiny-led-row,
 .preset-legend-row .tiny-led-row {
-  gap: 0.08cqw;
+  gap: 0.05cqw;
   min-width: 0;
 }
 
 .program-top-row .morph-legend-row .legend,
 .preset-legend-row .legend {
-  font-size: 0.22cqw;
+  font-size: 0.21cqw;
   letter-spacing: 0;
   white-space: nowrap;
 }
 
 .morph-legend-row .led,
 .preset-legend-row .led {
-  width: 0.26cqw;
-  height: 0.26cqw;
+  width: 0.22cqw;
+  height: 0.22cqw;
 }
 
 /* Centered legend between short flanking horizontal rules (reference:
@@ -2338,7 +2642,7 @@ body {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 0.25cqw;
+  gap: 0.2cqw;
   align-items: stretch;
 }
 
@@ -2405,7 +2709,7 @@ body {
 .store-side {
   display: flex;
   flex-direction: column;
-  gap: 0.14cqw;
+  gap: 0.1cqw;
   flex: none;
 }
 
@@ -2499,9 +2803,9 @@ body {
   /* Wide ~2:1 rectangle like the reference display (≈6cqw wide up here). */
   flex: 1;
   max-height: 3.2cqw;
-  padding: 0.16cqw 0.3cqw;
+  padding: 0.12cqw 0.3cqw;
   font-size: 0.44cqw;
-  line-height: 1.2;
+  line-height: 1.12;
 }
 
 .deck-section[data-section='program'] .oled .oled-name {
@@ -2532,7 +2836,7 @@ body {
 }
 
 .deck-section[data-section='program'] .program-grid {
-  gap: 0.16cqw 0.14cqw;
+  gap: 0.14cqw 0.08cqw;
 }
 
 .program-grid {
@@ -2540,8 +2844,11 @@ body {
 }
 
 .program-grid .panel-button.tiny {
-  min-width: 0.95cqw;
   padding: 0.05cqw;
+  /* The 4-across grid divides the strip evenly: the buttons fill their
+     cells (a hair under the global switch size) instead of clipping. */
+  min-width: 0;
+  width: 100%;
 }
 
 .morph-buttons .panel-button.tiny {
@@ -2549,8 +2856,9 @@ body {
 }
 
 .prog-num {
-  font-size: 0.28cqw;
-  gap: 0.08cqw;
+  font-size: 0.24cqw;
+  gap: 0.05cqw;
+  letter-spacing: 0;
 }
 
 .prog-num .led {
@@ -2562,20 +2870,9 @@ body {
   gap: 0.04cqw;
 }
 
-.deck-section[data-section='program'] .panel-button.rocker {
-  min-height: 0.95cqw;
-  min-width: 0.7cqw;
-}
-
 .deck-section[data-section='program'] .panel-button.small {
-  min-width: 1.3cqw;
-  min-height: 0.75cqw;
-}
-
-.deck-section[data-section='program'] .knob.large,
-.deck-section[data-section='program'] .encoder.large {
-  width: 1.9cqw;
-  height: 1.9cqw;
+  min-width: 1.5cqw;
+  min-height: 0.92cqw;
 }
 
 .program-dial-block {
@@ -2645,11 +2942,28 @@ body {
   letter-spacing: 0;
 }
 
+/* Reference: the Shift rocker sits on a printed light-gray plate with
+   SHIFT above and EXIT below in dark ink. */
 .shift-cluster {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   gap: 0.08cqw;
+  background: linear-gradient(180deg, #d3d4d2 0%, #bfc1c0 100%);
+  border-radius: 0.14cqw;
+  padding: 0.1cqw 0.16cqw 0.12cqw;
+  box-shadow:
+    inset 0 0.04cqw 0.05cqw rgba(255, 255, 255, 0.5),
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.3);
+}
+
+.shift-cluster .legend {
+  color: #22252b;
+  font-weight: 700;
+}
+
+.shift-cluster .legend.dim {
+  color: #383c44;
 }
 
 /* ---------------------------------------------------------------- synth -- */
@@ -2729,14 +3043,15 @@ body {
   flex: 1.45;
   min-height: 0;
   display: flex;
-  gap: 0.25cqw;
+  gap: 0.15cqw;
 }
 
 .synth-display-block {
   display: flex;
   flex-direction: column;
   gap: 0.2cqw;
-  width: 38%;
+  /* Photo: the OLED block is ~35% of the synth main area. */
+  width: 35.5%;
   flex: none;
 }
 
@@ -2753,12 +3068,6 @@ body {
 .voice-box .legend {
   font-size: 0.22cqw;
   max-width: 100%;
-}
-
-.voice-box .knob.small,
-.vibrato-box .knob.small {
-  width: 0.85cqw;
-  height: 0.85cqw;
 }
 
 .deck-section[data-section='synth'] .oled {
@@ -2790,22 +3099,24 @@ body {
   justify-content: space-around;
 }
 
-.synth-dials .encoder.small {
-  width: 0.85cqw;
-  height: 0.85cqw;
-}
-
 .synth-dial {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.08cqw;
+  /* Cells never shrink below the dial + print (no clipping). */
+  flex: none;
+}
+
+.synth-dial .legend {
+  font-size: 0.3cqw;
+  letter-spacing: 0.01cqw;
 }
 
 .mode-column {
   display: flex;
   flex-direction: column;
-  gap: 0.15cqw;
+  gap: 0.08cqw;
   align-items: center;
 }
 
@@ -2817,7 +3128,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.08cqw;
+  gap: 0.05cqw;
 }
 
 .arp-column {
@@ -2825,7 +3136,7 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15cqw;
+  gap: 0.08cqw;
 }
 
 .arp-row {
@@ -2841,28 +3152,38 @@ body {
   min-width: 0;
 }
 
-/* Knob cells need more width than the button cells beside them. */
+/* Knob cells need more width than the button cells beside them — enough
+   that the RANGE ENV print never runs under the mode button's cap. */
 .arp-row .knob-cell {
-  flex: 1.35 1 0;
+  flex: 1.5 1 0;
 }
 
 .arp-row .arp-mode-cell {
-  flex: 0.85 1 0;
+  flex: 0.8 1 0;
+}
+
+/* The RANGE knob prints a red 1-4 octave arc on the hardware. */
+.knob.arp-range .knob-scale {
+  color: #c8535b;
 }
 
 .arp-mode-cell .tiny-led-row {
   flex-wrap: wrap;
   justify-content: center;
-}
-
-.arp-row .knob.small {
-  width: 0.9cqw;
-  height: 0.9cqw;
+  gap: 0.05cqw;
 }
 
 .arp-box .legend {
   font-size: 0.22cqw;
+  letter-spacing: 0;
   max-width: 100%;
+}
+
+/* RANGE ENV straddles its narrow knob column like panel ink — max-width
+   clipping was cutting it to 'ANGE ENV'. */
+.arp-box .knob-cell .legend {
+  max-width: none;
+  white-space: nowrap;
 }
 
 /* '◂ MST CLK' must fit its narrow knob cell at 1440. */
@@ -2872,16 +3193,19 @@ body {
   white-space: nowrap;
 }
 
+/* Knob prints behave like panel ink: they may run past their flex cell
+   symmetrically instead of clipping (the knobs grew to hardware size). */
+.arp-box .knob-cell .legend,
+.lfo-knob-row .knob-cell .legend {
+  max-width: none;
+  white-space: nowrap;
+}
+
 .arp-box .panel-button .panel-button-cap {
   font-size: 0.26cqw;
 }
 
-.arp-box .panel-button.tiny,
-.voice-box .panel-button.tiny,
-.vibrato-box .panel-button.tiny {
-  min-width: 0.78cqw;
-  min-height: 0.6cqw;
-}
+/* Arp/Voice/Vibrato buttons keep the uniform switch footprint. */
 
 .knob-cell {
   display: flex;
@@ -2930,31 +3254,57 @@ body {
 }
 
 .voice-cols .knob-cell {
-  margin-top: 0.5cqw;
+  margin-top: 0.24cqw;
 }
 
 .voice-box,
 .vibrato-box {
   flex: 1;
   flex-direction: column;
-  gap: 0.06cqw;
-  padding: 0.34cqw 0.08cqw 0.08cqw;
+  gap: 0.04cqw;
+  padding: 0.28cqw 0.08cqw 0.05cqw;
 }
 
 /* Reference VIBRATO layout: WHL/DLY/ON and A.T./PED LED columns with the
-   MENU legend + red-framed button at the right; the blank dark mode-selector
-   button sits bottom-left. */
+   MENU legend + vertical button spanning at the right; the blank dark
+   mode-selector button sits bottom-left under the LED columns. */
 .vibrato-grid {
-  display: flex;
-  /* Wraps the MENU cell below the LED columns when print-size flooring
-     leaves no side-by-side slack (harness font metrics differ). */
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas:
+    'whl at menu'
+    'mode mode menu';
+  align-items: start;
+  justify-items: center;
   min-width: 0;
   max-width: 100%;
-  gap: 0.08cqw;
+  gap: 0.05cqw;
   width: 100%;
+}
+
+.vibrato-grid .tiny-led-row {
+  gap: 0.06cqw;
+}
+
+.vibrato-grid .legend {
+  letter-spacing: 0;
+}
+
+.vibrato-grid > .vibrato-led-col:first-child {
+  grid-area: whl;
+}
+
+.vibrato-grid > .vibrato-led-col:nth-child(2) {
+  grid-area: at;
+}
+
+.vibrato-grid > .vibrato-menu-cell {
+  grid-area: menu;
+  align-self: center;
+}
+
+.vibrato-grid > .vibrato-mode-button {
+  grid-area: mode;
 }
 
 .vibrato-led-col {
@@ -2979,10 +3329,6 @@ body {
   gap: 0.08cqw;
 }
 
-.vibrato-box .vibrato-mode-button {
-  align-self: flex-start;
-  margin-left: 0.1cqw;
-}
 
 .synth-bottom {
   flex: 1;
@@ -3001,21 +3347,8 @@ body {
   font-size: 0.26cqw;
 }
 
-.synth-bottom .panel-button.tiny {
-  min-width: 0.85cqw;
-  min-height: 0.7cqw;
-}
-
-.synth-bottom .knob,
-.synth-bottom .encoder {
-  width: 0.98cqw;
-  height: 0.98cqw;
-}
-
-.synth-bottom .knob.small {
-  width: 0.92cqw;
-  height: 0.92cqw;
-}
+/* Synth Lfo/Osc/Filter/Amp buttons: the SAME standard switch (user
+   direction — the photo's black buttons are not smaller than the rest). */
 
 /* Dense knob clusters (Osc/Voice/LFO/Filter boxes): one notch smaller scale
    print plus headroom above each knob so the numeral arcs never overlap the
@@ -3039,15 +3372,52 @@ body {
   gap: 0.02cqw;
 }
 
-.lfo-box .knob.small {
-  width: 0.72cqw;
-  height: 0.72cqw;
-}
-
 /* Beats .synth-bottom .group-box's shared gap/padding for this short box. */
 .synth-bottom .lfo-box {
   gap: 0.04cqw;
   padding-bottom: 0.03cqw;
+}
+
+/* WAVEFORM button cluster left, destination LED list right (reference). */
+.lfo-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.2cqw;
+  min-width: 0;
+  width: 100%;
+}
+
+.lfo-wave-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05cqw;
+  min-width: 0;
+}
+
+.lfo-dest-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.06cqw;
+  padding-top: 0.3cqw;
+  min-width: 0;
+}
+
+.lfo-dest-col .tiny-led-row {
+  gap: 0.06cqw;
+}
+
+.lfo-dest-col .legend {
+  font-size: 0.19cqw;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.lfo-dest-col .led {
+  width: 0.22cqw;
+  height: 0.22cqw;
 }
 
 /* The two LFO knobs share one row (reference: RATE/TIME left, MOD AMT right). */
@@ -3088,14 +3458,8 @@ body {
 }
 
 .lfo-box {
-  flex: 0.9;
-}
-
-/* Three knobs share the filter box: the full-size FREQ knob would overflow
-   its legend-width flex cell, so it sizes with its small siblings here. */
-.filter-box .knob {
-  width: 0.92cqw;
-  height: 0.92cqw;
+  /* Wide enough for the WAVEFORM cluster + destination LED list row. */
+  flex: 1.05;
 }
 
 .osc-box {
@@ -3233,14 +3597,15 @@ body {
   min-height: 0;
   min-width: 0;
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  grid-template-rows: 1fr 1fr 0.9fr 0.9fr;
+  /* Reference: Delay spans the right half's top; COMP and REVERB sit
+     side by side below it (vertical halves, Comp the narrower). */
+  grid-template-columns: 1.12fr 0.38fr 0.65fr;
+  grid-template-rows: 1fr 1fr 1.8fr;
   grid-template-areas:
-    'mod1 delay'
-    'mod2 delay'
-    'ampsim comp'
-    'ampsim reverb';
-  gap: 0.25cqw;
+    'mod1 delay delay'
+    'mod2 delay delay'
+    'ampsim comp reverb';
+  gap: 0.2cqw;
 }
 
 .fx-box {
@@ -3261,12 +3626,6 @@ body {
 
 .reverb-box .variation-cell .legend {
   max-width: 3cqw;
-}
-
-.reverb-box .fx-on-cell .panel-button.pill.small {
-  min-width: 0.95cqw;
-  min-height: 0.6cqw;
-  padding: 0.04cqw;
 }
 
 .reverb-box .fx-on-cell {
@@ -3303,11 +3662,6 @@ body {
 
 .reverb-box > .fx-on-cell {
   grid-area: on;
-}
-
-.reverb-box .knob.small {
-  width: 0.85cqw;
-  height: 0.85cqw;
 }
 
 .reverb-box .legend,
@@ -3373,8 +3727,8 @@ body {
 }
 
 .tap-box .panel-button.tap-button {
-  min-width: 1.7cqw;
-  min-height: 0.95cqw;
+  min-width: 1.5cqw;
+  min-height: 0.92cqw;
 }
 
 .tap-box .tiny-led-row .legend {
@@ -3423,11 +3777,6 @@ body {
   height: 0.26cqw;
 }
 
-.delay-box .knob.small {
-  width: 0.95cqw;
-  height: 0.95cqw;
-}
-
 .effects-grid .legend {
   font-size: 0.3cqw;
 }
@@ -3474,11 +3823,11 @@ body {
 }
 
 .amp-sim-box {
-  column-gap: 0.2cqw;
+  column-gap: 0.1cqw;
 }
 
 .amp-sim-box > .knob-cell + .knob-cell {
-  margin-left: 0.35cqw;
+  margin-left: 0.12cqw;
 }
 
 /* Keep the COMP ACTIVE print clear of the knob's numeral arc. */
@@ -3561,8 +3910,8 @@ body {
 }
 
 .fx-box .panel-button.rocker.fx-on-rocker {
-  min-width: 0.6cqw;
-  min-height: 1.15cqw;
+  min-width: 0.55cqw;
+  min-height: 1.05cqw;
 }
 
 .fx-box .fx-on-cell .tiny-led-row .legend {
@@ -3582,14 +3931,17 @@ body {
   gap: 0.14cqw;
 }
 
+/* Comp is a narrow vertical column beside Reverb (photo): AMOUNT knob
+   stack on top, the ON rocker + GLOBAL tag at the bottom. */
 .comp-box {
-  flex-direction: row-reverse;
+  flex-direction: column;
   flex-wrap: nowrap;
+  justify-content: flex-start;
 }
 
 .comp-box .fx-on-cell {
-  align-self: flex-end;
-  margin-bottom: 0.12cqw;
+  margin-top: auto;
+  margin-bottom: 0.08cqw;
 }
 
 /* Morph destination indicator (manual p. 39): assigned controls get a green dot. */

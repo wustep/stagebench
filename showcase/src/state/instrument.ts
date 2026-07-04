@@ -2803,10 +2803,10 @@ export class InstrumentStore {
   }
 
   /** Selects the LFO destination by absolute list position: 0 = Off,
-   *  1..SYNTH_LFO_DESTINATIONS.length = each destination in order (the
-   *  panel's synth-dial-3 "dial = absolute position" convention, mirroring
-   *  synth-dial-2's waveform-list mapping — the panel has no dedicated
-   *  per-destination button, manual p. 34's LEDs sit beside Mod Amt). */
+   *  1..SYNTH_LFO_DESTINATIONS.length = each destination in order. Driven
+   *  by the LFO box's clickable printed destination rows (the panel has no
+   *  dedicated per-destination button, manual p. 34's LEDs sit beside Mod
+   *  Amt; clicking the lit row selects Off, spec lfo.offState). */
   selectSynthLfoDestination(index: number): void {
     const layer = this.state.synth.focusedLayer
     const clamped = Math.max(0, Math.min(SYNTH_LFO_DESTINATIONS.length, Math.round(index)))

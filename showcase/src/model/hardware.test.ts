@@ -44,8 +44,8 @@ describe('visual.control-inventory — normalized hardware model', () => {
     // latches dials 1/2 onto pitch/fine-tune editing), the filter
     // (type/tracking/drive/on/freq/res/env amt, now including the optional
     // LP M/LP+HP types on the same cycle), the oscillator envelope (amount +
-    // Env To Pitch), the LFO (waveform/rate/mod amt/destination via dial
-    // 3/clock sync), voice modes (mode/priority/glide/unison/vibrato, now
+    // Env To Pitch), the LFO (waveform/rate/mod amt/destination via the
+    // clickable printed rows/clock sync), voice modes (mode/priority/glide/unison/vibrato, now
     // including the optional Delayed/Pedal vibrato modes on the same cycle),
     // the VIBRATO MENU button (spec voice.vibrato.menu: latches dials 1/2
     // onto Rate/Amount editing), the arpeggiator/gate (run/mode/direction/

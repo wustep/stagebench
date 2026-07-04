@@ -206,10 +206,17 @@ export const Drawbar = memo(function Drawbar({ store, id, className }: Continuou
 
 export const Wheel = memo(function Wheel({ store, id, className }: ContinuousProps) {
   const { value, min, range, sliderProps } = useContinuous(store, id)
-  const travel = (0.5 - (value - min) / range) * 40
+  const norm = (value - min) / range
+  const travel = (0.5 - norm) * 40
+  // The thumb dimple is a feature ON the rubber, so it rolls with the value
+  // across most of the visible crown — the main motion cue (the grain tile
+  // scrolling alone was too subtle to notice).
+  const dimpleTop = 82 - norm * 64
   return (
     <div {...sliderProps} className={`wheel ${className ?? ''}`}>
-      <div className="wheel-face" style={{ backgroundPosition: `50% calc(50% + ${travel}%)` }} />
+      <div className="wheel-face" style={{ backgroundPosition: `50% calc(50% + ${travel}%)` }}>
+        <span className="wheel-dimple" style={{ top: `${dimpleTop}%` }} aria-hidden="true" />
+      </div>
     </div>
   )
 })
@@ -217,11 +224,16 @@ export const Wheel = memo(function Wheel({ store, id, className }: ContinuousPro
 export const PitchStick = memo(function PitchStick({ store, id, className }: ContinuousProps) {
   const { value, min, range, sliderProps } = useContinuous(store, id)
   // The stick rests centered in its slot and SLIDES side to side with the
-  // bend (right = up), like the hardware seen from above.
-  const travel = ((value - min) / range - 0.5) * 60
+  // bend (right = up), like the hardware seen from above. Travel is capped
+  // so the wood tip stays inside the pocket at full bend; a slight pivot
+  // around the hidden left anchor makes the motion readable at panel scale.
+  const travel = ((value - min) / range - 0.5) * 26
   return (
     <div {...sliderProps} className={`pitch-stick ${className ?? ''}`}>
-      <div className="pitch-stick-lever" style={{ transform: `translateX(${travel}%)` }} />
+      <div
+        className="pitch-stick-lever"
+        style={{ transform: `translateX(${travel}%) rotate(${travel * 0.14}deg)` }}
+      />
     </div>
   )
 })

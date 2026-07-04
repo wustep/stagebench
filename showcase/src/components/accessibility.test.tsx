@@ -31,9 +31,10 @@ describe('accessibility.controls', () => {
 
   it('continuous controls expose value min/max/now and orientation', () => {
     renderApp()
-    // Dial 2 truthfully reads out the power-on Saw waveform's list position
-    // (not 0) — same derived-value pattern as the piano model dial below.
-    const derivedValue = new Set(['synth-dial-2'])
+    // Dials 2/3 truthfully read the power-on Saw's category and
+    // wave-within-category positions (TYPE/CAT/WAVE display convention) —
+    // same derived-value pattern as the piano model dial below.
+    const derivedValue = new Set(['synth-dial-2', 'synth-dial-3'])
     for (const control of HARDWARE_CONTROLS.filter((c) => c.type !== 'button')) {
       const element = controlElement(control.id)
       expect(element.getAttribute('aria-valuemin'), control.id).toBe(String(control.min ?? 0))
@@ -80,10 +81,11 @@ describe('accessibility.controls', () => {
 
   it('sliders are operable end-to-end with the keyboard alone', () => {
     renderApp()
-    // Dials 1 and 3 only edit the amp envelope's attack/release while the
-    // AMP ENVELOPE edit target is latched (manual-adaptation precedence
-    // documented in presentation.ts); at power-on they truthfully no-op.
-    const editGated = new Set(['synth-dial-1', 'synth-dial-3'])
+    // Dial 1 only edits menu values while an edit target (envelope, osc
+    // pitch, vibrato, arp menu) is latched; at power-on it truthfully
+    // no-ops. Dials 2/3 page the category/wave lists at power-on, so they
+    // run through the generic End/Home checks like every other slider.
+    const editGated = new Set(['synth-dial-1'])
     for (const control of HARDWARE_CONTROLS.filter((c) => c.type !== 'button' && !c.springLoaded)) {
       const element = controlElement(control.id)
       if (control.id === 'piano-model') {

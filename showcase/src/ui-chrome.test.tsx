@@ -64,6 +64,11 @@ describe('ui chrome — minimal by default with an INFO toggle', () => {
     const lens = screen.getByTestId('magnify-lens')
     expect(lens.getAttribute('aria-hidden')).toBe('true')
     expect(lens.querySelector('.lens-canvas')?.hasAttribute('inert')).toBe(true)
+    // The cursor clone ships all four OS-styled glyphs and starts as the arrow.
+    const lensCursor = lens.querySelector('.lens-cursor')
+    expect(lensCursor?.getAttribute('data-cursor')).toBe('default')
+    expect(['mac', 'win']).toContain(lensCursor?.getAttribute('data-os'))
+    expect(lensCursor?.querySelectorAll('svg')).toHaveLength(4)
     // The interactive deck stays unique and intact (the clone carries no testid).
     const deck = screen.getByTestId('control-deck')
     expect(deck.querySelectorAll(':scope > [data-section]')).toHaveLength(6)

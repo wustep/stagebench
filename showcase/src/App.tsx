@@ -31,6 +31,20 @@ import { VARIANT } from './model/variant'
 type ZoomableSectionId = 'organ' | 'piano' | 'synth' | 'effects'
 const ZOOM_TITLES: Record<ZoomableSectionId, string> = { organ: 'Organ', piano: 'Piano', synth: 'Synth', effects: 'Layer Effects' }
 
+/** CSS cursor values the panel actually uses (styles.css): `pointer` on
+ *  buttons, `ns-resize` on knob/fader/drawbar/wheel drags, `ew-resize` on the
+ *  pitch stick; anything else falls back to the plain arrow. */
+const LENS_CURSOR_KINDS = ['pointer', 'ns-resize', 'ew-resize'] as const
+
+/** Browsers never expose the real cursor bitmap, so the lens draws its own
+ *  OS-styled artwork: macOS's black arrow with a white outline vs the
+ *  Windows-style white arrow with a black outline. */
+const LENS_CURSOR_OS: 'mac' | 'win' = /mac/i.test(
+  (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? '',
+)
+  ? 'mac'
+  : 'win'
+
 /** Rear-connector legends printed along the top lip, [label, left%] pairs
  *  pixel-measured from reference/nord-stage-4-73.jpg. Multi-line labels wrap
  *  at the \n like the reference's stacked print. */
@@ -136,6 +150,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   const realDeckRef = useRef<HTMLDivElement>(null)
   const lensRef = useRef<HTMLDivElement>(null)
   const lensCanvasRef = useRef<HTMLDivElement>(null)
+  const lensCursorRef = useRef<HTMLSpanElement>(null)
   const LENS_W = 340
   const LENS_H = 230
   const LENS_K = 2.6
@@ -144,6 +159,14 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     const lens = lensRef.current
     const canvas = lensCanvasRef.current
     if (!deck || !lens || !canvas) return
+    const hoveredCursor = event.target instanceof Element ? getComputedStyle(event.target).cursor : ''
+    // Drag freeze: value drags capture the pointer on the control
+    // (controls.tsx onPointerDown), so while a button is held the event
+    // target stays the dragged resize-cursor control. Skipping all updates
+    // holds the lens (and its cursor clone) where the drag started, so the
+    // gesture doesn't carry the loupe away — the clone is a live render, so
+    // the value change stays visible inside the frozen lens.
+    if (event.buttons !== 0 && (hoveredCursor === 'ns-resize' || hoveredCursor === 'ew-resize')) return
     const r = deck.getBoundingClientRect()
     const x = event.clientX - r.left
     const y = event.clientY - r.top
@@ -162,6 +185,15 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     canvas.style.width = `${r.width}px`
     canvas.style.height = `${r.height}px`
     canvas.style.transform = `translate(${LENS_W / 2 - x * LENS_K}px, ${LENS_H / 2 - y * LENS_K}px) scale(${LENS_K})`
+    // Cursor clone: parked at the same panel point inside the canvas (so the
+    // scale transform magnifies it too), mirroring the hovered control's
+    // effective CSS cursor via the data-cursor attribute (see styles.css).
+    const cursorEl = lensCursorRef.current
+    if (cursorEl) {
+      cursorEl.style.left = `${x}px`
+      cursorEl.style.top = `${y}px`
+      cursorEl.dataset.cursor = (LENS_CURSOR_KINDS as readonly string[]).includes(hoveredCursor) ? hoveredCursor : 'default'
+    }
   }
   const onLensLeave = () => {
     if (lensRef.current) lensRef.current.style.visibility = 'hidden'
@@ -337,7 +369,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         onPointerLeave={magnify ? onLensLeave : undefined}
       >
         <div className="chassis" data-testid="chassis">
-          <div className="deck-block" data-testid="deck-block" style={{ height: '54%' }}>
+          <div className="deck-block" data-testid="deck-block" style={{ height: '54%' }} ref={realDeckRef}>
             {/* Rear-connector legends printed on the top lip (reference
                 photo); purely decorative print — the jacks are on the back. */}
             <div className="top-rail" aria-hidden="true">
@@ -347,7 +379,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
                 </span>
               ))}
             </div>
-            <div className="control-deck" data-testid="control-deck" ref={realDeckRef}>
+            <div className="control-deck" data-testid="control-deck">
               {/* Chassis screws along the deck's bottom lip (reference). */}
               <span className="deck-screws" aria-hidden="true">
                 {[13.6, 32.6, 40.7, 52.6, 76.4, 94.8].map((left) => (
@@ -382,20 +414,46 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       )}
       {magnify && (
         <div className="magnify-lens" ref={lensRef} aria-hidden="true" data-testid="magnify-lens">
-          {/* Inert visual clone of the deck at the same cqw scale; the
-              transform above magnifies the area under the cursor. */}
+          {/* Inert visual clone of the deck block (top-rail rear legends +
+              control deck) at the same cqw scale; the transform above
+              magnifies the area under the cursor. */}
           <div className="lens-canvas" ref={lensCanvasRef} inert>
-            <div className="control-deck lens-deck">
-              <PerformanceSection store={store} instrument={instrument} />
-              <OrganSection store={store} instrument={instrument} />
-              <PianoSection store={store} instrument={instrument} engine={engine} />
-              <ProgramSection store={store} instrument={instrument} engine={engine} />
-              <SynthSection store={store} instrument={instrument} />
-              <EffectsSection store={store} instrument={instrument} />
-              <span className="made-in" aria-hidden="true">
-                HANDMADE IN SWEDEN BY CLAVIA DMI AB&ensp;v2.0 Rev.B
-              </span>
+            <div className="deck-block lens-deck">
+              <div className="top-rail" aria-hidden="true">
+                {REAR_LEGENDS.map(([label, left]) => (
+                  <span key={label} className="rear-legend" style={{ left: `${left}%` }}>
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <div className="control-deck">
+                <PerformanceSection store={store} instrument={instrument} />
+                <OrganSection store={store} instrument={instrument} />
+                <PianoSection store={store} instrument={instrument} engine={engine} />
+                <ProgramSection store={store} instrument={instrument} engine={engine} />
+                <SynthSection store={store} instrument={instrument} />
+                <EffectsSection store={store} instrument={instrument} />
+                <span className="made-in" aria-hidden="true">
+                  HANDMADE IN SWEDEN BY CLAVIA DMI AB&ensp;v2.0 Rev.B
+                </span>
+              </div>
             </div>
+            {/* OS-styled clone of the mouse cursor at the magnified point;
+                onLensMove positions it and picks the glyph via data-cursor. */}
+            <span className="lens-cursor" ref={lensCursorRef} data-os={LENS_CURSOR_OS} data-cursor="default">
+              <svg data-for="default" viewBox="0 0 15 20" aria-hidden="true">
+                <path d="M1.2 1 L1.2 16.2 L5.3 12.9 L7.9 18.3 L10.6 17 L8.1 11.7 L13.3 11.7 Z" />
+              </svg>
+              <svg data-for="pointer" viewBox="0 0 18 23" aria-hidden="true">
+                <path d="M7.6 2.2 Q7.6 0.9 8.9 0.9 Q10.2 0.9 10.2 2.2 L10.2 8.2 Q10.5 7.5 11.4 7.7 Q12.3 7.9 12.3 8.9 Q12.7 8.2 13.5 8.4 Q14.3 8.7 14.3 9.6 Q14.8 9.1 15.4 9.4 Q16.1 9.8 16.1 10.6 L16.1 13.5 Q16.1 16.6 14.6 18.2 L14.6 21.4 L6.9 21.4 L6.9 18.6 Q4.6 16.9 3.6 14.6 Q3.1 13.4 4 12.7 Q4.9 12 5.9 12.9 L7.6 14.6 Z" />
+              </svg>
+              <svg data-for="ns-resize" viewBox="0 0 12 22" aria-hidden="true">
+                <path d="M6 1 L10.2 6.4 L7.3 6.4 L7.3 15.6 L10.2 15.6 L6 21 L1.8 15.6 L4.7 15.6 L4.7 6.4 L1.8 6.4 Z" />
+              </svg>
+              <svg data-for="ew-resize" viewBox="0 0 22 12" aria-hidden="true">
+                <path d="M1 6 L6.4 1.8 L6.4 4.7 L15.6 4.7 L15.6 1.8 L21 6 L15.6 10.2 L15.6 7.3 L6.4 7.3 L6.4 10.2 Z" />
+              </svg>
+            </span>
           </div>
         </div>
       )}

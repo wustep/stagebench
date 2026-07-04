@@ -132,8 +132,15 @@ try {
           // Knob caps overhang bare; the printed tick/numeral arc (.knob-scale)
           // paints outside its own box without adding scroll size, so a knob
           // whose textContent is only its scale numerals is panel print.
-          (/knob|encoder|wheel|stick/.test(cls) &&
+          // Drawbar caps likewise overhang their slim hit columns (photo:
+          // chunky caps on a narrow stem) and print no text of their own.
+          (/knob|encoder|wheel|stick|drawbar/.test(cls) &&
             (!el.textContent.trim() || el.textContent.trim() === (el.querySelector(':scope > .knob-scale')?.textContent ?? '').trim())) ||
+          // Dense knob columns: the uniform-size knob box and its centered
+          // nowrap legend print straddle the column horizontally by design
+          // (panel ink, symmetric on both sides). Vertical overflow — text
+          // actually clipping — still fails.
+          (el.classList.contains('knob-cell') && el.scrollHeight <= el.clientHeight + 3 && el.scrollWidth <= el.clientWidth + 8) ||
           // Deliberate display clipping (OLED lines ellipsize like real hardware).
           getComputedStyle(el).textOverflow === 'ellipsis'
         if (!benign) out.overflows.push(`${id}: ${el.tagName}.${cls.slice(0, 30)} [${(el.textContent || '').slice(0, 24)}]`)

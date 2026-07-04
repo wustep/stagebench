@@ -1379,3 +1379,117 @@ and geometry work. Tests 436 → 494.
   LEVEL; drawbar/oscillator print slimmed so the harness's font metrics
   keep 12/12 layout checks green.
 - Gates: typecheck, lint, build, verify:layout 12/12, tests 494/494.
+
+### 34 — Texture pass: meters, frames, button anatomy, TYPE/CAT/WAVE dials (2026-07-03)
+
+Follow-up audit round (user-directed) fixing what the sizing pass exposed:
+
+- **LED meters de-chunked**: ladder segments are thin slivers at a tight
+  pitch (0.36 x 0.085cqw, was 0.42 x 0.17) lit in the photo's yellow-green;
+  drawbar ladders match (crisp light-outlined frames, no washed fill).
+- **Red shift-frames restored as PRINT**: `.framed` draws an outline ring
+  around the standard-size switch (outline-offset ring the :active/lit
+  shadows can't strip) — the sizing pass had deleted the frames entirely,
+  misreading the uniformity rule; the photo prints rings around Waveform,
+  Arp/Vibrato Menu, Osc Pitch/Env, Filter Type/Env, Amp Envelope.
+- **Button anatomy**: housing reveal widened (padding 0.12cqw) with a
+  smaller-radius cap, so the rounded cap reads slightly smaller than its
+  rectangular base; red switches (Store, Arp Run) are red *through* — dark
+  red housing under the red cap. The Layer Effects small-switch exception
+  is gone: one switch size everywhere (verify:layout still 12/12).
+- **Display dials go canonical TYPE/CAT/WAVE** (reference caption row):
+  dial 2 pages waveform categories, dial 3 pages waves within the category
+  (sample sets in Samples mode), captions read CAT / WAVE truthfully, and
+  the display draws the selected wave's shape beside its name. The LFO
+  destination — dial 3's old job — moved to the LFO box's clickable
+  printed rows (LAYER INIT ▽ convention; click the lit row = Off, spec
+  lfo.offState). Accessibility tests updated: dial 3 left the edit-gated
+  set and joined the derived-value dials.
+- **Wheel block responds visibly**: the thumb dimple is a real element the
+  Wheel component rolls up the crown with the value (the grain-scroll
+  alone was imperceptible), and the pitch stick adds a slight pivot to its
+  slide; both wells sized up a notch (0.78 x 3.95 / 2.5 x 1.12cqw).
+- Print details: drawbar caps wear their serrated grooves; fader caps
+  flatter (0.95cqw); LIVE MODE is the photo's dark cap (was a tan pill);
+  PAGE/CAT-BANK caps are blank with the ◂ ▸ printed on the panel; ARP
+  RANGE prints the hardware's red 1-4 arc; RANGE ENV clears the arp mode
+  cluster (flex reweight).
+- Gates: typecheck, lint, tests 494/494, build, verify:layout 12/12.
+
+### 33 — Parallel round: magnifier upgrades, pressed keys, wheels rebuild (2026-07-03)
+
+Four concurrent workstreams (magnifier, keybed, wheel block, program rail),
+merged and re-gated together:
+
+- **Magnifier**: the lens now covers the top-lip rear-connector legends
+  (tracks the whole `deck-block`, clone includes the `REAR_LEGENDS` strip),
+  draws an OS-aware clone of the mouse cursor at the magnified point
+  (macOS vs Windows artwork chosen once from `userAgentData.platform`;
+  glyph follows the hovered control's computed cursor — default, pointer,
+  ns/ew-resize — hotspot-correct, scaled 2.6x), and freezes in place while
+  a drag edits a control (`buttons !== 0` + resize cursor short-circuits
+  the move handler; content keeps live-updating so the value change stays
+  visible). The cloned top rail paints no background of its own, keeping
+  the lens's original flat chassis backdrop.
+- **Pressed black keys** no longer translate down (that revealed white-key
+  material behind the cap). The footprint stays anchored and the drop is
+  drawn as the key's own body: shadowed rear band, faint lip at the lowered
+  cap edge, darkened top, foreshortened nose. The 30-glossy-sheen revert
+  from the user is honored (matte slab restored).
+- **Wheel block rebuilt from pixel measurements** of the HP73 photo: the
+  mod-wheel slot slimmed to the real ~0.72 x 3.7cqw stadium at -13.5°, the
+  ribbed face replaced with the photo's smooth stippled-rubber crown (the
+  grain layer still scrolls on drag), thumb dimple + right-edge channel;
+  pitch-stick pocket down to 2.3 x 1.02cqw with a grained maple tip,
+  end-grain facet and shortened travel so full bend stays inside the well.
+- **Program rail overflow** (revealed by the sizing pass): the clickable
+  LAYER INIT ▽ / PASTE ⇕ shift-legends sat in plain `<button>`s whose
+  13px UA font strut quadrupled each row — `.legend-button` is now an
+  inline-flex hugging its print, and the rail fits again. MASTER LEVEL's
+  cell pads for its dial's scale arc.
+- Verifier: drawbar caps join the knob-cap overhang exemption (chunky caps
+  on a narrow stem are by-design paint, no text), and `knob-cell` tolerates
+  the uniform knob/legend print straddling its dense column horizontally —
+  vertical (real clipping) overflow still fails.
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 494/494; the
+  gallery package's own typecheck/lint/test/build ran green alongside (it
+  got run-index and preview-overlay polish in the same round).
+
+### 32 — Hardware sizing unification: one switch, one knob, one fader (2026-07-03)
+
+User-directed pass encoding the hardware's uniformity rule: on the real
+panel every rectangular button is the same switch (cap color varies, some
+mounted vertically), every parameter knob is the same knob, every fader the
+same fader — only the drawbars are bigger. Plus overflow fixes everywhere
+the old under-sized controls were papering over space problems.
+
+- **One switch size (1.5 × 0.92cqw, photo-measured)**: `.small`/`.tiny`
+  survive as inert aliases; deleted the nine per-section shrink overrides
+  (rail, program strip, morph, perc, arp/voice/vibrato, synth-bottom,
+  variation, reverb rows). A `.vertical` variant is the same switch rotated
+  — applied ONLY where the photo mounts it vertically: Sound Init, Arp
+  Menu, Vibrato Menu, Amp Envelope (the FX-focus and variation buttons were
+  wrongly rotated mid-pass and corrected back to horizontal). One
+  exception, also photo-true: the Layer Effects section's switches are a
+  notch smaller (~1.1 × 0.62cqw) than the main-panel switches.
+- **One knob size (1.02cqw)**: killed seven per-box knob diameters (0.72 to
+  0.98); endless dials are one bigger size (1.3), PROGRAM VALUE and MASTER
+  LEVEL keep the large 1.7 dial. One fader size (0.8cqw wide), and drawbars
+  are the bigger control (1.15 × 1.7cqw caps) like the hardware.
+- **ARP RUN wears its red cap** (concurrent fan-in had it; kept), **SHIFT /
+  EXIT rides a printed light-gray plate** with dark SHIFT/EXIT ink and the
+  full-size rocker (the program-strip override that shrank it is gone).
+- **Fit fallout fixed structurally, not by shrinking controls back**:
+  vibrato box re-gridded (vertical MENU spans two rows, blank mode cap
+  bottom-left); LFO box re-laid to the photo (WAVEFORM cluster + stacked
+  OSC PITCH/OSC CTRL/FILTER destination LED list, GROUP ▿ print; the
+  invented `{destination} ▿` readout and one-line destination print are
+  gone); program 1-8 grid and B3 percussion switches split their tracks
+  evenly; Comp/Reverb rebuilt as side-by-side vertical halves under Delay
+  (photo layout) with Reverb's tone button under its LEDs; delay/comp/
+  reverb ON controls corrected from tan pills / dark caps to the photo's
+  light vertical rockers.
+- Print compression where the bigger controls left no slack (morph/preset
+  LED rows, prog-num, perc, arp cell, acoustics, piano-select, program
+  rail/mid gaps, oled line-height, perf-right air).
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 494/494.

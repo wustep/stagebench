@@ -9,11 +9,25 @@ import {
   MORPH_DESTINATIONS,
   presetSectionName,
   SPLIT_POSITIONS,
-  SYNTH_LFO_DESTINATIONS,
   SYNTH_WAVEFORMS,
   type InstrumentStore,
   type MorphSource,
+  type SynthWaveformCategory,
 } from './instrument'
+
+/** Ordered unique waveform categories (panel order), backing the display
+ *  dials' TYPE/CAT/WAVE convention: dial 2 pages this list, dial 3 pages the
+ *  waves within the current category. */
+const SYNTH_CATEGORIES: readonly SynthWaveformCategory[] = SYNTH_WAVEFORMS.reduce<SynthWaveformCategory[]>(
+  (cats, wave) => (cats.includes(wave.category) ? cats : [...cats, wave.category]),
+  [],
+)
+
+function categoryWaveIndices(category: SynthWaveformCategory): number[] {
+  const indices: number[] = []
+  for (let i = 0; i < SYNTH_WAVEFORMS.length; i++) if (SYNTH_WAVEFORMS[i]!.category === category) indices.push(i)
+  return indices
+}
 
 /**
  * Panel front door for every physical control.
@@ -174,10 +188,11 @@ export class PresentationStore {
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.decay
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.decay
           if (state.synthEnvEdit === 'osc') return synth.oscEnvelope.decay
-          // Samples mode reuses this dial for the 2-item sample-set list
-          // (spec.scope.optional Samples mode) instead of the waveform list.
-          if (synth.mode === 'Samples') return Math.round((synth.waveform / (SYNTH_SAMPLE_SETS.length - 1)) * 127)
-          return Math.round((synth.waveform / (SYNTH_WAVEFORMS.length - 1)) * 127)
+          // Samples mode has no categories (CAT prints '—'): dial 2 idles.
+          if (synth.mode === 'Samples') return 0
+          // Reference caption row TYPE/CAT/WAVE: dial 2 = CATegory position.
+          const cat = (SYNTH_WAVEFORMS[synth.waveform] ?? SYNTH_WAVEFORMS[0]!).category
+          return Math.round((SYNTH_CATEGORIES.indexOf(cat) / (SYNTH_CATEGORIES.length - 1)) * 127)
         }
         case 'synth-dial-3': {
           const synth = state.synth.layers[state.synth.focusedLayer]
@@ -186,8 +201,14 @@ export class PresentationStore {
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.release
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.release
           if (state.synthEnvEdit === 'osc') return synth.oscEnvelope.release
-          const destIndex = synth.lfo.destination === null ? 0 : SYNTH_LFO_DESTINATIONS.indexOf(synth.lfo.destination) + 1
-          return Math.round((destIndex / SYNTH_LFO_DESTINATIONS.length) * 127)
+          // Reference caption row TYPE/CAT/WAVE: dial 3 = WAVE within the
+          // category (sample-set list in Samples mode). LFO destination
+          // moved to the LFO box's clickable printed rows.
+          if (synth.mode === 'Samples')
+            return Math.round((Math.min(synth.waveform, SYNTH_SAMPLE_SETS.length - 1) / (SYNTH_SAMPLE_SETS.length - 1)) * 127)
+          const waves = categoryWaveIndices((SYNTH_WAVEFORMS[synth.waveform] ?? SYNTH_WAVEFORMS[0]!).category)
+          if (waves.length <= 1) return 0
+          return Math.round((Math.max(0, waves.indexOf(synth.waveform)) / (waves.length - 1)) * 127)
         }
         case 'mod1-rate':
           return chain.mod1.rate
@@ -565,9 +586,16 @@ export class PresentationStore {
           if (edit === 'amp') store.setSynthAmpEnvelope({ decay: clamped })
           else if (edit === 'filter') store.setSynthFilterEnvelope({ decay: clamped })
           else if (edit === 'osc') store.setSynthOscEnvelope({ decay: clamped })
-          else if (store.getState().synth.layers[store.getState().synth.focusedLayer].mode === 'Samples') {
-            store.selectSynthWaveform(Math.round((clamped / 127) * (SYNTH_SAMPLE_SETS.length - 1)))
-          } else store.selectSynthWaveform(Math.round((clamped / 127) * (SYNTH_WAVEFORMS.length - 1)))
+          else {
+            // Reference caption row TYPE/CAT/WAVE: dial 2 = CATegory by
+            // absolute list position (jump to that category's first wave).
+            // Samples mode has no categories, so the dial idles there.
+            const synth = state.synth.layers[state.synth.focusedLayer]
+            if (synth.mode === 'Samples') return
+            const target = SYNTH_CATEGORIES[Math.round((clamped / 127) * (SYNTH_CATEGORIES.length - 1))]!
+            const current = (SYNTH_WAVEFORMS[synth.waveform] ?? SYNTH_WAVEFORMS[0]!).category
+            if (target !== current) store.selectSynthWaveform(categoryWaveIndices(target)[0]!)
+          }
           return
         }
         case 'synth-dial-3': {
@@ -580,12 +608,19 @@ export class PresentationStore {
           if (edit === 'amp') store.setSynthAmpEnvelope({ release: clamped })
           else if (edit === 'filter') store.setSynthFilterEnvelope({ release: clamped })
           else if (edit === 'osc') store.setSynthOscEnvelope({ release: clamped })
-          // Outside envelope editing, dial 3 selects the LFO destination by
-          // absolute position (Off/Osc Pitch/Osc Ctrl/Filter Freq) — the
-          // same "dial = absolute list position" convention dial 2 uses for
-          // the waveform list, since the panel has no dedicated destination
-          // button (manual p. 34's destination LEDs sit beside Mod Amt).
-          else store.selectSynthLfoDestination(Math.round((clamped / 127) * SYNTH_LFO_DESTINATIONS.length))
+          else {
+            // Reference caption row TYPE/CAT/WAVE: dial 3 = WAVE within the
+            // current category by absolute position (the sample-set list in
+            // Samples mode). The LFO destination — dial 3's old default job
+            // — moved to the LFO box's clickable printed rows.
+            const synth = store.getState().synth.layers[store.getState().synth.focusedLayer]
+            if (synth.mode === 'Samples') {
+              store.selectSynthWaveform(Math.round((clamped / 127) * (SYNTH_SAMPLE_SETS.length - 1)))
+              return
+            }
+            const waves = categoryWaveIndices((SYNTH_WAVEFORMS[synth.waveform] ?? SYNTH_WAVEFORMS[0]!).category)
+            store.selectSynthWaveform(waves[Math.round((clamped / 127) * (waves.length - 1))]!)
+          }
           return
         }
         case 'mod1-rate':
