@@ -114,17 +114,22 @@ function SectionHeader({
   const lit = usePresentationToggle(store, onId)
   return (
     <div className="plate-header">
-      <PlateTitle title={title} onZoom={onZoom} subtitle="SECTION" />
-      <span className="fx-focus">
-        <Led color="yellow" on={fxFocusLit} />
-        <Legend>FX FOCUS</Legend>
-      </span>
-      <span className="on-cluster">
-        <Legend>ON</Legend>
-        <Led color="red" on={lit} />
-        <PanelButton store={store} id={onId} className="pill" holdAction={onSoloHold} />
-        <Legend className="dim">SOLO ▾</Legend>
-      </span>
+      {/* Photo: the light band is a TALL tab through SOLO ▾, then steps
+          down to a thin strip that continues to the plate's right edge. */}
+      <div className="plate-header-tab">
+        <PlateTitle title={title} onZoom={onZoom} subtitle="SECTION" />
+        <span className="fx-focus">
+          <Led color="yellow" on={fxFocusLit} />
+          <Legend>FX FOCUS</Legend>
+        </span>
+        <span className="on-cluster">
+          <Legend>ON</Legend>
+          <Led color="red" on={lit} />
+          <PanelButton store={store} id={onId} className="pill" holdAction={onSoloHold} />
+          <Legend className="dim">SOLO ▾</Legend>
+        </span>
+      </div>
+      <div className="plate-header-strip" aria-hidden="true" />
     </div>
   )
 }
@@ -1829,7 +1834,26 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             LAYER EFFECTS header band (reference photo). The organ entry has
             ONE focus LED captioned "A B": both organ layers share a single
             FX chain. */}
+        <div className="plate">
+          <div className="plate-header">
+            {/* Photo: tall band tab (title + ON + switch) over the FX FOCUS
+                gutter, stepping down to a thin strip that runs across the
+                whole section to its right edge. */}
+            <div className="plate-header-tab">
+              <PlateTitle title="LAYER EFFECTS" onZoom={onZoom} />
+              <span className="on-cluster">
+                <Legend>ON</Legend>
+                <Led color="red" on={!state.allFxOff} />
+                <PanelButton store={store} id="effects-on" className="pill" />
+              </span>
+            </div>
+            <div className="plate-header-strip" aria-hidden="true" />
+          </div>
+          <div className="effects-body">
         <div className="fx-strip" role="group" aria-label="FX Focus">
+          {/* The FX FOCUS print tab hangs from the band into this gutter
+              (photo) — first flow child so it tucks flush under the tab. */}
+          <span className="fx-focus-tab" aria-hidden="true">FX FOCUS</span>
           <span className="focus-cell">
             <Legend>ORGAN</Legend>
             <span className="tiny-led-row" aria-hidden="true">
@@ -1872,21 +1896,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             <Legend className="dim">EXIT</Legend>
           </span>
         </div>
-        <div className="plate">
-          <div className="plate-header">
-            <PlateTitle title="LAYER EFFECTS" onZoom={onZoom} />
-            <span className="on-cluster">
-              <Legend>ON</Legend>
-              <Led color="red" on={!state.allFxOff} />
-              <PanelButton store={store} id="effects-on" className="pill" />
-            </span>
-          </div>
           <div className="effects-grid">
-            {/* FX FOCUS prints on a light tab hanging below the band's left
-                edge (photo) — anchored to the grid's top-left corner so it
-                overlays the MOD 1 box edge without creating scroll overflow
-                on the header. */}
-            <span className="fx-focus-tab" aria-hidden="true">FX FOCUS</span>
             <GroupBox title="Mod 1" className="fx-box mod1-box">
               <span className="knob-cell">
                 <Knob store={store} id="mod1-rate" className="small" />
@@ -2187,6 +2197,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <Legend className={`dim red-tag ${state.fxGlobal.reverb ? 'lit' : ''}`}>GLOBAL ▿</Legend>
               </span>
             </GroupBox>
+          </div>
           </div>
         </div>
       </div>

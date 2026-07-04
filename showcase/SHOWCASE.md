@@ -1652,3 +1652,46 @@ starved and colliding:
   every other full run today.
 - Gates: typecheck, lint, verify:layout 12/12, tests 494/494 (one
   isolated-pass flake noted above); bench publish checks green.
+
+### 41 — Stepped header bands, FX FOCUS gutter, chrome tray, seven input fixes (2026-07-04)
+
+- **Section headers wear the photo's true profile**: every plate band is now
+  a TALL tab (title, FX FOCUS, ON ●, switch, SOLO ▾) that steps down to a
+  THIN light strip running to the plate's right edge — bands previously
+  spanned full width at full height.
+- **LAYER EFFECTS is restructured to the photo**: the band spans the whole
+  section (title at the section's far-left edge); the FX FOCUS print tab
+  hangs from the band into a red selector GUTTER (ORGAN A B / ALL FX OFF /
+  PIANO / SYNTH / SHIFT) that now lives INSIDE the section, with the dark
+  boxes grid to its right — the grid moves right, the tab no longer
+  overlaps MOD 1.
+- **Chrome tray redesigned** (everything outside the panel): a slim dark
+  stage-riser bar — uniform pill buttons (Sustain Pedal with a pedal-down
+  lamp, Info/Magnify with drawn icons instead of emoji), a styled Ctrl
+  Pedal slider with a numeric readout, and the INFO wall of text rebuilt
+  as a structured card (PIANO/MIDI/PEDALS/CTRL PEDAL/KEYS/COVERAGE rows).
+  Tray pills wrap at narrow widths. All testids/aria unchanged.
+- **Seven input bugs found by the sweep's input lens, verified in code and
+  fixed** (workflow was cut short by the account spend limit; findings
+  recovered from its transcript and verified by hand):
+  1. Space-bar sustain stuck DOWN forever if focus landed on a
+     button/slider between keydown and keyup (honesty break: damper up must
+     release) — the release now always fires for the key that engaged it.
+  2. PanelButton hold timer leaked on a second concurrent activation
+     (Enter+Space / two pointers): a ghost SOLO could fire after release.
+  3. Shift mid-drag rescaled the whole accumulated travel (value jumped
+     ~4x); drags now accumulate per-move increments.
+  4. Keyboard bends parked the spring-loaded pitch stick off-center;
+     arrow-key release now springs back like the pointer path.
+  5. Unplugging ONE of several MIDI devices left its notes ringing forever
+     (cleanup only fired when the last device left).
+  6. A second pointer could hijack a drag and spring-recenter it; the
+     spring return also ran for unrelated pointer-ups.
+  7. The section-zoom dialog closed when a press starting inside it was
+     released over the backdrop (scrim now requires press AND release on
+     itself).
+  Regression tests added for 1-4 (decorative-controls.test).
+- Gallery: removed the "SEEDED FROM FABLE 5 HIGH · ITERATING" tag from the
+  showcase overlay header (src/App.tsx).
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 498/498; root
+  gallery typecheck + lint green.

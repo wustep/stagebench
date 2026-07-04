@@ -239,3 +239,64 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     expect(oled.textContent).toBe(before)
   })
 })
+
+describe('input regressions — stuck-state and continuity bugs', () => {
+  it('Space sustain releases even when the keyup lands on a focused control', () => {
+    renderApp()
+    fireEvent.keyDown(window, { code: 'Space' })
+    expect(screen.getByTestId('pedal-status').textContent).toMatch(/sustain down/)
+    // Clicking a knob mid-press focuses it, so the Space keyup targets an
+    // interactive element — the damper must still come back up.
+    const knob = screen.getByRole('slider', { name: 'Mod 1 Rate' })
+    fireEvent.pointerDown(knob, { pointerId: 3, clientY: 50 })
+    fireEvent.pointerUp(knob, { pointerId: 3, clientY: 50 })
+    fireEvent.keyUp(knob, { code: 'Space' })
+    expect(screen.getByTestId('pedal-status').textContent).toMatch(/sustain up/)
+  })
+
+  it('toggling Shift mid-drag changes speed without a value jump', () => {
+    renderApp()
+    const wheel = screen.getByRole('slider', { name: 'Mod Wheel' })
+    fireEvent.pointerDown(wheel, { pointerId: 6, clientY: 200 })
+    fireEvent.pointerMove(wheel, { pointerId: 6, clientY: 100 })
+    const coarse = Number(wheel.getAttribute('aria-valuenow'))
+    expect(coarse).toBeGreaterThan(50)
+    // One more pixel with Shift held: a fine increment, not a 4x rescale of
+    // the whole accumulated travel.
+    fireEvent.pointerMove(wheel, { pointerId: 6, clientY: 99, shiftKey: true })
+    const fine = Number(wheel.getAttribute('aria-valuenow'))
+    expect(Math.abs(fine - coarse)).toBeLessThanOrEqual(1)
+    fireEvent.pointerUp(wheel, { pointerId: 6, clientY: 99 })
+  })
+
+  it('a keyboard bend on the spring-loaded pitch stick springs back on key release', () => {
+    renderApp()
+    const stick = screen.getByRole('slider', { name: 'Pitch Stick' })
+    fireEvent.keyDown(stick, { key: 'ArrowRight' })
+    expect(Number(stick.getAttribute('aria-valuenow'))).toBeGreaterThan(0)
+    fireEvent.keyUp(stick, { key: 'ArrowRight' })
+    expect(stick).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('a second activation of a hold button does not leak a ghost hold timer', () => {
+    renderApp()
+    vi.useFakeTimers()
+    try {
+      const organOn = screen.getByRole('button', { name: 'Organ Section On' })
+      const pianoOn = screen.getByRole('button', { name: 'Piano Section On' })
+      expect(pianoOn).toHaveAttribute('aria-pressed', 'true')
+      // Enter starts a hold; Space restarts it; both release quickly.
+      fireEvent.keyDown(organOn, { key: 'Enter' })
+      act(() => vi.advanceTimersByTime(200))
+      fireEvent.keyDown(organOn, { key: ' ' })
+      fireEvent.keyUp(organOn, { key: 'Enter' })
+      fireEvent.keyUp(organOn, { key: ' ' })
+      // A leaked first timer would fire SOLO ~500ms after the Enter press
+      // and silently drop the other sections.
+      act(() => vi.advanceTimersByTime(600))
+      expect(pianoOn).toHaveAttribute('aria-pressed', 'true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

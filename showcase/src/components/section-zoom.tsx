@@ -37,6 +37,7 @@ export function SectionZoomOverlay({
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const pressOnBackdropRef = useRef(false)
   // The clone must reproduce the panel section EXACTLY, only k× larger.
   // cqw units resolve against the container width, so the container is a
   // virtual panel scaled by k (cqWidth = k × .instrument width) while the
@@ -113,7 +114,19 @@ export function SectionZoomOverlay({
   if (!host) return null
 
   return createPortal(
-    <div className="section-zoom-backdrop" onClick={onClose}>
+    <div
+      className="section-zoom-backdrop"
+      // Standard modal-scrim rule: close only when the PRESS began on the
+      // backdrop — a drag that starts on a control inside the dialog and
+      // releases over the scrim must not dismiss it (the browser dispatches
+      // that click on the common ancestor, i.e. the backdrop).
+      onPointerDown={(event) => {
+        pressOnBackdropRef.current = event.target === event.currentTarget
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && pressOnBackdropRef.current) onClose()
+      }}
+    >
       <div
         ref={dialogRef}
         className="section-zoom-dialog"

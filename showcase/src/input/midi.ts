@@ -99,13 +99,24 @@ export class MidiInputManager {
         port.onmidimessage = (event) => this.handleMessage(event)
       }
     }
+    let removedAny = false
     for (const port of this.attachedPorts) {
-      if (!current.has(port)) port.onmidimessage = null
+      if (!current.has(port)) {
+        port.onmidimessage = null
+        removedAny = true
+      }
     }
     this.attachedPorts = current
     if (current.size > 0) {
       const names = [...current].map((p) => p.name ?? 'MIDI device').join(', ')
-      this.setStatus('connected', `MIDI connected: ${names}`)
+      if (removedAny) {
+        // A device left while others remain: its held notes would otherwise
+        // ring forever (their note-offs can never arrive).
+        this.handlers.onDisconnectCleanup()
+        this.setStatus('connected', `MIDI device removed — notes cleaned up. Connected: ${names}`)
+      } else {
+        this.setStatus('connected', `MIDI connected: ${names}`)
+      }
     } else if (previousCount > 0) {
       this.handlers.onDisconnectCleanup()
       this.setStatus('disconnected', 'MIDI device disconnected — notes were cleaned up.')

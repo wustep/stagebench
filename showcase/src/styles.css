@@ -480,17 +480,32 @@ body {
 
 /* The reference's section header is a full-width LIGHT band with dark navy
    text (title, SECTION, FX FOCUS, ON, SOLO all sit on it). */
+/* Photo: each plate's light band is a TALL tab (title, FX FOCUS, ON,
+   SOLO ▾) that steps down after the switch to a THIN strip running to the
+   plate's right edge. */
 .plate-header {
   flex: none;
-  position: relative; /* anchors the FX FOCUS tab under the effects band */
+  display: flex;
+  align-items: flex-start;
+  margin: -0.2cqw -0.35cqw 0.18cqw;
+}
+
+.plate-header-tab {
   display: flex;
   align-items: center;
   gap: 0.5cqw;
-  margin: -0.2cqw -0.35cqw 0.18cqw;
   padding: 0.08cqw 0.45cqw 0.1cqw;
   background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
-  border-radius: 0.3cqw 0.3cqw 0 0;
+  border-radius: 0.3cqw 0 0.24cqw 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.plate-header-strip {
+  flex: 1;
+  height: 0.42cqw;
+  background: linear-gradient(180deg, #d7dae3 0%, #c9cdd6 100%);
+  border-radius: 0 0.3cqw 0 0.12cqw;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
 }
 
 .plate-header .plate-title {
@@ -2152,7 +2167,7 @@ body {
 /* The piano plate is the narrowest: proportionally smaller header print
    (photo: the piano band's ink is visibly more compact than the wide
    plates') keeps the uniform-size ON switch inside the band. */
-.deck-section[data-section='piano'] .plate-header {
+.deck-section[data-section='piano'] .plate-header-tab {
   gap: 0.14cqw;
   padding-left: 0.24cqw;
   padding-right: 0.24cqw;
@@ -3617,14 +3632,12 @@ body {
   min-height: 0;
 }
 
-/* Reference: FX FOCUS prints on a small light tab hanging directly below
-   the LEFT edge of the LAYER EFFECTS header band — anchored to the grid's
-   top-left corner (top overhang only, so it never adds scroll overflow). */
+/* Reference: FX FOCUS prints on a small light tab hanging from the band
+   into the selector gutter. In-flow first child of the gutter, tucked up
+   flush against the band (top overhang never adds scroll overflow). */
 .fx-focus-tab {
-  position: absolute;
-  top: -0.06cqw;
-  left: 0;
-  z-index: 2; /* paints over the MOD 1 box edge it hangs onto */
+  align-self: flex-start;
+  margin-top: -0.16cqw;
   font-size: 0.3cqw;
   font-weight: 800;
   letter-spacing: 0.06cqw;
@@ -3681,16 +3694,22 @@ body {
 }
 
 .deck-section[data-section='effects'] .plate-header {
-  margin: 0;
-  align-self: flex-start;
-  width: max-content;
-  max-width: 100%;
-  border-radius: 0.3cqw 0.3cqw 0 0;
+  margin: 0 0 0.16cqw;
+}
+
+/* The FX FOCUS selector gutter + boxes grid sit side by side under the
+   band (photo: the gutter is red chassis INSIDE the section). */
+.effects-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  gap: 0.3cqw;
 }
 
 .deck-section[data-section='effects'] .effects-grid {
   background: linear-gradient(180deg, #414855 0%, var(--panel) 30%, var(--panel-dark) 100%);
-  border-radius: 0 0.35cqw 0.35cqw 0.35cqw;
+  border-radius: 0.35cqw;
   border: 0.07cqw solid rgba(0, 0, 0, 0.5);
   box-shadow:
     inset 0 0.1cqw 0.15cqw rgba(255, 255, 255, 0.12),
@@ -3699,7 +3718,6 @@ body {
 }
 
 .effects-grid {
-  position: relative; /* containing block for the FX FOCUS tab */
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -4108,13 +4126,53 @@ body {
 .ctrl-pedal {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-weight: 700;
 }
 
+.ctrl-pedal-label {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #b8bac1;
+}
+
+.ctrl-pedal-value {
+  min-width: 3ch;
+  text-align: right;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #8f929a;
+}
+
 .ctrl-pedal input[type='range'] {
-  width: 90px;
-  accent-color: #8a2f28;
+  appearance: none;
+  width: 96px;
+  height: 3px;
+  border-radius: 2px;
+  background: #43454c;
+  outline-offset: 4px;
+}
+
+.ctrl-pedal input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #c8493f 0%, #8e2a23 100%);
+  border: 1px solid #601a15;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.ctrl-pedal input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #c8493f 0%, #8e2a23 100%);
+  border: 1px solid #601a15;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
 }
 
 /* Active split points render as thin markers above the keys (manual p. 39). */
@@ -4132,94 +4190,142 @@ body {
 
 /* --------------------------------------------------------- status strip -- */
 
+/* The chrome tray: a slim dark stage-riser bar under the instrument, so
+   the panel stays the star and the web controls read as one quiet piece
+   of gear rather than default browser widgets. */
 .status-strip {
   width: min(94vw, 1400px);
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
+  gap: 8px 18px;
   justify-content: center;
+  align-items: center;
   font-size: 11px;
-  color: #5c564f;
+  color: #9a9da5;
+  background: linear-gradient(180deg, #26272b 0%, #1d1e21 100%);
+  border: 1px solid #131417;
+  border-radius: 10px;
+  padding: 8px 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 6px 16px rgba(20, 15, 12, 0.25);
 }
 
 .status-strip b {
   font-weight: 700;
+  color: #cfd2d8;
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  margin-right: 4px;
 }
 
 .status-strip [data-status='error'] {
-  color: #a03024;
+  color: #e2695c;
 }
 
 /* Minimal chrome: the informational strip collapses; essentials stay. */
 .chrome-essentials {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-basis: 100%;
   justify-content: center;
 }
 
+.chrome-divider {
+  width: 1px;
+  height: 16px;
+  background: #3c3e44;
+}
+
 .chrome-info {
-  display: contents;
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid #33353b;
+  padding-top: 8px;
+  max-width: 980px;
+  margin: 0 auto;
+  line-height: 1.5;
 }
 
 .status-strip.chrome-minimal .chrome-info {
   display: none;
 }
 
-.chrome-toggle {
+/* Shared pill for every tray button. */
+.chrome-toggle,
+.sustain-pedal {
   appearance: none;
-  border: 1px solid #b9b3a9;
-  border-radius: 10px;
-  background: transparent;
-  color: #8a847b;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #45474e;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2f3136 0%, #232428 100%);
+  color: #d3d5da;
   font: inherit;
   font-size: 10px;
-  letter-spacing: 0.06em;
-  padding: 1px 8px 2px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 4px 12px;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
-.chrome-toggle:hover {
-  color: #4a453f;
-  border-color: #8a847b;
+.chrome-toggle svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0.75;
+}
+
+.chrome-toggle:hover,
+.sustain-pedal:hover {
+  border-color: #6a6d76;
+  color: #f0f1f4;
 }
 
 .chrome-toggle[aria-pressed='true'] {
-  background: #d8d3ca;
-  color: #4a453f;
+  background: linear-gradient(180deg, #3a3225 0%, #2b2620 100%);
+  border-color: #8a713a;
+  color: #f3d9a0;
 }
 
-.chrome-toggle:focus-visible {
+.chrome-toggle[aria-pressed='true'] svg {
+  opacity: 1;
+}
+
+.chrome-toggle:focus-visible,
+.sustain-pedal:focus-visible,
+.ctrl-pedal input[type='range']:focus-visible {
   outline: 2px solid #d8a03c;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-/* On-screen sustain pedal (latching): the required UI sustain input. */
-.sustain-pedal {
-  appearance: none;
-  border: 1px solid #8a837a;
-  border-radius: 3px;
-  background: linear-gradient(#f2efe9, #d8d3ca);
-  color: #4a453f;
-  font: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 1px 8px 2px;
-  cursor: pointer;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+/* On-screen sustain pedal (latching): the required UI sustain input. Its
+   dot is the pedal-down lamp. */
+.chrome-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #46362f;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
 }
 
 .sustain-pedal[aria-pressed='true'] {
-  background: linear-gradient(#c8c2b8, #b4aea3);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
-  transform: translateY(1px);
+  border-color: #9a4238;
+  color: #f4dcd8;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.45),
+    0 0 10px rgba(200, 73, 63, 0.25);
 }
 
-.sustain-pedal:focus-visible {
-  outline: 2px solid #d8a03c;
-  outline-offset: 1px;
+.sustain-pedal[aria-pressed='true'] .chrome-dot {
+  background: #ff6a55;
+  box-shadow: 0 0 6px rgba(255, 106, 85, 0.9);
 }
 
 /* ------------------------------------------------------------- narrow -- */
@@ -4231,6 +4337,21 @@ body {
 
   .status-strip {
     font-size: 10px;
+    padding: 6px 10px;
+  }
+
+  /* The tray pills wrap instead of forcing a horizontal page scroll. */
+  .chrome-essentials {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+
+  .chrome-divider {
+    display: none;
+  }
+
+  .ctrl-pedal input[type='range'] {
+    width: 64px;
   }
 
   /* Non-scaling sub-pixel rounding accumulates in the dense Program strip

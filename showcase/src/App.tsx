@@ -277,6 +277,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   // plus the space-bar sustain and Z/X soft/sostenuto pedal input paths.
   useEffect(() => {
     const heldCodes = new Set<string>()
+    // Space engaged the pedal: remembered so the RELEASE always happens even
+    // if focus moved onto a button/slider mid-press (clicking a control
+    // focuses it) — otherwise the keyup guard below would skip the release
+    // and the damper would stick down forever.
+    let spaceSustainDown = false
     const isTypingTarget = (target: EventTarget | null): boolean => {
       if (!(target instanceof HTMLElement)) return false
       return target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
@@ -288,7 +293,10 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       if (isTypingTarget(event.target)) return
       if (event.code === SUSTAIN_KEY_CODE && !isInteractiveTarget(event.target)) {
         event.preventDefault()
-        if (!event.repeat) controller.setSustain(true)
+        if (!event.repeat) {
+          spaceSustainDown = true
+          controller.setSustain(true)
+        }
         return
       }
       // Letter keys never operate a focused button/slider (those use
@@ -310,12 +318,19 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       controller.noteOn(midiNote, KEYBOARD_VELOCITY, 'keyboard')
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      // Pedal key-ups mirror the key-down guard: keyboard activation of a
-      // focused control (e.g. Space on the on-screen sustain pedal) must not
-      // double as a pedal gesture.
-      if (event.code === SUSTAIN_KEY_CODE && !isInteractiveTarget(event.target)) {
-        controller.setSustain(false)
-        return
+      // Pedal key-ups mirror the key-down guard — EXCEPT when this very key
+      // engaged the pedal: the damper must come back up no matter where
+      // focus wandered during the press (honesty: pedal up = release).
+      if (event.code === SUSTAIN_KEY_CODE) {
+        if (spaceSustainDown) {
+          spaceSustainDown = false
+          controller.setSustain(false)
+          return
+        }
+        if (!isInteractiveTarget(event.target)) {
+          controller.setSustain(false)
+          return
+        }
       }
       if (event.code === SOFT_KEY_CODE) {
         controller.setSoft(false)
@@ -332,6 +347,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     }
     const onBlur = () => {
       heldCodes.clear()
+      spaceSustainDown = false
       controller.allNotesOff('blur')
     }
     window.addEventListener('keydown', onKeyDown)
@@ -470,10 +486,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             aria-label="Sustain Pedal"
             onClick={() => controller.setSustain(!controller.isSustainDown())}
           >
-            SUSTAIN PEDAL
+            <span className="chrome-dot" aria-hidden="true" />
+            Sustain Pedal
           </button>
           <label className="ctrl-pedal">
-            CTRL PEDAL
+            <span className="ctrl-pedal-label">Ctrl Pedal</span>
             <input
               type="range"
               min={0}
@@ -483,7 +500,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               data-testid="ctrl-pedal"
               onChange={(event) => instrument.setMorphSource('pedal', Number(event.target.value))}
             />
+            <span className="ctrl-pedal-value" aria-hidden="true">
+              {controlPedal}
+            </span>
           </label>
+          <span className="chrome-divider" aria-hidden="true" />
           <button
             type="button"
             className="chrome-toggle"
@@ -492,7 +513,12 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             aria-label="Show panel info"
             onClick={toggleChrome}
           >
-            ⓘ INFO
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+              <rect x="5.3" y="5" width="1.4" height="4" rx="0.7" fill="currentColor" />
+              <circle cx="6" cy="3.4" r="0.85" fill="currentColor" />
+            </svg>
+            Info
           </button>
           <button
             type="button"
@@ -502,36 +528,36 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             aria-label="Toggle magnifier lens"
             onClick={() => setMagnify((m) => !m)}
           >
-            🔍 MAGNIFY
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <circle cx="5" cy="5" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+              <rect x="7.4" y="8.2" width="4" height="1.5" rx="0.75" transform="rotate(45 7.4 8.2)" fill="currentColor" />
+            </svg>
+            Magnify
           </button>
         </span>
         {chrome === 'minimal' && engineDegraded && engineStatusLine}
         <span className="chrome-info">
           {(chrome !== 'minimal' || !engineDegraded) && engineStatusLine}
           <span data-testid="midi-status" data-status={midiStatus.status} aria-live="polite">
-            <b>MIDI:</b> {midiStatus.message}
+            <b>MIDI</b> {midiStatus.message}
           </span>
           <span data-testid="pedal-status">
-            <b>Pedals:</b> sustain {pedals.sustain ? 'down' : 'up'} (pedal latches / Space / CC64 half-pedal) · sostenuto{' '}
+            <b>Pedals</b> sustain {pedals.sustain ? 'down' : 'up'} (pedal latches / Space / CC64 half-pedal) · sostenuto{' '}
             {pedals.sostenuto ? 'down' : 'up'} (X / CC66) · soft {pedals.soft ? 'down' : 'up'} (Z / CC67)
           </span>
           <span data-testid="ctrl-pedal-status">
-            <span>
-              CTRL PEDAL {controlPedal} (CC11 · Control Pedal morph source)
-            </span>
+            <b>Ctrl pedal</b> {controlPedal} — CC11, the Control Pedal morph source
           </span>
           <span data-testid="keymap-help">
-            <b>Keyboard:</b> A S D F G H J K L ; play C4–E5 and W E T Y U O P the sharps between them (physical key
-            positions, layout-independent) · Space/Z/X are the sustain/soft/sostenuto pedals
+            <b>Keys</b> A S D F G H J K L ; play C4–E5, W E T Y U O P the sharps between them (physical positions,
+            layout-independent) · Space/Z/X are the sustain/soft/sostenuto pedals
           </span>
           <span className="status-note">
-            Functional: keybed, pedals, all Piano and Organ sections (all six organ models including B3 Bass and Pipe
-            2, and the Organ preset button), the complete Synth section (Analog and Samples modes, all optional
-            oscillator categories and filters), Layer Effects (including each synth layer's own effect chain and the
-            organ layers' shared chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, the
-            preset-library buttons, Layer Init (Shift + Section Edit), Mon/Copy monitor + copy/paste latches (manual
-            p. 43), and section zoom. Visual-only by spec exclusion: Synth Mode's Extern position, Section Edit's
-            plain press, and Morph A.T. (no browser aftertouch).
+            <b>Coverage</b> Every section is functional — keybed and pedals, Piano (all six types), Organ (all six
+            models, presets, percussion), Synth (Analog + Samples, every oscillator category and filter), per-layer
+            Layer Effects, Rotary, and the full Programs cluster (scenes, splits, morphs, master clock, transpose,
+            preset library, Mon/Copy). Visual-only by spec exclusion: Synth Mode&apos;s Extern position, Section
+            Edit&apos;s plain press, and Morph A.T. (no browser aftertouch).
           </span>
         </span>
       </footer>

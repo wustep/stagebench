@@ -24,7 +24,7 @@ function useContinuous(store: PresentationStore, id: string) {
   const min = control.min ?? 0
   const max = control.max ?? 127
   const range = max - min
-  const dragState = useRef<{ pointerId: number; startX: number; startY: number; startValue: number } | null>(null)
+  const dragState = useRef<{ pointerId: number; lastX: number; lastY: number; value: number } | null>(null)
 
   const onKeyDown = (event: ReactKeyboardEvent) => {
     let next: number | null = null
@@ -40,9 +40,21 @@ function useContinuous(store: PresentationStore, id: string) {
       store.setValue(id, next)
     }
   }
+  // Spring-loaded controls (pitch stick): releasing the key is releasing the
+  // stick — it springs back to center, exactly like the pointer path. Without
+  // this, arrow keys would park a bend the hardware can never hold.
+  const onKeyUp = control.springLoaded
+    ? (event: ReactKeyboardEvent) => {
+        if (['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
+          store.setValue(id, control.initial ?? 0)
+        }
+      }
+    : undefined
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
+    // A second pointer must not hijack (and spring-recenter) an active drag.
+    if (dragState.current) return
     event.currentTarget.focus()
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
@@ -50,22 +62,28 @@ function useContinuous(store: PresentationStore, id: string) {
       // A pointer can be gone by the time capture is requested (touch
       // cancellation, synthetic events); the drag still tracks via move events.
     }
-    dragState.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startValue: value }
+    dragState.current = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY, value }
   }
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragState.current
     if (!drag || drag.pointerId !== event.pointerId) return
-    let delta = drag.startY - event.clientY
+    let delta = drag.lastY - event.clientY
     // Drawbars are pulled out (toward the player, i.e. downward) to increase.
     if (control.type === 'drawbar') delta = -delta
     // The pitch stick moves SIDE TO SIDE on the hardware (right = bend up).
-    if (control.type === 'stick') delta = event.clientX - drag.startX
-    // Shift while dragging = fine adjust (quarter-speed).
+    if (control.type === 'stick') delta = event.clientX - drag.lastX
+    drag.lastX = event.clientX
+    drag.lastY = event.clientY
+    // Shift while dragging = fine adjust (quarter-speed). Applied to each
+    // increment — never to the whole accumulated travel — so toggling Shift
+    // mid-drag changes speed without the value jumping.
     const gain = event.shiftKey ? 0.25 : 1
-    store.setValue(id, drag.startValue + (delta / 200) * range * gain)
+    drag.value = Math.min(max, Math.max(min, drag.value + (delta / 200) * range * gain))
+    store.setValue(id, drag.value)
   }
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragState.current?.pointerId === event.pointerId) dragState.current = null
+    if (dragState.current?.pointerId !== event.pointerId) return
+    dragState.current = null
     if (control.springLoaded) store.setValue(id, control.initial ?? 0)
   }
 
@@ -107,6 +125,7 @@ function useContinuous(store: PresentationStore, id: string) {
     'data-decorative': control.decorative ? 'true' : 'false',
     'data-morphed': morphTag ?? undefined,
     onKeyDown,
+    onKeyUp,
     onPointerDown,
     onPointerMove,
     onPointerUp: endDrag,
@@ -269,6 +288,10 @@ export const PanelButton = memo(function PanelButton({ store, id, className, chi
   }
 
   const startHold = () => {
+    // A second activation (Enter + Space, pointer + key, second touch) must
+    // not leak the first timer — a leaked timer fires the hold action after
+    // everything is released.
+    clearHoldTimer()
     held.current = false
     holdTimer.current = window.setTimeout(() => {
       held.current = true

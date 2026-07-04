@@ -753,7 +753,6 @@ function App() {
           <div className="preview-header">
             <div className="preview-identity">
               <strong>Showcase</strong>
-              <span>SEEDED FROM FABLE 5 HIGH · ITERATING</span>
             </div>
             <div className="preview-tools">
               <button type="button" onClick={() => setShowcaseOpen(false)}>Close</button>
