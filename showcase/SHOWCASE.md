@@ -1790,3 +1790,23 @@ User-directed corrections from a header crop of the product photo:
 - Gates: typecheck, lint, build, verify:layout 12/12, full suite 499/499
   (the parallel-run compressor flake even behaved this run — still tracked
   separately); bench publish checks green.
+
+### 44 — Red pads, drawbar ladders, one knob size (2026-07-04)
+
+User-directed round, each item photo-checked:
+
+- **Red shift-frames are SOLID pads**: the black switch sits on a filled
+  red rounded backing (::before pad), not a hairline outline ring — and
+  paired pads (OSC, FILTER) keep a visible gap instead of merging.
+- **Drawbar ladders match the photo closeup**: a solid light plate holds
+  the 1-8 digits (dark ink, tight pitch) and chunky red cells; the plate
+  spans only the upper ~56% of the well and the cap's travel tops out
+  beside cell 8 instead of running to the well's bottom.
+- **ONE knob size everywhere** (user directive): every knob and knurled
+  dial — Master Level, Program/Model dials, all box knobs — is 1.14cqw
+  (.small/.large are inert aliases now); paired knob scales got breathing
+  room. Knob UX: hover brightening, a data-dragging state, double-click
+  reset to initial on knobs/dials (registration-carrying drawbars/faders
+  excluded), and a proper focus ring.
+- Gates: typecheck, lint, build, verify:layout 12/12, full suite 499/499;
+  bench publish checks green.
