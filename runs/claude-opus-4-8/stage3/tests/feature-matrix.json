@@ -1,0 +1,202 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 1,
+  "stage": 3,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "description": "Exact variant key count (73), range (E1-E7), white/black pattern, and geometry.",
+      "tests": ["tests/keybed.test.ts", "tests/App.test.tsx"]
+    },
+    {
+      "id": "visual.section-layout",
+      "description": "Six ordered sections at documented widths, 54/46 deck/keybed split, continuous chassis.",
+      "tests": ["tests/controls.test.ts", "tests/App.test.tsx"]
+    },
+    {
+      "id": "visual.control-inventory",
+      "description": "Stable control IDs, per-section landmarks and density, Program/Synth as the only primary OLEDs.",
+      "tests": ["tests/controls.test.ts", "tests/App.test.tsx"]
+    },
+    {
+      "id": "interaction.keys",
+      "description": "Pointer/touch/keyboard key press, release, and cancel/blur behavior.",
+      "tests": ["tests/App.test.tsx", "tests/inputIntegration.test.tsx"]
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "description": "Every visible control moves or presses accessibly and changes presentation state only.",
+      "tests": ["tests/controlStore.test.ts", "tests/App.test.tsx"]
+    },
+    {
+      "id": "accessibility.controls",
+      "description": "Accessible names, roles, values, keyboard operation, and visible focus.",
+      "tests": ["tests/App.test.tsx", "tests/regressionPhase2.test.tsx"]
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "description": "Note on/off, repeated and overlapping notes, release, all-notes-off, node cleanup.",
+      "tests": ["tests/pianoEngine.test.ts", "tests/App.test.tsx"]
+    },
+    {
+      "id": "piano.basic-inputs",
+      "description": "Pointer, independent multi-touch, mapped keyboard with repeat suppression, MIDI note/velocity/sustain, and denied/disconnected MIDI.",
+      "tests": [
+        "tests/noteRouter.test.ts",
+        "tests/midi.test.ts",
+        "tests/keyboardMap.test.ts",
+        "tests/inputIntegration.test.tsx"
+      ]
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "description": "Sustain transitions, concurrent voices, deterministic stealing, velocity response.",
+      "tests": ["tests/pianoEngine.test.ts"]
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "description": "Truthful loading/ready/error/fallback status; blur/disconnect/unmount stops every owned voice.",
+      "tests": ["tests/pianoEngine.test.ts", "tests/App.test.tsx", "tests/inputIntegration.test.tsx"]
+    },
+    {
+      "id": "regression.chassis",
+      "description": "No marketing hero, detached rails, missing keys, overflow, or clipped chassis at 1440x900 and 390x844.",
+      "tests": ["tests/App.test.tsx", "tests/regressionPhase2.test.tsx"]
+    },
+    {
+      "id": "piano.instrument-library",
+      "description": "Six selectable types; Grand/Upright/Electric are bundled recorded sample sets that load offline and render audibly distinct signals; Clav/Digital/Misc are honest synthesis; labeled playable fallback on asset failure.",
+      "tests": ["tests/instruments.test.ts"]
+    },
+    {
+      "id": "piano.layers",
+      "description": "Two layers (A, B) with enable, focus, level, and octave shift and correct per-layer voice ownership; disabled layers produce no voices.",
+      "tests": ["tests/audioEngine.test.ts", "tests/pianoControls.test.ts", "tests/controlBindings.test.ts"]
+    },
+    {
+      "id": "piano.velocity-controls",
+      "description": "KB Touch (3 curves), Dyn Comp (Off/1/2/3), Timbre, Unison (Off/1/2/3), and Soft Release each measurably change rendered audio.",
+      "tests": ["tests/pianoControls.test.ts"]
+    },
+    {
+      "id": "piano.pedals",
+      "description": "Sustain from the engine API (UI/keyboard/MIDI CC64) holds released notes until the pedal lifts and only affects layers with SUSTPED on.",
+      "tests": ["tests/audioEngine.test.ts"]
+    },
+    {
+      "id": "piano.fallback",
+      "description": "When sample assets fail to load the engine enters a labeled playable fallback that still renders sound (synthesized), never claiming recordings it lacks.",
+      "tests": ["tests/instruments.test.ts"]
+    },
+    {
+      "id": "effects.graph",
+      "description": "One AudioContext feeds layer buses, ordered effect units, master gain/limiter, and one destination; master level scales loudness; dispose cleans up all voices.",
+      "tests": ["tests/audioEngine.test.ts", "tests/effects.test.ts"]
+    },
+    {
+      "id": "effects.routing",
+      "description": "Focus follows/overrides layer focus, Piano group mode, Delay/Compressor/Reverb global mode, per-unit bypass, all-effects bypass, documented signal order, and To Rotary routing (reverb before rotary).",
+      "tests": ["tests/effects.test.ts", "tests/controlBindings.test.ts"]
+    },
+    {
+      "id": "effects.processing",
+      "description": "Each effect unit and every listed type processes real audio and is audibly distinct, with working bypass and dry/wet; delay feedback filtering processes the repeats.",
+      "tests": ["tests/effects.test.ts"]
+    },
+    {
+      "id": "regression.phase1",
+      "description": "The Phase 1 surface, keybed, inputs, accessibility, and console cleanliness remain intact under the Phase 2 AudioEngine.",
+      "tests": ["tests/regressionPhase2.test.tsx", "tests/App.test.tsx", "tests/inputIntegration.test.tsx"]
+    },
+    {
+      "id": "programs.roundtrip",
+      "description": "Storing and re-loading any of the 32 slots round-trips all supported control + performance state (Master Level excluded) via JSON serialization.",
+      "tests": ["tests/program.test.ts"]
+    },
+    {
+      "id": "programs.store-live",
+      "description": "8 Live slots auto-store every edit, persist across slot changes, and survive a bank export/import (reload); Store As names a program.",
+      "tests": ["tests/program.test.ts"]
+    },
+    {
+      "id": "programs.undo-cancel",
+      "description": "Editing sets the dirty (E) flag; selecting another program discards edits (edit-discard); Store clears dirty; cancel store reverts.",
+      "tests": ["tests/program.test.ts"]
+    },
+    {
+      "id": "programs.navigation",
+      "description": "32 slots across 4 pages of 8 plus 8 Live slots; dial/page/program-button browsing; numeric list; >=8 factory programs demonstrating piano/organ/synth/split/layered setups.",
+      "tests": ["tests/program.test.ts"]
+    },
+    {
+      "id": "layers.routing",
+      "description": "Piano/Organ/Synth layers route through the single graph; scene enable and split zones gate whether each layer sounds; dispose tears down every section's voices.",
+      "tests": ["tests/integration.test.ts"]
+    },
+    {
+      "id": "splits.zones",
+      "description": "Splits with editable points/crossfades route notes by zone; a split silences notes outside a layer's zone; crossfades fade a layer across the boundary (audible level change).",
+      "tests": ["tests/integration.test.ts"]
+    },
+    {
+      "id": "morph.assignments",
+      "description": "Morph assignment add/replace/clear per source (Wheel, Control Pedal); morphing the filter cutoff interpolates and is observable in rendered audio.",
+      "tests": ["tests/program.test.ts", "tests/integration.test.ts"]
+    },
+    {
+      "id": "scenes.switching",
+      "description": "Layer Scenes I/II toggle enable state without changing shared sound parameters; scene I vs II select different enabled layers in audio.",
+      "tests": ["tests/program.test.ts", "tests/integration.test.ts"]
+    },
+    {
+      "id": "organ.engine",
+      "description": "B3, Vox, Farf, and Pipe render spectrally distinct signals (not one renamed oscillator); percussion, key click, and vibrato/chorus measurably change rendered audio.",
+      "tests": ["tests/organEngine.test.ts"]
+    },
+    {
+      "id": "organ.models-drawbars",
+      "description": "Nine drawbars drive each model's audible spectrum (adding upper drawbars increases brightness; all-zero yields near silence); B3 Bass limits to 16'/8'.",
+      "tests": ["tests/organEngine.test.ts"]
+    },
+    {
+      "id": "organ.rotary",
+      "description": "Organ routes into the shared rotary (reverb before rotary) with slow/fast/stop acceleration and drive; renders real audio.",
+      "tests": ["tests/organEngine.test.ts", "tests/effects.test.ts"]
+    },
+    {
+      "id": "synth.sources",
+      "description": "Pure, Sync, Multi, Super, and FM-H are audibly distinct source constructions; Osc Ctrl acts per category (Super detune, FM index).",
+      "tests": ["tests/synthEngine.test.ts"]
+    },
+    {
+      "id": "synth.filter-envelopes",
+      "description": "LP12/LP24/HP/BP filters, cutoff, resonance, tracking, drive, and osc/filter/amp envelopes each alter rendered audio (cutoff removes highs, HP vs LP, attack delays onset, filter env sweep).",
+      "tests": ["tests/synthEngine.test.ts"]
+    },
+    {
+      "id": "synth.voice-modes",
+      "description": "Poly stacks voices; mono/legato keep a single voice per layer; unison adds detuned voices; glide/priority/vibrato change voice behavior.",
+      "tests": ["tests/synthEngine.test.ts"]
+    },
+    {
+      "id": "synth.arp-gate",
+      "description": "Deterministic arpeggiator/gate: arpSequence order for Up/Down/Up-Down/Range, seeded Random reproducibility, manual-scheduler tick order, and master-clock tap BPM.",
+      "tests": ["tests/synthEngine.test.ts"]
+    },
+    {
+      "id": "system.integration",
+      "description": "Piano + Organ + Synth all render through the ONE AudioContext to one destination; no second AudioContext; dispose cleans up every section.",
+      "tests": ["tests/integration.test.ts", "tests/audioEngine.test.ts"]
+    },
+    {
+      "id": "hardware.bindings",
+      "description": "Every functional control maps to real audio/system state (organ/synth/program bindings + transpose shifting whole-instrument pitch); spec-excluded controls stay decorative.",
+      "tests": ["tests/integration.test.ts", "tests/controlBindings.test.ts"]
+    },
+    {
+      "id": "regression.phase2",
+      "description": "All inherited Phase-1 and Phase-2 visual, piano, effects, input, and accessibility behavior remains regression-free under the Phase-3 engine.",
+      "tests": ["tests/regressionPhase2.test.tsx", "tests/audioEngine.test.ts", "tests/effects.test.ts", "tests/pianoControls.test.ts", "tests/controlBindings.test.ts"]
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "claude-opus-4-8",
+  "stage": 3,
+  "evaluator": "independent-agent (opus-4.8)",
+  "evaluatedAt": "2026-07-04T00:00:00.000Z",
+  "summary": "An ambitious and largely complete Phase 3 that ships the full Stage 4 system through the single inherited Phase-2 audio graph and backs almost everything with real-boundary tests. Organ: four spectrally distinct engines (B3 tonewheel with drawbar-footage sine partials + leakage + key click + single-trigger percussion; Vox odd-harmonic reed; Farf buzzy register switches; Pipe flute ranks), nine drawbars driving each model's spectrum, vibrato/chorus depth scaling, and rotary routing that accelerates slow->fast into the shared post-reverb rotary. Synth: five genuinely different oscillator constructions (Pure single wave, Sync hard-sync, Multi detuned-saw stack, Super 7-voice supersaw, FM-H 2-op FM) with category-correct Osc Ctrl, LP12/LP24/HP/BP filters with tracking/res/drive, osc/filter/amp envelopes, a 5-waveform/3-destination LFO with clock sync, poly/mono/legato + glide + unison + vibrato, and a deterministic arpeggiator/gate driven by an injectable MasterClock (tap + dial). The Program system is a serializable ControlStore+PerformanceStore snapshot: 32 slots (4 pages x 8) plus 8 auto-storing Live slots, dial/page/list browsing, Store/Store As with naming, truthful dirty (E) and edit-discard, plus splits (zones/points/crossfades), Layer Scenes I/II, Wheel + Control-Pedal morphs (assign/interpolate/clear), Master Clock, Transpose +/-6, and Panic — all round-tripping losslessly with Master Level correctly excluded. All engines run in one AudioContext to one destination, and the honesty contract holds: Organ/Synth engines are declared honest synthesis (no recordings), every functional control is bound, and the only decorative controls are explicitly enumerated spec-exclusions. The corrected status strip truthfully states everything is live. All four gates pass; 38/38 features covered; zero page errors (console shows only benign autoplay-policy warnings). Main gaps: cosmetic text overflow/crowding in the central Program OLED strip at 1440px, recorded pianos remain single-velocity-layer (inherited), and the narrow layout keeps the horizontal-scroll strategy.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 3,
+          "evidence": [
+            "stage3-desktop.png retains the full chassis, six sections, drawbar LEDs, dual OLEDs, and 73-key keybed; adds a Master Clock group (MST CLK 120 / CTRL PED) and a numeric Program slot grid",
+            "stage3-visual-audit.md:49-50 discloses honest gap: Synth OLED 'Super Saw' label overflows its readout slightly at 1440px (cosmetic); central Program strip labels (Store/Live/Split) appear slightly crowded/overlapping in the capture",
+            "Inherited geometry/materials unchanged from Phase 1/2; narrow view keeps the same non-clipping horizontal-scroll strategy (stage3-narrow.png)"
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "rating": 3,
+          "evidence": [
+            "stage3-desktop.png shows Program slot grid (1-8), Scene/Split/Panic, Synth OSC CAT list (Pure/Sync/Multi/Super/FM-H) with Wave list, LFO waveform/dest, filter and envelope controls rendered",
+            "src/state/performanceStore.ts:45-126 backs transpose, scenes (per-layer enable), master clock, splits (points/crossfades/zones), and morph assignments as hardware-reflected state",
+            "Central Program/Live/Split region reads slightly dense with minor label overlap in the capture, but all landmarks are present and reference-credible"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 3,
+          "evidence": [
+            "src/state/programManager.ts:28-31 SLOT_COUNT 32, PAGE_SIZE 8, PAGE_COUNT 4, LIVE_SLOT_COUNT 8; dirty lifecycle + Store/Store As + edit-discard implemented",
+            "tests/program.test.ts:66-164 asserts 32 slots across 4 pages + 8 live, dial-step/page browsing, dirty->select discards edits, store clears dirty, cancel reverts, Store As writes named program, live edits auto-store and survive export/import",
+            "At least 7 named factory programs (White Grand, Tine Stack, B3 Soulful, Vox Continental, Super Saw Lead, Vista Pad Whl, Scene Layers); test:75 requires >=8 factory programs"
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 3,
+          "evidence": [
+            "src/state/performanceStore.ts: splits (on/points/crossfades/zones), scenes I/II per-layer enable, morph add/replace/clear per source, clock bpm/sync, transpose +/-6",
+            "tests/integration.test.ts:60-173 scene gating, scene I vs II different layers, split silences out-of-zone notes, crossfade audible level change across boundary, morph cutoff changes rendered brightness, transpose shifts synth pitch",
+            "tests/program.test.ts:164-199 scene toggles enable-state without changing sound params; morph adds/replaces/clears per source (Wheel + Control Pedal); Panic is internal All Notes Off (audioEngine.allNotesOff)"
+          ]
+        },
+        {
+          "id": "organSystem",
+          "rating": 3,
+          "evidence": [
+            "src/audio/organEngine.ts:9-28 B3/Vox/Farf/Pipe(+B3 Bass/Pipe2) with distinct spectra, nine footage-ratio drawbars, per-model partial construction, percussion + key click, vibrato/chorus per-partial detuning",
+            "tests/organEngine.test.ts:33-136 four engines distinct spectra with identical drawbars, spectrum builder differs per model, drawbar brightness, zero-drawbar near-silence, percussion attack energy, V3 stronger than V1, rotary routes and accelerates slow->fast",
+            "src/audio/sectionBindings.ts:46 nine drawbars bound (organ-drawbar-1..9) plus model/perc/vib-chorus/on; two organ layers share the effect graph"
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 3,
+          "evidence": [
+            "src/audio/synthEngine.ts:22-58 five source categories as different constructions (Pure/Sync/Multi/Super/FM-H), category-correct Osc Ctrl, LP12/LP24/HP/BP filters w/ tracking/res/drive, osc/filter/amp envelopes, unison/glide",
+            "tests/synthEngine.test.ts:27-153 five categories distinct, Osc Ctrl per category, FM harmonic content, LP cutoff/HP-vs-LP, amp-env attack delay, filter-env sweep, mono vs poly, unison width, deterministic arp Up/Down/Range + seeded Random + manual-scheduler tick + tap-tempo BPM",
+            "src/audio/clock.ts + sectionBindings synth-arp-* bindings: rate/sync/range/dir/hold/run; three synth layers with independent chains (IMPLEMENTATION_DETAILS.json:148)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 4,
+          "evidence": [
+            "tests/organEngine.test.ts:33 'B3, Vox, Farf, Pipe produce distinct spectra with identical drawbars' + :57 partial-level builder difference — proves not renamed copies",
+            "tests/synthEngine.test.ts:27 'Pure, Sync, Multi, Super, FM-H render distinct signals' rendered via OfflineAudioContext; :49 FM-H amount changes harmonic content",
+            "organEngine.ts/synthEngine.ts implement genuinely different spectra (additive footage partials vs hard-sync/supersaw/FM), not one generic oscillator with labels"
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "rating": 4,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json:6 all Piano/Organ/Synth layers route into the inherited per-layer LayerChain -> master gain -> limiter -> single destination; no second AudioContext",
+            "tests/integration.test.ts:25 'piano, organ, and synth all render through the single context/destination'; :43 dispose tears down organ+synth voices too",
+            "organEngine rotary routing and To-Rotary reuse the shared post-reverb rotary (tests/organEngine.test.ts:136); correct gain staging inherited from Phase 2 (20ms ramps, one limiter)"
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "rating": 3,
+          "evidence": [
+            "audioEngine per-layer polyphony stealing + reap on end; 20ms parameter ramps avoid clicks; deterministic arp/LFO under injectable clock keeps timing stable",
+            "tests/integration.test.ts exercises layered/split/scene play and crossfades without errors; verifications/stage3.json all gates green",
+            "stage3-capture.json: 26 console messages are all benign autoplay-policy warnings, zero pageErrors across desktop and narrow; deep engine stack under heavy layered polyphony not independently load-profiled here"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "rating": 4,
+          "evidence": [
+            "src/state/programManager.ts snapshots ControlStore + PerformanceStore into a JSON-serializable ProgramState; loadInto replaces both stores so the whole instrument reconfigures",
+            "tests/program.test.ts:17-63 serializes/deserializes losslessly, Master Level excluded (program.ts:100 PROGRAM_EXCLUDED_CONTROLS), storing then reloading restores every supported control",
+            "tests/program.test.ts:130 live-mode edits persist and survive export/import; scenes/splits/morphs/clock/transpose all part of the round-tripped performance state"
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "rating": 3,
+          "evidence": [
+            "src/audio/controlBindings.ts (248 lines) + sectionBindings.ts (164 lines) bind Piano/Organ/Synth/Effects/Master; controlBindings.test.ts:117 'Organ and Synth controls are now functional bindings (Phase 3)'",
+            "IMPLEMENTATION_DETAILS.json:134-141 enumerates the remaining decorative controls as explicit spec-exclusions (A.T. morph, Num Pad, Shift menus, rotary sound-menu tuning, Extern/Samples synth modes, organ Preset) — no generic no-op fallbacks",
+            "Status strip states 'Every control is bound or listed as unsupported — nothing fakes success'; some excluded items (e.g. Shift-menu sub-pages) are unsupported rather than implemented"
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "rating": 3,
+          "evidence": [
+            "tests/integration.test.ts:60-173 exercises engines with scenes, split zones, crossfades, and morphs as one system through the shared graph",
+            "MasterClock syncs arp + synth LFO + delay + Mod 1 (IMPLEMENTATION_DETAILS.json:6); transpose shifts the whole instrument and is tested to change rendered synth pitch",
+            "Splits route notes by zone across Piano/Organ/Synth layers via a per-note routing gate; scenes select different enabled layer sets"
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "rating": 4,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json:129 every inherited Phase-1 and Phase-2 test preserved (regression-free); tests/regressionPhase2.test.tsx and Phase-1 suites retained",
+            "verifications/stage3.json: 38/38 features covered, test/typecheck/lint/build all passed",
+            "Recorded piano library, effects graph, unified inputs, and responsive behavior remain functional under the Phase-3 engine (instruments/effects/pianoControls tests carried forward)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "architecture",
+          "rating": 4,
+          "evidence": [
+            "Clean ownership: ControlStore + PerformanceStore -> ProgramManager (serialization/slots); AudioEngine owns one context, per-layer LayerChains, shared rotary, master/limiter; organEngine/synthEngine/clock are separate composable modules",
+            "One-context routing with inherited effect composition; ProgramState is a single serializable snapshot (program.ts) with explicit exclusion list; extensible layer/targeting model",
+            "Injectable MasterClock + scheduler make the arpeggiator deterministic and testable (tests/synthEngine.test.ts:129)"
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "rating": 4,
+          "evidence": [
+            "Real-boundary tests across organEngine/synthEngine/program/integration render through node-web-audio-api OfflineAudioContext and assert measured signals + serialized state, not mocks",
+            "38/38 feature-matrix features covered; inherited Phase-1/2 suites preserved; required-control coverage audited in evidence/stage3-visual-audit.md",
+            "Modular naming (sectionBindings vs controlBindings, performanceStore vs controlStore); some breadth/duplication across per-layer chains and binding maps but well-organized"
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "rating": 3,
+          "evidence": [
+            "verifications/stage3.json all gates passed; stage3-capture.json zero pageErrors, only benign autoplay warnings on both profiles",
+            "tests/integration.test.ts:43 dispose tears down organ + synth voices; voices reap on end; 20ms ramps and injectable clock keep render/audio stable",
+            "Rapid integrated interaction (layers/splits/scenes/morphs/arp) exercised in tests; extreme sustained CPU/voice stress not separately profiled in evidence"
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Cosmetic layout crowding in the central Program OLED strip at 1440px: the Synth 'Super Saw' readout overflows slightly and the Store/Live/Split labels overlap their buttons in the capture (disclosed as a known gap; does not obscure function).",
+    "Recorded Grand/Upright/Electric pianos remain a single recorded velocity layer (inherited from Phase 2); dynamic timbre is gain/filter-shaped, honestly disclosed.",
+    "Narrow (390x844) layout continues to rely on horizontal scroll rather than reflow (inherited from Phase 1/2).",
+    "A set of spec-excluded controls (A.T. morph, Num Pad, Shift menus, organ Preset, Extern/Samples synth modes) are honestly listed as unsupported rather than implemented — correct per the honesty contract, but a scope boundary versus the full hardware.",
+    "Extreme sustained-polyphony CPU/voice-load and long-run stability are not independently profiled in the sealed evidence beyond the passing test suite and clean captures."
+  ]
+}

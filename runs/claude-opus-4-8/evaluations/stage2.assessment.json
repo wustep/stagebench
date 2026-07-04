@@ -1,0 +1,167 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "claude-opus-4-8",
+  "stage": 2,
+  "evaluator": "independent-agent (opus-4.8)",
+  "evaluatedAt": "2026-07-04T00:00:00.000Z",
+  "summary": "A very strong, honest Phase 2. Six selectable Piano types: Grand/Upright/Electric are genuinely recorded multi-sampled sets (30 real MP3 root notes each, ~20-25KB per file, FluidR3_GM via gleitz/midi-js-soundfonts, CC-BY-3.0, full provenance in IMPLEMENTATION_DETAILS + per-set manifest.json + LICENSE), loaded offline via real createBufferSource + playbackRate pitch-shift (<=1 semitone). Clav/Digital/Misc are honest synthesis, correctly declared. The single-velocity-layer limitation is disclosed truthfully rather than faked as multi-layer. The audio graph is the real deal: one BaseAudioContext, per-layer buses A/B, ordered chain Mod1->Mod2->Delay->Amp/EQ->Comp->Reverb, shared post-reverb Rotary, master gain -> DynamicsCompressor limiter -> one destination, with To-Rotary reroute and per-layer voice ownership/stealing. Effects are real Web Audio subgraphs and are asserted on rendered signals via OfflineAudioContext (tremolo amplitude vs bypass, stereo width, delay repeats + in-loop feedback filtering, reverb tails growing Booth->Cathedral, rotary moving stereo, per-unit bypass, chain order, To-Rotary routing). Piano controls (KB Touch, Dyn Comp, Timbre, Unison, Soft Release, per-layer level/octave/SUSTPED) all change rendered audio and are tested. Organ/Synth/Program stay honestly decorative and this is asserted (controlBindings test confirms no binding). All four gates pass. Console shows only benign autoplay-policy warnings (AudioContext needs a user gesture); zero page errors. Main gaps: narrow layout still relies on horizontal scroll; recorded sets are a single velocity layer (honestly disclosed but a fidelity ceiling); effect visual-state feedback is functional but modest.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "rating": 3,
+          "evidence": [
+            "stage2-desktop.png is visually identical to Phase 1: same chassis, six sections, drawbar LEDs, dual OLEDs, full 73-key keybed; status bar now reads 'Piano ready (recorded + synth voices)'",
+            "tests/regressionPhase2.test.tsx:24-39 asserts six sections, exactly two OLEDs, 73 keys (43 white + 30 black), and accessible names retained under the Phase-2 engine",
+            "stage2-narrow.png retains chassis/keybed at true proportions with the same deliberate horizontal-scroll strategy as Phase 1"
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "rating": 3,
+          "evidence": [
+            "src/audio/controlBindings.ts wires Piano and Layer-Effects controls to real audio; Piano type selector, layer enable/focus/level, per-unit on/off, group and global modes all bound",
+            "tests/controlBindings.ts:76-108 assert reverb ON toggles unit bypass on focused layer, group applies to both, delay GLOBAL targets both, amp To Rotary flips routing",
+            "IMPLEMENTATION_DETAILS.json:122 FX focus follows/overrides layer focus with Piano group mode and per-unit bypass reflected in panel state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 4,
+          "evidence": [
+            "public/samples/{grand,upright,electric} each contain 30 real MP3 root notes (~620-736KB/set, C4.mp3 ~25KB) — genuine recordings, not generated buffers",
+            "IMPLEMENTATION_DETAILS.json:41-104 declares recorded provenance (FluidR3_GM acoustic_grand/honkytonk/electric_piano_1, Frank Wen, CC-BY-3.0, gleitz/midi-js-soundfonts), offline:true, manifest per set; single velocity layer disclosed honestly at :57,78,99,108",
+            "tests/instruments.test.ts:19-37 'load from bundled files offline (real samplers)', 'declared as sampled not synthesized', 'Grand/Upright/Electric render audibly distinct signals'; Clav/Digital/Misc declared as generated synthesis"
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "rating": 3,
+          "evidence": [
+            "src/audio/audioEngine.ts:415-484 per-layer voice ownership, octave shift, per-layer level, enable gating, one-voice-per-(layer,pitch) stealing, oldest-first polyphony",
+            "tests/audioEngine.test.ts:51-104 only enabled layers sound; layer B adds voices when enabled; octave shift changes rendered pitch; per-layer level fader changes that layer's loudness",
+            "tests/pianoControls.test.ts:101 disabling a layer stops routing its voices; noteOff respects per-layer SUSTPED (audioEngine.ts:444-454)"
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 3,
+          "evidence": [
+            "src/audio/sampler.ts:52-95 shapeVelocity (KB Touch exponent + Dyn Comp floor) and timbreFilter tone shaping; audioEngine voiceParams threads kbTouch/dynComp/timbre/unison/softRelease",
+            "tests/pianoControls.test.ts:22-70 rendered-signal assertions: KB Touch curve, Dyn Comp raises soft strokes, monotonic velocity loudness, Timbre Bright vs Off differ, Unison adds detuned voices, Soft Release lengthens tail",
+            "String Res and PSTICK exposed; single recorded velocity layer means dynamic timbre variation is gain/filter-shaped rather than recorded (disclosed)"
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "rating": 3,
+          "evidence": [
+            "Inherited unified note lifecycle (pointer/touch/keyboard/MIDI CC64) drives the single-context engine (IMPLEMENTATION_DETAILS.json:120)",
+            "tests/instruments.test.ts:56 falls back to playable synthesis when sample assets fail; StatusBar reports labeled fallback rather than pretending recordings exist",
+            "tests/regressionPhase2.test.tsx:48-80 key press drives engine voice count up then down; unmount disposes engine cleanly; MIDI denied shown honestly in capture"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 4,
+          "evidence": [
+            "src/audio/audioEngine.ts:229-253 exactly one BaseAudioContext; master gain -> DynamicsCompressor limiter -> single ctx.destination; shared Rotary output -> master; two LayerChains share master + rotary input",
+            "audioEngine.ts:102-113 ordered chain input->mod1->mod2->delay->amp->comp->reverb->level, then level->normalSend->master AND level->rotarySend->rotary",
+            "tests/audioEngine.test.ts:6-50 renders piano voices through one context to one destination, silence with no notes, master level scales loudness, dispose cleans up; parameter changes use 20ms ramps (setLevel/setMasterLevel)"
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "rating": 4,
+          "evidence": [
+            "src/audio/effects.ts implements real subgraphs: Mod1 (tremolo/pan/ring-mod/wah), Mod2 (chorus/flanger/ensemble/phaser), Delay (stereo + in-loop feedback filter), AmpEq (waveshaper+3-band EQ / resonant filter / To Rotary), Compressor, Reverb (generated IR convolution), Rotary",
+            "tests/effects.test.ts:44-271 OfflineAudioContext assertions: Mod1 modulates amplitude vs bypass, A-Pan stereo width, Mod1/Mod2 types audibly distinct, Delay audible repeats, feedback filter progressively filters repeats (not dry), Amp drive vs bypass, Compressor narrows ratio, Reverb decay tail growing Booth->Cathedral, Rotary moving stereo image",
+            "IMPLEMENTATION_DETAILS.json:35-38 reverb IRs are generated (deterministic PRNG) not recorded, disclosed honestly; all units process real audio with working bypass and dry/wet"
+          ]
+        },
+        {
+          "id": "routingControl",
+          "rating": 4,
+          "evidence": [
+            "audioEngine.ts:355-397 focus/group/global targeting: focused layer by default, Piano group -> both, Delay/Comp/Reverb global -> both regardless of focus",
+            "tests/effects.test.ts:272-362 all-effects OFF neutralizes chain, per-unit on/off changes signal, To Rotary routes into shared rotary, focus vs group targeting, global mode both layers, and asserts ordered chain Mod1->Mod2->Delay->Amp->Comp->Reverb",
+            "audioEngine.ts:131-139 reverb-before-rotary maintained; To-Rotary crossfades normalSend/rotarySend with 20ms ramps"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "rating": 3,
+          "evidence": [
+            "tests/controlBindings.ts:25-61 master level control drives master gain; piano type selector changes the sounding voice (immediate audible feedback)",
+            "Panel control state stored and reflected (LEDs/selectors) via controlStore; effect on/off and focus update panel state",
+            "Effect visual feedback is functional but modest relative to the sonic depth; some parameter changes surface primarily through the bound audio rather than rich display readouts"
+          ]
+        },
+        {
+          "id": "failureStress",
+          "rating": 3,
+          "evidence": [
+            "tests/instruments.test.ts:56 asset-failure fallback to playable synthesis with labeled status; MIDI-denied path shown in capture and inherited midi tests",
+            "audioEngine.ts:470-490 allNotesOff hard-stops and reaps; enforcePolyphony steals oldest per layer preventing runaway voice counts",
+            "tests/regressionPhase2.test.tsx:66 'no console errors during a basic interaction pass'; capture pageErrors empty (only benign autoplay warnings)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 4,
+          "evidence": [
+            "Clean boundaries: sampler (source/voice) -> LayerChain (bus + ordered effects) -> AudioEngine (master/limiter/rotary/targeting); effects.ts EffectUnit interface with setBypassed/dispose",
+            "Injectable platform APIs: SampleLoaderDeps (fetchBytes/decode) and BaseAudioContext allow OfflineAudioContext test rendering (audioEngine.ts:11-13 comment, sampler.ts:396-417)",
+            "Designed for Phase 3 extensibility: engine already models layers, targeting, shared post-reverb rotary, and one-destination master path"
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "rating": 4,
+          "evidence": [
+            "tests/effects.test.ts, audioEngine.test.ts, instruments.test.ts, pianoControls.test.ts all render through node-web-audio-api OfflineAudioContext and assert on measured signals (RMS/stereo/decay), not mocks (IMPLEMENTATION_DETAILS.json:111)",
+            "controlBindings.test.ts:117 asserts Organ/Synth/Program controls stay decorative with no audio binding (honesty contract proven at the boundary)",
+            "Deterministic: reverb IR uses seeded PRNG; tests compare rendered buffers deterministically"
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "rating": 3,
+          "evidence": [
+            "verifications/stage2.json: test/typecheck/lint/build all passed; 20ms parameter ramps avoid clicks; dispose tears down chains/rotary/master",
+            "Phase-1 fake backend retained for preserved Phase-1 tests; regressionPhase2 suite guards inherited surface",
+            "Some duplication across per-layer chains and unit wiring, and effect-unit config surface is broad; maintainable but dense"
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Recorded Grand/Upright/Electric sets are a single velocity layer per root note; dynamic timbre is gain/filter-shaped at play time rather than multi-layer recorded (disclosed honestly, but a fidelity ceiling vs the real instrument).",
+    "Narrow (390x844) layout still relies on horizontal scroll rather than reflow, inheriting the Phase-1 limitation.",
+    "Effect/parameter visual-state feedback is functional but modest relative to the sonic depth; richer display readouts would strengthen audibleFeedback.",
+    "Reverb impulse responses are generated (seeded PRNG) rather than recorded IRs (disclosed, acceptable, but not convolved real spaces)."
+  ]
+}

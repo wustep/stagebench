@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "runId": "claude-opus-4-8",
+  "stage": 3,
+  "verifiedAt": "2026-07-04T11:59:34.064Z",
+  "passed": true,
+  "artifactDigest": "71d54d7e2f92ed6233237218533fc608ed0f6da3e8bd7d788d8020be16d1f4a3",
+  "artifactFiles": 292,
+  "phaseContract": {
+    "specs": [
+      "specs/nord-stage-4.visual.json",
+      "specs/nord-stage-4.piano.json",
+      "specs/nord-stage-4.effects.json",
+      "specs/nord-stage-4.programs.json",
+      "specs/nord-stage-4.organ.json",
+      "specs/nord-stage-4.synth.json"
+    ],
+    "hardGates": 5
+  },
+  "featureMatrix": {
+    "coveredFeatures": 38,
+    "requiredFeatures": 38
+  },
+  "implementationDetails": {
+    "audioStrategy": "One AudioContext (src/audio/audioEngine.ts). Piano (A,B), Organ (A,B), and Synth (A,B,C) layers each own their voices and route into per-layer effect chains (LayerChain) — Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ (or Filter) -> Compressor -> Reverb — then a per-layer level gain into the master gain -> DynamicsCompressor limiter -> the single AudioContext.destination. A single shared Rotary sits AFTER reverb; a layer whose Amp Sim/EQ model is 'To Rotary' (and the routed Organ) reroutes its post-reverb signal into the shared rotary. Grand/Upright/Electric play RECORDED multi-sampled buffers; Clav/Digital/Misc AND every Organ (B3/Vox/Farf/Pipe) and Synth (Pure/Sync/Multi/Super/FM-H) voice play HONEST SYNTHESIS (declared below), never recordings. Splits (up to 4 zones, 3 points, Off/±6/±12 crossfades), Layer Scenes I/II, and a per-note routing gate decide which section-layers sound. Wheel/Control-Pedal morphs interpolate assigned destinations through the ControlStore. A MasterClock (tap/dial) syncs the deterministic arpeggiator, synth LFO, delay, and Mod 1. Transpose (±6) shifts the whole instrument; Panic is an internal All Notes Off. Every functional Piano/Organ/Synth/Layer-Effects/Master/Program control maps to real audio or system state (src/audio/controlBindings.ts, src/audio/sectionBindings.ts, src/state/programManager.ts); only spec-excluded controls stay decorative and are listed in decorativeControls. Parameter changes use short ~20ms ramps; voices, effect units, LFOs, and the AudioContext are all cleaned up on release/teardown.",
+    "generatedSources": 6,
+    "sampleSources": 3
+  },
+  "checks": [
+    {
+      "id": "test",
+      "command": "pnpm run test",
+      "passed": true,
+      "durationMs": 4313,
+      "detail": "Passed"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm run typecheck",
+      "passed": true,
+      "durationMs": 1377,
+      "detail": "Passed"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm run lint",
+      "passed": true,
+      "durationMs": 744,
+      "detail": "Passed"
+    },
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "passed": true,
+      "durationMs": 1851,
+      "detail": "Passed"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence/stage3-desktop.png",
+      "passed": true,
+      "detail": "evidence/stage3-desktop.png · 1440x900"
+    },
+    {
+      "id": "evidence/stage3-narrow.png",
+      "passed": true,
+      "detail": "evidence/stage3-narrow.png · 390x844"
+    },
+    {
+      "id": "evidence/stage3-visual-audit.md",
+      "passed": true,
+      "detail": "evidence/stage3-visual-audit.md"
+    },
+    {
+      "id": "evidence/stage3-capture.json",
+      "passed": true,
+      "detail": "evidence/stage3-capture.json"
+    }
+  ]
+}

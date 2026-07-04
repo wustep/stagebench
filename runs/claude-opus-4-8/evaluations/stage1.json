@@ -1,0 +1,228 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "claude-opus-4-8",
+  "stage": 1,
+  "stageName": "Complete surface and basic piano",
+  "status": "complete",
+  "evaluator": "independent-agent (opus-4.8)",
+  "evaluatedAt": "2026-07-04T00:00:00.000Z",
+  "summary": "A strong, honest Phase 1. The desktop capture is a faithful reproduction of the 73-key Nord Stage 4: continuous red chassis, correct left-to-right section order (Master/wheels/Rotary, Organ, Piano, central Program OLED, Synth OLED, Layer Effects), full E1-E7 keybed with correct 43-white/30-black pattern, red drawbar LED ladders with correct footage labels, and Program+Synth as the only two primary OLEDs. The control inventory is deep (140 stable-ID controls across all six sections). The one dependable piano voice is honest real-time additive synthesis through a single AudioContext -> master gain -> limiter -> destination, with truthful IMPLEMENTATION_DETAILS declaring no recorded samples. The note lifecycle (velocity, release, retrigger, sustain, deterministic oldest-first stealing, cleanup) is real and asserted via a fake-backend on measurable tone events. Every panel control is genuinely decorative (presentation-only store that mutates no audio/system state) and this is stated to the user in the status bar. All four gates pass; both captures render with zero console messages/page errors. Main gaps: narrow view uses horizontal scroll rather than reflow (whole surface not visible at once), a slightly muted chassis hue, and minor keybed bevel/rail simplifications, all disclosed honestly in the visual audit.",
+  "score": 88.5,
+  "rawScore": 88.5,
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "label": "Complete visual fidelity",
+      "weight": 45,
+      "score": 83.8,
+      "contribution": 37.7,
+      "criteria": [
+        {
+          "id": "silhouetteGeometry",
+          "label": "Silhouette, chassis, and geometry",
+          "weight": 30,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "stage1-desktop.png: continuous deep-red chassis, correct deck/keybed split, full-width white/black keybed, wheels and Rotary group on far-left red area matching reference/nord-stage-4-73.jpg",
+            "src/model/keybed.ts:13-18 declares variant stage-4-73, totalKeys 73, whiteKeys 43, blackKeys 30, lowMidi 28 (E1) / highMidi 100 (E7)",
+            "stage1-visual-audit.md:59-72 honestly discloses deviations: slightly muted maroon hue, rear/top I/O rail not modeled, keybed rendered without front-lip bevel"
+          ]
+        },
+        {
+          "id": "hardwareInventory",
+          "label": "Complete hardware inventory and placement",
+          "weight": 35,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "grep of src/model/controls.ts: 140 controls distributed across all six sections (effects 33, synth 36, organ 19, piano 20, program 15, performance 9)",
+            "tests/App.test.tsx:31 asserts exactly two OLED displays, in Program and Synth (the only primary OLED gate)",
+            "stage1-desktop.png shows nine drawbars with footage labels, B3 Percussion, Vib/Chorus, Piano Select model list, dense Synth deck, and full Layer Effects column matching the reference"
+          ]
+        },
+        {
+          "id": "materialsTypography",
+          "label": "Materials, color, typography, and displays",
+          "weight": 20,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "stage1-desktop.png: dark control decks, red metal chassis, red LED drawbar ladders, two green-lit OLEDs (A:11 Nord Stage / Super Saw), 'nord stage 4 / HAMMER ACTION 73' branding lower-left",
+            "stage1-visual-audit.md:60-70 notes muted hue and Mod 1/Mod 2 label vs reference Effect 1/Effect 2 silk-screen; inventory equivalent",
+            "Legends, section headers, and LED/OLED hierarchy legible in capture"
+          ]
+        },
+        {
+          "id": "responsiveRetention",
+          "label": "Narrow retention",
+          "weight": 15,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "stage1-narrow.png (390x844): chassis, Organ section, drawbar LEDs and left of keybed all render at true proportions with honest status bar pinned below",
+            "stage1-visual-audit.md:52-57 documents deliberate horizontal-scroll strategy rather than a faked responsive collapse; whole surface not visible in one frame",
+            "stage1-capture.json: narrow capture has empty consoleMessages and pageErrors"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "basicPiano",
+      "label": "Basic Piano functionality",
+      "weight": 25,
+      "score": 91.3,
+      "contribution": 22.8,
+      "criteria": [
+        {
+          "id": "unifiedInputs",
+          "label": "Unified playable inputs",
+          "weight": 35,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "src/input/noteRouter.ts:48-97 one shared note lifecycle with per-owner tags (pointer/touch/kbd/midi), co-ownership dedup, per-owner release, and panic()",
+            "tests/inputIntegration.test.tsx: MIDI plays notes + connected status, MIDI unsupported/denied paths, computer-key mapping with autorepeat suppression, release on window blur",
+            "tests/midi.test.ts:85 asserts device disconnect releases sustain and reports disconnected"
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "label": "Voice lifecycle and performance",
+          "weight": 40,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "src/audio/pianoEngine.ts:83-169 velocity->gain squared curve, per-note release, retrigger steals same pitch, sustain holds released voices until pedal lift, deterministic stealOldest by monotonic order",
+            "tests/pianoEngine.test.ts:73-113 asserts monotonic velocity gain, sustain hold/release, oldest-first stealing at limit=3, on real fake-backend tone events",
+            "tests/App.test.tsx:138 stops all owned voices on unmount; noteRouter.panic() hard-stops on blur/disconnect"
+          ]
+        },
+        {
+          "id": "honestBasicSource",
+          "label": "Basic source and status honesty",
+          "weight": 25,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json:6-16 declares generated additive synthesis, sampleSources [], 'There are NO recorded samples in this phase'",
+            "src/audio/webAudioBackend.ts:1-9,96-103 single AudioContext, master gain -> DynamicsCompressor limiter -> destination; comment states honest synthesis not a recording",
+            "tests/App.test.tsx:132 'reports the synthesized voice as ready, not as a recording'; pianoEngine.ts:71 markReady only after voice is genuinely ready, with idle/loading/error/fallback states"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interaction",
+      "label": "Surface interaction and honesty",
+      "weight": 15,
+      "score": 86.3,
+      "contribution": 12.9,
+      "criteria": [
+        {
+          "id": "physicalInteraction",
+          "label": "Control movement and feedback",
+          "weight": 55,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "tests/App.test.tsx:50-71 every decorative control exposes accessible name via data-control-id; knobs/faders are ARIA sliders with value text; keys are buttons with pressed state",
+            "src/state/controlStore.ts:59-80 set/toggle/cycle move knobs, buttons, selectors and emit presentation state",
+            "stage1-desktop.png shows all control kinds rendered (knobs, wheels, faders, drawbars, encoders, buttons, selectors)"
+          ]
+        },
+        {
+          "id": "decorativeBoundary",
+          "label": "Decorative-control boundary",
+          "weight": 45,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "src/state/controlStore.ts:1-9 header: changing a value changes NOTHING sonic or systemic; keybed/sustain are the sole functional paths and do not read this store",
+            "tests/App.test.tsx:104 'toggling a decorative button does not create any audio'; :112 knob updates its own value only",
+            "IMPLEMENTATION_DETAILS.json:22 no decorative control produces audio or mutates program/effect state (honesty contract); status bar states 'All panel controls are decorative.'"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 15,
+      "score": 100,
+      "contribution": 15,
+      "criteria": [
+        {
+          "id": "structureTests",
+          "label": "Data structure and tests",
+          "weight": 55,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Clean separation: src/model (keybed/controls), src/input (noteRouter/midi/keyboardMap), src/audio (types boundary + webAudio/fake backends + pianoEngine), src/state, src/components",
+            "src/audio/types.ts injectable AudioBackend boundary; fakeBackend.ts enables deterministic tests with real tone-event assertions",
+            "10 test files with meaningful behavioral assertions (pianoEngine, noteRouter, midi, keyboardMap, inputIntegration, controlStore, App); feature-matrix covers 11/11 required features"
+          ]
+        },
+        {
+          "id": "runtime",
+          "label": "Runtime quality",
+          "weight": 45,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "verifications/stage1.json: test/typecheck/lint/build all passed",
+            "stage1-capture.json: desktop and narrow captures both have empty consoleMessages and pageErrors arrays",
+            "Cleanup on blur/disconnect/unmount asserted (noteRouter.panic, engine.dispose, App unmount test)"
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 2460,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 1046,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 340,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 1202,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      }
+    ]
+  },
+  "issues": [
+    "Narrow (390x844) layout relies on horizontal scroll rather than reflow, so the full hardware surface is not visible in a single frame (disclosed in stage1-visual-audit.md).",
+    "Chassis hue is a slightly muted maroon rather than the reference's more saturated Nord red.",
+    "Minor material simplifications: keybed rendered without front-lip bevel; rear/top I/O rail not modeled (out of scope for the playable front surface).",
+    "Layer Effects modulation blocks labeled Mod 1 / Mod 2 where the reference silk-screen reads Effect 1 / Effect 2 (control inventory is equivalent)."
+  ]
+}

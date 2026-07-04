@@ -1,0 +1,1178 @@
+{
+  "version": 1,
+  "runId": "claude-opus-4-8",
+  "generatedAt": "2026-07-04T12:08:51.062Z",
+  "description": "Generated from phase package manifests, detected audio assets, and benchmark-authored audio provenance.",
+  "phases": [
+    {
+      "phase": 1,
+      "phaseName": "Complete surface and basic piano",
+      "status": "complete",
+      "artifactPath": "runs/claude-opus-4-8/stage1",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "One basic piano voice produced by honest real-time synthesis in a single Web Audio AudioContext. Each note is a small additive oscillator stack (a triangle fundamental, a slightly detuned sine for body, and sine partials at the octave and twelfth) shaped by a per-note gain envelope. Velocity scales the peak gain on a squared curve; note-off applies a per-note linear release; sustain (UI/keyboard/MIDI CC64) holds released notes until the damper lifts. All voices route through one master gain into a DynamicsCompressor acting as a soft limiter, then to the single AudioContext.destination. Polyphony is bounded (16 voices) with deterministic oldest-first voice stealing. There are NO recorded samples in this phase.",
+        "generatedSources": [
+          {
+            "name": "Phase 1 basic piano voice",
+            "type": "generated",
+            "synthesis": "Additive oscillator stack (triangle fundamental + detuned sine + octave/twelfth sine partials) with a velocity-scaled amplitude envelope and per-note release.",
+            "implementation": "src/audio/webAudioBackend.ts (WebAudioTone) and src/audio/pianoEngine.ts (PianoEngine).",
+            "license": "Generated at runtime; no third-party asset, no license required.",
+            "notes": "This is synthesized, not a recording. It is a deliberately simple, dependable placeholder for the Phase 2 recorded sample sets (Grand/Upright/Electric), which are NOT present yet."
+          }
+        ],
+        "sampleSources": [],
+        "detectedFiles": [],
+        "notes": [
+          "No recorded sample sets are bundled in Phase 1. Grand/Upright/Electric recorded sample sets are Phase 2 scope.",
+          "The audio boundary is injectable (src/audio/types.ts). Tests use src/audio/fakeBackend.ts — no real AudioContext, no audio output, no network, no MIDI device.",
+          "If no AudioContext is available, the app enters a truthful, labeled silent 'fallback' status that still tracks the note lifecycle and never reports the primary voice as ready.",
+          "Every panel control other than the keybed and sustain input is honestly decorative: it moves/presses and stores presentation-only state (src/state/controlStore.ts). No decorative control produces audio or mutates program/effect/system state (honesty contract)."
+        ]
+      }
+    },
+    {
+      "phase": 2,
+      "phaseName": "Piano library and working effects",
+      "status": "complete",
+      "artifactPath": "runs/claude-opus-4-8/stage2",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "node-web-audio-api",
+            "version": "^2.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "One AudioContext (src/audio/audioEngine.ts). Two Piano layers (A, B) each own their voices and route only to their own layer bus. Each layer bus passes through an ordered effect chain — Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ (or Filter) -> Compressor -> Reverb — then a per-layer level gain into the master gain -> DynamicsCompressor limiter -> the single AudioContext.destination. A single shared Rotary sits AFTER reverb (reverb always precedes rotary); a layer whose Amp Sim/EQ model is 'To Rotary' has its post-reverb signal rerouted into the shared rotary and out of the normal master path. Grand/Upright/Electric play RECORDED multi-sampled buffers (nearest recorded root, playback-rate pitch, <=1 semitone shift); Clav/Digital/Misc play HONEST SYNTHESIS. KB Touch, Dyn Comp, Timbre, Unison, and Soft Release shape each voice; sustain (UI/keyboard/MIDI CC64) holds released notes per layer only when that layer's SUSTPED is on. Every functional Piano, Layer-Effects, and Master control maps to real audio via src/audio/controlBindings.ts; Organ, Synth, and Program controls are not bound and stay decorative. Parameter changes use short ~20ms ramps to avoid clicks; voices, effect units, and the AudioContext are all cleaned up on release/teardown.",
+        "generatedSources": [
+          {
+            "name": "Clav (Clavinet D6) voice",
+            "type": "generated",
+            "synthesis": "Sawtooth fundamental + square octave partial with a percussive decay envelope; velocity/KB-Touch shaped; optional detuned unison stack.",
+            "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'clav').",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT a recording. Declared as the Clav type per the piano spec (Clav may be honest synthesis)."
+          },
+          {
+            "name": "Digital (Digital Grand) voice",
+            "type": "generated",
+            "synthesis": "Triangle fundamental + octave and twelfth sine partials, velocity/KB-Touch shaped; also serves as the labeled playable fallback when sample assets fail to load.",
+            "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'digital').",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT a recording. Digital type per the piano spec (honest synthesis acceptable)."
+          },
+          {
+            "name": "Misc (Vibraphone / mallet) voice",
+            "type": "generated",
+            "synthesis": "Sine fundamental + inharmonic mallet partials (ratios 4 and 9.2) with a long percussive decay.",
+            "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'mallet').",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT a recording. Misc mallet character per the piano spec."
+          },
+          {
+            "name": "Layer effect units",
+            "type": "generated",
+            "synthesis": "Real Web Audio subgraphs: Mod 1 (LFO tremolo/pan, ring mod, wah), Mod 2 (modulated-delay chorus/flanger/ensemble/spin and all-pass phaser/vibe), Delay (stereo delay with an in-loop feedback filter so repeats are progressively filtered), Amp Sim/EQ (waveshaper drive + 3-band EQ or 24 dB resonant filter or To Rotary), Compressor (DynamicsCompressor + makeup), Reverb (convolution with a per-type generated impulse), Rotary (horn+bass rotor with LFO pan/amplitude).",
+            "implementation": "src/audio/effects.ts.",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Reverb impulse responses are generated (deterministic PRNG), not recorded IRs; all units process real audio with working bypass and dry/wet."
+          }
+        ],
+        "sampleSources": [
+          {
+            "type": "recorded",
+            "pianoType": "Grand",
+            "set": "public/samples/grand",
+            "instrument": "FluidR3_GM acoustic_grand_piano",
+            "soundfont": "FluidR3_GM",
+            "author": "Frank Wen (FluidR3_GM SoundFont)",
+            "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+            "license": "CC-BY-3.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+            "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+            "format": "mp3",
+            "rootNoteCount": 30,
+            "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+            "velocityLayers": 1,
+            "velocityHandling": "Single recorded velocity layer per root note; velocity, KB Touch, and Dyn Comp shape loudness via a gain/curve at play time (declared honestly — not multiple recorded velocity layers).",
+            "manifest": "public/samples/grand/manifest.json",
+            "offline": true,
+            "name": "Grand — FluidR3_GM acoustic_grand_piano (public/samples/grand)",
+            "source": "FluidR3_GM acoustic_grand_piano pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+          },
+          {
+            "type": "recorded",
+            "pianoType": "Upright",
+            "set": "public/samples/upright",
+            "instrument": "FluidR3_GM honkytonk_piano",
+            "soundfont": "FluidR3_GM",
+            "author": "Frank Wen (FluidR3_GM SoundFont)",
+            "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+            "license": "CC-BY-3.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+            "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+            "format": "mp3",
+            "rootNoteCount": 30,
+            "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+            "velocityLayers": 1,
+            "velocityHandling": "Single recorded velocity layer per root note; loudness shaped at play time. Audibly distinct from the grand (upright / tack character).",
+            "manifest": "public/samples/upright/manifest.json",
+            "offline": true,
+            "name": "Upright — FluidR3_GM honkytonk_piano (public/samples/upright)",
+            "source": "FluidR3_GM honkytonk_piano pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+          },
+          {
+            "type": "recorded",
+            "pianoType": "Electric",
+            "set": "public/samples/electric",
+            "instrument": "FluidR3_GM electric_piano_1",
+            "soundfont": "FluidR3_GM",
+            "author": "Frank Wen (FluidR3_GM SoundFont)",
+            "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+            "license": "CC-BY-3.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+            "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+            "format": "mp3",
+            "rootNoteCount": 30,
+            "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+            "velocityLayers": 1,
+            "velocityHandling": "Single recorded velocity layer per root note; loudness shaped at play time. Rhodes-style tine EP timbre, audibly distinct from grand and upright.",
+            "manifest": "public/samples/electric/manifest.json",
+            "offline": true,
+            "name": "Electric — FluidR3_GM electric_piano_1 (public/samples/electric)",
+            "source": "FluidR3_GM electric_piano_1 pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/A0.mp3",
+            "bytes": 21009
+          },
+          {
+            "path": "public/samples/electric/A1.mp3",
+            "bytes": 22829
+          },
+          {
+            "path": "public/samples/electric/A2.mp3",
+            "bytes": 20697
+          },
+          {
+            "path": "public/samples/electric/A3.mp3",
+            "bytes": 23765
+          },
+          {
+            "path": "public/samples/electric/A4.mp3",
+            "bytes": 18539
+          },
+          {
+            "path": "public/samples/electric/A5.mp3",
+            "bytes": 17421
+          },
+          {
+            "path": "public/samples/electric/A6.mp3",
+            "bytes": 14717
+          },
+          {
+            "path": "public/samples/electric/A7.mp3",
+            "bytes": 13911
+          },
+          {
+            "path": "public/samples/electric/C1.mp3",
+            "bytes": 21893
+          },
+          {
+            "path": "public/samples/electric/C2.mp3",
+            "bytes": 22309
+          },
+          {
+            "path": "public/samples/electric/C3.mp3",
+            "bytes": 20437
+          },
+          {
+            "path": "public/samples/electric/C4.mp3",
+            "bytes": 19553
+          },
+          {
+            "path": "public/samples/electric/C5.mp3",
+            "bytes": 19761
+          },
+          {
+            "path": "public/samples/electric/C6.mp3",
+            "bytes": 17837
+          },
+          {
+            "path": "public/samples/electric/C7.mp3",
+            "bytes": 14743
+          },
+          {
+            "path": "public/samples/electric/C8.mp3",
+            "bytes": 13937
+          },
+          {
+            "path": "public/samples/electric/Eb1.mp3",
+            "bytes": 21685
+          },
+          {
+            "path": "public/samples/electric/Eb2.mp3",
+            "bytes": 21711
+          },
+          {
+            "path": "public/samples/electric/Eb3.mp3",
+            "bytes": 20333
+          },
+          {
+            "path": "public/samples/electric/Eb4.mp3",
+            "bytes": 20385
+          },
+          {
+            "path": "public/samples/electric/Eb5.mp3",
+            "bytes": 19943
+          },
+          {
+            "path": "public/samples/electric/Eb6.mp3",
+            "bytes": 17343
+          },
+          {
+            "path": "public/samples/electric/Eb7.mp3",
+            "bytes": 14405
+          },
+          {
+            "path": "public/samples/electric/Gb1.mp3",
+            "bytes": 22829
+          },
+          {
+            "path": "public/samples/electric/Gb2.mp3",
+            "bytes": 20879
+          },
+          {
+            "path": "public/samples/electric/Gb3.mp3",
+            "bytes": 21893
+          },
+          {
+            "path": "public/samples/electric/Gb4.mp3",
+            "bytes": 17083
+          },
+          {
+            "path": "public/samples/electric/Gb5.mp3",
+            "bytes": 19605
+          },
+          {
+            "path": "public/samples/electric/Gb6.mp3",
+            "bytes": 15991
+          },
+          {
+            "path": "public/samples/electric/Gb7.mp3",
+            "bytes": 14353
+          },
+          {
+            "path": "public/samples/grand/A0.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A5.mp3",
+            "bytes": 18929
+          },
+          {
+            "path": "public/samples/grand/A6.mp3",
+            "bytes": 15315
+          },
+          {
+            "path": "public/samples/grand/A7.mp3",
+            "bytes": 14535
+          },
+          {
+            "path": "public/samples/grand/C1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C5.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C6.mp3",
+            "bytes": 19371
+          },
+          {
+            "path": "public/samples/grand/C7.mp3",
+            "bytes": 14977
+          },
+          {
+            "path": "public/samples/grand/C8.mp3",
+            "bytes": 14327
+          },
+          {
+            "path": "public/samples/grand/Eb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb5.mp3",
+            "bytes": 24753
+          },
+          {
+            "path": "public/samples/grand/Eb6.mp3",
+            "bytes": 17915
+          },
+          {
+            "path": "public/samples/grand/Eb7.mp3",
+            "bytes": 14925
+          },
+          {
+            "path": "public/samples/grand/Gb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb5.mp3",
+            "bytes": 24493
+          },
+          {
+            "path": "public/samples/grand/Gb6.mp3",
+            "bytes": 17239
+          },
+          {
+            "path": "public/samples/grand/Gb7.mp3",
+            "bytes": 14665
+          },
+          {
+            "path": "public/samples/upright/A0.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A5.mp3",
+            "bytes": 18513
+          },
+          {
+            "path": "public/samples/upright/A6.mp3",
+            "bytes": 15315
+          },
+          {
+            "path": "public/samples/upright/A7.mp3",
+            "bytes": 14535
+          },
+          {
+            "path": "public/samples/upright/C1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C5.mp3",
+            "bytes": 25481
+          },
+          {
+            "path": "public/samples/upright/C6.mp3",
+            "bytes": 18721
+          },
+          {
+            "path": "public/samples/upright/C7.mp3",
+            "bytes": 14899
+          },
+          {
+            "path": "public/samples/upright/C8.mp3",
+            "bytes": 14379
+          },
+          {
+            "path": "public/samples/upright/Eb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb5.mp3",
+            "bytes": 24051
+          },
+          {
+            "path": "public/samples/upright/Eb6.mp3",
+            "bytes": 17447
+          },
+          {
+            "path": "public/samples/upright/Eb7.mp3",
+            "bytes": 14873
+          },
+          {
+            "path": "public/samples/upright/Gb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb5.mp3",
+            "bytes": 23947
+          },
+          {
+            "path": "public/samples/upright/Gb6.mp3",
+            "bytes": 17031
+          },
+          {
+            "path": "public/samples/upright/Gb7.mp3",
+            "bytes": 14665
+          }
+        ],
+        "notes": [
+          "The recorded sample sets are bundled under public/samples/ and load offline (no network at runtime). scripts/fetch-samples.mjs reproducibly re-downloads them; provenance is echoed in each set's manifest.json and public/samples/LICENSE.txt.",
+          "Each recorded set uses 30 root notes spaced a minor third apart, so playback pitch-shifts a note by at most ~1 semitone (no obvious stretching). Only a single recorded velocity layer per root note is bundled; velocity/KB-Touch/Dyn-Comp shaping at play time is declared honestly and is NOT presented as multiple recorded velocity layers.",
+          "If a sample set fails to load, the engine reports a labeled playable fallback (StatusBar) and plays the synthesized 'digital' recipe instead of pretending recordings exist.",
+          "Master Level, all functional Piano controls, and all Layer-Effects controls change rendered audio and agree with their panel feedback (tests: tests/instruments.test.ts, tests/pianoControls.test.ts, tests/effects.test.ts, tests/controlBindings.test.ts).",
+          "The audio boundary is exercised in tests with node-web-audio-api's OfflineAudioContext (real rendered signals), not mocks. The Phase-1 fake backend (src/audio/fakeBackend.ts) still backs the preserved Phase-1 tests.",
+          "Organ, Synth, and Program controls remain honestly decorative in Phase 2: they move/press and store presentation-only state (src/state/controlStore.ts) and are not bound in src/audio/controlBindings.ts."
+        ]
+      }
+    },
+    {
+      "phase": 3,
+      "phaseName": "Complete Stage 4 system",
+      "status": "complete",
+      "artifactPath": "runs/claude-opus-4-8/stage3",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "node-web-audio-api",
+            "version": "^2.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "One AudioContext (src/audio/audioEngine.ts). Piano (A,B), Organ (A,B), and Synth (A,B,C) layers each own their voices and route into per-layer effect chains (LayerChain) — Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ (or Filter) -> Compressor -> Reverb — then a per-layer level gain into the master gain -> DynamicsCompressor limiter -> the single AudioContext.destination. A single shared Rotary sits AFTER reverb; a layer whose Amp Sim/EQ model is 'To Rotary' (and the routed Organ) reroutes its post-reverb signal into the shared rotary. Grand/Upright/Electric play RECORDED multi-sampled buffers; Clav/Digital/Misc AND every Organ (B3/Vox/Farf/Pipe) and Synth (Pure/Sync/Multi/Super/FM-H) voice play HONEST SYNTHESIS (declared below), never recordings. Splits (up to 4 zones, 3 points, Off/±6/±12 crossfades), Layer Scenes I/II, and a per-note routing gate decide which section-layers sound. Wheel/Control-Pedal morphs interpolate assigned destinations through the ControlStore. A MasterClock (tap/dial) syncs the deterministic arpeggiator, synth LFO, delay, and Mod 1. Transpose (±6) shifts the whole instrument; Panic is an internal All Notes Off. Every functional Piano/Organ/Synth/Layer-Effects/Master/Program control maps to real audio or system state (src/audio/controlBindings.ts, src/audio/sectionBindings.ts, src/state/programManager.ts); only spec-excluded controls stay decorative and are listed in decorativeControls. Parameter changes use short ~20ms ramps; voices, effect units, LFOs, and the AudioContext are all cleaned up on release/teardown.",
+        "generatedSources": [
+          {
+            "name": "Organ engines (B3, Vox, Farf, Pipe 1/2, B3 Bass)",
+            "type": "generated",
+            "synthesis": "Additive/subtractive per-model spectra (src/audio/organEngine.ts, organSpectrum): B3/B3 Bass sum pure sine partials at the nine drawbar footages with faint tonewheel leakage; Vox adds triangle cores plus odd-harmonic reed partials; Farf uses sawtooth+square register switches (drawbars pulled past half = on) for a bright buzzy voice; Pipe 1/2 use flute/principal sine ranks with chorus detuning. B3 adds single-triggered percussion (2nd/3rd harmonic, soft/normal level, slow/fast decay) and a filtered-noise key-click transient. Vibrato/chorus applies per-partial detuning whose depth grows across 1-3 and differs V vs C.",
+            "implementation": "src/audio/organEngine.ts.",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT recordings. The four required engines render spectrally distinct signals (tests/organEngine.test.ts), satisfying the 'audibly distinct, not renamed copies' hard gate."
+          },
+          {
+            "name": "Synth engine (Pure, Sync, Multi, Super, FM-H)",
+            "type": "generated",
+            "synthesis": "Genuinely different oscillator constructions (src/audio/synthEngine.ts): Pure = a single classic wave (sine/tri/saw/square/PeriodicWave pulse/white-noise buffer); Sync = a bright hard-sync-style slave whose pitch tracks Osc Ctrl over a stable master; Multi = a detuned saw stack (Osc Ctrl = detune spread, +8ve variant); Super = a seven-voice supersaw/supersquare (Osc Ctrl = detune/width); FM-H = 2-operator FM with a 2:1 harmonic ratio (Osc Ctrl = FM index). Each voice runs oscillator(s) -> filter (LP12/LP24/HP/BP with keyboard tracking, resonance, drive) -> amp VCA, shaped by oscillator/filter/amp envelopes; a per-layer LFO (five waveforms, three destinations) modulates pitch/ctrl/cutoff. Voice modes poly/mono/legato, unison, glide, and a deterministic arpeggiator/gate (src/audio/clock.ts) with master-clock sync.",
+            "implementation": "src/audio/synthEngine.ts, src/audio/clock.ts.",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT recordings. The five source categories are audibly distinct (tests/synthEngine.test.ts). The arpeggiator is deterministic under a fixed clock and injectable scheduler."
+          },
+          {
+            "name": "Clav (Clavinet D6) voice",
+            "type": "generated",
+            "synthesis": "Sawtooth fundamental + square octave partial with a percussive decay envelope; velocity/KB-Touch shaped; optional detuned unison stack.",
+            "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'clav').",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT a recording. Declared as the Clav type per the piano spec (Clav may be honest synthesis)."
+          },
+          {
+            "name": "Digital (Digital Grand) voice",
+            "type": "generated",
+            "synthesis": "Triangle fundamental + octave and twelfth sine partials, velocity/KB-Touch shaped; also serves as the labeled playable fallback when sample assets fail to load.",
+            "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'digital').",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT a recording. Digital type per the piano spec (honest synthesis acceptable)."
+          },
+          {
+            "name": "Misc (Vibraphone / mallet) voice",
+            "type": "generated",
+            "synthesis": "Sine fundamental + inharmonic mallet partials (ratios 4 and 9.2) with a long percussive decay.",
+            "implementation": "src/audio/sampler.ts (createSynthVoice, recipe 'mallet').",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Honest synthesis, NOT a recording. Misc mallet character per the piano spec."
+          },
+          {
+            "name": "Layer effect units",
+            "type": "generated",
+            "synthesis": "Real Web Audio subgraphs: Mod 1 (LFO tremolo/pan, ring mod, wah), Mod 2 (modulated-delay chorus/flanger/ensemble/spin and all-pass phaser/vibe), Delay (stereo delay with an in-loop feedback filter so repeats are progressively filtered), Amp Sim/EQ (waveshaper drive + 3-band EQ or 24 dB resonant filter or To Rotary), Compressor (DynamicsCompressor + makeup), Reverb (convolution with a per-type generated impulse), Rotary (horn+bass rotor with LFO pan/amplitude).",
+            "implementation": "src/audio/effects.ts.",
+            "license": "Generated at runtime; no third-party asset.",
+            "notes": "Reverb impulse responses are generated (deterministic PRNG), not recorded IRs; all units process real audio with working bypass and dry/wet."
+          }
+        ],
+        "sampleSources": [
+          {
+            "type": "recorded",
+            "pianoType": "Grand",
+            "set": "public/samples/grand",
+            "instrument": "FluidR3_GM acoustic_grand_piano",
+            "soundfont": "FluidR3_GM",
+            "author": "Frank Wen (FluidR3_GM SoundFont)",
+            "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+            "license": "CC-BY-3.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+            "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+            "format": "mp3",
+            "rootNoteCount": 30,
+            "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+            "velocityLayers": 1,
+            "velocityHandling": "Single recorded velocity layer per root note; velocity, KB Touch, and Dyn Comp shape loudness via a gain/curve at play time (declared honestly — not multiple recorded velocity layers).",
+            "manifest": "public/samples/grand/manifest.json",
+            "offline": true,
+            "name": "Grand — FluidR3_GM acoustic_grand_piano (public/samples/grand)",
+            "source": "FluidR3_GM acoustic_grand_piano pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+          },
+          {
+            "type": "recorded",
+            "pianoType": "Upright",
+            "set": "public/samples/upright",
+            "instrument": "FluidR3_GM honkytonk_piano",
+            "soundfont": "FluidR3_GM",
+            "author": "Frank Wen (FluidR3_GM SoundFont)",
+            "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+            "license": "CC-BY-3.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+            "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+            "format": "mp3",
+            "rootNoteCount": 30,
+            "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+            "velocityLayers": 1,
+            "velocityHandling": "Single recorded velocity layer per root note; loudness shaped at play time. Audibly distinct from the grand (upright / tack character).",
+            "manifest": "public/samples/upright/manifest.json",
+            "offline": true,
+            "name": "Upright — FluidR3_GM honkytonk_piano (public/samples/upright)",
+            "source": "FluidR3_GM honkytonk_piano pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+          },
+          {
+            "type": "recorded",
+            "pianoType": "Electric",
+            "set": "public/samples/electric",
+            "instrument": "FluidR3_GM electric_piano_1",
+            "soundfont": "FluidR3_GM",
+            "author": "Frank Wen (FluidR3_GM SoundFont)",
+            "packagedBy": "gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts)",
+            "license": "CC-BY-3.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+            "attribution": "FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts.",
+            "format": "mp3",
+            "rootNoteCount": 30,
+            "rootNotes": "A0,C1,Eb1,Gb1,A1,C2,Eb2,Gb2,A2,C3,Eb3,Gb3,A3,C4,Eb4,Gb4,A4,C5,Eb5,Gb5,A5,C6,Eb6,Gb6,A6,C7,Eb7,Gb7,A7,C8 (every 3 semitones, A0..C8)",
+            "velocityLayers": 1,
+            "velocityHandling": "Single recorded velocity layer per root note; loudness shaped at play time. Rhodes-style tine EP timbre, audibly distinct from grand and upright.",
+            "manifest": "public/samples/electric/manifest.json",
+            "offline": true,
+            "name": "Electric — FluidR3_GM electric_piano_1 (public/samples/electric)",
+            "source": "FluidR3_GM electric_piano_1 pre-rendered by gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts); FluidR3_GM SoundFont by Frank Wen, CC-BY 3.0; pre-rendered by gleitz/midi-js-soundfonts."
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/A0.mp3",
+            "bytes": 21009
+          },
+          {
+            "path": "public/samples/electric/A1.mp3",
+            "bytes": 22829
+          },
+          {
+            "path": "public/samples/electric/A2.mp3",
+            "bytes": 20697
+          },
+          {
+            "path": "public/samples/electric/A3.mp3",
+            "bytes": 23765
+          },
+          {
+            "path": "public/samples/electric/A4.mp3",
+            "bytes": 18539
+          },
+          {
+            "path": "public/samples/electric/A5.mp3",
+            "bytes": 17421
+          },
+          {
+            "path": "public/samples/electric/A6.mp3",
+            "bytes": 14717
+          },
+          {
+            "path": "public/samples/electric/A7.mp3",
+            "bytes": 13911
+          },
+          {
+            "path": "public/samples/electric/C1.mp3",
+            "bytes": 21893
+          },
+          {
+            "path": "public/samples/electric/C2.mp3",
+            "bytes": 22309
+          },
+          {
+            "path": "public/samples/electric/C3.mp3",
+            "bytes": 20437
+          },
+          {
+            "path": "public/samples/electric/C4.mp3",
+            "bytes": 19553
+          },
+          {
+            "path": "public/samples/electric/C5.mp3",
+            "bytes": 19761
+          },
+          {
+            "path": "public/samples/electric/C6.mp3",
+            "bytes": 17837
+          },
+          {
+            "path": "public/samples/electric/C7.mp3",
+            "bytes": 14743
+          },
+          {
+            "path": "public/samples/electric/C8.mp3",
+            "bytes": 13937
+          },
+          {
+            "path": "public/samples/electric/Eb1.mp3",
+            "bytes": 21685
+          },
+          {
+            "path": "public/samples/electric/Eb2.mp3",
+            "bytes": 21711
+          },
+          {
+            "path": "public/samples/electric/Eb3.mp3",
+            "bytes": 20333
+          },
+          {
+            "path": "public/samples/electric/Eb4.mp3",
+            "bytes": 20385
+          },
+          {
+            "path": "public/samples/electric/Eb5.mp3",
+            "bytes": 19943
+          },
+          {
+            "path": "public/samples/electric/Eb6.mp3",
+            "bytes": 17343
+          },
+          {
+            "path": "public/samples/electric/Eb7.mp3",
+            "bytes": 14405
+          },
+          {
+            "path": "public/samples/electric/Gb1.mp3",
+            "bytes": 22829
+          },
+          {
+            "path": "public/samples/electric/Gb2.mp3",
+            "bytes": 20879
+          },
+          {
+            "path": "public/samples/electric/Gb3.mp3",
+            "bytes": 21893
+          },
+          {
+            "path": "public/samples/electric/Gb4.mp3",
+            "bytes": 17083
+          },
+          {
+            "path": "public/samples/electric/Gb5.mp3",
+            "bytes": 19605
+          },
+          {
+            "path": "public/samples/electric/Gb6.mp3",
+            "bytes": 15991
+          },
+          {
+            "path": "public/samples/electric/Gb7.mp3",
+            "bytes": 14353
+          },
+          {
+            "path": "public/samples/grand/A0.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/A5.mp3",
+            "bytes": 18929
+          },
+          {
+            "path": "public/samples/grand/A6.mp3",
+            "bytes": 15315
+          },
+          {
+            "path": "public/samples/grand/A7.mp3",
+            "bytes": 14535
+          },
+          {
+            "path": "public/samples/grand/C1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C5.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/C6.mp3",
+            "bytes": 19371
+          },
+          {
+            "path": "public/samples/grand/C7.mp3",
+            "bytes": 14977
+          },
+          {
+            "path": "public/samples/grand/C8.mp3",
+            "bytes": 14327
+          },
+          {
+            "path": "public/samples/grand/Eb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Eb5.mp3",
+            "bytes": 24753
+          },
+          {
+            "path": "public/samples/grand/Eb6.mp3",
+            "bytes": 17915
+          },
+          {
+            "path": "public/samples/grand/Eb7.mp3",
+            "bytes": 14925
+          },
+          {
+            "path": "public/samples/grand/Gb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/grand/Gb5.mp3",
+            "bytes": 24493
+          },
+          {
+            "path": "public/samples/grand/Gb6.mp3",
+            "bytes": 17239
+          },
+          {
+            "path": "public/samples/grand/Gb7.mp3",
+            "bytes": 14665
+          },
+          {
+            "path": "public/samples/upright/A0.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/A5.mp3",
+            "bytes": 18513
+          },
+          {
+            "path": "public/samples/upright/A6.mp3",
+            "bytes": 15315
+          },
+          {
+            "path": "public/samples/upright/A7.mp3",
+            "bytes": 14535
+          },
+          {
+            "path": "public/samples/upright/C1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/C5.mp3",
+            "bytes": 25481
+          },
+          {
+            "path": "public/samples/upright/C6.mp3",
+            "bytes": 18721
+          },
+          {
+            "path": "public/samples/upright/C7.mp3",
+            "bytes": 14899
+          },
+          {
+            "path": "public/samples/upright/C8.mp3",
+            "bytes": 14379
+          },
+          {
+            "path": "public/samples/upright/Eb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Eb5.mp3",
+            "bytes": 24051
+          },
+          {
+            "path": "public/samples/upright/Eb6.mp3",
+            "bytes": 17447
+          },
+          {
+            "path": "public/samples/upright/Eb7.mp3",
+            "bytes": 14873
+          },
+          {
+            "path": "public/samples/upright/Gb1.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb2.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb3.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb4.mp3",
+            "bytes": 25585
+          },
+          {
+            "path": "public/samples/upright/Gb5.mp3",
+            "bytes": 23947
+          },
+          {
+            "path": "public/samples/upright/Gb6.mp3",
+            "bytes": 17031
+          },
+          {
+            "path": "public/samples/upright/Gb7.mp3",
+            "bytes": 14665
+          }
+        ],
+        "notes": [
+          "The recorded sample sets are bundled under public/samples/ and load offline (no network at runtime). scripts/fetch-samples.mjs reproducibly re-downloads them; provenance is echoed in each set's manifest.json and public/samples/LICENSE.txt.",
+          "Each recorded set uses 30 root notes spaced a minor third apart, so playback pitch-shifts a note by at most ~1 semitone (no obvious stretching). Only a single recorded velocity layer per root note is bundled; velocity/KB-Touch/Dyn-Comp shaping at play time is declared honestly and is NOT presented as multiple recorded velocity layers.",
+          "If a sample set fails to load, the engine reports a labeled playable fallback (StatusBar) and plays the synthesized 'digital' recipe instead of pretending recordings exist.",
+          "Master Level, all functional Piano controls, and all Layer-Effects controls change rendered audio and agree with their panel feedback (tests: tests/instruments.test.ts, tests/pianoControls.test.ts, tests/effects.test.ts, tests/controlBindings.test.ts).",
+          "The audio boundary is exercised in tests with node-web-audio-api's OfflineAudioContext (real rendered signals), not mocks. The Phase-1 fake backend (src/audio/fakeBackend.ts) still backs the preserved Phase-1 tests.",
+          "Phase 3: Organ and Synth engines are honest synthesis (declared under generatedSources) and route through the same single-context Phase-2 effect graph; no second AudioContext exists. Program state (src/state/program.ts) is a serializable snapshot of every supported control plus performance state (splits, zones, crossfades, scenes, morphs, master clock, transpose); Master Level is excluded. The ProgramManager (src/state/programManager.ts) owns 32 slots + 8 auto-storing Live slots with the dirty (E) lifecycle and Store/Store As.",
+          "Phase-3 rendered-audio and system tests: tests/organEngine.test.ts, tests/synthEngine.test.ts, tests/program.test.ts, tests/integration.test.ts. Every inherited Phase-1 and Phase-2 test is preserved (regression-free)."
+        ]
+      }
+    }
+  ]
+}
