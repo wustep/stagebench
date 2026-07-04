@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from 'react'
 import { getControl, HARDWARE_CONTROLS } from '../model/hardware'
+import { PRESET_BANKS } from '../model/presets'
 import { instrumentsOfType, SYNTH_SAMPLE_SETS, type InstrumentSpec } from '../audio/library'
 import type { InstrumentController } from '../input/controller'
 import {
   mappings,
   MORPH_DESTINATIONS,
+  presetSectionName,
   SPLIT_POSITIONS,
   SYNTH_LFO_DESTINATIONS,
   SYNTH_WAVEFORMS,
@@ -16,7 +18,7 @@ import {
  * Panel front door for every physical control.
  *
  * Two truthful classes of controls:
- * - DECORATIVE (Synth, remaining Program scope, spec-excluded Organ preset):
+ * - DECORATIVE (spec-excluded remainder, e.g. Morph A.T.):
  *   visual position/lit state lives here and connects to nothing else.
  * - FUNCTIONAL (Piano, Organ, Layer Effects, Rotary, Master Level, pitch
  *   stick, Panic, Shift): reads and writes are forwarded to the canonical
@@ -82,7 +84,11 @@ export class PresentationStore {
       const chain = wiring.instrument.focusedChain()
       if (id.startsWith('organ-drawbar-')) {
         const index = Number(id.slice('organ-drawbar-'.length)) - 1
-        return state.organ.layers[state.organ.focusedLayer].drawbars[index] ?? 0
+        const layer = state.organ.layers[state.organ.focusedLayer]
+        // Preset On: the cap sits on the focused layer's stored registration
+        // (as before). Drawbar Live (manual p. 19/21): the cap follows the
+        // physical pose the drag moves.
+        return (layer.presetOn ? layer.drawbars[index] : state.organDrawbarPose[index]) ?? 0
       }
       switch (id) {
         case 'perf-master-level':
@@ -97,6 +103,9 @@ export class PresentationStore {
           }
           if (state.clockEdit) return Math.round(((state.masterClock.bpm - 30) / 270) * 127)
           if (state.transposeEdit) return Math.round(((state.transpose.semitones + 6) / 12) * 127)
+          // Preset Library browse (manual p. 41): the dial spans the preset list.
+          if (state.presetBrowse)
+            return Math.round((state.presetBrowse.index / (PRESET_BANKS[state.presetBrowse.section].length - 1)) * 127)
           return wiring.instrument.programDialValue()
         }
         case 'rotary-drive':
@@ -286,6 +295,9 @@ export class PresentationStore {
           return state.kbHold
         case 'organ-vib-on':
           return state.organ.layers[state.organ.focusedLayer].vibrato
+        case 'organ-preset':
+          // Lit = focused layer's Preset On (manual p. 21: default On).
+          return state.organ.layers[state.organ.focusedLayer].presetOn
         case 'organ-perc-on':
           return state.organ.percussion.on
         case 'organ-perc-volume':
@@ -298,6 +310,9 @@ export class PresentationStore {
           return state.organ.toRotary
         case 'live-mode':
           return state.programs.liveMode
+        case 'mon-copy':
+          // Lit while the Mon/Copy or Paste latch is on (manual p. 43).
+          return state.monCopy !== null
         case 'layer-scene':
           return state.scenes.active === 'II'
         case 'split-onset':
@@ -341,10 +356,24 @@ export class PresentationStore {
     const max = control.max ?? 127
     const clamped = Math.min(max, Math.max(min, Math.round(value)))
     const wiring = this.wiring
+    // MON/COPY monitor (manual p. 43: hold Mon/Copy and turn a knob to
+    // display its value WITHOUT changing it) — pointer-first adaptation:
+    // while either latch is on, every continuous functional control becomes
+    // a read-only OLED readout of its canonical value; nothing is written.
+    if (wiring && !control.decorative && wiring.instrument.getState().monCopy !== null) {
+      wiring.instrument.setLastEdit(`${control.label}: ${this.getValue(id)}`)
+      return
+    }
     // Morph capture (manual p. 38): while a source is armed, an edit to a
-    // morphable destination records its start→end range as it applies.
+    // morphable destination records its start→end range as it applies —
+    // except a Drawbar Live layer's drawbars: "morphs are not applicable in
+    // Drawbar Live mode" (manual p. 39), so a Live drag captures nothing.
     const arming = wiring && !control.decorative ? wiring.instrument.getState().morphArming : null
-    const previous = arming && MORPH_DESTINATIONS.has(id) ? this.getValue(id) : null
+    const liveDrawbar =
+      wiring !== null &&
+      id.startsWith('organ-drawbar-') &&
+      !wiring.instrument.getState().organ.layers[wiring.instrument.getState().organ.focusedLayer].presetOn
+    const previous = arming && MORPH_DESTINATIONS.has(id) && !liveDrawbar ? this.getValue(id) : null
     this.applyValue(id, clamped)
     if (wiring && arming && previous !== null && previous !== clamped) {
       const state = wiring.instrument.getState()
@@ -407,8 +436,10 @@ export class PresentationStore {
             store.setTransposeSemitones(Math.round((clamped / 127) * 12) - 6)
             return
           }
-          // Shift + dial browses in the numeric list view (manual p. 41).
-          if (this.state.toggles['shift'] === true && !store.getState().programs.naming) {
+          // Shift + dial browses in the numeric list view (manual p. 41) —
+          // unless the Preset Library screen has the dial (dialProgram then
+          // routes to the preset list and loads, manual p. 41).
+          if (this.state.toggles['shift'] === true && !store.getState().programs.naming && !store.getState().presetBrowse) {
             store.setProgramListView(true)
           }
           store.dialProgram(clamped)
@@ -590,6 +621,11 @@ export class PresentationStore {
     if (wiring && !control.decorative) {
       const store = wiring.instrument
       const shift = this.state.toggles['shift'] === true
+      // MON/COPY / PASTE latch (manual p. 43): while latched, the Layer,
+      // effect ON, Morph Assign and PROGRAM buttons become copy sources /
+      // paste targets instead of performing their normal action (the
+      // pointer-first adaptation of the hardware's hold-combos).
+      if (store.getState().monCopy !== null && this.monCopyPress(store, id)) return
       switch (id) {
         case 'shift-2':
           // Second physical Shift/Exit button: delegates to the one modifier.
@@ -633,6 +669,13 @@ export class PresentationStore {
           return
         case 'organ-vib-on':
           store.toggleOrganVibrato()
+          return
+        case 'organ-preset':
+          // PRESET (manual p. 21): plain press toggles the focused layer's
+          // Preset On / Drawbar Live state; SYNC = Shift + Preset copies the
+          // physical drawbar pose into the layer's stored registration.
+          if (shift) store.syncOrganDrawbars()
+          else store.toggleOrganPreset()
           return
         case 'organ-perc-on':
           store.toggleOrganPercussion('on')
@@ -809,17 +852,36 @@ export class PresentationStore {
           store.setLastEdit('PANIC — all notes off')
           return
         case 'store':
-          store.storePress()
+          // STORE AS… is Shift + Store on the hardware (manual p. 41) — one
+          // physical red button, the naming flow on the shifted press.
+          if (shift) store.storeAsPress()
+          else store.storePress()
           return
-        case 'store-as':
-          store.storeAsPress()
+        case 'preset-organ':
+        case 'preset-piano':
+        case 'preset-synth': {
+          // PRESET LIBRARY (manual p. 41-42): opens that section's preset
+          // browse screen on the Program OLED; SINGLE LAYER = Shift + press
+          // loads into the focused Piano/Synth layer only (manual p. 42).
+          // Organ presets are always whole-Section (p. 41 note: both Organ
+          // layers share one chain), so the ORGAN button has no Shift
+          // pairing — Shift falls through to the plain whole-Section press.
+          // Pressing the section's own button again leaves the screen,
+          // keeping the loaded sound; a different section's button switches
+          // banks (the load already kept is an ordinary edit).
+          const section = id === 'preset-organ' ? 'organ' : id === 'preset-piano' ? 'piano' : 'synth'
+          if (store.getState().presetBrowse?.section === section) store.exitPresetBrowse(true)
+          else store.enterPresetBrowse(section, section === 'organ' ? false : shift)
           return
+        }
         case 'page-left':
-          if (store.getState().splitEdit) store.selectSplitPoint(-1)
+          if (store.getState().presetBrowse) store.stepPreset(-1)
+          else if (store.getState().splitEdit) store.selectSplitPoint(-1)
           else store.shiftProgramPage(-1)
           return
         case 'page-right':
-          if (store.getState().splitEdit) store.selectSplitPoint(1)
+          if (store.getState().presetBrowse) store.stepPreset(1)
+          else if (store.getState().splitEdit) store.selectSplitPoint(1)
           else store.shiftProgramPage(1)
           return
         case 'live-mode':
@@ -845,6 +907,15 @@ export class PresentationStore {
           // not modeled, so the button moves and changes nothing.
           if (shift) store.setLayerInitEdit(!store.getState().layerInitEdit)
           return
+        case 'mon-copy': {
+          // MON/COPY (manual p. 43) — pointer-first adaptation (declared;
+          // the hardware HOLDS Mon/Copy or Paste): a click LATCHES the
+          // monitor/copy mode, Shift + click latches PASTE (the ⇕ print
+          // under the cap); clicking again or Shift/Exit leaves.
+          const current = store.getState().monCopy
+          store.setMonCopyMode(shift ? (current === 'paste' ? null : 'paste') : current === 'copy' ? null : 'copy')
+          return
+        }
         case 'layer-scene':
           store.toggleLayerScene()
           return
@@ -917,6 +988,16 @@ export class PresentationStore {
             else if (button === 2) store.layerInitPiano()
             else if (button === 3) store.layerInitSynth()
             else store.setLastEdit('Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn')
+            return
+          }
+          const browse = store.getState().presetBrowse
+          if (browse) {
+            // Preset screen soft-button row (manual p. 42 prints Num · Cat ·
+            // Cancel): the Num/Cat sort modes are not implemented, so only
+            // Cancel is honest here — PROGRAM 1 = Cancel (restores the
+            // pre-browse sound); other buttons re-print the hint.
+            if (button === 0) store.exitPresetBrowse(false)
+            else store.setLastEdit(`${presetSectionName(browse.section)} Preset — PROG 1: Cancel · SHIFT/EXIT: keep`)
             return
           }
           store.selectProgramButton(button)
@@ -1034,6 +1115,18 @@ export class PresentationStore {
           if (store.cancelStoreFlow()) return
           // …then clears a pending Num Pad page digit (manual p. 44)…
           if (store.clearNumPadPending()) return
+          // …then unlatches the Mon/Copy or Paste mode (manual p. 43)…
+          if (store.getState().monCopy !== null) {
+            store.setMonCopyMode(null)
+            return
+          }
+          // …then leaves the Preset Library screen, KEEPING the loaded
+          // sound (manual p. 42: "press Shift/Exit … to leave the Preset
+          // screen"; Cancel is the PROGRAM 1 soft button)…
+          if (store.getState().presetBrowse) {
+            store.exitPresetBrowse(true)
+            return
+          }
           // …then exits split-edit mode…
           if (store.getState().splitEdit) {
             store.setSplitEdit(false)
@@ -1063,6 +1156,58 @@ export class PresentationStore {
     const current = this.state.toggles[id] ?? false
     this.state = { ...this.state, toggles: { ...this.state.toggles, [id]: !current } }
     for (const listener of this.listeners) listener()
+  }
+
+  /** Maps a button press to its Mon/Copy copy-source / paste-target role
+   *  while a latch is on (manual p. 43); false = not one of the listed
+   *  buttons, so the press keeps its normal behavior. Shift is deliberately
+   *  ignored here — it stays latched after entering Paste mode. */
+  private monCopyPress(store: InstrumentStore, id: string): boolean {
+    switch (id) {
+      case 'piano-layer-a':
+      case 'piano-layer-b':
+        store.monCopyLayerPress('piano', id.endsWith('a') ? 'A' : 'B')
+        return true
+      case 'organ-layer-a':
+      case 'organ-layer-b':
+        store.monCopyLayerPress('organ', id.endsWith('a') ? 'A' : 'B')
+        return true
+      case 'synth-layer-a':
+      case 'synth-layer-b':
+      case 'synth-layer-c':
+        store.monCopyLayerPress('synth', id.endsWith('a') ? 'A' : id.endsWith('b') ? 'B' : 'C')
+        return true
+      case 'mod1-on':
+        store.monCopyEffectPress('mod1')
+        return true
+      case 'mod2-on':
+        store.monCopyEffectPress('mod2')
+        return true
+      case 'delay-on':
+        store.monCopyEffectPress('delay')
+        return true
+      case 'amp-on':
+        store.monCopyEffectPress('ampEq')
+        return true
+      case 'comp-on':
+        store.monCopyEffectPress('comp')
+        return true
+      case 'reverb-on':
+        store.monCopyEffectPress('reverb')
+        return true
+      case 'morph-wheel':
+        store.monCopyMorphPress('wheel')
+        return true
+      case 'morph-ctrlped':
+        store.monCopyMorphPress('pedal')
+        return true
+      default:
+        if (/^program-[1-8]$/.test(id)) {
+          store.monCopyProgramPress(Number(id.slice('program-'.length)) - 1)
+          return true
+        }
+        return false
+    }
   }
 }
 

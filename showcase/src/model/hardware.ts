@@ -14,9 +14,15 @@ import type { SectionId } from './variant'
  * small, truthfully DECORATIVE remainder moves or presses and exposes
  * accessible presentation state but has no audio effect, matching spec
  * exclusions: Synth Mode's Extern position (the button cycles only between
- * the two real modes and never lands there), the preset-library buttons,
- * the Mon·Copy menu, Morph A.T. (no browser aftertouch), and the Organ
- * preset button. Prog View is functional: it cycles the Program display's
+ * the two real modes and never lands there) and Morph A.T. (no browser
+ * aftertouch). Mon/Copy is functional (manual p. 43): its click latches the
+ * monitor/copy mode (knobs display without writing; Layer / effect ON /
+ * Morph / PROGRAM buttons copy) and Shift + click latches Paste.
+ * The Organ PRESET button is functional
+ * (manual p. 21): it toggles the focused layer's Preset On / Drawbar Live
+ * state, with SYNC as its Shift pairing. All three PRESET
+ * LIBRARY buttons are functional (manual p. 41-42), each browsing/loading
+ * its factory bank. Prog View is functional: it cycles the Program display's
  * four view modes (manual p. 42). Section Edit is functional through its
  * Shift pairing only — LAYER INIT (manual p. 43) opens the four-soft-button
  * init screen on the Program OLED, while the plain press truthfully does
@@ -73,8 +79,10 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'rotary-speed',
   'rotary-stop-mode',
   'rotary-source',
-  // Organ section — all controls except the spec-excluded preset button
+  // Organ section — all controls, including PRESET / Drawbar Live + SYNC
+  // (manual p. 19/21)
   'organ-on',
+  'organ-preset',
   'organ-level-a',
   'organ-level-b',
   'organ-layer-a',
@@ -116,8 +124,14 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   // and the Programs cluster (32 slots + 8 Live, store flows, navigation)
   'panic',
   'shift',
+  // STORE AS… = Shift + Store (manual p. 41): one physical red button.
   'store',
-  'store-as',
+  // PRESET LIBRARY (manual p. 41-42): browse/load the factory Organ, Piano
+  // and Synth banks on the Program OLED; SINGLE LAYER = Shift + press for
+  // Piano/Synth (Organ presets are always whole-Section — p. 41 note).
+  'preset-organ',
+  'preset-piano',
+  'preset-synth',
   'prog-view',
   'program-dial',
   'page-left',
@@ -127,6 +141,10 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   // LAYER INIT = Shift + Section Edit (manual p. 43): the button's Shift
   // pairing opens the init screen; its plain press is truthfully inert.
   'section-edit',
+  // MONITOR / COPY / PASTE (manual p. 43): the Mon/Copy click latches the
+  // monitor/copy mode, Shift + click latches Paste (pointer-first
+  // adaptation of the hardware's hold gestures).
+  'mon-copy',
   'layer-scene',
   'split-onset',
   'mstclk-tap',
@@ -269,7 +287,9 @@ const organControls = section('organ', [
   toggle('organ-perc-decay', 'Percussion Decay Fast', 'B3 Percussion'),
   toggle('organ-perc-harmonic', 'Percussion Harmonic Third', 'B3 Percussion'),
   toggle('organ-perc-on', 'Percussion On', 'B3 Percussion'),
-  push('organ-preset', 'Organ Preset'),
+  // PRESET (manual p. 21): latching per-layer Preset On/Off toggle (Off =
+  // Drawbar Live); SYNC is its Shift pairing.
+  toggle('organ-preset', 'Organ Preset'),
   push('organ-octave-down', 'Organ Octave Shift Down'),
   push('organ-octave-up', 'Organ Octave Shift Up'),
   ...DRAWBAR_FOOTAGES.map((footage, i) => ({
@@ -307,7 +327,6 @@ const programControls = section('program', [
   push('panic', 'Panic', 'Transp'),
   push('prog-view', 'Prog View'),
   push('store', 'Store'),
-  push('store-as', 'Store As'),
   push('preset-organ', 'Preset Library Organ', 'Preset Library'),
   push('preset-piano', 'Preset Library Piano', 'Preset Library'),
   push('preset-synth', 'Preset Library Synth', 'Preset Library'),

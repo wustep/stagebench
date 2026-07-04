@@ -76,6 +76,21 @@ describe('interaction.keys — visual press lifecycle', () => {
     expect(c4.dataset.pressed).toBe('false')
   })
 
+  it('note keys keep playing while a panel button has focus (letters never operate buttons)', () => {
+    renderApp()
+    const button = document.querySelector<HTMLElement>('[data-control-id="piano-type"]')!
+    button.focus()
+    const c4 = key(60)
+    fireEvent.keyDown(button, { code: 'KeyA' })
+    expect(c4.dataset.pressed).toBe('true')
+    fireEvent.keyUp(button, { code: 'KeyA' })
+    expect(c4.dataset.pressed).toBe('false')
+    // Space (button activation) must still NOT double as the sustain pedal
+    // while the button is focused.
+    fireEvent.keyDown(button, { code: 'Space' })
+    expect(document.querySelector('[data-testid="sustain-pedal"]')!.getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('key repeat does not retrigger the note', () => {
     const { getContext } = renderApp()
     fireEvent.keyDown(window, { code: 'KeyA' })

@@ -1,6 +1,16 @@
 import { useSyncExternalStore } from 'react'
-import { INSTRUMENTS, instrumentsOfType, PIANO_TYPES, type PianoType } from '../audio/library'
+import { INSTRUMENTS, instrumentsOfType, PIANO_TYPES, SYNTH_SAMPLE_SETS, type PianoType } from '../audio/library'
 import { DRAWBAR_INITIAL, getControl } from '../model/hardware'
+import {
+  ORGAN_PRESETS,
+  PIANO_PRESETS,
+  PRESET_BANKS,
+  SYNTH_PRESETS,
+  type EffectChainPresetSpec,
+  type OrganLayerPresetSpec,
+  type PianoLayerPresetSpec,
+  type SynthLayerPresetSpec,
+} from '../model/presets'
 import type { StorageBoundary } from '../audio/boundaries'
 import { buildFactoryContent, PROGRAM_SNAPSHOT_KEYS, snapshotOf } from './factory-programs'
 
@@ -125,11 +135,16 @@ export interface OrganLayerState {
   octave: -1 | 0 | 1
   zone: ZoneRange
   model: OrganModelId
-  /** Nine virtual drawbars, 0 (in) .. 8 (fully out). Always live (spec:
-   *  Preset/Drawbar-Live modes are excluded — virtual drawbars show live values). */
+  /** The Program's stored drawbar registration, 0 (in) .. 8 (fully out).
+   *  Drives the sound and the LED graphs while `presetOn` is true. */
   drawbars: number[]
   /** Per-layer vibrato/chorus on/off (manual p. 19). */
   vibrato: boolean
+  /** PRESET On (default, manual p. 21): the stored `drawbars` drive the
+   *  sound and the LED graphs. Off = "Drawbar Live" (manual p. 19): the
+   *  physical drawbar pose (`organDrawbarPose`) drives the sound and the
+   *  drawbar LED graphs go dark. Per-layer, program-stored. */
+  presetOn: boolean
 }
 
 export interface OrganState {
@@ -490,6 +505,20 @@ export const MORPH_DESTINATIONS: ReadonlySet<string> = new Set([
   'arp-rate',
 ])
 
+/* ------------------------------------------------- monitor / copy / paste -- */
+
+/** MON/COPY clipboard (manual p. 43): the one copied object, deep-cloned at
+ *  copy time so later edits never leak into (or out of) it. `label` is the
+ *  truthful display name a paste refusal re-prints ("Cannot paste X here").
+ *  Not program state. */
+export type MonCopyClipboard =
+  | { kind: 'piano-layer'; label: string; payload: { layer: PianoLayerState; chain: EffectChainState } }
+  | { kind: 'organ-layer'; label: string; payload: { layer: OrganLayerState; chain: EffectChainState } }
+  | { kind: 'synth-layer'; label: string; payload: { layer: SynthLayerState; chain: EffectChainState } }
+  | { kind: 'effect'; label: string; unit: keyof EffectChainState; payload: EffectChainState[keyof EffectChainState] }
+  | { kind: 'morph'; label: string; payload: MorphAssignment[] }
+  | { kind: 'program'; label: string; payload: ProgramSlot }
+
 /**
  * Everything a program stores (spec: nord-stage-4.programs.json
  * programState.includes) — Master Level is deliberately excluded. The
@@ -585,8 +614,35 @@ export interface InstrumentState {
   /** LAYER INIT screen (Shift + Section Edit, manual p. 43): PROGRAM 1-4 act
    *  as the four soft buttons (All / Org AB / Pno / Syn). Not program state. */
   layerInitEdit: boolean
+  /** PRESET LIBRARY browse screen (manual p. 41-42): the Program dial steps
+   *  the section's preset list, loading each preset live into the current
+   *  program as an ordinary dirty edit. `preBrowse` is the snapshot the
+   *  Cancel soft button restores; `loaded` stays false until the dial first
+   *  loads (the manual's "E" coupling on the focused, not-yet-loaded
+   *  preset); `singleLayer` = SINGLE LAYER (Shift + preset button): load
+   *  into the focused layer only. Mutually exclusive with the other
+   *  Program-OLED edit modes. Not program state. */
+  presetBrowse: {
+    section: SectionKey
+    index: number
+    preBrowse: ProgramSnapshot
+    preDirty: boolean
+    singleLayer: boolean
+    loaded: boolean
+  } | null
   /** Morph source being assigned (source button latched). Not program state. */
   morphArming: MorphSource | null
+  /** MON/COPY / PASTE latch (manual p. 43) — pointer-first adaptation of the
+   *  hardware's hold gestures (like SOLO's click convention): 'copy' =
+   *  Mon/Copy latched (continuous controls become read-only monitor
+   *  readouts; Layer / effect ON / Morph Assign / PROGRAM buttons copy),
+   *  'paste' = PASTE (Shift + Mon/Copy) latched (the same buttons paste).
+   *  Mutually exclusive with the Program-OLED edit modes and preset
+   *  browsing. Not program state. */
+  monCopy: 'copy' | 'paste' | null
+  /** The copied object (deep-cloned, manual p. 43). Survives leaving the
+   *  latch so a later Paste can use it. Not program state. */
+  clipboard: MonCopyClipboard | null
   /** AMP/FILTER/OSC ENVELOPE button latched: the three Synth OLED dials edit
    *  the focused layer's selected envelope's attack/decay/release instead of
    *  their normal waveform-list/menu roles. Not program state (panel mode only). */
@@ -607,6 +663,12 @@ export interface InstrumentState {
   synthOscPitchEdit: boolean
   /** Live morph source positions (mod wheel, control pedal 0..127). Not program state. */
   morphValues: Record<MorphSource, number>
+  /** The ONE physical set of nine drawbars on the hardware: their current
+   *  pose, 0..8 each. Dragging a drawbar always moves this; an organ layer
+   *  with Preset Off ("Drawbar Live", manual p. 19/21) sounds from this pose
+   *  instead of its stored registration. Not program state — like real
+   *  hardware positions, the pose persists across program loads. */
+  organDrawbarPose: number[]
   /** When true (Group mode), effect edits apply to both piano layer chains. */
   fxGroupPiano: boolean
   allFxOff: boolean
@@ -682,7 +744,7 @@ function defaultPianoLayer(enabled: boolean): PianoLayerState {
  *  both Organ Layers to a B3 sound"): a stock 888000000 registration (the
  *  same default the power-on layer B carries), vibrato off. */
 function initOrganLayer(enabled: boolean): OrganLayerState {
-  return { enabled, level: 100, octave: 0, zone: { from: 0, to: 3 }, model: 'B3', drawbars: [8, 8, 8, 0, 0, 0, 0, 0, 0], vibrato: false }
+  return { enabled, level: 100, octave: 0, zone: { from: 0, to: 3 }, model: 'B3', drawbars: [8, 8, 8, 0, 0, 0, 0, 0, 0], vibrato: false, presetOn: true }
 }
 
 function defaultChain(): EffectChainState {
@@ -742,12 +804,18 @@ function baseInstrumentState(): InstrumentState {
     clockEdit: false,
     transposeEdit: false,
     layerInitEdit: false,
+    presetBrowse: null,
     morphArming: null,
+    monCopy: null,
+    clipboard: null,
     synthEnvEdit: null,
     modelListView: false,
     synthVibratoEdit: false,
     synthOscPitchEdit: false,
     morphValues: { wheel: 0, pedal: 0 },
+    // The physical pose boots matching the power-on focused layer's (A's)
+    // registration so nothing jumps when a layer first goes Drawbar Live.
+    organDrawbarPose: [...DRAWBAR_INITIAL],
     organ: {
       // The section starts off (Piano is the power-on sound); its layer A is
       // pre-enabled so the ON button makes it immediately audible.
@@ -755,8 +823,8 @@ function baseInstrumentState(): InstrumentState {
       focusedLayer: 'A',
       layers: {
         // Layer A's registration matches the reference photo's drawbar pose.
-        A: { enabled: true, level: 100, octave: 0, zone: { from: 0, to: 3 }, model: 'B3', drawbars: [...DRAWBAR_INITIAL], vibrato: false },
-        B: { enabled: false, level: 100, octave: 0, zone: { from: 0, to: 3 }, model: 'B3', drawbars: [8, 8, 8, 0, 0, 0, 0, 0, 0], vibrato: false },
+        A: { enabled: true, level: 100, octave: 0, zone: { from: 0, to: 3 }, model: 'B3', drawbars: [...DRAWBAR_INITIAL], vibrato: false, presetOn: true },
+        B: { enabled: false, level: 100, octave: 0, zone: { from: 0, to: 3 }, model: 'B3', drawbars: [8, 8, 8, 0, 0, 0, 0, 0, 0], vibrato: false, presetOn: true },
       },
       percussion: { on: false, soft: false, fast: false, third: false, poly: false },
       vibratoType: 'C3',
@@ -968,9 +1036,16 @@ export class InstrumentStore {
       const current = Math.max(0, Math.min(count - 1, Math.floor(parsed.current)))
       const slot = (liveMode ? parsed.live : parsed.bank)[current]!
       const base = this.state
+      const snapshot = cloneSnapshot(slot.snapshot)
       return {
         ...base,
-        ...cloneSnapshot(slot.snapshot),
+        ...snapshot,
+        // The physical drawbar pose (never persisted) boots from the
+        // restored program's focused organ layer so nothing jumps when a
+        // layer first goes Drawbar Live.
+        organDrawbarPose: [
+          ...(snapshot.organ?.layers[snapshot.organ.focusedLayer]?.drawbars ?? base.organDrawbarPose),
+        ],
         pianoNotFound: null,
         programs: {
           ...base.programs,
@@ -1131,7 +1206,7 @@ export class InstrumentStore {
   setClockEdit(on: boolean): void {
     if (on === this.state.clockEdit) return
     this.patch(
-      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false } : {}) },
+      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null } : {}) },
       on ? 'Mst Clk Edit — dial: BPM · PROG 1/2: delay/mod1 sync' : 'Mst Clk Edit closed',
     )
   }
@@ -1157,7 +1232,7 @@ export class InstrumentStore {
   setTransposeEdit(on: boolean): void {
     if (on === this.state.transposeEdit) return
     this.patch(
-      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null, layerInitEdit: false } : {}) },
+      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null } : {}) },
       on ? 'Transpose Edit — dial: -6…+6 st' : 'Transpose Edit closed',
     )
   }
@@ -1226,7 +1301,7 @@ export class InstrumentStore {
   setSplitEdit(on: boolean): void {
     if (on === !!this.state.splitEdit) return
     this.patch(
-      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false, layerInitEdit: false } : {}) },
+      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false, layerInitEdit: false, presetBrowse: null, monCopy: null } : {}) },
       on ? 'Split Edit — dial: position · PAGE: point · PROG 1/2: on/xfade' : 'Split Edit closed',
     )
   }
@@ -1281,7 +1356,7 @@ export class InstrumentStore {
   setLayerInitEdit(on: boolean): void {
     if (on === this.state.layerInitEdit) return
     this.patch(
-      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null } : {}) },
+      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null } : {}) },
       on ? 'Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn' : 'Layer Init closed',
     )
   }
@@ -1361,6 +1436,249 @@ export class InstrumentStore {
         fxGroupSynth: false,
       },
       `Layer Init — Synth ${layer}`,
+    )
+  }
+
+  /* ------------------------------------------------------ preset library -- */
+
+  /** PRESET LIBRARY (manual p. 41): opens the browse screen for a section's
+   *  preset bank (ORGAN_PRESETS / PIANO_PRESETS / SYNTH_PRESETS). Entering
+   *  captures the current sound for the Cancel soft button and does NOT
+   *  load anything yet — the focused preset stays coupled with an "E" until
+   *  the dial is turned (manual p. 41). Organ presets are always
+   *  whole-Section (manual p. 41 note: both Organ layers share one effect
+   *  chain), so singleLayer is forced off there. Mutually exclusive with
+   *  the other Program-OLED edit modes. */
+  enterPresetBrowse(section: SectionKey, singleLayer: boolean): void {
+    const single = section === 'organ' ? false : singleLayer
+    const name = presetSectionName(section)
+    const focused = section === 'piano' ? this.state.focusedLayer : this.state.synth.focusedLayer
+    this.patch(
+      {
+        presetBrowse: {
+          section,
+          index: 0,
+          preBrowse: snapshotOf(this.state),
+          preDirty: this.state.programs.dirty,
+          singleLayer: single,
+          loaded: false,
+        },
+        clockEdit: false,
+        transposeEdit: false,
+        splitEdit: null,
+        layerInitEdit: false,
+        monCopy: null,
+      },
+      single ? `${name} Preset — Single Layer ${focused} · dial: load` : `${name} Preset — dial: load · PROG 1: Cancel`,
+    )
+  }
+
+  /** Leaves the Preset screen. keep=true (Shift/Exit or the same library
+   *  button, manual p. 42) keeps the loaded sound — it stays an ordinary
+   *  edit; keep=false is the Cancel soft button (manual p. 42: "Pressing
+   *  Cancel instead reverts to the sound that was loaded prior to entering
+   *  the Preset Library"). */
+  exitPresetBrowse(keep: boolean): void {
+    const browse = this.state.presetBrowse
+    if (!browse) return
+    if (keep) {
+      this.patch({ presetBrowse: null }, 'Preset Library closed')
+      return
+    }
+    // Routed through patch so a Live slot's auto-store also restores (the
+    // cancel is itself an ordinary "edit" back to the pre-browse sound).
+    this.patch(
+      { ...cloneSnapshot(browse.preBrowse), pianoNotFound: null, presetBrowse: null },
+      'Preset cancelled — previous sound restored',
+    )
+    // Outside Live mode the restore is not an edit relative to the loaded
+    // program: put the dirty flag back the way the browse found it.
+    if (!this.state.programs.liveMode && this.state.programs.dirty !== browse.preDirty) {
+      this.patchPrograms({ dirty: browse.preDirty })
+    }
+  }
+
+  /** Program dial while browsing (manual p. 41: "Once the dial is operated,
+   *  the Preset sound is actually loaded"): 0..127 across the preset list. */
+  dialPreset(value: number): void {
+    const browse = this.state.presetBrowse
+    if (!browse) return
+    const count = PRESET_BANKS[browse.section].length
+    this.loadPreset(Math.round((clamp(value) / 127) * (count - 1)))
+  }
+
+  /** PAGE ◂ ▸ while browsing (manual p. 41: the PAGE buttons navigate the
+   *  list): steps to — and loads — the neighboring preset. */
+  stepPreset(delta: -1 | 1): void {
+    const browse = this.state.presetBrowse
+    if (!browse) return
+    this.loadPreset(browse.index + delta)
+  }
+
+  /** Loads the browsed section's preset at `index` into the current program
+   *  — one ordinary dirty (or Live auto-stored) edit. */
+  loadPreset(index: number): void {
+    const browse = this.state.presetBrowse
+    if (!browse) return
+    if (browse.section === 'organ') this.loadOrganPreset(index)
+    else if (browse.section === 'piano') this.loadPianoPreset(index)
+    else this.loadSynthPreset(index)
+  }
+
+  /** Layer Scenes and presets (manual p. 43): "When loading a Preset for an
+   *  entire Section ... that Section will be turned off in the non-active
+   *  Layer Scene." (Single Layer loads leave the other scene untouched.) */
+  private scenesWithSectionOff(section: SectionKey): ScenesState {
+    const scenes = this.state.scenes
+    const off =
+      section === 'piano'
+        ? { pianoA: false, pianoB: false }
+        : section === 'organ'
+          ? { organA: false, organB: false }
+          : { synthA: false, synthB: false, synthC: false }
+    return { ...scenes, stored: { ...scenes.stored, ...off } }
+  }
+
+  /** Loads SYNTH_PRESETS[index] into the current program — one ordinary
+   *  dirty (or Live auto-stored) edit. Section mode (manual p. 41 "entire
+   *  Section") configures layer A plus any declared B/C with the section on
+   *  and undeclared layers reset off; SINGLE LAYER (manual p. 42) writes
+   *  only the focused layer's sound and its own chain, leaving the other
+   *  layers, the section on/off and the arp intact. */
+  loadSynthPreset(index: number): void {
+    const browse = this.state.presetBrowse
+    if (!browse) return
+    const clamped = Math.max(0, Math.min(SYNTH_PRESETS.length - 1, Math.round(index)))
+    const preset = SYNTH_PRESETS[clamped]!
+    const label = `Synth Preset ${clamped + 1}/${SYNTH_PRESETS.length}: ${preset.name}`
+    if (browse.singleLayer) {
+      const id = this.state.synth.focusedLayer
+      const current = this.state.synth.layers[id]
+      // Sound fields reset to init then the preset's primary (A) layer is
+      // applied; enabled/level/octave/zone are the player's performance
+      // setup, not the preset's sound, and stay untouched.
+      const loaded = synthLayerFromPreset(preset.layers.A, defaultSynthLayer(current.enabled))
+      const layer: SynthLayerState = { ...loaded, enabled: current.enabled, level: current.level, octave: current.octave, zone: current.zone }
+      this.patch(
+        {
+          synth: { ...this.state.synth, layers: { ...this.state.synth.layers, [id]: layer } },
+          synthChains: { ...this.state.synthChains, [id]: chainFromPreset(preset.layers.A.chain) },
+          presetBrowse: { ...browse, index: clamped, loaded: true },
+        },
+        `${label} → Layer ${id}`,
+      )
+      return
+    }
+    const layers = {} as Record<SynthLayerId, SynthLayerState>
+    const synthChains = {} as Record<SynthLayerId, EffectChainState>
+    for (const id of SYNTH_LAYER_IDS) {
+      const spec = preset.layers[id]
+      layers[id] = spec ? synthLayerFromPreset(spec, defaultSynthLayer(true)) : defaultSynthLayer(false)
+      synthChains[id] = chainFromPreset(spec?.chain)
+    }
+    this.patch(
+      {
+        synth: { ...this.state.synth, sectionOn: true, focusedLayer: 'A', layers, arp: { ...defaultArp(), ...preset.arp } },
+        synthChains,
+        scenes: this.scenesWithSectionOff('synth'),
+        presetBrowse: { ...browse, index: clamped, loaded: true },
+      },
+      label,
+    )
+  }
+
+  /** Loads ORGAN_PRESETS[index] — ALWAYS whole-Section (manual p. 41 note:
+   *  both Organ layers share one effect chain, so there is no single-layer
+   *  variant): both layers' registrations, the shared percussion/scanner/
+   *  rotary routing and the shared Organ chain; undeclared layer B resets
+   *  off. SUSTPED/PSTICK stay untouched (performance routing, not the
+   *  preset's sound — the layerInitOrganAB convention). */
+  loadOrganPreset(index: number): void {
+    const browse = this.state.presetBrowse
+    if (!browse || browse.section !== 'organ') return
+    const clamped = Math.max(0, Math.min(ORGAN_PRESETS.length - 1, Math.round(index)))
+    const preset = ORGAN_PRESETS[clamped]!
+    this.patch(
+      {
+        organ: {
+          ...this.state.organ,
+          sectionOn: true,
+          focusedLayer: 'A',
+          layers: {
+            A: organLayerFromPreset(preset.layers.A, true),
+            B: preset.layers.B ? organLayerFromPreset(preset.layers.B, true) : initOrganLayer(false),
+          },
+          percussion: { on: false, soft: false, fast: false, third: false, poly: false, ...preset.percussion },
+          vibratoType: preset.vibratoType ?? 'C3',
+          toRotary: preset.toRotary ?? false,
+        },
+        organChain: chainFromPreset(preset.chain),
+        scenes: this.scenesWithSectionOff('organ'),
+        presetBrowse: { ...browse, index: clamped, loaded: true },
+      },
+      `Organ Preset ${clamped + 1}/${ORGAN_PRESETS.length}: ${preset.name}`,
+    )
+  }
+
+  /** Loads PIANO_PRESETS[index]. Section mode configures layer A plus any
+   *  declared B (undeclared B resets off) with per-layer chains and the
+   *  section-shared Piano parameters over reset defaults; SINGLE LAYER
+   *  (manual p. 42) writes only the focused layer's instrument and its own
+   *  chain, keeping the other layer and the section on/off intact. Declared
+   *  adaptation: KB Touch/Dyn Comp/Timbre/Unison/Acoustics are
+   *  section-shared in this model (the layerInitPiano convention), so a
+   *  Single Layer load still applies the preset's shared settings. */
+  loadPianoPreset(index: number): void {
+    const browse = this.state.presetBrowse
+    if (!browse || browse.section !== 'piano') return
+    const clamped = Math.max(0, Math.min(PIANO_PRESETS.length - 1, Math.round(index)))
+    const preset = PIANO_PRESETS[clamped]!
+    const label = `Piano Preset ${clamped + 1}/${PIANO_PRESETS.length}: ${preset.name}`
+    const shared: PianoSharedState = {
+      ...this.state.piano,
+      kbTouch: 0,
+      dynComp: 0,
+      timbre: 0,
+      unison: 0,
+      softRelease: false,
+      stringRes: false,
+      pedNoise: false,
+      ...preset.shared,
+    }
+    if (browse.singleLayer) {
+      const id = this.state.focusedLayer
+      const current = this.state.layers[id]
+      // The instrument is the preset's sound; enabled/level/octave/zone are
+      // the player's performance setup and stay untouched (the synth
+      // single-layer convention).
+      const loaded = pianoLayerFromPreset(preset.layers.A, defaultPianoLayer(current.enabled))
+      const layer: PianoLayerState = { ...loaded, level: current.level, octave: current.octave, zone: current.zone }
+      this.patch(
+        {
+          layers: { ...this.state.layers, [id]: layer },
+          piano: shared,
+          chains: { ...this.state.chains, [id]: chainFromPreset(preset.layers.A.chain) },
+          pianoNotFound: null,
+          presetBrowse: { ...browse, index: clamped, loaded: true },
+        },
+        `${label} → Layer ${id}`,
+      )
+      return
+    }
+    this.patch(
+      {
+        layers: {
+          A: pianoLayerFromPreset(preset.layers.A, defaultPianoLayer(true)),
+          B: preset.layers.B ? pianoLayerFromPreset(preset.layers.B, defaultPianoLayer(true)) : defaultPianoLayer(false),
+        },
+        piano: { ...shared, sectionOn: true },
+        focusedLayer: 'A',
+        chains: { A: chainFromPreset(preset.layers.A.chain), B: chainFromPreset(preset.layers.B?.chain) },
+        scenes: this.scenesWithSectionOff('piano'),
+        pianoNotFound: null,
+        presetBrowse: { ...browse, index: clamped, loaded: true },
+      },
+      label,
     )
   }
 
@@ -1554,7 +1872,10 @@ export class InstrumentStore {
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
-      // Loading a program resets the Preset Name display state (manual p. 42).
+      // A program load replaces the whole sound: the Preset Library browse
+      // screen closes (its loaded-preset edit was just discarded like any
+      // other edit) and the Preset Name display state resets (manual p. 42).
+      presetBrowse: null,
       programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `${programLabel(clamped, programs.liveMode)} ${slot.name}`,
     })
@@ -1629,8 +1950,13 @@ export class InstrumentStore {
     this.selectProgram(page * 8 + (reference % 8))
   }
 
-  /** Program dial (0..127 panel value): browses slots; sets characters while naming. */
+  /** Program dial (0..127 panel value): browses slots; sets characters while
+   *  naming; steps and LOADS presets while the Preset Library is open. */
   dialProgram(value: number): void {
+    if (this.state.presetBrowse) {
+      this.dialPreset(value)
+      return
+    }
     const programs = this.state.programs
     if (programs.naming) {
       const index = Math.round((value / 127) * (NAMING_CHARSET.length - 1))
@@ -1663,6 +1989,12 @@ export class InstrumentStore {
    * press confirms the name and moves on to destination selection.
    */
   storePress(): void {
+    // Declared limitation: storing back INTO the preset bank (manual p. 42
+    // "Storing Presets to the Preset Library") is out of scope — the bank is
+    // read-only factory content, so STORE always targets program slots. A
+    // Store started from the Preset screen first leaves it, keeping the
+    // loaded sound (which the capture below then stores like any edit).
+    if (this.state.presetBrowse) this.exitPresetBrowse(true)
     const programs = this.state.programs
     if (programs.storePending) {
       this.confirmStore()
@@ -1774,6 +2106,8 @@ export class InstrumentStore {
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
+      // Switching banks loads a program — the preset browse screen closes.
+      presetBrowse: null,
       programs: {
         ...programs,
         liveMode,
@@ -1807,6 +2141,160 @@ export class InstrumentStore {
       programs: { ...programs, liveMode: undo.liveMode, current: undo.slot, dirty: true, undo: null },
       lastEdit: `Undo — back to ${programLabel(undo.slot, undo.liveMode)} (edited)`,
     })
+  }
+
+  /* ------------------------------------------------ monitor / copy / paste -- */
+
+  /** MON/COPY / PASTE latch (manual p. 43) — pointer-first adaptation of the
+   *  hardware's hold gestures (declared; like SOLO's click convention): a
+   *  Mon/Copy click latches monitor/copy mode, Shift + click latches Paste;
+   *  clicking again or Shift/Exit leaves. While latched, presentation.ts
+   *  routes continuous controls to a read-only monitor readout and the
+   *  Layer / effect ON / Morph Assign / PROGRAM buttons to the copy/paste
+   *  presses below. Mutually exclusive with the Program-OLED edit modes and
+   *  preset browsing; opening the latch is panel-only state, not an edit. */
+  setMonCopyMode(mode: 'copy' | 'paste' | null): void {
+    if (mode === this.state.monCopy) return
+    this.patch(
+      {
+        monCopy: mode,
+        ...(mode ? { clockEdit: false, transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null } : {}),
+      },
+      mode === 'copy'
+        ? 'Mon/Copy — turn a knob: monitor · Layer/FX On/Morph/Program: copy'
+        : mode === 'paste'
+          ? 'Paste — press a Layer / FX On / Morph / Program target'
+          : 'Mon/Copy off',
+    )
+  }
+
+  /** Truthful refusal shared by every incompatible (or empty) paste press:
+   *  prints what the clipboard holds and writes nothing. */
+  private monCopyRefuse(): void {
+    const clip = this.state.clipboard
+    this.setLastEdit(clip ? `Cannot paste ${clip.label} here` : 'Paste — clipboard empty')
+  }
+
+  /** A LAYER button pressed while a Mon/Copy latch is on (manual p. 43 "To
+   *  copy a Layer, press any Layer A, B or C buttons"): copy captures the
+   *  layer's full state plus its effect chain; paste writes a SAME-SECTION
+   *  clipboard layer into the pressed one as one ordinary edit. Cross-
+   *  section layer pastes are refused — the Piano/Organ/Synth layer schemas
+   *  genuinely differ. Both Organ layers share one chain (manual p. 18), so
+   *  an Organ layer copy carries — and its paste rewrites — the shared chain. */
+  monCopyLayerPress(section: SectionKey, layer: LayerId | SynthLayerId): void {
+    const label = `${presetSectionName(section)} ${layer}`
+    if (this.state.monCopy === 'copy') {
+      const clipboard: MonCopyClipboard =
+        section === 'piano'
+          ? { kind: 'piano-layer', label, payload: deepClone({ layer: this.state.layers[layer as LayerId], chain: this.state.chains[layer as LayerId] }) }
+          : section === 'organ'
+            ? { kind: 'organ-layer', label, payload: deepClone({ layer: this.state.organ.layers[layer as LayerId], chain: this.state.organChain }) }
+            : { kind: 'synth-layer', label, payload: deepClone({ layer: this.state.synth.layers[layer as SynthLayerId], chain: this.state.synthChains[layer as SynthLayerId] }) }
+      this.patch({ clipboard }, `Copied: ${label}`)
+      return
+    }
+    const clip = this.state.clipboard
+    if (section === 'piano' && clip?.kind === 'piano-layer') {
+      const payload = deepClone(clip.payload)
+      this.patch(
+        { layers: { ...this.state.layers, [layer]: payload.layer }, chains: { ...this.state.chains, [layer]: payload.chain } },
+        `Pasted → ${label}`,
+      )
+      return
+    }
+    if (section === 'organ' && clip?.kind === 'organ-layer') {
+      const payload = deepClone(clip.payload)
+      this.patch(
+        {
+          organ: { ...this.state.organ, layers: { ...this.state.organ.layers, [layer]: payload.layer } },
+          organChain: payload.chain,
+        },
+        `Pasted → ${label}`,
+      )
+      return
+    }
+    if (section === 'synth' && clip?.kind === 'synth-layer') {
+      const payload = deepClone(clip.payload)
+      this.patch(
+        {
+          synth: { ...this.state.synth, layers: { ...this.state.synth.layers, [layer]: payload.layer } },
+          synthChains: { ...this.state.synthChains, [layer]: payload.chain },
+        },
+        `Pasted → ${label}`,
+      )
+      return
+    }
+    this.monCopyRefuse()
+  }
+
+  /** An effect unit's ON button while a latch is on (manual p. 43 "To copy
+   *  an Effect, press any Effect ON button"): copy captures the focused
+   *  chain's unit settings; paste writes them back through updateUnit — the
+   *  same one-ordinary-edit path a knob edit uses (honoring FX focus and
+   *  Group/Global targeting). Same-unit pastes only: the unit schemas differ. */
+  monCopyEffectPress(unit: keyof EffectChainState): void {
+    if (this.state.monCopy === 'copy') {
+      const clipboard: MonCopyClipboard = { kind: 'effect', label: unitLabel(unit), unit, payload: deepClone(this.focusedChain()[unit]) }
+      this.patch({ clipboard }, `Copied: ${unitLabel(unit)}`)
+      return
+    }
+    const clip = this.state.clipboard
+    if (clip?.kind === 'effect' && clip.unit === unit) {
+      this.updateUnit(unit, deepClone(clip.payload) as never, `Pasted → ${unitLabel(unit)}`)
+      return
+    }
+    this.monCopyRefuse()
+  }
+
+  /** A Morph Assign source button while a latch is on (manual p. 43 "To
+   *  copy a Morph, press the WHEEL, A.T. or CTRLPED buttons" — A.T. stays
+   *  spec-excluded): copy captures that source's assignments; paste writes
+   *  them onto the PRESSED source (the assignment lists share one schema). */
+  monCopyMorphPress(source: MorphSource): void {
+    if (this.state.monCopy === 'copy') {
+      const clipboard: MonCopyClipboard = { kind: 'morph', label: `Morph ${morphSourceLabel(source)}`, payload: deepClone(this.state.morph[source]) }
+      this.patch({ clipboard }, `Copied: Morph ${morphSourceLabel(source)}`)
+      return
+    }
+    const clip = this.state.clipboard
+    if (clip?.kind === 'morph') {
+      this.patch({ morph: { ...this.state.morph, [source]: deepClone(clip.payload) } }, `Pasted → Morph ${morphSourceLabel(source)}`)
+      return
+    }
+    this.monCopyRefuse()
+  }
+
+  /** A PROGRAM 1-8 button while a latch is on (manual p. 43 "To copy a
+   *  Program, press one of the PROGRAM 1-8 buttons"): copy captures that
+   *  slot of the current page (or Live bank); paste writes the clipboard
+   *  into the pressed slot and loads it there — like a confirmed Store. */
+  monCopyProgramPress(button: number): void {
+    const programs = this.state.programs
+    const index = programs.liveMode ? button : Math.floor(programs.current / 8) * 8 + button
+    const slotLabel = programLabel(index, programs.liveMode)
+    if (this.state.monCopy === 'copy') {
+      const slot = this.activeBank()[index]!
+      const clipboard: MonCopyClipboard = { kind: 'program', label: `Program ${slotLabel} ${slot.name}`, payload: deepClone(slot) }
+      this.patch({ clipboard }, `Copied: ${slotLabel} ${slot.name}`)
+      return
+    }
+    const clip = this.state.clipboard
+    if (clip?.kind === 'program') {
+      const bankKey = programs.liveMode ? 'live' : 'bank'
+      const bank = [...this.activeBank()]
+      bank[index] = deepClone(clip.payload)
+      this.commit({
+        ...this.state,
+        ...cloneSnapshot(clip.payload.snapshot),
+        pianoNotFound: null,
+        programs: { ...programs, [bankKey]: bank, current: index, dirty: false },
+        lastEdit: `Pasted → ${slotLabel} ${clip.payload.name}`,
+      })
+      this.persistPrograms(this.state)
+      return
+    }
+    this.monCopyRefuse()
   }
 
   /* -------------------------------------------------------------- organ -- */
@@ -1860,9 +2348,47 @@ export class InstrumentStore {
   setOrganDrawbar(index: number, value: number): void {
     const layer = this.state.organ.focusedLayer
     const clamped = Math.max(0, Math.min(8, Math.round(value)))
-    const drawbars = [...this.state.organ.layers[layer].drawbars]
+    // Dragging a drawbar always moves the ONE physical pose (there is one
+    // physical set of drawbars on the hardware).
+    const organDrawbarPose = [...this.state.organDrawbarPose]
+    organDrawbarPose[index] = clamped
+    const layerState = this.state.organ.layers[layer]
+    if (!layerState.presetOn) {
+      // Drawbar Live (manual p. 19/21): the physical pose drives the sound;
+      // the Program's stored registration stays untouched — a pose move is
+      // not a program edit (no dirty flag, no Live auto-store).
+      this.patch({ organDrawbarPose }, `Drawbar ${index + 1}: ${clamped} (Live)`)
+      return
+    }
+    const drawbars = [...layerState.drawbars]
     drawbars[index] = clamped
-    this.patchOrganLayer(layer, { drawbars }, `Drawbar ${index + 1}: ${clamped}`)
+    this.patch(
+      {
+        organDrawbarPose,
+        organ: { ...this.state.organ, layers: { ...this.state.organ.layers, [layer]: { ...layerState, drawbars } } },
+      },
+      `Drawbar ${index + 1}: ${clamped}`,
+    )
+  }
+
+  /** PRESET On/Off for the focused layer (manual p. 21). Off = "Drawbar
+   *  Live": the physical drawbar pose drives the sound and the drawbar LED
+   *  graphs go dark (manual p. 19). Per-layer, program-stored. */
+  toggleOrganPreset(): void {
+    const layer = this.state.organ.focusedLayer
+    const presetOn = !this.state.organ.layers[layer].presetOn
+    this.patchOrganLayer(layer, { presetOn }, `Organ ${layer} Preset ${presetOn ? 'On' : 'Off — Drawbar Live'}`)
+  }
+
+  /** SYNC (Shift + Preset, manual p. 21): synchronizes the focused layer's
+   *  Preset settings with the physical positions of the drawbars — one
+   *  ordinary dirty (or Live auto-stored) edit. p. 21 specifies only the
+   *  copy, so the layer's Preset On/Off state is left untouched. (The
+   *  manual's press-hold PRESET alternative for SYNC is not modeled —
+   *  declared adaptation; Shift + Preset is the one way in.) */
+  syncOrganDrawbars(): void {
+    const layer = this.state.organ.focusedLayer
+    this.patchOrganLayer(layer, { drawbars: [...this.state.organDrawbarPose] }, `Organ ${layer} SYNC: Preset ← drawbars`)
   }
 
   cycleOrganVibratoType(): void {
@@ -2595,6 +3121,13 @@ function clamp(value: number): number {
   return Math.max(0, Math.min(127, Math.round(value)))
 }
 
+/** Deep-clones a Mon/Copy payload (manual p. 43): the clipboard must never
+ *  share references with live state, in either direction. Every payload is
+ *  plain JSON-serializable state, like the program snapshots. */
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 /** Backfills a persisted synth layer's filter/oscEnvelope/lfo sub-objects
  *  with the current defaults when a snapshot from before those fields
  *  existed is loaded — the existing top-level "missing `synth` key
@@ -2638,6 +3171,21 @@ function normalizeSynthState(synth: Partial<SynthState> | null | undefined): Syn
  *  programs never crash the engine on a missing nested key. */
 function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
   const cloned = JSON.parse(JSON.stringify(snapshot)) as ProgramSnapshot
+  // Organ layers persisted before the PRESET / Drawbar Live field existed
+  // (manual p. 21) lack `presetOn`: backfill the hardware default (On).
+  const backfillOrganLayer = (layer: OrganLayerState): OrganLayerState => ({
+    ...layer,
+    presetOn: (layer as Partial<OrganLayerState>).presetOn ?? true,
+  })
+  const normalizedOrgan = cloned.organ
+    ? {
+        ...cloned.organ,
+        layers: {
+          A: backfillOrganLayer(cloned.organ.layers.A),
+          B: backfillOrganLayer(cloned.organ.layers.B),
+        },
+      }
+    : cloned.organ
   const normalizedSynth = normalizeSynthState(cloned.synth)
   const synthChains = cloned.synthChains as Partial<Record<SynthLayerId, EffectChainState>> | undefined
   const normalizedSynthChains: Record<SynthLayerId, EffectChainState> = {
@@ -2647,10 +3195,82 @@ function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
   }
   return {
     ...cloned,
+    ...(normalizedOrgan ? { organ: normalizedOrgan } : {}),
     ...(normalizedSynth ? { synth: normalizedSynth } : {}),
     synthChains: normalizedSynthChains,
     fxGroupSynth: cloned.fxGroupSynth ?? false,
     kbHold: cloned.kbHold ?? false,
+  }
+}
+
+/** Builds one synth layer from a preset spec (src/model/presets.ts) over an
+ *  init-layer base: waveform names resolve against SYNTH_WAVEFORMS, a
+ *  declared sampleSet switches the layer to Samples mode (the index reuses
+ *  the waveform field, the panel's existing Samples convention). */
+function synthLayerFromPreset(spec: SynthLayerPresetSpec, base: SynthLayerState): SynthLayerState {
+  const waveform =
+    spec.sampleSet !== undefined
+      ? Math.max(0, Math.min(SYNTH_SAMPLE_SETS.length - 1, Math.round(spec.sampleSet)))
+      : spec.waveform !== undefined
+        ? Math.max(0, SYNTH_WAVEFORMS.findIndex((w) => w.name === spec.waveform))
+        : base.waveform
+  return {
+    ...base,
+    mode: spec.sampleSet !== undefined ? 'Samples' : 'Analog',
+    waveform,
+    level: spec.level ?? base.level,
+    oscCtrl: spec.oscCtrl ?? base.oscCtrl,
+    oscPitch: { ...base.oscPitch, ...spec.oscPitch },
+    ampEnvelope: { ...base.ampEnvelope, ...spec.ampEnvelope },
+    filter: { ...base.filter, ...spec.filter, envelope: { ...base.filter.envelope, ...spec.filter?.envelope } },
+    oscEnvelope: { ...base.oscEnvelope, ...spec.oscEnvelope },
+    lfo: { ...base.lfo, ...spec.lfo },
+    voice: { ...base.voice, ...spec.voice },
+  }
+}
+
+/** Display name for a Preset Library section (manual p. 41 headers). */
+export function presetSectionName(section: SectionKey): string {
+  return section === 'organ' ? 'Organ' : section === 'piano' ? 'Piano' : 'Synth'
+}
+
+/** Builds one organ layer from a preset spec over the init B3 layer: model,
+ *  registration (clamped 0..8 per drawbar), per-layer vibrato and balance. */
+function organLayerFromPreset(spec: OrganLayerPresetSpec, enabled: boolean): OrganLayerState {
+  const base = initOrganLayer(enabled)
+  return {
+    ...base,
+    model: spec.model,
+    drawbars: base.drawbars.map((value, i) => Math.max(0, Math.min(8, Math.round(spec.drawbars[i] ?? value)))),
+    vibrato: spec.vibrato ?? false,
+    level: spec.level !== undefined ? clamp(spec.level) : base.level,
+  }
+}
+
+/** Builds one piano layer from a preset spec over the default layer: the
+ *  bundled instrument (model index clamped to the type's list) and balance. */
+function pianoLayerFromPreset(spec: PianoLayerPresetSpec, base: PianoLayerState): PianoLayerState {
+  const models = instrumentsOfType(spec.type)
+  return {
+    ...base,
+    type: spec.type,
+    model: Math.max(0, Math.min(Math.max(0, models.length - 1), Math.round(spec.model ?? 0))),
+    level: spec.level !== undefined ? clamp(spec.level) : base.level,
+  }
+}
+
+/** A reset effect chain with a preset's unit overrides applied (presets are
+ *  "complete sounds, including their effect configurations", manual p. 41). */
+function chainFromPreset(spec: EffectChainPresetSpec | undefined): EffectChainState {
+  const chain = defaultChain()
+  if (!spec) return chain
+  return {
+    mod1: { ...chain.mod1, ...spec.mod1 },
+    mod2: { ...chain.mod2, ...spec.mod2 },
+    delay: { ...chain.delay, ...spec.delay },
+    ampEq: { ...chain.ampEq, ...spec.ampEq },
+    comp: { ...chain.comp, ...spec.comp },
+    reverb: { ...chain.reverb, ...spec.reverb },
   }
 }
 
@@ -2685,6 +3305,10 @@ function applyMorphWrite(state: InstrumentState, assignment: MorphAssignment, t:
   if (control.startsWith('organ-drawbar-') && (layer === 'A' || layer === 'B')) {
     const index = Number(control.slice('organ-drawbar-'.length)) - 1
     const organLayer = state.organ.layers[layer]
+    // "Morphs are not applicable in Drawbar Live mode" (manual p. 39): a
+    // Live layer sounds from the physical pose, so a drawbar morph write to
+    // its stored registration would be inaudible AND untruthful — skip it.
+    if (!organLayer.presetOn) return state
     if ((organLayer.drawbars[index] ?? 0) === value) return state
     const drawbars = [...organLayer.drawbars]
     drawbars[index] = value

@@ -25,16 +25,17 @@ describe('visual.control-inventory — normalized hardware model', () => {
     }
     // Every Piano-, Organ- and Effects-section control is functional now,
     // including the Synth FX-focus group button (each synth layer now has
-    // its own effect chain to focus). Only the Organ preset button stays
-    // truthfully decorative (preset library is spec-excluded benchmark-wide).
+    // its own effect chain to focus) and the Organ PRESET button (manual
+    // p. 21: latching per-layer Preset On / Drawbar Live toggle, with SYNC
+    // as its Shift pairing).
     for (const control of HARDWARE_CONTROLS.filter(
       (c) => c.section === 'piano' || c.section === 'organ' || c.section === 'effects',
     )) {
-      if (control.id === 'organ-preset') continue
       expect(control.decorative, control.id).toBe(false)
     }
     expect(getControl('fx-focus-synth').decorative).toBe(false)
-    expect(getControl('organ-preset').decorative).toBe(true)
+    expect(getControl('organ-preset').decorative).toBe(false)
+    expect(getControl('organ-preset').latching).toBe(true)
     // Synth scope: section on/off, three layers (level/enable/octave),
     // waveform selection (category button + dial 2; SOUND INIT is that same
     // button's Shift pairing, manual p. 37 — no separate control), Osc Ctrl
@@ -99,17 +100,19 @@ describe('visual.control-inventory — normalized hardware model', () => {
     expect(getControl('perf-master-level').decorative).toBe(false)
     // The Programs cluster (32 slots + 8 Live, store flows, navigation),
     // Layer Scenes, Split, Prog View (display view modes + Preset Name,
-    // manual p. 42) and Section Edit (functional through its LAYER INIT
+    // manual p. 42), Section Edit (functional through its LAYER INIT
     // Shift pairing, manual p. 43 — there is no separate layer-init button;
-    // the plain press is truthfully inert) are functional; presets and the
-    // spec-excluded menus remain decorative.
-    for (const id of ['store', 'store-as', 'program-dial', 'page-left', 'page-right', 'live-mode', 'solo-undo', 'program-1', 'program-8', 'layer-scene', 'split-onset', 'mstclk-tap', 'transpose-onset', 'morph-wheel', 'morph-ctrlped', 'perf-mod-wheel', 'prog-view', 'section-edit']) {
+    // the plain press is truthfully inert) and all three PRESET LIBRARY
+    // buttons (manual p. 41-42: browse/load the factory Organ/Piano/Synth
+    // banks; SINGLE LAYER = Shift + press for Piano/Synth — Organ presets
+    // are always whole-Section, p. 41 note) and Mon/Copy (manual p. 43:
+    // click latches the read-only monitor/copy mode, Shift + click latches
+    // Paste) are functional; the spec-excluded menus remain decorative.
+    for (const id of ['store', 'program-dial', 'page-left', 'page-right', 'live-mode', 'solo-undo', 'program-1', 'program-8', 'layer-scene', 'split-onset', 'mstclk-tap', 'transpose-onset', 'morph-wheel', 'morph-ctrlped', 'perf-mod-wheel', 'prog-view', 'section-edit', 'preset-organ', 'preset-piano', 'preset-synth', 'mon-copy']) {
       expect(getControl(id).decorative, id).toBe(false)
     }
     // morph-at stays decorative: aftertouch is spec-excluded (no browser aftertouch).
-    for (const id of ['morph-at', 'preset-piano', 'mon-copy']) {
-      expect(getControl(id).decorative, id).toBe(true)
-    }
+    expect(getControl('morph-at').decorative).toBe(true)
     // The rail has no layer-init button of its own (the reference photo's
     // outlined box holds SOLO/UNDO, SECTION EDIT with the LAYER INIT ▽
     // shift-legend below it, and MON/COPY).

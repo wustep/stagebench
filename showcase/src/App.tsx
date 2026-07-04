@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   realAssetBoundary,
   realAudioBoundary,
@@ -106,6 +106,45 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   // an extra portaled overlay rendering the same section again, larger.
   const [zoomedSection, setZoomedSection] = useState<ZoomableSectionId | null>(null)
 
+  // Magnifier loupe: while toggled on, a floating lens follows the pointer
+  // over the control deck showing a 2.6x view of the panel under the cursor.
+  // The lens content is a second, inert render of the deck (aria-hidden,
+  // pointer-events none) — purely visual, the real deck stays interactive.
+  const [magnify, setMagnify] = useState(false)
+  const realDeckRef = useRef<HTMLDivElement>(null)
+  const lensRef = useRef<HTMLDivElement>(null)
+  const lensCanvasRef = useRef<HTMLDivElement>(null)
+  const LENS_W = 340
+  const LENS_H = 230
+  const LENS_K = 2.6
+  const onLensMove = (event: ReactPointerEvent) => {
+    const deck = realDeckRef.current
+    const lens = lensRef.current
+    const canvas = lensCanvasRef.current
+    if (!deck || !lens || !canvas) return
+    const r = deck.getBoundingClientRect()
+    const x = event.clientX - r.left
+    const y = event.clientY - r.top
+    if (x < 0 || y < 0 || x > r.width || y > r.height) {
+      lens.style.visibility = 'hidden'
+      return
+    }
+    lens.style.visibility = 'visible'
+    // Lens floats beside the cursor, flipping above/below to stay on screen.
+    const left = Math.min(event.clientX + 20, window.innerWidth - LENS_W - 8)
+    const top = event.clientY - LENS_H - 20 < 8 ? event.clientY + 22 : event.clientY - LENS_H - 20
+    lens.style.left = `${left}px`
+    lens.style.top = `${top}px`
+    // The clone renders at the real deck's width (same cqw scale), then the
+    // transform magnifies and centers the cursor point in the lens.
+    canvas.style.width = `${r.width}px`
+    canvas.style.height = `${r.height}px`
+    canvas.style.transform = `translate(${LENS_W / 2 - x * LENS_K}px, ${LENS_H / 2 - y * LENS_K}px) scale(${LENS_K})`
+  }
+  const onLensLeave = () => {
+    if (lensRef.current) lensRef.current.style.visibility = 'hidden'
+  }
+
   const [chrome, setChrome] = useState<'minimal' | 'full'>(() => {
     try {
       const raw = system.storage.load('stagebench.ui.v1')
@@ -198,16 +237,20 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         if (!event.repeat) controller.setSustain(true)
         return
       }
-      if (event.code === SOFT_KEY_CODE && !isInteractiveTarget(event.target)) {
+      // Letter keys never operate a focused button/slider (those use
+      // Space/Enter and arrows), so notes and the Z/X pedals keep playing
+      // even while a panel control has focus — only the Space sustain guard
+      // above must respect focus, since Space also activates buttons.
+      if (event.code === SOFT_KEY_CODE) {
         if (!event.repeat) controller.setSoft(true)
         return
       }
-      if (event.code === SOSTENUTO_KEY_CODE && !isInteractiveTarget(event.target)) {
+      if (event.code === SOSTENUTO_KEY_CODE) {
         if (!event.repeat) controller.setSostenuto(true)
         return
       }
       const midiNote = KEY_CODE_TO_MIDI[event.code]
-      if (midiNote === undefined || isInteractiveTarget(event.target)) return
+      if (midiNote === undefined) return
       if (event.repeat || heldCodes.has(event.code)) return
       heldCodes.add(event.code)
       controller.noteOn(midiNote, KEYBOARD_VELOCITY, 'keyboard')
@@ -220,11 +263,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         controller.setSustain(false)
         return
       }
-      if (event.code === SOFT_KEY_CODE && !isInteractiveTarget(event.target)) {
+      if (event.code === SOFT_KEY_CODE) {
         controller.setSoft(false)
         return
       }
-      if (event.code === SOSTENUTO_KEY_CODE && !isInteractiveTarget(event.target)) {
+      if (event.code === SOSTENUTO_KEY_CODE) {
         controller.setSostenuto(false)
         return
       }
@@ -268,11 +311,13 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         aria-label={`${VARIANT.label} product study`}
         data-variant={VARIANT.id}
         data-testid="instrument"
+        onPointerMove={magnify ? onLensMove : undefined}
+        onPointerLeave={magnify ? onLensLeave : undefined}
       >
         <div className="chassis" data-testid="chassis">
           <div className="deck-block" data-testid="deck-block" style={{ height: '54%' }}>
             <div className="top-rail" aria-hidden="true" />
-            <div className="control-deck" data-testid="control-deck">
+            <div className="control-deck" data-testid="control-deck" ref={realDeckRef}>
               <PerformanceSection store={store} instrument={instrument} />
               <OrganSection store={store} instrument={instrument} onZoom={() => setZoomedSection('organ')} />
               <PianoSection store={store} instrument={instrument} engine={engine} onZoom={() => setZoomedSection('piano')} />
@@ -298,6 +343,25 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           {zoomedSection === 'synth' && <SynthSection store={store} instrument={instrument} />}
           {zoomedSection === 'effects' && <EffectsSection store={store} instrument={instrument} />}
         </SectionZoomOverlay>
+      )}
+      {magnify && (
+        <div className="magnify-lens" ref={lensRef} aria-hidden="true" data-testid="magnify-lens">
+          {/* Inert visual clone of the deck at the same cqw scale; the
+              transform above magnifies the area under the cursor. */}
+          <div className="lens-canvas" ref={lensCanvasRef} inert>
+            <div className="control-deck lens-deck">
+              <PerformanceSection store={store} instrument={instrument} />
+              <OrganSection store={store} instrument={instrument} />
+              <PianoSection store={store} instrument={instrument} engine={engine} />
+              <ProgramSection store={store} instrument={instrument} engine={engine} />
+              <SynthSection store={store} instrument={instrument} />
+              <EffectsSection store={store} instrument={instrument} />
+              <span className="made-in" aria-hidden="true">
+                HANDMADE IN SWEDEN BY CLAVIA DMI AB&ensp;v2.0 Rev.B
+              </span>
+            </div>
+          </div>
+        </div>
       )}
       <footer
         className={`status-strip ${chrome === 'minimal' ? 'chrome-minimal' : ''}`}
@@ -336,6 +400,16 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           >
             ⓘ INFO
           </button>
+          <button
+            type="button"
+            className="chrome-toggle"
+            data-testid="magnify-toggle"
+            aria-pressed={magnify}
+            aria-label="Toggle magnifier lens"
+            onClick={() => setMagnify((m) => !m)}
+          >
+            🔍 MAGNIFY
+          </button>
         </span>
         {chrome === 'minimal' && engineDegraded && engineStatusLine}
         <span className="chrome-info">
@@ -358,12 +432,12 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           </span>
           <span className="status-note">
             Functional: keybed, pedals, all Piano and Organ sections (all six organ models including B3 Bass and Pipe
-            2), the complete Synth section (Analog and Samples modes, all optional oscillator categories and
-            filters), Layer Effects (including each synth layer's own effect chain and the organ layers' shared
-            chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, Layer Init (Shift + Section Edit),
-            and section zoom. Visual-only by spec exclusion: Synth Mode's Extern position, the preset-library
-            buttons, Section Edit's plain press and the Mon·Copy menu, Morph A.T. (no browser aftertouch), and the
-            Organ preset button.
+            2, and the Organ preset button), the complete Synth section (Analog and Samples modes, all optional
+            oscillator categories and filters), Layer Effects (including each synth layer's own effect chain and the
+            organ layers' shared chain), Rotary, Programs/scenes/splits/morphs/master clock/transpose, the
+            preset-library buttons, Layer Init (Shift + Section Edit), Mon/Copy monitor + copy/paste latches (manual
+            p. 43), and section zoom. Visual-only by spec exclusion: Synth Mode's Extern position, Section Edit's
+            plain press, and Morph A.T. (no browser aftertouch).
           </span>
         </span>
       </footer>

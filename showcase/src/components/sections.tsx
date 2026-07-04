@@ -19,6 +19,7 @@ import {
   type InstrumentStore,
   type SectionKey,
 } from '../state/instrument'
+import { PRESET_BANKS } from '../model/presets'
 import { instrumentsOfType, SYNTH_SAMPLE_SETS } from '../audio/library'
 import type { EngineStatusInfo, PianoEngine } from '../audio/engine'
 import {
@@ -267,7 +268,7 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
 
 /* ---------------------------------------------------------------- Organ -- */
 
-function DrawbarColumn({ store, index }: { store: PresentationStore; index: number }) {
+function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; index: number; presetOn: boolean }) {
   const id = `organ-drawbar-${index + 1}`
   const value = usePresentationValue(store, id)
   const range = usePresentationMorphRange(store, id, 8)
@@ -280,14 +281,17 @@ function DrawbarColumn({ store, index }: { store: PresentationStore; index: numb
       <Legend className="dim drawbar-register">{DRAWBAR_REGISTERS[index] || ' '}</Legend>
       <div className="drawbar-row">
         {/* Reference: each LED ladder sits in a light-outlined frame with the
-            1-8 amount numerals printed beside the segments. */}
+            1-8 amount numerals printed beside the segments. In Drawbar Live
+            mode "the drawbar LEDs are all unlit" (manual p. 19/21) — the
+            frame and numerals stay printed, every LED goes dark (morph range
+            included: morphs are not applicable in Drawbar Live, p. 39). */}
         <span className="drawbar-scale" aria-hidden="true">
           <span className="drawbar-scale-nums">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
               <i key={n}>{n}</i>
             ))}
           </span>
-          <LedLadder count={8} lit={value} color="red" fill="down" className="drawbar-ladder" rangeLit={range ?? undefined} />
+          <LedLadder count={8} lit={presetOn ? value : 0} color="red" fill="down" className="drawbar-ladder" rangeLit={(presetOn ? range : null) ?? undefined} />
         </span>
         <Drawbar store={store} id={id} className={`cap-${color}`} />
       </div>
@@ -336,9 +340,14 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
               <Led color="yellow" on={organ.pstick} />
               <Legend>PSTICK</Legend>
             </span>
-            <PanelButton store={store} id="organ-preset" className="dark small">
-              PRESET
-            </PanelButton>
+            {/* PRESET (manual p. 21): lit while the focused layer sounds its
+                stored registration; dark = Drawbar Live (physical pose).
+                SYNC ▿ = Shift + Preset copies the pose into the Program. */}
+            <span className="tiny-led-row">
+              <Led color="green" on={focused.presetOn} />
+              <Legend>PRESET</Legend>
+            </span>
+            <PanelButton store={store} id="organ-preset" className="dark small" />
             <Legend className="dim">SYNC ▿</Legend>
             <span className="octave-row">
               <Legend>◂ OCTAVE SHIFT ▸</Legend>
@@ -444,7 +453,7 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
             </div>
             <div className="drawbar-bank" role="group" aria-label="Drawbars">
               {DRAWBAR_FOOTAGES.map((_, i) => (
-                <DrawbarColumn key={i} store={store} index={i} />
+                <DrawbarColumn key={i} store={store} index={i} presetOn={focused.presetOn} />
               ))}
             </div>
           </div>
@@ -725,6 +734,32 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         ]
       })()
     : null
+  // PRESET LIBRARY browse (manual p. 41-42): the section name, the list rows
+  // around the focused preset, and the manual's "E" coupling on the focused
+  // row until the dial first loads it. PROGRAM 1 is the Cancel soft button
+  // (of the manual's Num/Cat/Cancel row, only Cancel is implemented). Organ
+  // presets never browse single-layer (manual p. 41 note).
+  const browse = state.presetBrowse
+  const presetRows = browse
+    ? (() => {
+        const bank = PRESET_BANKS[browse.section]
+        const count = bank.length
+        const presetStart = Math.max(0, Math.min(browse.index - 1, count - 2))
+        const focusedPresetLayer = browse.section === 'piano' ? state.focusedLayer : state.synth.focusedLayer
+        return [
+          <span key="pb" className="oled-slot" data-testid="oled-preset-line">
+            ♪ {browse.section.toUpperCase()} PRESET{browse.singleLayer ? ` — LAYER ${focusedPresetLayer}` : ''} · PROG 1:
+            Cancel · SHIFT: keep
+          </span>,
+          ...[presetStart, presetStart + 1].map((i) => (
+            <span key={i} className="oled-slot" data-testid={`oled-preset-list-${i}`}>
+              {i === browse.index ? '▸' : ' '} {i + 1}/{count} {bank[i]!.name}
+              {i === browse.index && !browse.loaded ? ' E' : ''}
+            </span>
+          )),
+        ]
+      })()
+    : null
   // LAYER INIT screen (Shift + Section Edit, manual p. 43): PROGRAM 1-4 act
   // as the four soft buttons; Pno/Syn name the focused layer they reset.
   const layerInitRows = state.layerInitEdit
@@ -875,10 +910,9 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                   <Led color="red" on={!!programs.storePending} className={programs.storePending ? 'flash' : ''} />
                   <Legend>STORE</Legend>
                 </span>
+                {/* ONE red button — STORE AS… is Shift + Store (manual
+                    p. 41); the STORE AS… / PAGE NAME lines are panel print. */}
                 <PanelButton store={store} id="store" className="red small" />
-                {/* Blank cap; STORE AS… / PAGE NAME are printed on the panel
-                    beneath it (reference). */}
-                <PanelButton store={store} id="store-as" className="dark tiny" />
                 <Legend>STORE AS…</Legend>
                 <Legend className="dim">PAGE NAME</Legend>
               </span>
@@ -943,19 +977,19 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
           </div>
           <div className="program-center">
             <GroupBox title="Preset Library" className="preset-box">
-              {/* The preset library isn't implemented (buttons are decorative),
-                  so all three LEDs stay unlit. */}
+              {/* Each section's LED lights while its bank is being browsed
+                  (manual p. 41). */}
               <span className="preset-legend-row" aria-hidden="true">
                 <span className="tiny-led-row">
-                  <Led color="green" />
+                  <Led color="green" on={browse?.section === 'organ'} />
                   <Legend>ORGAN</Legend>
                 </span>
                 <span className="tiny-led-row">
-                  <Led color="green" />
+                  <Led color="green" on={browse?.section === 'piano'} />
                   <Legend>PIANO</Legend>
                 </span>
                 <span className="tiny-led-row">
-                  <Led color="green" />
+                  <Led color="green" on={browse?.section === 'synth'} />
                   <Legend>SYNTH</Legend>
                 </span>
               </span>
@@ -972,7 +1006,8 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               lines={[
                 <span key="p" className={`oled-program${xl}`} data-testid="oled-program-line">{programReadout}</span>,
                 <span key="n">{nameLine}</span>,
-                ...(layerInitRows ??
+                ...(presetRows ??
+                  layerInitRows ??
                   splitRows ??
                   clockRows ??
                   transposeRows ??
@@ -1060,9 +1095,26 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                 </button>
               </span>
               <span className="rail-cell">
-                <Legend>MON/COPY</Legend>
+                {/* Lit while the Mon/Copy or Paste latch is on (manual
+                    p. 43) — the tiny-led-row convention for latched modes
+                    on push buttons. */}
+                <span className="tiny-led-row">
+                  <Led color="yellow" on={state.monCopy !== null} className="mon-copy-led" />
+                  <Legend>MON/COPY</Legend>
+                </span>
                 <PanelButton store={store} id="mon-copy" className="dark tiny" />
-                <Legend className="dim">PASTE ⇕</Legend>
+                {/* PASTE = Shift + Mon/Copy (manual p. 43). The printed ⇕
+                    shift-legend below the cap is itself clickable and
+                    latches Paste mode directly (the panel's hold-to-shift
+                    convention, manual p. 44). */}
+                <button
+                  type="button"
+                  className="legend-button"
+                  aria-label="Paste"
+                  onClick={() => instrument.setMonCopyMode(state.monCopy === 'paste' ? null : 'paste')}
+                >
+                  <Legend className="dim">PASTE ⇕</Legend>
+                </button>
               </span>
             </span>
             <span className="shift-cluster">
@@ -1344,29 +1396,39 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                       <Legend>{synth.arp.mode === 'Gate' ? 'HARDNESS' : 'RANGE'} ENV</Legend>
                     </span>
                     <span className="arp-mode-cell">
-                      <PanelButton store={store} id="arp-menu" className="framed tiny">
-                        MENU
-                      </PanelButton>
+                      {/* LED binds to the menu latch when the Arp Menu
+                          feature lands; dark until then. */}
+                      <span className="tiny-led-row" aria-hidden="true">
+                        <Led color="red" />
+                        <Legend>MENU</Legend>
+                      </span>
+                      <PanelButton store={store} id="arp-menu" className="framed tiny" />
                       <Legend className="dim">GROUP ▿</Legend>
                     </span>
                   </div>
                 </GroupBox>
                 <div className="voice-vibrato-row">
                   <GroupBox title="Voice" className="voice-box">
-                    <span className="tiny-led-row" aria-hidden="true">
-                      <Led color="red" on={focused.voice.mode === 'Mono'} />
-                      <Legend>MONO</Legend>
-                    </span>
-                    <span className="tiny-led-row" aria-hidden="true">
-                      <Led color="red" on={focused.voice.mode === 'Legato'} />
-                      <Legend>LEGATO</Legend>
-                    </span>
-                    <PanelButton store={store} id="voice-mode" className="dark tiny" />
-                    <Legend className="dim">PRI {focused.voice.priority} ▿</Legend>
-                    <span className="knob-cell">
-                      <Knob store={store} id="glide" className="small" />
-                      <Legend>GLIDE</Legend>
-                      <Legend className="dim">LO ▿ HI ▿</Legend>
+                    {/* Reference: mode LEDs + button LEFT, the GLIDE knob
+                        RIGHT — a wide, short box, not a tall stack. */}
+                    <span className="voice-cols">
+                      <span className="voice-mode-col">
+                        <span className="tiny-led-row" aria-hidden="true">
+                          <Led color="red" on={focused.voice.mode === 'Mono'} />
+                          <Legend>MONO</Legend>
+                        </span>
+                        <span className="tiny-led-row" aria-hidden="true">
+                          <Led color="red" on={focused.voice.mode === 'Legato'} />
+                          <Legend>LEGATO</Legend>
+                        </span>
+                        <PanelButton store={store} id="voice-mode" className="dark tiny" />
+                        <Legend className="dim">PRI {focused.voice.priority} ▿</Legend>
+                      </span>
+                      <span className="knob-cell">
+                        <Knob store={store} id="glide" className="small" />
+                        <Legend>GLIDE</Legend>
+                        <Legend className="dim">LO ▿ HI ▿</Legend>
+                      </span>
                     </span>
                   </GroupBox>
                   <GroupBox title="Vibrato" className="vibrato-box">
@@ -1401,7 +1463,10 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                         </span>
                       </span>
                       <span className="vibrato-menu-cell">
-                        <Legend>MENU</Legend>
+                        <span className="tiny-led-row" aria-hidden="true">
+                          <Led color="red" on={state.synthVibratoEdit} />
+                          <Legend>MENU</Legend>
+                        </span>
                         <PanelButton store={store} id="vibrato-menu" className="framed tiny" />
                       </span>
                     </span>
@@ -1417,9 +1482,11 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <Led color="green" on={lfo.destination !== null} />
                   <Legend>{lfo.waveform.toUpperCase()}</Legend>
                 </span>
-                <PanelButton store={store} id="lfo-waveform" className="framed tiny">
-                  WAVEFORM
-                </PanelButton>
+                <span className="tiny-led-row" aria-hidden="true">
+                  <Led color="red" />
+                  <Legend>WAVEFORM</Legend>
+                </span>
+                <PanelButton store={store} id="lfo-waveform" className="framed tiny" />
                 <Legend className="dim">{lfo.destination ?? 'OFF'} ▿</Legend>
                 {/* Reference: the two LFO knobs sit side by side (RATE/TIME
                     left, MOD AMT right), not stacked. */}
@@ -1437,13 +1504,22 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <Legend className="dim">OSC PITCH · OSC CTRL · FILTER</Legend>
               </GroupBox>
               <GroupBox title="Oscillators" className="osc-box">
+                {/* Reference: '\u25cf PITCH/SMP  \u25cf ENVELOPE' printed above two
+                    plain black buttons; the LEDs light while that OLED dial
+                    edit is latched. */}
+                <span className="button-cell-legends" aria-hidden="true">
+                  <span className="tiny-led-row">
+                    <Led color="red" on={state.synthOscPitchEdit} />
+                    <Legend>PITCH/SMP</Legend>
+                  </span>
+                  <span className="tiny-led-row">
+                    <Led color="red" on={state.synthEnvEdit === 'osc'} />
+                    <Legend>ENVELOPE</Legend>
+                  </span>
+                </span>
                 <span className="button-cell">
-                  <PanelButton store={store} id="osc-pitch-smp" className="framed tiny">
-                    PITCH/SMP
-                  </PanelButton>
-                  <PanelButton store={store} id="osc-envelope" className="framed tiny" led="red">
-                    ENVELOPE
-                  </PanelButton>
+                  <PanelButton store={store} id="osc-pitch-smp" className="framed tiny" />
+                  <PanelButton store={store} id="osc-envelope" className="framed tiny" />
                 </span>
                 <Legend className={`dim ${oscEnvelope.toPitch ? 'lit' : ''}`}>
                   ENV TO PITCH {oscEnvelope.toPitch ? '●' : '○'} · VELOCITY {oscEnvelope.velocity ? '●' : '○'}
@@ -1462,13 +1538,19 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 </span>
               </GroupBox>
               <GroupBox title="Filter" className="filter-box">
+                <span className="button-cell-legends" aria-hidden="true">
+                  <span className="tiny-led-row">
+                    <Led color="red" />
+                    <Legend>TYPE</Legend>
+                  </span>
+                  <span className="tiny-led-row">
+                    <Led color="red" on={state.synthEnvEdit === 'filter'} />
+                    <Legend>ENVELOPE</Legend>
+                  </span>
+                </span>
                 <span className="button-cell">
-                  <PanelButton store={store} id="filter-type" className="framed tiny">
-                    TYPE
-                  </PanelButton>
-                  <PanelButton store={store} id="filter-envelope" className="framed tiny" led="red">
-                    ENVELOPE
-                  </PanelButton>
+                  <PanelButton store={store} id="filter-type" className="framed tiny" />
+                  <PanelButton store={store} id="filter-envelope" className="framed tiny" />
                 </span>
                 <TokenRow tokens={[...SYNTH_FILTER_TYPES]} active={filter.type} />
                 <Legend className="dim">
@@ -1495,9 +1577,11 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               </GroupBox>
               <div className="amp-unison-column">
                 <GroupBox title="Amp" className="amp-box">
-                  <PanelButton store={store} id="amp-envelope" className="framed tiny" led="red">
-                    ENVELOPE
-                  </PanelButton>
+                  <span className="tiny-led-row" aria-hidden="true">
+                    <Led color="red" on={state.synthEnvEdit === 'amp'} />
+                    <Legend>ENVELOPE</Legend>
+                  </span>
+                  <PanelButton store={store} id="amp-envelope" className="framed tiny" />
                   {/* VELOCITY ▿ = Shift + ENVELOPE cycles Off/1/2/3.
                       Two-LED encoding (reference print "1 ● 2 ●"): level 1
                       lights LED 1, level 2 lights LED 2, level 3 lights

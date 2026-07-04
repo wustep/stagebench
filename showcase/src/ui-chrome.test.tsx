@@ -56,4 +56,18 @@ describe('ui chrome — minimal by default with an INFO toggle', () => {
     fireEvent.click(screen.getByTestId('sustain-pedal'))
     expect(screen.getByTestId('pedal-status').textContent).toMatch(/sustain down/)
   })
+
+  it('the magnifier lens renders an inert, aria-hidden clone without disturbing the real deck', () => {
+    renderApp()
+    expect(screen.queryByTestId('magnify-lens')).toBeNull()
+    fireEvent.click(screen.getByTestId('magnify-toggle'))
+    const lens = screen.getByTestId('magnify-lens')
+    expect(lens.getAttribute('aria-hidden')).toBe('true')
+    expect(lens.querySelector('.lens-canvas')?.hasAttribute('inert')).toBe(true)
+    // The interactive deck stays unique and intact (the clone carries no testid).
+    const deck = screen.getByTestId('control-deck')
+    expect(deck.querySelectorAll(':scope > [data-section]')).toHaveLength(6)
+    fireEvent.click(screen.getByTestId('magnify-toggle'))
+    expect(screen.queryByTestId('magnify-lens')).toBeNull()
+  })
 })

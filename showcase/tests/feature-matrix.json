@@ -16,7 +16,7 @@
     {
       "id": "visual.control-inventory",
       "tests": ["src/model/hardware.test.ts", "src/components/surface.test.tsx"],
-      "notes": "Normalized hardware model with unique stable IDs; nine organ drawbars; primary OLEDs only in Program and Synth; truthful functional/decorative split (Piano/Organ/effects/rotary/master/Panic/Programs functional; the complete Synth section — sources/layers, filter/envelopes/LFO, voice modes and the arpeggiator/gate — is functional too; only Synth Mode's Extern/Samples positions and the Organ preset button stay decorative)."
+      "notes": "Normalized hardware model with unique stable IDs; nine organ drawbars; primary OLEDs only in Program and Synth; truthful functional/decorative split (Piano/Organ/effects/rotary/master/Panic/Programs functional; the complete Synth section — sources/layers, filter/envelopes/LFO, voice modes and the arpeggiator/gate — is functional too; only Synth Mode's Extern/Samples positions and Morph A.T. stay decorative; the Organ PRESET button (Preset On / Drawbar Live, with SYNC as its Shift pairing, manual p. 21), all three Program-strip PRESET LIBRARY buttons and Mon/Copy (manual p. 43: latched monitor/copy and Paste modes) are functional)."
     },
     {
       "id": "interaction.keys",
@@ -26,7 +26,7 @@
     {
       "id": "interaction.decorative-controls",
       "tests": ["src/components/decorative-controls.test.tsx"],
-      "notes": "Still-decorative Synth Mode Extern/Samples positions and the Organ preset button move by pointer and keyboard, update only presentation state, never create an AudioContext and never alter voices; functional controls are marked data-decorative=false and their canonical writes are tested separately."
+      "notes": "Still-decorative Synth Mode Extern/Samples positions and Morph A.T. move by pointer and keyboard, update only presentation state, never create an AudioContext and never alter voices; functional controls are marked data-decorative=false and their canonical writes are tested separately."
     },
     {
       "id": "accessibility.controls",
@@ -104,6 +104,16 @@
       "notes": "Showcase extension: 8 program buttons within 4 pages, page buttons, dial browsing of all 32 slots, Shift+dial numeric list view, Live Mode bank switch with LED and L-slot readout; 12 distinct factory programs ship (piano, organ, layered and effected setups, plus a split demo — Bass & Tines — and three synth demos — Super Saw Pad, FM Keys, Gate Pulse)."
     },
     {
+      "id": "programs.preset-library",
+      "tests": ["src/state/preset-library.test.ts", "src/audio/render-synth3.test.ts", "src/audio/render-preset-library.test.ts"],
+      "notes": "Showcase extension (manual p. 41-42): the three PRESET LIBRARY buttons open a browse screen on the Program OLED (each section's LED lit while browsing); the Program dial (and PAGE buttons) step that section's factory bank — a 14-preset Synth bank, a 12-registration Organ bank across all six models, and a 13-preset Piano bank over the eight bundled instruments — loading each preset live into the current program as an ordinary dirty/Live-auto-stored edit; entering loads nothing (the focused preset carries the manual's E coupling until the dial turns); Shift/Exit or the section's own library button leaves keeping the sound (a different section's button switches banks); the PROGRAM 1 soft button is the manual's Cancel and restores the pre-browse snapshot and dirty flag; SINGLE LAYER (Shift+button, Piano/Synth only) loads only the focused layer's sound + chain, leaving other layers, section on/off and the arp intact — Organ presets are always whole-Section (manual p. 41 note: both Organ layers share one chain, written by every Organ preset); Section presets can declare multiple layers plus shared settings, and per manual p. 43 a Section load turns that Section off in the non-active Layer Scene while Single Layer loads leave it untouched; rendered tests prove two Synth presets and two Organ registrations produce audibly distinct signals. Declared limitations: the Num/Cat sort modes are not implemented, and storing back INTO the preset banks is out of scope (read-only factory content)."
+    },
+    {
+      "id": "programs.mon-copy",
+      "tests": ["src/state/mon-copy.test.ts"],
+      "notes": "Showcase extension (manual p. 43, pointer-first adaptation of the hardware's hold gestures): the Mon/Copy click LATCHES a monitor/copy mode (LED lit) and Shift + Mon/Copy latches Paste; clicking again or Shift/Exit leaves, and both latches are mutually exclusive with the Program-OLED edit modes and preset browsing. While latched, every continuous functional control becomes a read-only OLED readout of its canonical value (nothing is written), and the Layer / effect ON / Morph Assign / PROGRAM 1-8 buttons copy — a layer's full state + its chain (Organ layers carry the shared chain), an effect unit's focused-chain settings, a morph source's assignments, or a program slot — into a deep-cloned non-snapshot clipboard. Paste writes the clipboard into a compatible pressed target as one ordinary dirty/Live-auto-stored edit (same-section layers, same-unit effects via the normal updateUnit path, any morph source, program slots like a confirmed Store); incompatible targets print a truthful 'Cannot paste X here' and change nothing."
+    },
+    {
       "id": "morph.assignments",
       "tests": ["src/state/morph.test.ts"],
       "notes": "Showcase extension: Wheel and Control Pedal morph sources (A.T. is spec-excluded). Latch a source button, move destinations to capture start→end (opposite directions supported); moving the mod wheel, the on-screen Control Pedal or MIDI CC11 interpolates every assigned destination without marking the program edited; zeroing removes one assignment, Shift+source clears the source; assigned controls show a green indicator; assignments are program state. LED ladders (layer faders and organ drawbars) now show the assigned morph range as a dim half-opacity LED span between the captured start→end (manual p. 39 indicator nicety), resolving the same layer/chain context the capture path used; unassigned controls show no range LEDs."
@@ -130,8 +140,8 @@
     },
     {
       "id": "organ.models-drawbars",
-      "tests": ["src/audio/organ.test.ts", "src/audio/render-organ.test.ts"],
-      "notes": "Showcase extension: B3/Vox/Farf/Pipe 1 generated digital models rendered audibly distinct (pairwise similarity < 0.8); nine drawbars drive the live spectrum (including mid-note pulls); Farf drawbars act as register switches; B3 percussion (single-trigger, soft/fast/third, and POLY via Shift + Percussion Volume for legato retriggering), key click, and the C1-C3/V1-V3 scanner with per-layer on/off all measurably change rendered audio. Two spec-optional models round out the 6-model cycle: B3 Bass (B3's tonewheel/click limited to the 16'+8' drawbars only, no percussion) and Pipe 2 (Pipe 1's ranks/chiff with a brighter principal registration — triangle low ranks, boosted/wider-detuned upper ranks); both LEDs are lit in the model grid and audibly verified (B3 Bass non-silent with only its two drawbars voiced; Pipe 2 vs Pipe 1 similarity < 0.9)."
+      "tests": ["src/audio/organ.test.ts", "src/audio/organ-preset.test.ts", "src/audio/render-organ.test.ts"],
+      "notes": "Showcase extension: B3/Vox/Farf/Pipe 1 generated digital models rendered audibly distinct (pairwise similarity < 0.8); nine drawbars drive the live spectrum (including mid-note pulls); PRESET On/Off per layer (manual p. 19/21): Preset On sounds the Program's stored registration, Preset Off (Drawbar Live) sounds the single physical drawbar pose with every drawbar LED graph dark, pose drags never dirty the program, SYNC (Shift + Preset) copies the pose into the registration as one ordinary edit, drawbar morphs are gated for a Live layer (manual p. 39), presetOn round-trips through programs with old snapshots backfilled to On; Farf drawbars act as register switches; B3 percussion (single-trigger, soft/fast/third, and POLY via Shift + Percussion Volume for legato retriggering), key click, and the C1-C3/V1-V3 scanner with per-layer on/off all measurably change rendered audio. Two spec-optional models round out the 6-model cycle: B3 Bass (B3's tonewheel/click limited to the 16'+8' drawbars only, no percussion) and Pipe 2 (Pipe 1's ranks/chiff with a brighter principal registration — triangle low ranks, boosted/wider-detuned upper ranks); both LEDs are lit in the model grid and audibly verified (B3 Bass non-silent with only its two drawbars voiced; Pipe 2 vs Pipe 1 similarity < 0.9)."
     },
     {
       "id": "organ.rotary",

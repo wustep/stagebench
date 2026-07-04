@@ -1325,20 +1325,30 @@ export class PianoEngine {
     this.syncArpScheduler(now)
   }
 
+  /** The drawbar values an organ layer actually sounds from: Preset On
+   *  reads the Program's stored registration; Preset Off ("Drawbar Live",
+   *  manual p. 19/21) reads the single physical drawbar pose instead. */
+  private effectiveOrganDrawbars(layer: LayerId): number[] {
+    const layerState = this.state.organ.layers[layer]
+    return layerState.presetOn ? layerState.drawbars : this.state.organDrawbarPose
+  }
+
   /** Retargets every sounding organ voice's partial gains from the live
-   *  drawbar state (and the Vox tone-mix crossfade). */
+   *  drawbar state (and the Vox tone-mix crossfade) — in Preset mode that
+   *  means stored-registration edits/morphs, in Drawbar Live mode physical
+   *  pose moves; both retune mid-note. */
   private updateOrganVoiceGains(now: number): void {
     const apply = (voice: Voice) => {
       const live = voice.organLive
       if (!live) return
-      const layerState = this.state.organ.layers[voice.layer as LayerId]
+      const drawbars = this.effectiveOrganDrawbars(voice.layer as LayerId)
       const recipe = ORGAN_MODEL_RECIPES[live.model]
       for (const partial of live.partials) {
-        const value = layerState.drawbars[partial.drawbar] ?? 0
+        const value = drawbars[partial.drawbar] ?? 0
         rampTo(partial.gain.gain, Math.max(0.0001, drawbarPartialGain(recipe, value) * partial.level), now)
       }
       if (live.voxMix) {
-        const mix = (layerState.drawbars[8] ?? 0) / 8
+        const mix = (drawbars[8] ?? 0) / 8
         rampTo(live.voxMix.dark.gain, Math.max(0.0001, 1 - mix), now)
         rampTo(live.voxMix.bright.gain, Math.max(0.0001, mix), now)
       }
@@ -1867,6 +1877,8 @@ export class PianoEngine {
     this.stealPastCap('organ', layer)
 
     const layerState = this.state.organ.layers[layer]
+    // Preset On = stored registration; Drawbar Live = physical pose (manual p. 19/21).
+    const drawbars = this.effectiveOrganDrawbars(layer)
     const recipe = ORGAN_MODEL_RECIPES[layerState.model]
     const fundamental = midiToFrequency(midi + layerState.octave * 12 + this.transposeOffset())
     const bend = this.effectiveBend('organ')
@@ -1893,7 +1905,7 @@ export class PianoEngine {
       darkFilter.Q.value = 0.5
       const dark = context.createGain()
       const bright = context.createGain()
-      const mix = (layerState.drawbars[8] ?? 0) / 8
+      const mix = (drawbars[8] ?? 0) / 8
       dark.gain.value = Math.max(0.0001, 1 - mix)
       bright.gain.value = Math.max(0.0001, mix)
       bus.connect(darkFilter)
@@ -1920,7 +1932,7 @@ export class PianoEngine {
       const partialGain = context.createGain()
       partialGain.gain.value = Math.max(
         0.0001,
-        drawbarPartialGain(recipe, layerState.drawbars[partial.drawbar] ?? 0) * level,
+        drawbarPartialGain(recipe, drawbars[partial.drawbar] ?? 0) * level,
       )
       osc.connect(partialGain)
       partialGain.connect(entry)

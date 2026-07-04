@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderEngine, rms, zeroCrossingRate, type RenderStep } from '../test/offline'
 import { SYNTH_WAVEFORMS, type InstrumentStore } from '../state/instrument'
+import { SYNTH_PRESETS } from '../model/presets'
 
 /**
  * synth.voice-modes / synth.arp-gate — REAL rendered audio through the full
@@ -127,5 +128,41 @@ describe('synth.chains — rendered per-layer effect chain proof', () => {
     // remaining afterward is the delay's repeats.
     expect(rms(result.left, 0.0, 0.3)).toBeGreaterThan(0.001)
     expect(rms(result.left, 1.2, 1.8)).toBeGreaterThan(0.0005)
+  }, 240000)
+})
+
+describe('programs.preset-library — rendered proof', () => {
+  // Loading a factory SYNTH preset (manual p. 41) is an ordinary state edit,
+  // so the same engine graph renders it: two presets with very different
+  // sources ('Acid Wire' — a saw into a low LP M; 'Static Bloom' — white
+  // noise through a highpass) must produce audibly distinct signals.
+  async function renderPreset(name: string) {
+    const index = SYNTH_PRESETS.findIndex((p) => p.name === name)
+    expect(index).toBeGreaterThanOrEqual(0)
+    return renderEngine({
+      duration: 1.4,
+      configure: (store) => {
+        store.setPianoSectionOn(false)
+        store.enterPresetBrowse('synth', false)
+        store.loadSynthPreset(index)
+        store.exitPresetBrowse(true) // keep the loaded sound (manual p. 42)
+      },
+      steps: [
+        { time: 0, run: ({ engine }) => engine.noteOn(60, 0.9) },
+        { time: 1.1, run: ({ engine }) => engine.noteOff(60) },
+      ],
+    })
+  }
+
+  it('two different synth presets render distinct audio', async () => {
+    const wire = await renderPreset('Acid Wire')
+    const bloom = await renderPreset('Static Bloom')
+    // Both presets audibly sound…
+    expect(rms(wire.left, 0.6, 1.0)).toBeGreaterThan(0.001)
+    expect(rms(bloom.left, 0.6, 1.0)).toBeGreaterThan(0.001)
+    // …and the noise preset's zero-crossing rate dwarfs the tonal one's.
+    const wireZcr = zeroCrossingRate(wire.left, 0.6, 1.0)
+    const bloomZcr = zeroCrossingRate(bloom.left, 0.6, 1.0)
+    expect(bloomZcr).toBeGreaterThan(wireZcr * 3)
   }, 240000)
 })

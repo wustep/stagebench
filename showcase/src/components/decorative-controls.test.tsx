@@ -157,11 +157,11 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     fireEvent.click(screen.getByRole('button', { name: 'Organ Section On' }))
     fireEvent.click(screen.getByRole('button', { name: 'Store' }))
     fireEvent.click(screen.getByRole('button', { name: 'Live Mode' }))
-    // Synth Mode Select is now FUNCTIONAL (spec.scope.optional Samples mode)
-    // — see the "functional panel controls" test below for its canonical
-    // effect. Preset Library Synth stays decorative (spec exclusion: "Synth
-    // preset library... downloads").
-    fireEvent.click(screen.getByRole('button', { name: 'Preset Library Synth' }))
+    // Synth Mode Select and the three Preset Library buttons are FUNCTIONAL
+    // now (spec.scope.optional Samples mode; manual p. 41-42) — see the
+    // "functional panel controls" tests and preset-library.test.ts for their
+    // canonical effects.
+    fireEvent.click(screen.getByRole('button', { name: 'Morph Assign Aftertouch' }))
     fireEvent.keyDown(screen.getByRole('slider', { name: 'Mod Wheel' }), { key: 'ArrowUp' })
 
     // No AudioContext may even have been created by decorative interaction.
@@ -226,18 +226,17 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
   })
 
   it('the OLED content does not react to decorative program controls', () => {
-    // Program buttons, Store, the dial and Prog View (display view modes,
-    // manual p. 42) belong to the functional Programs cluster now — the
-    // still-decorative controls are the morph-A.T./preset/menu scope.
-    // Section Edit is functional only through its LAYER INIT Shift pairing
-    // (manual p. 43); its plain press stays truthfully inert.
+    // Program buttons, Store, the dial, Prog View (display view modes,
+    // manual p. 42), the three Preset Library buttons and Mon/Copy (manual
+    // p. 43) belong to the functional Programs cluster now — the one
+    // still-decorative control here is Morph A.T. Section Edit is
+    // functional only through its LAYER INIT Shift pairing (manual p. 43);
+    // its plain press stays truthfully inert.
     renderApp()
     const oled = screen.getByTestId('oled-program')
     const before = oled.textContent
     fireEvent.click(screen.getByRole('button', { name: 'Morph Assign Aftertouch' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Preset Library Piano' }))
     fireEvent.click(screen.getByRole('button', { name: 'Section Edit' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Monitor/Copy Paste' }))
     expect(oled.textContent).toBe(before)
   })
 })

@@ -53,8 +53,9 @@ describe('accessibility.controls', () => {
     // Piano section on with layer A enabled, Layer Effects section on, and
     // the (off) Organ and Synth sections with their layer A pre-enabled.
     // Filter On starts lit (spec filter default is on) — Synth part 2's one
-    // new truthfully-pressed-at-power-on latching control.
-    const pressedAtPowerOn = new Set(['piano-on', 'piano-layer-a', 'effects-on', 'reverb-bright', 'organ-layer-a', 'synth-layer-a', 'filter-on'])
+    // new truthfully-pressed-at-power-on latching control. Organ PRESET is
+    // On by default too (manual p. 21: "By default the PRESET is turned On").
+    const pressedAtPowerOn = new Set(['piano-on', 'piano-layer-a', 'effects-on', 'reverb-bright', 'organ-layer-a', 'synth-layer-a', 'filter-on', 'organ-preset'])
     for (const control of HARDWARE_CONTROLS.filter((c) => c.type === 'button')) {
       const element = controlElement(control.id)
       if (control.latching) {

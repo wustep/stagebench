@@ -103,6 +103,40 @@ describe('organ — rendered behavior', () => {
     expect(zeroCrossingRate(pulled.left, 0.8, 1.05)).toBeGreaterThan(zeroCrossingRate(still.left, 0.8, 1.05) * 2)
   }, 240000)
 
+  it('Drawbar Live: a physical drawbar pull reshapes the rendered spectrum while the stored registration stays put', async () => {
+    // PRESET Off (manual p. 19/21): the layer sounds from the physical pose.
+    // The pose starts equal to the dark 16'-only registration (Preset-mode
+    // drags write both), so the render opens identical to Preset mode; the
+    // mid-note pull then moves ONLY the pose — the Program's stored
+    // registration must come out of the render untouched.
+    const registration = [8, 0, 0, 0, 0, 0, 0, 0, 0]
+    let storedAfter: number[] = []
+    const live = await renderEngine({
+      duration: 1.4,
+      configure: (store) => {
+        organOnly(store)
+        registration.forEach((value, index) => store.setOrganDrawbar(index, value))
+        store.toggleOrganPreset() // layer A -> Drawbar Live
+      },
+      steps: [
+        { time: 0, run: ({ engine }) => engine.noteOn(60, 0.85) },
+        { time: 0.6, run: ({ store }) => store.setOrganDrawbar(8, 8) }, // physical 1' pull (pose only)
+        {
+          time: 1.1,
+          run: ({ engine, store }) => {
+            storedAfter = [...store.getState().organ.layers.A.drawbars]
+            engine.noteOff(60)
+          },
+        },
+      ],
+    })
+    // The 1' partial audibly appears after the pull...
+    expect(rms(live.left, 0.1, 0.5)).toBeGreaterThan(0.002)
+    expect(zeroCrossingRate(live.left, 0.8, 1.05)).toBeGreaterThan(zeroCrossingRate(live.left, 0.2, 0.5) * 2)
+    // ...while the Program's stored registration is unchanged.
+    expect(storedAfter).toEqual(registration)
+  }, 240000)
+
   it('B3 percussion adds a decaying attack; fast decay dies sooner than slow', async () => {
     const registration = [0, 0, 8, 0, 0, 0, 0, 0, 0] // 8' only
     const plain = await renderOrgan(withModel(0, registration))

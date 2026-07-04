@@ -86,6 +86,37 @@ body {
   gap: 0.25cqw;
 }
 
+/* Magnifier loupe: a fixed lens that follows the pointer over the deck,
+   showing an inert 2.6x clone of the panel under the cursor. */
+.magnify-lens {
+  position: fixed;
+  width: 340px;
+  height: 230px;
+  z-index: 60;
+  border: 3px solid #d7dae3;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--chassis-mid, #6d1721);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.lens-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* Its own container context at the real deck's width keeps every cqw
+     size identical to the live panel before the scale transform. */
+  container-type: inline-size;
+  transform-origin: 0 0;
+}
+
+.lens-deck {
+  width: 100%;
+  height: 100%;
+}
+
 /* "HANDMADE IN SWEDEN..." vertical print on the bare red right margin:
    reads bottom-to-top (vertical-rl rotated 180°), anchored at the panel's
    bottom-right like the hardware print. */
@@ -675,6 +706,8 @@ body {
 
 /* Buttons */
 
+/* Reference: every button is a rounded cap seated in a RECTANGULAR dark
+   housing (the switch bezel), not a floating rounded pill. */
 .panel-button {
   position: relative;
   display: inline-flex;
@@ -684,12 +717,12 @@ body {
   gap: 0.1cqw;
   border: none;
   margin: 0;
-  padding: 0.1cqw;
-  border-radius: 0.22cqw;
-  background: linear-gradient(180deg, #23262b 0%, #131519 100%);
+  padding: 0.09cqw;
+  border-radius: 0.07cqw;
+  background: linear-gradient(180deg, #191b1f 0%, #0b0c0e 100%);
   box-shadow:
-    inset 0 0.06cqw 0.06cqw rgba(255, 255, 255, 0.14),
-    0 0.12cqw 0.18cqw rgba(0, 0, 0, 0.45);
+    inset 0 0.04cqw 0.05cqw rgba(255, 255, 255, 0.08),
+    0 0.1cqw 0.16cqw rgba(0, 0, 0, 0.45);
   cursor: pointer;
   min-width: 1.7cqw;
   min-height: 1cqw;
@@ -704,10 +737,31 @@ body {
   text-transform: uppercase;
   white-space: nowrap;
   pointer-events: none;
+  /* The rounded cap riding the rectangular housing. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex: 1;
+  background: linear-gradient(180deg, #2c2f35 0%, #17191d 55%, #0f1013 100%);
+  border-radius: 0.34cqw;
+  padding: 0.08cqw 0.24cqw;
+  box-shadow:
+    inset 0 0.05cqw 0.06cqw rgba(255, 255, 255, 0.16),
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.5);
 }
 
+
+/* Reference closeup: gray caps sit on a GRAY rectangular base (a shade
+   darker than the cap), with only a hairline dark edge — not a black well.
+   The edge is a border (not box-shadow) so the lit/active shadow overrides
+   can never strip the housing. */
 .panel-button.pill {
-  background: linear-gradient(180deg, #1d2024 0%, #101215 100%);
+  background: linear-gradient(180deg, #a8a29a 0%, #857f76 100%);
+  border: 0.045cqw solid rgba(28, 25, 22, 0.55);
+  box-shadow:
+    inset 0 0.04cqw 0.06cqw rgba(255, 255, 255, 0.3),
+    0 0.08cqw 0.14cqw rgba(0, 0, 0, 0.4);
 }
 
 .panel-button.pill .panel-button-cap {
@@ -725,7 +779,14 @@ body {
   min-height: 0.42cqw;
 }
 
-/* Section-header ON buttons are dark caps on the light band (photo). */
+
+/* Section-header ON buttons are ALL BLACK — dark cap on a dark housing —
+   sitting on the light band (photo). */
+.plate-header .panel-button.pill {
+  background: linear-gradient(180deg, #191b1f 0%, #0b0c0e 100%);
+  border-color: rgba(0, 0, 0, 0.6);
+}
+
 .plate-header .panel-button.pill .panel-button-cap {
   background: linear-gradient(180deg, #3d4148 0%, #17191d 100%);
   min-width: 1.3cqw;
@@ -747,20 +808,39 @@ body {
   font-size: 0.26cqw;
 }
 
-.panel-button.red {
-  background: linear-gradient(180deg, #c8353c 0%, #8f1f27 100%);
+/* Red buttons (Store, Arp Run): a RED cap riding the same dark rectangular
+   housing as every other button. */
+.panel-button.red .panel-button-cap {
+  background: linear-gradient(180deg, #d5474e 0%, #a3242c 55%, #7e161e 100%);
+  color: #f8e6e6;
+  box-shadow:
+    inset 0 0.05cqw 0.06cqw rgba(255, 220, 220, 0.3),
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.5);
 }
 
 /* Reference: the synth menu/select buttons are BLACK caps inside a THIN
    dark-red frame (only ARP RUN is a genuinely red cap). The frame is an
    outline ring — at small sizes a thick red pad would read as a red pill. */
-.panel-button.framed {
-  background: linear-gradient(180deg, #23262b 0%, #131519 100%);
-  padding: 0.06cqw;
-  box-shadow:
-    0 0 0 0.07cqw #71222b,
-    inset 0 0.05cqw 0.08cqw rgba(255, 255, 255, 0.12),
-    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.4);
+/* .framed buttons match the standard black cap-on-housing treatment; their
+   printed labels + LED indicators live on the panel above the caps. */
+
+/* Paired '● LABEL' rows above the Oscillators/Filter button pairs. */
+.button-cell-legends {
+  display: flex;
+  justify-content: space-evenly;
+  gap: 0.1cqw;
+  width: 100%;
+  min-width: 0;
+}
+
+.button-cell-legends .tiny-led-row {
+  gap: 0.08cqw;
+  min-width: 0;
+}
+
+.button-cell-legends .legend {
+  white-space: nowrap;
+  font-size: 0.22cqw;
 }
 
 .deck-section[data-section='program'] .panel-button.red.small {
@@ -778,10 +858,24 @@ body {
   border-radius: 0.18cqw;
 }
 
+/* Rockers (Shift/Exit): the light cap rides a slightly darker warm-gray
+   rectangular base, like the other caps-on-housings. */
 .panel-button.rocker {
   min-width: 0.95cqw;
   min-height: 1.9cqw;
-  background: linear-gradient(180deg, #d9d4c9 0%, #b3ada1 45%, #837d71 100%);
+  background: linear-gradient(180deg, #aca69c 0%, #837d73 100%);
+  box-shadow:
+    inset 0 0.04cqw 0.06cqw rgba(255, 255, 255, 0.3),
+    0 0.08cqw 0.14cqw rgba(0, 0, 0, 0.4),
+    0 0 0 0.045cqw rgba(28, 25, 22, 0.55);
+}
+
+.panel-button.rocker .panel-button-cap {
+  background: linear-gradient(180deg, #ded9cf 0%, #beb8ac 45%, #948e82 100%);
+  border-radius: 0.32cqw;
+  box-shadow:
+    inset 0 0.05cqw 0.07cqw rgba(255, 250, 240, 0.55),
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.35);
 }
 
 .panel-button:active .panel-button-cap,
@@ -1208,7 +1302,10 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.2cqw;
+  /* Clear air between MASTER LEVEL and the Rotary strip, with the whole
+     column starting a touch lower (reference proportions). */
+  gap: 0.55cqw;
+  padding-top: 0.45cqw;
   min-height: 0;
 }
 
@@ -1283,9 +1380,10 @@ body {
 /* Reference: the Rotary Speaker strip is a light-outlined box printed
    directly on the RED chassis (no dark panel fill). */
 .rotary-strip {
-  /* Sized to its content: the reference outline closes just below MORPH,
-     leaving bare red chassis beneath (it never reaches the plate bottom). */
-  flex: none;
+  /* Stretches so its bottom border lines up with the Organ plate's bottom
+     edge; the outline closes there even when content ends at MORPH. */
+  flex: 1;
+  min-height: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -1459,11 +1557,23 @@ body {
   gap: 0.1cqw;
 }
 
+/* [legend | ◀ ▶ | legend] on FIXED columns so every row's arrow pair sits
+   on one shared vertical axis regardless of legend width. */
 .model-led-grid > span {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 1fr auto auto 1fr;
   align-items: center;
-  gap: 0.14cqw;
-  justify-content: center;
+  column-gap: 0.14cqw;
+}
+
+.model-led-grid > span > .legend:first-child {
+  justify-self: end;
+  text-align: right;
+}
+
+.model-led-grid > span > .legend:last-child {
+  justify-self: start;
+  text-align: left;
 }
 
 .model-led-grid .legend {
@@ -1705,7 +1815,15 @@ body {
 .panel-button.rocker.timbre-rocker {
   min-width: 0.75cqw;
   min-height: 1.75cqw;
-  background: linear-gradient(180deg, #2e3136 0%, #17191d 55%, #0c0d0f 100%);
+  background: linear-gradient(180deg, #1c1e22 0%, #0c0d0f 100%);
+}
+
+/* The timbre rocker is DARK on the hardware — dark cap on its dark base. */
+.panel-button.rocker.timbre-rocker .panel-button-cap {
+  background: linear-gradient(180deg, #33363c 0%, #1a1c20 55%, #101114 100%);
+  box-shadow:
+    inset 0 0.05cqw 0.06cqw rgba(255, 255, 255, 0.14),
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.5);
 }
 
 .timbre-title {
@@ -1769,11 +1887,23 @@ body {
   gap: 0.08cqw;
 }
 
+/* Same fixed-column treatment as .model-led-grid: the arrow pairs share
+   one vertical axis across rows. */
 .type-led-grid > span {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 1fr auto auto 1fr;
   align-items: center;
-  gap: 0.15cqw;
-  justify-content: center;
+  column-gap: 0.15cqw;
+}
+
+.type-led-grid > span > .legend:first-child {
+  justify-self: end;
+  text-align: right;
+}
+
+.type-led-grid > span > .legend:last-child {
+  justify-self: start;
+  text-align: left;
 }
 
 .type-led-grid .legend {
@@ -2021,7 +2151,9 @@ body {
 .program-top-row .group-box {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  /* Visible so the floating pill titles (which ride the top border) are
+     never clipped — MORPH ASSIGN was losing its top half. */
+  overflow: visible;
 }
 
 /* Beat the program-strip density rule's specificity: the printed LED rows
@@ -2273,11 +2405,12 @@ body {
 
 .deck-section[data-section='program'] .program-grid-box {
   /* A touch more air around the 8-button grid (reference proportions). */
-  padding: 0.34cqw 0.16cqw 0.18cqw;
+  padding: 0.42cqw 0.16cqw 0.26cqw;
+  min-height: 4.4cqw;
 }
 
 .deck-section[data-section='program'] .program-grid {
-  gap: 0.12cqw 0.14cqw;
+  gap: 0.16cqw 0.14cqw;
 }
 
 .program-grid {
@@ -2476,7 +2609,10 @@ body {
 }
 
 .synth-top {
-  flex: none;
+  /* Splits the plate height with .synth-bottom at roughly the reference's
+     60/40 so no dead band opens and neither half gets crushed. */
+  flex: 1.45;
+  min-height: 0;
   display: flex;
   gap: 0.25cqw;
 }
@@ -2500,7 +2636,7 @@ body {
 
 .vibrato-box .legend,
 .voice-box .legend {
-  font-size: 0.24cqw;
+  font-size: 0.22cqw;
   max-width: 100%;
 }
 
@@ -2631,6 +2767,32 @@ body {
 .voice-vibrato-row {
   display: flex;
   gap: 0.1cqw;
+  /* Fill the synth-top column's spare height instead of leaving a dead
+     band between the display dials and the bottom boxes. */
+  flex: 1;
+  align-items: stretch;
+  min-height: 0;
+}
+
+/* Voice: mode cluster left, GLIDE knob right (reference proportions). */
+.voice-cols {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 0.3cqw;
+  width: 100%;
+  flex: 1;
+}
+
+.voice-mode-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1cqw;
+}
+
+.voice-cols .knob-cell {
+  margin-top: 0.5cqw;
 }
 
 .voice-box,
@@ -2646,9 +2808,14 @@ body {
    button sits bottom-left. */
 .vibrato-grid {
   display: flex;
+  /* Wraps the MENU cell below the LED columns when print-size flooring
+     leaves no side-by-side slack (harness font metrics differ). */
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: center;
-  gap: 0.14cqw;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.08cqw;
   width: 100%;
 }
 
@@ -2794,11 +2961,12 @@ body {
 }
 
 .osc-box {
-  flex: 0.95;
+  /* Wide enough for the '● PITCH/SMP ● ENVELOPE' printed row at 1440. */
+  flex: 1.1;
 }
 
 .filter-box {
-  flex: 1.35;
+  flex: 1.2;
 }
 
 .lfo-box,
