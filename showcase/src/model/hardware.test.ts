@@ -103,9 +103,9 @@ describe('visual.control-inventory — normalized hardware model', () => {
     expect(getControl('perf-master-level').decorative).toBe(false)
     // The Programs cluster (32 slots + 8 Live, store flows, navigation),
     // Layer Scenes, Split, Prog View (display view modes + Preset Name,
-    // manual p. 42), Section Edit (functional through its LAYER INIT
-    // Shift pairing, manual p. 43 — there is no separate layer-init button;
-    // the plain press is truthfully inert) and all three PRESET LIBRARY
+    // manual p. 42), Section Edit (manual p. 43: the plain press latches
+    // the sticky all-Layers edit mode — iteration 31 — and its LAYER INIT
+    // Shift pairing opens the init screen) and all three PRESET LIBRARY
     // buttons (manual p. 41-42: browse/load the factory Organ/Piano/Synth
     // banks; SINGLE LAYER = Shift + press for Piano/Synth — Organ presets
     // are always whole-Section, p. 41 note) and Mon/Copy (manual p. 43:

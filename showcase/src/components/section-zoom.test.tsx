@@ -56,6 +56,19 @@ describe('ui.section-zoom', () => {
     expect(document.activeElement).toBe(inspect)
   })
 
+  it('inerts everything behind the scrim while open, and releases it on close', () => {
+    renderApp()
+    const app = document.querySelector('.stage-app')!
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Organ section' }))
+    const backdrop = document.querySelector('.section-zoom-backdrop')!
+    for (const child of Array.from(app.children)) {
+      if (child === backdrop) expect(child.hasAttribute('inert')).toBe(false)
+      else expect(child.hasAttribute('inert')).toBe(true)
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(document.querySelector('[inert]')).toBeNull()
+  })
+
   it('contains Tab focus inside the dialog, wrapping at the first/last focusable', () => {
     renderApp()
     fireEvent.click(screen.getByRole('button', { name: 'Inspect Organ section' }))

@@ -68,11 +68,28 @@ export function SectionZoomOverlay({
   }, [sectionId])
 
   // Trap initial focus on the close button; restore focus to whatever opened
-  // the overlay (the section's Inspect button) when it closes.
+  // the overlay (the section's Inspect button) when it closes. While the
+  // dialog is open, everything behind the scrim is `inert` — the Tab trap
+  // below already contains keyboard focus, but some browsers keep the deck
+  // pointer/assistive-tech reachable without this. One effect handles both
+  // so the un-inert always precedes the focus restore.
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const host = document.querySelector('.stage-app')
+    const inerted: Element[] = []
+    if (host) {
+      for (const child of Array.from(host.children)) {
+        if (!child.classList.contains('section-zoom-backdrop') && !child.hasAttribute('inert')) {
+          child.setAttribute('inert', '')
+          inerted.push(child)
+        }
+      }
+    }
     closeButtonRef.current?.focus()
-    return () => previousFocusRef.current?.focus()
+    return () => {
+      for (const el of inerted) el.removeAttribute('inert')
+      previousFocusRef.current?.focus()
+    }
   }, [])
 
   useEffect(() => {

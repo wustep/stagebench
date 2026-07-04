@@ -1136,6 +1136,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                   type="button"
                   className="legend-button"
                   aria-label="Layer Init"
+                  aria-pressed={state.layerInitEdit}
                   onClick={() => instrument.setLayerInitEdit(!state.layerInitEdit)}
                 >
                   <Legend className="dim layer-init-print">LAYER INIT</Legend>
@@ -1158,6 +1159,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                   type="button"
                   className="legend-button"
                   aria-label="Paste"
+                  aria-pressed={state.monCopy === 'paste'}
                   onClick={() => instrument.setMonCopyMode(state.monCopy === 'paste' ? null : 'paste')}
                 >
                   <Legend className="dim">PASTE ⇟</Legend>
@@ -1655,6 +1657,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                       type="button"
                       className="legend-button"
                       aria-label={`LFO Destination ${label}`}
+                      aria-pressed={lfo.destination === dest}
                       onClick={() => instrument.selectSynthLfoDestination(lfo.destination === dest ? 0 : i + 1)}
                     >
                       <span className="tiny-led-row">

@@ -567,8 +567,8 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             <b>Coverage</b> Every section is functional — keybed and pedals, Piano (all six types), Organ (all six
             models, presets, percussion), Synth (Analog + Samples, every oscillator category and filter), per-layer
             Layer Effects, Rotary, and the full Programs cluster (scenes, splits, morphs, master clock, transpose,
-            preset library, Mon/Copy). Visual-only by spec exclusion: Synth Mode&apos;s Extern position, Section
-            Edit&apos;s plain press, and Morph A.T. (no browser aftertouch).
+            preset library, Mon/Copy, Section Edit). Visual-only by spec exclusion: Synth Mode&apos;s Extern position
+            and Morph A.T. (no browser aftertouch). MIDI output (Extern section, manual ch. 9) is out of scope.
           </span>
         </span>
       </footer>
