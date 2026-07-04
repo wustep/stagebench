@@ -133,11 +133,12 @@ describe('piano.velocity-controls', () => {
     expect(master.gain.value).toBeGreaterThan(initial)
   })
 
-  it('Panic through the panel stops every voice and resets pedals', () => {
+  it('Panic through the panel (Shift + Transpose On/Set) stops every voice and resets pedals', () => {
     renderApp()
     fireEvent.pointerDown(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })
     fireEvent.keyDown(window, { code: 'Space' })
-    fireEvent.click(screen.getByRole('button', { name: 'Panic' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Transpose On/Set' }))
     expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/PANIC/)
     expect(screen.getByTestId('pedal-status').textContent).toMatch(/sustain up/)
     fireEvent.pointerUp(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })

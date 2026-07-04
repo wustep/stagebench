@@ -3608,6 +3608,35 @@ body {
   color: #4d5464;
 }
 
+/* LAYER EFFECTS (reference): the light header band is a fit-content tab and
+   the dark body starts below it — red chassis shows to the band's right
+   (the photo's stepped silhouette), so the plate chrome moves off the
+   section wrapper onto the grid itself. */
+.deck-section[data-section='effects'] .plate {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.deck-section[data-section='effects'] .plate-header {
+  margin: 0;
+  align-self: flex-start;
+  width: max-content;
+  max-width: 100%;
+  border-radius: 0.3cqw 0.3cqw 0 0;
+}
+
+.deck-section[data-section='effects'] .effects-grid {
+  background: linear-gradient(180deg, #414855 0%, var(--panel) 30%, var(--panel-dark) 100%);
+  border-radius: 0 0.35cqw 0.35cqw 0.35cqw;
+  border: 0.07cqw solid rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 0.1cqw 0.15cqw rgba(255, 255, 255, 0.12),
+    inset 0 -0.15cqw 0.25cqw rgba(0, 0, 0, 0.3);
+  padding: 0.3cqw 0.35cqw;
+}
+
 .effects-grid {
   flex: 1;
   min-height: 0;
@@ -4274,15 +4303,30 @@ body {
   overflow: auto;
   background: #100d0d;
   padding: 24px;
+  /* Center the clip when it fits; margin:auto keeps overflow scrollable. */
+  display: flex;
+}
+
+/* The clip box hugs the magnified section; the container inside it is the
+   k×-scaled VIRTUAL PANEL the clone's cqw units resolve against (sized
+   inline by SectionZoomOverlay). The section keeps its natural share of
+   that virtual panel, so the zoomed layout is the panel layout, only
+   larger — never stretched to a fixed frame. */
+.section-zoom-clip {
+  overflow: hidden;
+  margin: auto;
+  flex: none;
 }
 
 .section-zoom-container {
   container-type: inline-size;
+  /* Fallbacks for the first pre-measure frame only. */
   width: 1600px;
   height: 480px;
   display: flex;
 }
 
 .section-zoom-container .deck-section {
-  width: 100% !important;
+  width: var(--zoom-section-width, 100%) !important;
+  flex: none;
 }

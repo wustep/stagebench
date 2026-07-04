@@ -682,10 +682,10 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
   const currentSlot = activeBank[programs.current]!
   const naming = programs.naming
   // Num Pad entry pending (manual p. 44): the readout shows the page digit
-  // and a dash until the slot digit arrives, e.g. "1–".
+  // and a dash until the slot digit arrives, e.g. "A:1–".
   const programReadout =
     programs.numPadPending !== null
-      ? `${programs.numPadPending}–`
+      ? `A:${programs.numPadPending}–`
       : `${programLabel(programs.current, programs.liveMode)}${programs.dirty ? ' E' : ''}${
           programs.storePending ? ` ▸ STORE ${programLabel(reference, programs.liveMode)}?` : ''
         }`
@@ -902,11 +902,15 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               <Led color="yellow" on={state.transpose.on} />
               <Legend>ON/SET ▽</Legend>
             </span>
-            <PanelButton store={store} id="transpose-onset" className="dark tiny" />
-            {/* Declared deviation: on the reference PANIC is the Shift print
-                under the single ON/SET button; we keep a separate functional
-                panic button, blank its cap, and print PANIC beneath it. */}
-            <PanelButton store={store} id="panic" className="dark tiny" />
+            {/* ONE switch, as printed: press = transpose on/off, Shift +
+                press = PANIC (manual p. 40), press-and-hold = the dial-edit
+                latch standing in for the hardware's hold-and-turn Set. */}
+            <PanelButton
+              store={store}
+              id="transpose-onset"
+              className="dark tiny"
+              holdAction={() => instrument.setTransposeEdit(!instrument.getState().transposeEdit)}
+            />
             <Legend className="dim">PANIC</Legend>
           </GroupBox>
         </div>
@@ -1448,13 +1452,13 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                       </span>
                       <PanelButton store={store} id="arp-mode" className="dark tiny" led="green" />
                       {/* PATTERN LED stays dark: arp patterns are not
-                          implemented (Shift + this button cycles Direction
-                          instead, printed on the readout below). */}
+                          implemented (Shift + this button cycles Direction,
+                          reported on the OLED edit line and in the Arp
+                          Menu — the photo prints nothing more here). */}
                       <span className="tiny-led-row" aria-hidden="true">
                         <Led color="red" />
                         <Legend className="dim">PATTERN ▿</Legend>
                       </span>
-                      <Legend className="dim">{synth.arp.direction} ▿</Legend>
                     </span>
                     <span className="knob-cell">
                       {/* Red 1-4 arc print like the hardware's octave range. */}
@@ -1491,8 +1495,10 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                           <Led color="red" on={focused.voice.mode === 'Legato'} />
                           <Legend>LEGATO</Legend>
                         </span>
+                        {/* Shift + press cycles note priority; the new value
+                            reports on the OLED edit line (no invented panel
+                            readout — the photo prints nothing here). */}
                         <PanelButton store={store} id="voice-mode" className="dark tiny" />
-                        <Legend className="dim">PRI {focused.voice.priority} ▿</Legend>
                       </span>
                       <span className="knob-cell">
                         <Knob store={store} id="glide" className="small" />
@@ -1554,10 +1560,9 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     LED column right; knobs side by side below. */}
                 <span className="lfo-top-row">
                   <span className="lfo-wave-cell">
-                    <span className="tiny-led-row" aria-hidden="true">
-                      <Led color="green" on={lfo.destination !== null} />
-                      <Legend>{lfo.waveform.toUpperCase()}</Legend>
-                    </span>
+                    {/* Panel print only (photo): the selected waveform is
+                        reported on the OLED edit line when cycled, not by an
+                        invented panel readout. */}
                     <span className="tiny-led-row" aria-hidden="true">
                       <Led color="red" />
                       <Legend>WAVEFORM</Legend>

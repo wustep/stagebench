@@ -915,10 +915,6 @@ export class PresentationStore {
           if (shift) store.cycleLayerZone('piano', store.getState().focusedLayer, 1)
           else store.shiftOctave(store.getState().focusedLayer, 1)
           return
-        case 'panic':
-          wiring.controller.panic()
-          store.setLastEdit('PANIC — all notes off')
-          return
         case 'store':
           // STORE AS… is Shift + Store on the hardware (manual p. 41) — one
           // physical red button, the naming flow on the shifted press.
@@ -1024,9 +1020,16 @@ export class PresentationStore {
           return
         }
         case 'transpose-onset':
-          // Shift opens the dial-edit mode; otherwise TRANSPOSE ON/OFF.
-          if (shift) store.setTransposeEdit(!store.getState().transposeEdit)
-          else store.toggleTranspose()
+          // PANIC = Shift + Transp (manual p. 40); a plain press toggles
+          // TRANSPOSE ON/OFF. The dial-edit latch lives on press-and-hold
+          // (≈ the hardware's hold-Transp-and-turn-dial Set gesture),
+          // wired through the button's holdAction in sections.tsx.
+          if (shift) {
+            wiring.controller.panic()
+            store.setLastEdit('PANIC — all notes off')
+          } else {
+            store.toggleTranspose()
+          }
           return
         case 'program-1':
         case 'program-2':

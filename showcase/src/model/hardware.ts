@@ -122,9 +122,9 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'piano-model',
   'piano-octave-down',
   'piano-octave-up',
-  // Program section: Panic, Shift (Global-mode / SUSTPED / Exit modifier),
-  // and the Programs cluster (32 slots + 8 Live, store flows, navigation)
-  'panic',
+  // Program section: Shift (Global-mode / SUSTPED / Exit modifier) and the
+  // Programs cluster (32 slots + 8 Live, store flows, navigation). PANIC is
+  // Shift + Transpose On/Set (manual p. 40) — no separate physical button.
   'shift',
   // STORE AS… = Shift + Store (manual p. 41): one physical red button.
   'store',
@@ -329,7 +329,6 @@ const programControls = section('program', [
   toggle('split-onset', 'Split On/Set', 'Split'),
   push('mstclk-tap', 'Master Clock Tap/Set', 'Mst Clk'),
   toggle('transpose-onset', 'Transpose On/Set', 'Transp'),
-  push('panic', 'Panic', 'Transp'),
   push('prog-view', 'Prog View'),
   push('store', 'Store'),
   push('preset-organ', 'Preset Library Organ', 'Preset Library'),

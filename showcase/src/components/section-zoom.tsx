@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 /**
@@ -20,11 +20,16 @@ import { createPortal } from 'react-dom'
  */
 export function SectionZoomOverlay({
   title,
+  sectionId,
   onClose,
   children,
 }: {
   /** Human-readable section name for the dialog's aria-label, e.g. "Organ". */
   title: string
+  /** deck-section id ('organ' | 'piano' | …) — used to measure the section's
+   *  on-panel aspect ratio so the magnified clone keeps the panel's
+   *  proportions instead of stretching to a fixed frame. */
+  sectionId: string
   onClose: () => void
   /** The section component, rendered again at the zoomed container width. */
   children: ReactNode
@@ -32,6 +37,34 @@ export function SectionZoomOverlay({
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  // The clone must reproduce the panel section EXACTLY, only k× larger.
+  // cqw units resolve against the container width, so the container is a
+  // virtual panel scaled by k (cqWidth = k × .instrument width) while the
+  // section itself keeps its natural share of it (sectionWidth = k × its
+  // on-panel width); a clip box hides the virtual panel's unused remainder.
+  const [size, setSize] = useState<{ clipWidth: number; clipHeight: number; cqWidth: number } | null>(null)
+
+  useEffect(() => {
+    const measure = () => {
+      const section = document.querySelector(`.control-deck .deck-section[data-section='${sectionId}']`)
+      const panel = document.querySelector('.instrument')
+      if (!section || !panel) return
+      const rect = section.getBoundingClientRect()
+      const panelRect = panel.getBoundingClientRect()
+      if (!rect.width || !rect.height || !panelRect.width) return
+      const fitWidth = window.innerWidth * 0.92 - 48
+      const fitHeight = window.innerHeight * 0.78 - 48
+      // Largest fully-visible scale — but never below the magnification
+      // floor: on narrow viewports (the overlay's reason to exist) the
+      // clone must render larger than the panel and let the stage scroll,
+      // or the legends would shrink instead of magnify.
+      const k = Math.max(Math.min(fitWidth / rect.width, fitHeight / rect.height), 1000 / rect.width)
+      setSize({ clipWidth: rect.width * k, clipHeight: rect.height * k, cqWidth: panelRect.width * k })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [sectionId])
 
   // Trap initial focus on the close button; restore focus to whatever opened
   // the overlay (the section's Inspect button) when it closes.
@@ -96,7 +129,21 @@ export function SectionZoomOverlay({
           </button>
         </div>
         <div className="section-zoom-stage">
-          <div className="section-zoom-container">{children}</div>
+          <div
+            className="section-zoom-clip"
+            style={size ? { width: size.clipWidth, height: size.clipHeight } : undefined}
+          >
+            <div
+              className="section-zoom-container"
+              style={
+                size
+                  ? ({ width: size.cqWidth, height: size.clipHeight, '--zoom-section-width': `${size.clipWidth}px` } as CSSProperties)
+                  : undefined
+              }
+            >
+              {children}
+            </div>
+          </div>
         </div>
       </div>
     </div>,

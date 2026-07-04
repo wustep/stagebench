@@ -99,7 +99,6 @@ describe('visual.control-inventory — normalized hardware model', () => {
     for (const control of HARDWARE_CONTROLS.filter((c) => c.section === 'synth')) {
       expect(control.decorative, control.id).toBe(!synthFunctional.has(control.id))
     }
-    expect(getControl('panic').decorative).toBe(false)
     expect(getControl('perf-master-level').decorative).toBe(false)
     // The Programs cluster (32 slots + 8 Live, store flows, navigation),
     // Layer Scenes, Split, Prog View (display view modes + Preset Name,
@@ -187,7 +186,10 @@ describe('visual.control-inventory — normalized hardware model', () => {
     expect(program.some((c) => c.id === 'live-mode')).toBe(true)
     expect(program.filter((c) => c.group === 'Program')).toHaveLength(8)
     expect(program.filter((c) => c.group === 'Morph Assign')).toHaveLength(3)
-    expect(program.some((c) => c.id === 'panic')).toBe(true)
+    // PANIC is Shift + Transpose On/Set (manual p. 40) — the photo-measured
+    // surface has no separate panic button.
+    expect(program.some((c) => c.id === 'panic')).toBe(false)
+    expect(program.some((c) => c.id === 'transpose-onset')).toBe(true)
   })
 
   it('has dense synth groups: mode, arp, voice, vibrato, LFO, oscillators, filter, amp, unison, three layers', () => {

@@ -215,12 +215,13 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     fireEvent.pointerUp(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })
   })
 
-  it('the functional Panic button DOES stop playing voices (Phase 2 behavior)', () => {
+  it('functional PANIC (Shift + Transpose On/Set, manual p. 40) DOES stop playing voices', () => {
     const { getContext } = renderApp()
     fireEvent.pointerDown(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })
     const context = getContext()!
     expect(context.bufferSources().some((s) => s.stopped)).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Panic' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Transpose On/Set' }))
     expect(context.bufferSources().every((s) => s.stopped)).toBe(true)
     fireEvent.pointerUp(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })
   })

@@ -101,7 +101,7 @@ describe('programs.mon-copy — copy and paste (store)', () => {
     const source = store.getState().programs.bank[1]!
     store.setMonCopyMode('copy')
     store.monCopyProgramPress(1) // slot 1.2 of the current page
-    expect(store.getState().lastEdit).toBe(`Copied: 1.2 ${source.name}`)
+    expect(store.getState().lastEdit).toBe(`Copied: A:12 ${source.name}`)
     store.setMonCopyMode('paste')
     store.monCopyProgramPress(4) // slot 1.5
     const s = store.getState()
@@ -110,7 +110,7 @@ describe('programs.mon-copy — copy and paste (store)', () => {
     expect(s.programs.bank[4]!.snapshot).not.toBe(source.snapshot) // its own clone
     expect(s.programs.current).toBe(4) // loaded there, like Store
     expect(s.programs.dirty).toBe(false)
-    expect(s.lastEdit).toBe(`Pasted → 1.5 ${source.name}`)
+    expect(s.lastEdit).toBe(`Pasted → A:15 ${source.name}`)
   })
 
   it('a paste press with an empty clipboard is refused truthfully', () => {

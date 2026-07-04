@@ -343,14 +343,14 @@ describe('programs.navigation — buttons, pages, dial, list view', () => {
     expect(store.getState().programs.current).toBe(4)
     store.shiftProgramPage(1)
     expect(store.getState().programs.current).toBe(12) // page 2, same button
-    expect(store.currentProgramLabel()).toBe('2.5')
+    expect(store.currentProgramLabel()).toBe('A:25')
     store.shiftProgramPage(1)
     store.shiftProgramPage(1)
     store.shiftProgramPage(1) // clamped at page 4
-    expect(store.currentProgramLabel()).toBe('4.5')
+    expect(store.currentProgramLabel()).toBe('A:45')
     store.selectProgramButton(0)
-    expect(store.currentProgramLabel()).toBe('4.1')
-    expect(programLabel(31, false)).toBe('4.8')
+    expect(store.currentProgramLabel()).toBe('A:41')
+    expect(programLabel(31, false)).toBe('A:48')
     expect(programLabel(3, true)).toBe('L4')
   })
 
@@ -365,14 +365,14 @@ describe('programs.navigation — buttons, pages, dial, list view', () => {
 
   it('the panel shows program number, name, E flag and the Shift list view', () => {
     renderApp()
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('1.1')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:11')
     expect(screen.getByTestId('oled-name-line').textContent).toBe('Royal Grand')
     // An edit raises the truthful E flag…
     fireEvent.click(screen.getByRole('button', { name: 'Unison Select' }))
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('1.1 E')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:11 E')
     // …and a program change clears it and loads the neighbor.
     fireEvent.click(screen.getByRole('button', { name: 'Program 2' }))
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('1.2')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:12')
     expect(screen.getByTestId('oled-name-line').textContent).toBe('Tine Stack')
     // Shift + dial opens the numeric list view; dropping Shift closes it.
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
@@ -393,7 +393,7 @@ describe('programs.navigation — buttons, pages, dial, list view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Program 3' }))
     expect(screen.getByTestId('oled-program-line').textContent).toBe('L3')
     fireEvent.click(liveButton)
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('1.1')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:11')
   })
 })
 
@@ -407,7 +407,7 @@ describe('programs.numpad — Shift + Live Mode two-digit selection (manual p. 4
     expect(store.getState().programs.current).toBe(0) // nothing selected yet
     store.selectProgramButton(4) // digit 5 = slot -> 2.5
     expect(store.getState().programs.numPadPending).toBeNull()
-    expect(store.currentProgramLabel()).toBe('2.5')
+    expect(store.currentProgramLabel()).toBe('A:25')
   })
 
   it('ignores an invalid first digit — this bank has 4 pages, so 5-8 name no page', () => {
@@ -451,14 +451,14 @@ describe('programs.numpad — Shift + Live Mode two-digit selection (manual p. 4
     expect(liveButton.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' })) // drop Shift
     fireEvent.click(screen.getByRole('button', { name: 'Program 3' }))
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('3–')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:3–')
     fireEvent.click(screen.getByRole('button', { name: 'Program 2' }))
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('3.2')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:32')
     // Shift/Exit clears a fresh pending digit instead of latching Shift.
     fireEvent.click(screen.getByRole('button', { name: 'Program 1' }))
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('1–')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:1–')
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
-    expect(screen.getByTestId('oled-program-line').textContent).toBe('3.2')
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('A:32')
     // Plain Live Mode clicks keep working exactly as before.
     fireEvent.click(liveButton)
     expect(liveButton.getAttribute('aria-pressed')).toBe('true')
@@ -502,8 +502,8 @@ describe('programs.progview — display view modes and Preset Name (manual p. 42
     expect(screen.getByTestId('oled-config-organ').textContent).toContain('B3')
     expect(screen.getByTestId('oled-config-synth').textContent).toContain('Saw')
     fireEvent.click(progViewButton) // mode 3: the current page's 8 programs
-    expect(screen.getByTestId('oled-page-list-0').textContent).toContain('▸ 1.1 Royal Grand')
-    expect(screen.getByTestId('oled-page-list-7').textContent).toContain('1.8')
+    expect(screen.getByTestId('oled-page-list-0').textContent).toContain('▸ A:11 Royal Grand')
+    expect(screen.getByTestId('oled-page-list-7').textContent).toContain('A:18')
     fireEvent.click(progViewButton) // back to mode 0
     expect(screen.getByTestId('oled-piano-line')).toBeInTheDocument()
   })

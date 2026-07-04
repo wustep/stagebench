@@ -897,9 +897,11 @@ function baseInstrumentState(): InstrumentState {
   }
 }
 
-/** Display label for a slot: page.button (1.1 … 4.8) or L1 … L8. */
+/** Display label for a slot in the hardware's bank:page-slot format
+ *  (manual p. 13/44: e.g. "A:11" … "A:48"). This build carries one bank, so
+ *  the letter is always A; Live slots read L1 … L8. */
 export function programLabel(index: number, liveMode: boolean): string {
-  return liveMode ? `L${index + 1}` : `${Math.floor(index / 8) + 1}.${(index % 8) + 1}`
+  return liveMode ? `L${index + 1}` : `A:${Math.floor(index / 8) + 1}${(index % 8) + 1}`
 }
 
 /** Characters available to the STORE AS naming dial. */

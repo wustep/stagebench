@@ -1,5 +1,5 @@
-import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, fireEvent, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
 import { InstrumentStore } from './instrument'
@@ -54,21 +54,36 @@ describe('system.clock-transpose — panel', () => {
     expect(screen.queryByTestId('oled-clock-line')).toBeNull()
   })
 
-  it('the TRANSP button toggles and lights; Shift opens the editor', () => {
+  it('the TRANSP button toggles and lights; holding opens the editor; Shift+press is PANIC', () => {
     renderApp()
     const button = screen.getByRole('button', { name: 'Transpose On/Set' })
     fireEvent.click(button)
     expect(button.getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Transpose On \+0 st/)
-    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
-    fireEvent.click(shift)
-    fireEvent.click(button)
+    // Press-and-hold opens the dial editor (the hardware's hold-Transp-and-
+    // turn-dial Set gesture); the swallowed release must not toggle.
+    vi.useFakeTimers()
+    try {
+      fireEvent.keyDown(button, { key: 'Enter' })
+      act(() => vi.advanceTimersByTime(500))
+      fireEvent.keyUp(button, { key: 'Enter' })
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(button.getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByTestId('oled-transpose-line')).toBeTruthy()
     const dial = screen.getByRole('slider', { name: 'Program Dial' })
     fireEvent.keyDown(dial, { key: 'End' })
     expect(screen.getByTestId('oled-transpose-line').textContent).toMatch(/\+6 st/)
+    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
     fireEvent.click(shift)
     expect(screen.queryByTestId('oled-transpose-line')).toBeNull()
+    // PANIC = Shift + Transp (manual p. 40): all-notes-off, transpose state
+    // untouched.
+    fireEvent.click(shift)
+    fireEvent.click(button)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/PANIC/)
+    expect(button.getAttribute('aria-pressed')).toBe('true')
   })
 })
 

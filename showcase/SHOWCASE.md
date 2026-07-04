@@ -1562,3 +1562,30 @@ candidate for a canonical hold-to-set rework.
   MOD 1 box edge it overlaps). The red strip keeps its `FX Focus` group
   label for accessibility; the tab itself is decorative print.
 - Gates: typecheck, lint, verify:layout 12/12, tests 494/494.
+
+### 38 — Canonical pass: A:11 readout, Shift+Transp PANIC, print cleanups, true-aspect magnifier (2026-07-04)
+
+- **Program readout speaks the hardware's format**: `A:11` … `A:48`
+  (bank:page-slot, manual p. 13/44) everywhere programLabel reaches — OLED
+  readout, page lists, store prompts — and the Num Pad pending state prints
+  `A:1–` like the manual's example. One bank carried, so the letter is
+  always A; Live stays L1–L8.
+- **PANIC is canonical**: Shift + Transpose On/Set fires all-notes-off
+  (manual p. 40) and the invented second button is gone from the surface
+  and the hardware model (its tests updated). The transpose dial-edit
+  latch moved to press-and-hold on the same switch — the closest gesture
+  to the hardware's hold-Transp-and-turn-dial Set.
+- **Invented readouts removed** (photo prints nothing there): LFO waveform
+  name, VOICE `PRI <value> ▿`, and the arp direction line. All three
+  already report canonically on the OLED edit line when cycled; iteration
+  32 precedent.
+- **LAYER EFFECTS band is the photo's stepped tab**: fit-content light
+  band (title + ON) with red chassis showing to its right; the dark body
+  chrome moved onto the effects grid (rounded top-right, square top-left
+  under the band). FX FOCUS tab still hangs from the band's left edge.
+- **Magnifier reproduces the panel at true aspect**: the zoom overlay now
+  measures the section's on-panel box and renders the clone as its natural
+  share of a k×-scaled virtual panel (clip box hides the remainder) —
+  no more stretch-to-1600×480; a 1000px magnification floor keeps the
+  narrow-viewport case (its reason to exist) large and scrollable.
+- Gates: typecheck, lint, verify:layout 12/12, tests 494/494.

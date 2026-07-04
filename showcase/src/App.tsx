@@ -405,7 +405,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         </div>
       </div>
       {zoomedSection && (
-        <SectionZoomOverlay title={ZOOM_TITLES[zoomedSection]} onClose={() => setZoomedSection(null)}>
+        <SectionZoomOverlay title={ZOOM_TITLES[zoomedSection]} sectionId={zoomedSection} onClose={() => setZoomedSection(null)}>
           {zoomedSection === 'organ' && <OrganSection store={store} instrument={instrument} />}
           {zoomedSection === 'piano' && <PianoSection store={store} instrument={instrument} engine={engine} />}
           {zoomedSection === 'synth' && <SynthSection store={store} instrument={instrument} />}
