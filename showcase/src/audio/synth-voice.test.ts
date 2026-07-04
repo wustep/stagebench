@@ -2,7 +2,7 @@ import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
-import { InstrumentStore, mappings } from '../state/instrument'
+import { InstrumentStore, mappings, SYNTH_WAVEFORMS } from '../state/instrument'
 import { PianoEngine } from './engine'
 
 /**
@@ -65,6 +65,31 @@ describe('synth.voice — Mono/Legato single-voice behavior', () => {
     expect(glideEvents.length).toBeGreaterThan(0) // setTargetAtTime portamento, not a step
 
     engine.noteOff(64)
+    engine.noteOff(60)
+  })
+
+  it('a legato glide keeps each source’s frequency ratio: the Sub Osc stays an octave down (audit B2)', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    const subIndex = SYNTH_WAVEFORMS.findIndex((w) => w.name === 'Saw Sub')
+    store.selectSynthWaveform(subIndex)
+    store.cycleSynthVoiceMode() // Poly -> Mono
+    store.cycleSynthVoiceMode() // Mono -> Legato
+    store.setSynthGlide(80)
+
+    const before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    const voiceOscillators = voiceSourcesFor(context, before)
+    engine.noteOn(72, 0.8) // overlapped: glide up an octave
+    const targets = voiceOscillators
+      .map((o) => o.frequency.events.filter((e) => e.kind === 'target').at(-1)?.value)
+      .filter((v): v is number => typeof v === 'number')
+      .sort((a, b) => a - b)
+    expect(targets).toHaveLength(2) // main + sub both glide
+    // The sub's glide target is exactly half the main oscillator's.
+    expect(targets[0]!).toBeCloseTo(targets[1]! / 2, 6)
+    engine.noteOff(72)
     engine.noteOff(60)
   })
 
@@ -497,6 +522,47 @@ describe('synth.arp — deterministic scheduler', () => {
     engine.noteOff(60)
   })
 
+  it('keys pressed WHILE Gate runs still sound (Gate gates played notes, never swallows them)', () => {
+    const { engine, store, timers, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setArpRate(127)
+    store.cycleArpMode() // Arp -> Poly
+    store.cycleArpMode() // Poly -> Gate
+    store.toggleArpRun()
+    timers.advance(60000 / 300 + 1)
+    const before = context.nodes.length
+    engine.noteOn(62, 0.8) // pressed while the gate is already running
+    expect(voiceSourcesFor(context, before).length).toBeGreaterThan(0)
+    expect(engine.isNoteActive(62)).toBe(true)
+    engine.noteOff(62)
+    expect(engine.isNoteActive(62)).toBe(false)
+  })
+
+  it('the gate pulses a dedicated stage — the amp envelope’s scheduled ramps survive (audit B5)', () => {
+    const { engine, store, timers, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setArpRate(127)
+    store.cycleArpMode()
+    store.cycleArpMode() // Gate
+    store.setSynthAmpEnvelope({ decay: 60 })
+    const before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    // The voice's envelope gain: first gain node created for the press.
+    const created = (context.nodes as unknown[]).slice(before)
+    const envelopeGain = created.find((n) => (n as { kind?: string }).kind === 'gain') as {
+      gain: { events: Array<{ kind: string }> }
+    }
+    const scheduled = envelopeGain.gain.events.length
+    store.toggleArpRun()
+    timers.advance(60000 / 300 + 1)
+    timers.advance(60000 / 300 + 1)
+    // Gate pulses never cancel anything on the envelope gain.
+    expect(envelopeGain.gain.events.slice(scheduled).filter((e) => e.kind === 'cancel')).toHaveLength(0)
+    engine.noteOff(60)
+  })
+
   it('Poly mode starts one new voice per held note per step, vs Arp mode\'s one note total', () => {
     const { engine, store, timers, getContext } = makeSystem()
     engine.ensureStarted()
@@ -553,17 +619,44 @@ describe('synth.arp — deterministic scheduler', () => {
     engine.noteOff(60)
   })
 
-  it('ARP RUN off stops the scheduler: pending timer count returns to baseline', () => {
-    const { engine, store, timers } = makeSystem()
+  it('ARP RUN off stops the scheduler: no further steps sound', () => {
+    const { engine, store, timers, getContext } = makeSystem()
     engine.ensureStarted()
+    const context = getContext()!
     store.setArpRate(127)
     store.toggleArpRun()
     engine.noteOn(60, 0.8)
     timers.advance(60000 / 300 + 1)
     expect(timers.pendingCount()).toBeGreaterThan(0)
     store.toggleArpRun()
+    // Run-off releases the arp's voice and re-sounds the held key normally
+    // (its release/cleanup timers may be pending) — but the STEP timer is
+    // gone: advancing far past several step intervals starts no arp notes.
+    timers.advance(60000) // flush every pending cleanup
+    const before = context.nodes.length
+    timers.advance((60000 / 300) * 8)
+    expect(voiceSourcesFor(context, before)).toHaveLength(0)
     expect(timers.pendingCount()).toBe(0)
     engine.noteOff(60)
+  })
+
+  it('ARP RUN off releases the scheduler’s sounding note and re-sounds held keys (audit B3)', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.setArpRate(127)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    timers.advance(60000 / 300 + 1) // one arp step is sounding
+    store.toggleArpRun()
+    // Default Poly voice mode: both held keys sound normally again, and
+    // nothing hangs when the keys lift.
+    expect(engine.isNoteActive(60)).toBe(true)
+    expect(engine.isNoteActive(64)).toBe(true)
+    engine.noteOff(60)
+    engine.noteOff(64)
+    expect(engine.isNoteActive(60)).toBe(false)
+    expect(engine.isNoteActive(64)).toBe(false)
   })
 })
 

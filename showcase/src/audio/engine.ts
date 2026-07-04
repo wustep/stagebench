@@ -97,7 +97,12 @@ export type AllNotesOffReason = 'blur' | 'midi-disconnect' | 'unmount' | 'input-
 
 type VoiceSource =
   | { kind: 'sample'; node: AudioBufferSourceNodeLike; baseRate: number }
-  | { kind: 'synth'; node: OscillatorNodeLike; baseDetune: number }
+  /** `freqRatio` is the source's fixed multiple of the voice's fundamental
+   *  (1 unless set): the Sub Osc square runs at 0.5x, FM-I's modulator at
+   *  1.414x. A legato glide retargets `fundamental * freqRatio`, never the
+   *  raw fundamental — gliding every source to the same Hz used to slam the
+   *  sub up an octave and collapse FM-I's inharmonic ratio to 1:1. */
+  | { kind: 'synth'; node: OscillatorNodeLike; baseDetune: number; freqRatio?: number }
 
 export type SectionId = 'piano' | 'organ' | 'synth'
 /** A layer id valid for the section it's paired with: A/B for piano and
@@ -187,6 +192,12 @@ interface Voice {
   organLive: OrganVoiceLive | null
   synthLive: SynthVoiceLive
   synthFilter: SynthVoiceFilter | null
+  /** True while the arp scheduler (not a key press) is sounding this voice —
+   *  ARP RUN off releases exactly these. */
+  arpDriven: boolean
+  /** Synth voices only: a dedicated post-filter gain the Gate mode pulses,
+   *  so gating never cancels the amp envelope's own scheduled ramps. */
+  gateGain: GainNodeLike | null
 }
 
 /** Numeric voice-map key — section/layer/midi packed into one small integer
@@ -1599,7 +1610,10 @@ export class PianoEngine {
     const held = this.synthHeld[layer]
     const alreadyHeld = held.includes(midi)
     if (!alreadyHeld) held.push(midi)
-    if (this.state.synth.arp.run) return // the arp scheduler sounds notes itself
+    // Arp/Poly modes: the scheduler sounds notes itself. Gate mode does NOT
+    // start notes — it rhythmically gates normally-played voices (manual
+    // p. 35), so key presses must keep sounding voices while it runs.
+    if (this.state.synth.arp.run && this.state.synth.arp.mode !== 'Gate') return
 
     const voiceState = this.state.synth.layers[layer].voice
     if (voiceState.mode === 'Poly') {
@@ -1651,9 +1665,18 @@ export class PianoEngine {
     const now = context.currentTime
     for (const source of voice.sources) {
       if (source.kind !== 'synth') continue
-      // FM-H's modulator tracks the carrier 1:1 (algorithm A); every source
-      // here (including unison duplicates) glides at the same rate.
-      source.node.frequency.setTargetAtTime(targetFrequency, now, timeConstant)
+      // Every source glides at the same rate but toward its OWN multiple of
+      // the fundamental (freqRatio: FM modulators keep their ratio, the Sub
+      // Osc square stays an octave down; unison duplicates ride at 1).
+      source.node.frequency.setTargetAtTime(targetFrequency * (source.freqRatio ?? 1), now, timeConstant)
+    }
+    // FM voices scale their modulation index by the carrier's pitch — track
+    // the glide so a later Osc Ctrl retarget doesn't recompute the index for
+    // the pre-glide note.
+    const live = voice.synthLive
+    if (live?.kind === 'fm') {
+      live.carrierFrequency = targetFrequency
+      rampTo(live.modGain, fmModulationIndex(layerState.oscCtrl, targetFrequency), now)
     }
     voice.midi = toMidi
     this.voices.delete(key)
@@ -1687,9 +1710,47 @@ export class PianoEngine {
       this.boundary.timers.clearTimeout(this.arpTimer)
       this.arpTimer = null
     }
-    // Panic (Off) clears the arp's own sounding note as well as the held
-    // set it was cycling through, matching the spec's "Panic/hold-off clears".
     this.arpSoundingMidi = { A: null, B: null, C: null }
+    const context = this.context
+    if (!context) return
+    const now = context.currentTime
+    // Release every voice the scheduler was sounding — a run-off between
+    // step boundaries otherwise leaves the last arp note hanging until its
+    // key lifts (or forever under KB HOLD) — and re-open any half-closed
+    // gate stages so normally-played voices aren't stuck dimmed.
+    for (const voice of [...this.voices.values()]) {
+      if (voice.section !== 'synth') continue
+      if (voice.arpDriven) {
+        this.releaseVoice(voice, QUICK_RELEASE_SECONDS)
+      } else if (voice.gateGain) {
+        rampTo(voice.gateGain.gain, 1, now)
+      }
+    }
+    // Held keys (physically down or KB-HOLD-latched) go back to sounding
+    // normally, exactly as lifting the arp on the hardware leaves the held
+    // chord ringing — through the normal per-mode dispatch so Poly starts
+    // every note and Mono/Legato sounds only the priority winner. Gate mode
+    // never owned the voices (key presses started them), so nothing to
+    // re-sound there.
+    if (this.state.synth.arp.mode === 'Gate') return
+    for (const layer of SYNTH_LAYER_IDS) {
+      const layerState = this.state.synth.layers[layer]
+      if (!layerState.enabled || !this.state.synth.sectionOn) continue
+      this.synthSoundingMidi[layer] = null
+      if (layerState.voice.mode === 'Poly') {
+        for (const midi of this.synthHeld[layer]) {
+          const zoneGain = zoneGainFor(this.state.split, layerState.zone, midi)
+          if (zoneGain > 0.005) this.startSynthVoice(layer, midi, 0.8, zoneGain)
+        }
+      } else if (this.synthHeld[layer].length > 0) {
+        const held = this.synthHeld[layer]
+        const priority = layerState.voice.priority
+        const winner =
+          priority === 'Low' ? Math.min(...held) : priority === 'High' ? Math.max(...held) : held[held.length - 1]!
+        const zoneGain = zoneGainFor(this.state.split, layerState.zone, winner)
+        if (zoneGain > 0.005) this.triggerSynthMonoVoice(layer, winner, 0.8, zoneGain)
+      }
+    }
   }
 
   private nextArpRandom(): number {
@@ -1765,7 +1826,7 @@ export class PianoEngine {
       if (arp.mode === 'Poly') {
         for (const midi of held) {
           const zoneGain = zoneGainFor(this.state.split, zone, midi)
-          if (zoneGain > 0.005) this.startSynthVoice(layer, midi, 0.8, zoneGain)
+          if (zoneGain > 0.005) this.startSynthVoice(layer, midi, 0.8, zoneGain).arpDriven = true
         }
         continue
       }
@@ -1790,7 +1851,7 @@ export class PianoEngine {
       }
       const zoneGain = zoneGainFor(this.state.split, zone, midi)
       if (zoneGain > 0.005) {
-        this.startSynthVoice(layer, midi, 0.8, zoneGain)
+        this.startSynthVoice(layer, midi, 0.8, zoneGain).arpDriven = true
         this.arpSoundingMidi[layer] = midi
       }
     }
@@ -1813,11 +1874,14 @@ export class PianoEngine {
     const onFraction = 0.5 + hardness * 0.3 // harder = shorter, punchier gate-on
     for (const voice of this.voices.values()) {
       if (voice.section !== 'synth' || voice.layer !== layer) continue
-      const peak = voice.gain.gain.value
-      voice.gain.gain.cancelScheduledValues(now)
-      voice.gain.gain.setValueAtTime(peak, now)
-      voice.gain.gain.setTargetAtTime(peak * floor, now, stepSeconds * 0.08)
-      voice.gain.gain.setTargetAtTime(peak, now + stepSeconds * onFraction, stepSeconds * 0.08)
+      // Pulse the dedicated gate stage between 1 and the hardness floor; the
+      // amp envelope's own gain keeps every ramp it scheduled at note-on.
+      const gate = voice.gateGain
+      if (!gate) continue
+      gate.gain.cancelScheduledValues(now)
+      gate.gain.setValueAtTime(1, now)
+      gate.gain.setTargetAtTime(floor, now, stepSeconds * 0.08)
+      gate.gain.setTargetAtTime(1, now + stepSeconds * onFraction, stepSeconds * 0.08)
     }
   }
 
@@ -1856,6 +1920,8 @@ export class PianoEngine {
       organLive: null,
       synthLive: null,
       synthFilter: null,
+      arpDriven: false,
+      gateGain: null,
     }
     voice.section = section
     voice.layer = layer
@@ -1871,6 +1937,8 @@ export class PianoEngine {
     voice.organLive = null
     voice.synthLive = null
     voice.synthFilter = null
+    voice.arpDriven = false
+    voice.gateGain = null
     voice.ownedNodes.push(gain)
     return voice
   }
@@ -2283,7 +2351,12 @@ export class PianoEngine {
         carrier.start(now)
         ownedNodes.push(modGain)
         sources.push({ kind: 'synth', node: carrier, baseDetune: 0 })
-        sources.push({ kind: 'synth', node: modulator, baseDetune: 0 })
+        sources.push({
+          kind: 'synth',
+          node: modulator,
+          baseDetune: 0,
+          freqRatio: wave.category === 'FM-I' ? FM_INHARMONIC_RATIO : 1,
+        })
         synthLive = { kind: 'fm', modGain: modGain.gain, carrierFrequency: frequency, oscCtrlParam: modGain.gain }
         break
       }
@@ -2311,7 +2384,7 @@ export class PianoEngine {
         subGain.connect(gain)
         sub.start(now)
         ownedNodes.push(subGain)
-        sources.push({ kind: 'synth', node: sub, baseDetune: 0 })
+        sources.push({ kind: 'synth', node: sub, baseDetune: 0, freqRatio: 0.5 })
         synthLive = { kind: 'sub', subGain: subGain.gain, oscCtrlParam: subGain.gain }
         break
       }
@@ -2549,7 +2622,15 @@ export class PianoEngine {
     for (const osc of oscillatorNodes) vibratoRamp.connect(osc.detune)
     for (const scaler of pitchScalers) vibratoRamp.connect(scaler)
 
-    filterOut.connect(channel.voiceBus)
+    // Dedicated gate stage: the arp's Gate mode pulses THIS gain, never the
+    // amp-envelope gain — cancelScheduledValues on the envelope gain used to
+    // freeze a decaying voice at whatever level the first pulse sampled.
+    const gateGain = context.createGain()
+    gateGain.gain.value = 1
+    filterOut.connect(gateGain)
+    gateGain.connect(channel.voiceBus)
+    ownedNodes.push(gateGain)
+    voice.gateGain = gateGain
     voice.synthLive = synthLive
     voice.synthFilter = synthFilter
     this.voices.set(key, voice)
