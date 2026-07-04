@@ -1589,3 +1589,36 @@ candidate for a canonical hold-to-set rework.
   no more stretch-to-1600×480; a 1000px magnification floor keeps the
   narrow-viewport case (its reason to exist) large and scrollable.
 - Gates: typecheck, lint, verify:layout 12/12, tests 494/494.
+
+### 39 — Uniform switch pass, program-strip air, cutout + arc polish (2026-07-04)
+
+User-directed round, verified control-by-control in the DOM:
+
+- **Every squircle-in-rectangle switch is now EXACTLY one size**: 82
+  horizontal at 1.50 × 0.92cqw and 14 vertical at 0.92 × 1.50 (measured
+  live across the whole deck; was ten size buckets from 0.55 × 1.05 to
+  1.60 × 0.92). Deleted the per-section shrink rules (piano acoustics/
+  header/layer pills, organ percussion split, morph strip, program grid,
+  synth/organ layer pills, fx ON rockers, Shift/Exit 1.9-tall rockers,
+  vib-select). The cap keeps a wider housing reveal along the switch's
+  short ends (sides for horizontal, top/bottom for vertical).
+- **Program section unsquished**: the grid's full-size switches replace the
+  cell-squeezed ones (the box had divided them down); PROGRAM 1–8 rows now
+  read like the photo. The piano header — the narrowest band — takes
+  proportionally smaller print instead of shrinking its ON switch.
+- **Section-width sanity check against the 73 photo** (band-scan of
+  `nord-stage-4-73.jpg`): the rendered fractions (piano ≈ 8%, program
+  ≈ 12.5%) match the photo; the spec's coarse `horizontalSections`
+  (piano 0.15, program 0.09) are the outlier. variant.ts stays.
+- **Cutout titles have no outline** (user direction); the FX FOCUS tab
+  re-anchored to the effects grid's top-left corner (same look, no
+  scroll-overflow false positive).
+- **OSC box prints match the photo**: ● ENV TO PITCH ▿ / ● VELOCITY ▿ as
+  separate LED rows under the buttons (was an invented combined readout
+  line with state dots).
+- **MASTER LEVEL wears the photo's OPEN arc** (conic ring with a bottom
+  gap, was a closed circle); ROTARY SPEAKER's ON ● print right-aligned to
+  the box corner like the photo.
+- Confirmed already-clean: no waveform-name readout above WAVEFORM (gone
+  since iteration 38), drawbar cap colors, A:11 readout, stepped LFX band.
+- Gates: typecheck, lint, verify:layout 12/12, tests 494/494.

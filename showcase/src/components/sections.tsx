@@ -1630,9 +1630,19 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <PanelButton store={store} id="osc-pitch-smp" className="framed tiny" />
                   <PanelButton store={store} id="osc-envelope" className="framed tiny" />
                 </span>
-                <Legend className={`dim ${oscEnvelope.toPitch ? 'lit' : ''}`}>
-                  ENV TO PITCH {oscEnvelope.toPitch ? '●' : '○'} · VELOCITY {oscEnvelope.velocity ? '●' : '○'}
-                </Legend>
+                {/* Reference print: ● ENV TO PITCH ▿ under the left button,
+                    ● VELOCITY ▿ under the right — separate LED rows, not a
+                    combined readout line. */}
+                <span className="button-cell-legends" aria-hidden="true">
+                  <span className="tiny-led-row">
+                    <Led color="red" on={oscEnvelope.toPitch} />
+                    <Legend className="dim">ENV TO PITCH ▿</Legend>
+                  </span>
+                  <span className="tiny-led-row">
+                    <Led color="red" on={oscEnvelope.velocity} />
+                    <Legend className="dim">VELOCITY ▿</Legend>
+                  </span>
+                </span>
                 <span className="knob-pair">
                   <span className="knob-cell">
                     {/* The live value reads out on the display's OSC CTRL
