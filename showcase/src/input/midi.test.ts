@@ -9,6 +9,8 @@ function makeHandlers(): MidiHandlers & {
   sostenuto: ReturnType<typeof vi.fn>
   soft: ReturnType<typeof vi.fn>
   cleanup: ReturnType<typeof vi.fn>
+  wheel: ReturnType<typeof vi.fn>
+  bend: ReturnType<typeof vi.fn>
 } {
   const on = vi.fn()
   const off = vi.fn()
@@ -16,6 +18,8 @@ function makeHandlers(): MidiHandlers & {
   const sostenuto = vi.fn()
   const soft = vi.fn()
   const cleanup = vi.fn()
+  const wheel = vi.fn()
+  const bend = vi.fn()
   return {
     on,
     off,
@@ -23,11 +27,15 @@ function makeHandlers(): MidiHandlers & {
     sostenuto,
     soft,
     cleanup,
+    wheel,
+    bend,
     noteOn: on,
     noteOff: off,
     setSustain: sustain,
     setSostenuto: sostenuto,
     setSoft: soft,
+    setModWheel: wheel,
+    setPitchBend: bend,
     onDisconnectCleanup: cleanup,
   }
 }
@@ -108,6 +116,38 @@ describe('piano.basic-inputs — Web MIDI boundary', () => {
     expect(handlers.soft).toHaveBeenLastCalledWith(true)
     port.emit([0xb0, 67, 0])
     expect(handlers.soft).toHaveBeenLastCalledWith(false)
+  })
+
+  it('maps CC1 mod wheel to a continuous 0..1 value', async () => {
+    const access = new FakeMidiAccess()
+    const handlers = makeHandlers()
+    const manager = new MidiInputManager(handlers)
+    await manager.start(fakeMidiBoundary(access))
+    const port = new FakePort('p1', 'Test Piano 73')
+    access.addPort(port)
+    port.emit([0xb0, 1, 127])
+    expect(handlers.wheel).toHaveBeenLastCalledWith(1)
+    port.emit([0xb0, 1, 64])
+    expect(handlers.wheel).toHaveBeenLastCalledWith(64 / 127)
+    port.emit([0xb0, 1, 0])
+    expect(handlers.wheel).toHaveBeenLastCalledWith(0)
+  })
+
+  it('maps 14-bit pitch bend to -1..1 with an exact center and full-scale ends', async () => {
+    const access = new FakeMidiAccess()
+    const handlers = makeHandlers()
+    const manager = new MidiInputManager(handlers)
+    await manager.start(fakeMidiBoundary(access))
+    const port = new FakePort('p1', 'Test Piano 73')
+    access.addPort(port)
+    port.emit([0xe0, 0x00, 0x40]) // center: 8192
+    expect(handlers.bend).toHaveBeenLastCalledWith(0)
+    port.emit([0xe0, 0x7f, 0x7f]) // 16383: full up
+    expect(handlers.bend).toHaveBeenLastCalledWith(1)
+    port.emit([0xe0, 0x00, 0x00]) // 0: full down
+    expect(handlers.bend).toHaveBeenLastCalledWith(-1)
+    port.emit([0xe0, 0x00, 0x60]) // 12288: half up
+    expect(handlers.bend).toHaveBeenLastCalledWith(4096 / 8191)
   })
 
   it('ignores notes outside the keybed range and malformed messages', async () => {

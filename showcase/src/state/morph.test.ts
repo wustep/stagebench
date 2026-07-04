@@ -248,3 +248,48 @@ describe('morph.assignments — id-encoded destinations resolve their own layer 
     expect(store.morphLayerFor('piano-level-a')).toBe('A')
   })
 })
+
+describe('morph.assignments — MIDI CC1 wheel and pitch bend (audit D1)', () => {
+  it('MIDI CC1 drives the Wheel morph source and the on-screen wheel follows', async () => {
+    const rendered = renderApp()
+    const wheelButton = screen.getByRole('button', { name: 'Morph Assign Wheel' })
+    fireEvent.click(wheelButton)
+    const knob = screen.getByRole('slider', { name: 'Reverb Dry/Wet' })
+    fireEvent.keyDown(knob, { key: 'End' })
+    fireEvent.click(wheelButton)
+    const port = new FakePort('p1', 'Morph Dev')
+    rendered.midiAccess.addPort(port)
+    await waitFor(() => {
+      expect(screen.getByTestId('midi-status').getAttribute('data-status')).toBe('connected')
+    })
+    port.emit([0xb0, 1, 127])
+    await waitFor(() => {
+      expect(Number(knob.getAttribute('aria-valuenow'))).toBe(127)
+      // The on-screen mod wheel mirrors the device position.
+      const wheel = screen.getByRole('slider', { name: 'Mod Wheel' })
+      expect(Number(wheel.getAttribute('aria-valuenow'))).toBe(127)
+    })
+    port.emit([0xb0, 1, 0])
+    await waitFor(() => {
+      expect(Number(knob.getAttribute('aria-valuenow'))).toBe(64)
+    })
+  })
+
+  it('MIDI pitch bend moves the on-screen pitch stick', async () => {
+    const rendered = renderApp()
+    const port = new FakePort('p1', 'Bend Dev')
+    rendered.midiAccess.addPort(port)
+    await waitFor(() => {
+      expect(screen.getByTestId('midi-status').getAttribute('data-status')).toBe('connected')
+    })
+    const stick = screen.getByRole('slider', { name: 'Pitch Stick' })
+    port.emit([0xe0, 0x7f, 0x7f]) // full up
+    await waitFor(() => {
+      expect(Number(stick.getAttribute('aria-valuenow'))).toBe(100)
+    })
+    port.emit([0xe0, 0x00, 0x40]) // back to center
+    await waitFor(() => {
+      expect(Number(stick.getAttribute('aria-valuenow'))).toBe(0)
+    })
+  })
+})

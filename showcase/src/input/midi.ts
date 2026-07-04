@@ -19,6 +19,12 @@ export interface MidiHandlers {
   setSoft?(down: boolean): void
   /** CC11 expression — continuous 0..1; drives the Control Pedal morph source. */
   setControlPedal?(value: number): void
+  /** CC1 mod wheel — continuous 0..1; drives the Wheel morph source (and the
+   *  on-screen wheel, which reads the same canonical value). */
+  setModWheel?(value: number): void
+  /** Pitch bend — normalized -1..1 (14-bit, center 8192 = 0); drives the
+   *  pitch stick's ±2 semitone bend. */
+  setPitchBend?(value: number): void
   /** Called when the active device disappears so owned notes can be cleaned up. */
   onDisconnectCleanup(): void
 }
@@ -26,6 +32,8 @@ export interface MidiHandlers {
 const NOTE_ON = 0x90
 const NOTE_OFF = 0x80
 const CONTROL_CHANGE = 0xb0
+const PITCH_BEND = 0xe0
+const CC_MOD_WHEEL = 1
 const CC_EXPRESSION = 11
 const CC_SUSTAIN = 64
 const CC_SOSTENUTO = 66
@@ -144,6 +152,13 @@ export class MidiInputManager {
       else if (data[1] === CC_SOSTENUTO) this.handlers.setSostenuto?.(data[2]! >= 64)
       else if (data[1] === CC_SOFT) this.handlers.setSoft?.(data[2]! >= 64)
       else if (data[1] === CC_EXPRESSION) this.handlers.setControlPedal?.(data[2]! / 127)
+      else if (data[1] === CC_MOD_WHEEL) this.handlers.setModWheel?.(data[2]! / 127)
+    } else if (statusByte === PITCH_BEND && data.length >= 3) {
+      // 14-bit LSB/MSB, center 8192 -> 0. The positive half divides by 8191
+      // so a full-up bend (16383) reaches exactly +1.
+      const raw = ((data[2]! & 0x7f) << 7) | (data[1]! & 0x7f)
+      const centered = raw - 8192
+      this.handlers.setPitchBend?.(centered < 0 ? centered / 8192 : centered / 8191)
     }
   }
 

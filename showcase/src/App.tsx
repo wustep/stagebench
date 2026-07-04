@@ -115,6 +115,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     })
     engine.attachStore(instrument)
     const controller = new InstrumentController(engine)
+    const store = new PresentationStore({ instrument, controller, now: panelClock })
     const midi = new MidiInputManager({
       noteOn: (note, velocity) => controller.noteOn(note, velocity, 'midi'),
       noteOff: (note) => controller.noteOff(note, 'midi'),
@@ -122,9 +123,14 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       setSostenuto: (down) => controller.setSostenuto(down),
       setSoft: (down) => controller.setSoft(down),
       setControlPedal: (value) => instrument.setMorphSource('pedal', value * 127),
+      // CC1 drives the canonical Wheel morph value; the on-screen wheel reads
+      // the same value, so it follows the hardware wheel's position.
+      setModWheel: (value) => instrument.setMorphSource('wheel', value * 127),
+      // Pitch bend routes through the panel's own pitch-stick handler so the
+      // on-screen stick mirrors the device (engine bend + local visual).
+      setPitchBend: (value) => store.setValue('perf-pitch-stick', value * 100),
       onDisconnectCleanup: () => controller.allNotesOff('midi-disconnect'),
     })
-    const store = new PresentationStore({ instrument, controller, now: panelClock })
     return { engine, controller, midi, store, instrument, storage }
     // The instrument system is created once per mounted app.
     // eslint-disable-next-line react-hooks/exhaustive-deps
