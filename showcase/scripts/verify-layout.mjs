@@ -38,14 +38,30 @@ if (!existsSync(join(ROOT, 'dist', 'index.html'))) {
 }
 
 function findChromium() {
-  const cache = join(homedir(), 'Library', 'Caches', 'ms-playwright')
-  const dirs = readdirSync(cache)
-    .filter((d) => /^chromium-\d+$/.test(d))
-    .sort()
-    .reverse()
-  for (const dir of dirs) {
-    const path = join(cache, dir, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing')
-    if (existsSync(path)) return path
+  // Playwright's browser cache lives in a platform-specific directory; check
+  // the macOS and Linux homes with their respective executable layouts.
+  const caches = [
+    join(homedir(), 'Library', 'Caches', 'ms-playwright'),
+    join(homedir(), '.cache', 'ms-playwright'),
+  ]
+  const executables = [
+    ['chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'],
+    ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
+    ['chrome-linux', 'chrome'],
+    ['chrome-linux64', 'chrome'],
+  ]
+  for (const cache of caches) {
+    if (!existsSync(cache)) continue
+    const dirs = readdirSync(cache)
+      .filter((d) => /^chromium-\d+$/.test(d))
+      .sort()
+      .reverse()
+    for (const dir of dirs) {
+      for (const executable of executables) {
+        const path = join(cache, dir, ...executable)
+        if (existsSync(path)) return path
+      }
+    }
   }
   throw new Error('No cached Playwright Chromium found')
 }

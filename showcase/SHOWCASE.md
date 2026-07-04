@@ -1810,3 +1810,42 @@ User-directed round, each item photo-checked:
   excluded), and a proper focus ring.
 - Gates: typecheck, lint, build, verify:layout 12/12, full suite 499/499;
   bench publish checks green.
+
+### 45 — Selector housings, meters, pads, chip colors (2026-07-05)
+
+Photo-comparison sweep (color / buttons / spacing), each item checked
+against crops of nord-stage-4-73:
+
+- **Selector arrow housings**: every ◀▶ triangle grid (Organ Model, Piano
+  Select, Vib/Chorus scanner matrix, Mod 1/2, Amp Sim, Reverb) now seats
+  its arrows in the photo's recessed near-black rounded housing strip —
+  they floated bare on the plate; unlit arrows read as medium gray inside
+  it (the plate-dark unlit color vanished against black).
+- **Level meters**: fader LED ladders are the closeup's 14 chunky
+  near-square cells at a tight pitch, with unlit cells visible as dark
+  ridges (they were 9 thin floating slivers); the fader caps lose their
+  hard black center groove for the photo's subtle seam.
+- **Red shift pads**: pad inset tightened to the photo's ~0.12cqw reveal,
+  and the Osc/Filter button pairs sit 0.5cqw apart so their pads are
+  separate red islands again (they had merged into one blob).
+- **Colors**: STORE / ARP RUN caps muted to the photo's brick red (was
+  bright crimson); PRESET LIBRARY title corrected to a LIGHT pill with
+  dark maroon text (round-42's "maroon tab" note had the colors
+  inverted); display name ink tinted the photo's ice blue; the lit
+  latching-button green halo is gone (hardware buttons never glow — the
+  adjacent LED is the state light).
+- **Prints**: A-WAH is the photo's OUTLINED chip (WAH/PUMP stay filled);
+  morph LED dots print left of the morphable knob labels (LFO/Osc/Filter,
+  Arp Rate, and the Layer Effects RATE/AMOUNT/TEMPO/FEEDBACK/DRIVE/FREQ/
+  DRY WET set — unlit prints; the functional morph dot stays on the
+  knob); DRY WET flanks its knob; RES/FREQ HP no longer wraps.
+- **Reverb box**: VAR|CHORALE button moved to the photo's spot — right
+  side under the type grid, LED at its right, label beneath — instead of
+  centered on its own row; the Mod 1/2 knob pair gets clearance so the
+  RATE/AMOUNT numeral arcs stop colliding.
+- verify-layout's Chromium lookup now also finds Linux caches
+  (~/.cache/ms-playwright, chrome-linux64) alongside the macOS path.
+- Gates: typecheck, lint, build, verify:layout 12/12; suite 498/499 — the
+  one failure is the delay-feedback-filter render assertion, which fails
+  identically on the base commit in this environment (pre-existing, not a
+  regression).
