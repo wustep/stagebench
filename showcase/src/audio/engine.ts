@@ -543,6 +543,14 @@ export class PianoEngine {
   /** Osc Pitch offset (cents) last applied to each synth layer's sounding
    *  voices — edits retarget live via the bend retarget path (applyBendToVoices). */
   private appliedSynthPitch: Record<SynthLayerId, number> = { A: 0, B: 0, C: 0 }
+  /** Param-diff guards for updateSynthVoiceLive: retargeting a sounding
+   *  voice's AudioParams calls cancelScheduledValues, which would truncate
+   *  the note-on-scheduled filter/pitch envelope ramps. Every store commit
+   *  reaches updateSynthVoiceLive, so unrelated edits (master level, morph
+   *  motion, program browse) must NOT touch these params — only a change to
+   *  the values that actually shape them may. */
+  private appliedSynthLiveSig: Record<SynthLayerId, string> = { A: '', B: '', C: '' }
+  private appliedSynthFilterSig: Record<SynthLayerId, string> = { A: '', B: '', C: '' }
   private seqCounter = 0
   private organClick: AudioBufferLike | null = null
   private organChiff: AudioBufferLike | null = null
@@ -1375,13 +1383,30 @@ export class PianoEngine {
   private updateSynthVoiceLive(now: number): void {
     const context = this.context
     if (!context) return
+    // Per-layer change detection (see appliedSynthLiveSig): only the layers
+    // whose live-retarget inputs / filter parameters actually changed get
+    // their sounding voices' params touched — an untouched layer's scheduled
+    // filter/pitch envelope ramps keep running.
+    const sectionBend = this.effectiveBend('synth')
+    const liveChanged: Record<SynthLayerId, boolean> = { A: false, B: false, C: false }
+    const filterChanged: Record<SynthLayerId, boolean> = { A: false, B: false, C: false }
+    for (const layer of SYNTH_LAYER_IDS) {
+      const layerState = this.state.synth.layers[layer]
+      const f = layerState.filter
+      const liveSig = `${layerState.oscCtrl}|${sectionBend}|${this.synthOscPitchCents(layer)}`
+      const filterSig = `${f.type}|${f.freq}|${f.res}|${f.tracking}|${f.drive}`
+      liveChanged[layer] = liveSig !== this.appliedSynthLiveSig[layer]
+      filterChanged[layer] = filterSig !== this.appliedSynthFilterSig[layer]
+      this.appliedSynthLiveSig[layer] = liveSig
+      this.appliedSynthFilterSig[layer] = filterSig
+    }
     const apply = (voice: Voice) => {
       if (voice.section !== 'synth') return
       const layerState = this.state.synth.layers[voice.layer as SynthLayerId]
-      const live = voice.synthLive
+      const live = liveChanged[voice.layer as SynthLayerId] ? voice.synthLive : null
       if (live) {
         const oscCtrl = layerState.oscCtrl
-        const bend = this.effectiveBend('synth')
+        const bend = sectionBend
         // Osc Ctrl retargets recompute the full detune: base spread + bend +
         // the layer's Osc Pitch offset (manual p. 28).
         const pitchCents = this.synthOscPitchCents(voice.layer as SynthLayerId)
@@ -1438,7 +1463,7 @@ export class PianoEngine {
           }
         }
       }
-      const filter = voice.synthFilter
+      const filter = filterChanged[voice.layer as SynthLayerId] ? voice.synthFilter : null
       if (filter) {
         const filterState = layerState.filter
         filter.driveShaper.curve = synthDriveCurve(filterState.drive)

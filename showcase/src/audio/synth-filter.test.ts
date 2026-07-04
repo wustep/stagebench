@@ -441,3 +441,57 @@ function selectWaveform(store: InstrumentStore, name: string): void {
   const index = SYNTH_WAVEFORMS.findIndex((w) => w.name === name)
   store.selectSynthWaveform(index)
 }
+
+describe('synth.filter — envelope survival across unrelated store commits', () => {
+  it('unrelated edits never cancel a sounding voice’s scheduled filter envelope; a filter edit still retargets it', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    // A big filter envelope so the note-on schedules cutoff ramps.
+    store.setSynthFilterParam('envAmount', 127)
+    const before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    const [biquad] = filtersFrom(context, before)
+    expect(biquad).toBeDefined()
+    expect(biquad!.frequency.events.some((e) => e.kind === 'linear')).toBe(true) // envelope scheduled
+    const scheduled = biquad!.frequency.events.length
+
+    // Unrelated commits (each reaches applyState → updateSynthVoiceLive):
+    store.setMasterVolume(90)
+    store.setMorphSource('wheel', 64)
+    store.setSynthAmpEnvelope({ release: 40 })
+    const afterUnrelated = biquad!.frequency.events.slice(scheduled)
+    expect(afterUnrelated.filter((e) => e.kind === 'cancel')).toHaveLength(0)
+
+    // A REAL filter edit still retargets the sounding voice immediately.
+    store.setSynthFilterParam('freq', 30)
+    const afterEdit = biquad!.frequency.events.slice(scheduled)
+    expect(afterEdit.some((e) => e.kind === 'cancel')).toBe(true)
+    engine.noteOff(60)
+  })
+
+  it('an Osc Ctrl-scheduled pitch envelope survives unrelated commits too', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    selectWaveform(store, 'Super Saw')
+    // Osc envelope in toPitch mode schedules detune ramps at note-on.
+    store.setSynthEnvEdit('osc')
+    store.toggleOscEnvToPitch()
+    store.setSynthOscEnvelope({ amount: 127 })
+    const before = context.nodes.length
+    engine.noteOn(60, 0.8)
+    const oscillators = (context.nodes as unknown[]).slice(before).filter((n): n is { detune: { events: Array<{ kind: string }> } } => {
+      const node = n as { kind?: string; detune?: unknown }
+      return node.kind === 'oscillator' && node.detune !== undefined
+    })
+    expect(oscillators.length).toBeGreaterThan(0)
+    const counts = oscillators.map((osc) => osc.detune.events.length)
+    store.setMasterVolume(80)
+    store.updateUnit('reverb', { mix: 90 }, 'Reverb test edit')
+    oscillators.forEach((osc, i) => {
+      expect(osc.detune.events.slice(counts[i]).filter((e) => e.kind === 'cancel')).toHaveLength(0)
+    })
+    engine.noteOff(60)
+  })
+})
