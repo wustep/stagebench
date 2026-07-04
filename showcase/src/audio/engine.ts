@@ -745,7 +745,16 @@ export class PianoEngine {
     } else {
       timbreTreble.connect(dynMakeup)
     }
-    dynMakeup.connect(levelGain)
+
+    const units = {
+      mod1: createMod1(context),
+      mod2: createMod2(context),
+      delay: createDelay(context),
+      ampEq: createAmpEq(context),
+      comp: createComp(context),
+      reverb: createReverb(context),
+    }
+    dynMakeup.connect(units.mod1.input)
 
     // Sympathetic/pedal-down string resonance approximation: a generated
     // short bright impulse fed from the voice bus, active with String Res +
@@ -756,28 +765,24 @@ export class PianoEngine {
     resConvolver.buffer = this.makeResonanceImpulse(context)
     voiceBus.connect(resSend)
     resSend.connect(resConvolver)
-    resConvolver.connect(levelGain)
-
-    const units = {
-      mod1: createMod1(context),
-      mod2: createMod2(context),
-      delay: createDelay(context),
-      ampEq: createAmpEq(context),
-      comp: createComp(context),
-      reverb: createReverb(context),
-    }
-    levelGain.connect(units.mod1.input)
+    resConvolver.connect(units.mod1.input)
     units.mod1.output.connect(units.mod2.input)
     units.mod2.output.connect(units.delay.input)
     units.delay.output.connect(units.ampEq.input)
     units.ampEq.output.connect(units.comp.input)
     units.comp.output.connect(units.reverb.input)
 
+    // Spec signalContract.requiredOrder: the Layer level sits AFTER the
+    // effect chain — pulling a fader trims the already-processed sound, it
+    // never starves the delay/reverb tails of input. (The single shared
+    // rotary makes a strictly-post-rotary per-layer level impossible; the
+    // level rides the post-reverb split feeding both sends instead.)
     const toMaster = context.createGain()
     const toRotary = context.createGain()
     toRotary.gain.value = 0.0001
-    units.reverb.output.connect(toMaster)
-    units.reverb.output.connect(toRotary)
+    units.reverb.output.connect(levelGain)
+    levelGain.connect(toMaster)
+    levelGain.connect(toRotary)
     toMaster.connect(this.masterGain!)
     toRotary.connect(this.rotary!.input)
 
@@ -795,7 +800,10 @@ export class PianoEngine {
     }
   }
 
-  /** Organ layer path: voices → vib/chorus scanner → level → shared chain input. */
+  /** Organ layer path: voices → vib/chorus scanner → level → shared chain
+   *  input. Unlike Piano/Synth, the Organ level must stay PRE-chain: both
+   *  layers mix into the one shared effect chain (manual p. 18), so the
+   *  faders are the only place their balance can be set. */
   private buildOrganChannel(context: AudioContextLike, chain: OrganSharedChain): OrganChannel {
     const voiceBus = context.createGain()
     const scanner = createScanner(context)
@@ -860,19 +868,21 @@ export class PianoEngine {
       comp: createComp(context),
       reverb: createReverb(context),
     }
-    voiceBus.connect(levelGain)
-    levelGain.connect(units.mod1.input)
+    voiceBus.connect(units.mod1.input)
     units.mod1.output.connect(units.mod2.input)
     units.mod2.output.connect(units.delay.input)
     units.delay.output.connect(units.ampEq.input)
     units.ampEq.output.connect(units.comp.input)
     units.comp.output.connect(units.reverb.input)
 
+    // Layer level post-chain (spec signalContract.requiredOrder) — see the
+    // piano channel note.
     const toMaster = context.createGain()
     const toRotary = context.createGain()
     toRotary.gain.value = 0.0001
-    units.reverb.output.connect(toMaster)
-    units.reverb.output.connect(toRotary)
+    units.reverb.output.connect(levelGain)
+    levelGain.connect(toMaster)
+    levelGain.connect(toRotary)
     toMaster.connect(this.masterGain!)
     toRotary.connect(this.rotary!.input)
 

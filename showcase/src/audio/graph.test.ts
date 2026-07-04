@@ -61,21 +61,23 @@ describe('effects.graph', () => {
     const { channels, masterGain, rotary } = engine.diagnostics()
     for (const layer of ['A', 'B'] as const) {
       const channel = channels![layer]
-      // voice bus -> timbre -> (dyn comp) -> level -> mod1 -> mod2 -> delay
-      // -> amp/EQ -> comp -> reverb -> master (and a rotary tap post-reverb).
+      // voice bus -> timbre -> (dyn comp) -> mod1 -> mod2 -> delay
+      // -> amp/EQ -> comp -> reverb -> LAYER LEVEL -> master (and a rotary
+      // tap): spec signalContract.requiredOrder puts the layer level after
+      // the chain so a fader pull trims the processed sound, tails intact.
       expect(directlyConnected(channel.voiceBus as never, channel.timbreBass)).toBe(true)
-      expect(reaches(channel.timbreBass, channel.levelGain)).toBe(true)
-      expect(directlyConnected(channel.levelGain as never, channel.units.mod1.input)).toBe(true)
+      expect(reaches(channel.timbreBass, channel.units.mod1.input)).toBe(true)
       expect(directlyConnected(channel.units.mod1.output as never, channel.units.mod2.input)).toBe(true)
       expect(directlyConnected(channel.units.mod2.output as never, channel.units.delay.input)).toBe(true)
       expect(directlyConnected(channel.units.delay.output as never, channel.units.ampEq.input)).toBe(true)
       expect(directlyConnected(channel.units.ampEq.output as never, channel.units.comp.input)).toBe(true)
       expect(directlyConnected(channel.units.comp.output as never, channel.units.reverb.input)).toBe(true)
-      expect(reaches(channel.units.reverb.output, masterGain)).toBe(true)
+      expect(directlyConnected(channel.units.reverb.output as never, channel.levelGain)).toBe(true)
+      expect(reaches(channel.levelGain, masterGain)).toBe(true)
       // The chain does NOT skip units: mod1 input cannot reach master except through mod2.
       expect(reaches(channel.units.mod1.output, channel.units.mod2.input)).toBe(true)
-      // Reverb precedes Rotary: the rotary tap hangs off the reverb output.
-      expect(directlyConnected(channel.units.reverb.output as never, channel.toRotary)).toBe(true)
+      // Reverb precedes Rotary: the rotary tap hangs off the post-reverb level.
+      expect(directlyConnected(channel.levelGain as never, channel.toRotary)).toBe(true)
       expect(directlyConnected(channel.toRotary as never, rotary!.input)).toBe(true)
     }
     // One rotary instance shared by both layers, last before the master.
