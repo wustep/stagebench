@@ -1,0 +1,183 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt5-5-high-2",
+  "stage": 2,
+  "evaluator": "fresh-independent-evaluator",
+  "evaluatedAt": "2026-07-04T08:15:03Z",
+  "summary": "Phase 2 preserves a recognizable Stage 4 73 surface and implements a useful generated two-layer piano shell with keyboard/pointer/MIDI input, stateful layer controls, and deterministic Float32Array probe processors for piano controls and effects. The artifact misses the main Phase 2 piano hard gate: IMPLEMENTATION_DETAILS.json declares sampleSources: [] and explicitly says Grand/Upright/Electric are generated approximations, not bundled recorded sample sets. A second major issue is that live played notes bypass the effect processors: noteOn builds oscillator/filter/gain voices directly into layer buses and master, while Mod/Delay/Amp/Compressor/Reverb/Rotary processing exists only in renderProbe(). Current pnpm test also fails with a timeout in the surface inventory test, while typecheck, lint, and build pass.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "rating": 3,
+          "evidence": [
+            "Sealed desktop and narrow captures show one continuous red Stage 4 73-style chassis, six ordered sections, Program/Synth as the only primary OLEDs, and the full 73-key E1-E7 keybed with 43 white and 30 black keys.",
+            "src/hardware.ts models the required section fractions [0.13, 0.21, 0.15, 0.09, 0.21, 0.21], and src/App.test.tsx asserts the key count, section order, and two-OLED rule.",
+            "The visual remains schematic rather than reference-faithful: controls are generic CSS buttons/knobs/faders, top-rail and panel micro-layout are approximate, and the 390x844 capture compresses labels and control state to near-illegibility."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "rating": 2,
+          "evidence": [
+            "Piano and effects controls are marked functional in App.tsx and update state for layer focus, layer levels, type buttons, KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, effect on/type/amount, group, bypass, global flags, rotary, and Master Level.",
+            "The status strip reflects selected layer and several piano performance values, and button/knob aria state changes are visible through the surface.",
+            "Several functional-looking controls are incomplete or misleading: piano.section-on and piano.model-select are listed as functional but have no handler, SUSTPED toggles routing rather than acting as a sustain pedal input, and effect state is not connected to the audible live signal path."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 1,
+          "evidence": [
+            "The code exposes all six required type names: Grand, Upright, Electric, Clav, Digital, and Misc.",
+            "IMPLEMENTATION_DETAILS.json has sampleSources: [] and lists Grand/Upright/Electric under generatedSources as candidate-authored generated approximations, explicitly 'not sampled from a recording'.",
+            "The status/audit are honest about generated approximations, so this is not a false provenance claim, but it fails the phase hard gate requiring bundled recorded, redistributable Grand/Upright/Electric sample sets."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "rating": 3,
+          "evidence": [
+            "createPianoEngine initializes Piano layers A and B with enable, focus, level, octave, SUSTPED, PSTICK, and type state.",
+            "noteOn iterates over enabled layers and stores each voice with its layer owner; tests exercise enabling B, focus following B, octave shift, per-layer sustain-pedal routing, and cleanup.",
+            "Layer level updates are applied to layer bus gain and renderProbe level; however Piano Section On is not implemented and layer behavior is still based on synthesized oscillators rather than the required sample library."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 2,
+          "evidence": [
+            "KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, and Master Level are represented in canonical state and renderProbe tests assert measurable Float32Array changes.",
+            "Live noteOn applies KB Touch, Dyn Comp, Timbre, Unison detune, Soft Release, layer level, and Master Level to the oscillator path.",
+            "String Resonance exists only in renderProbe, Unison is a single-oscillator detune rather than detuned stereo voices, PSTICK has no input path, and no piano control is verified against recorded-sample playback because there are no recordings."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "rating": 2,
+          "evidence": [
+            "The rendered app supports pointer key press/release/cancel, mapped computer keyboard notes with repeat suppression, keyboard sustain via spacebar, MIDI note on/off, and MIDI CC64 sustain.",
+            "Blur, MIDI state change, unmount, allNotesOff, voice stealing, and fallback when AudioContext is unavailable are implemented and partly tested.",
+            "There is no functional UI sustain pedal input beyond SUSTPED routing toggles, no real sample asset failure path because no assets are loaded, multitouch is inferred from pointerId handling rather than directly tested, and the current pnpm test run fails."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 2,
+          "evidence": [
+            "The live engine creates one AudioContext, two layer GainNode buses, one master gain, a DynamicsCompressor limiter when available, and one destination.",
+            "Dispose/allNotesOff disconnect buses/master/limiter and schedules owned voices for cleanup.",
+            "The documented effect order is only a snapshot string plus renderProbe order; live noteOn connects oscillator -> filter -> gain -> layer bus -> master and does not construct Mod 1, Mod 2, Delay, Amp/EQ, Compressor, Reverb, or Rotary nodes in the audible graph."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "rating": 1,
+          "evidence": [
+            "pianoEngine.ts contains deterministic Float32Array processors for all required Mod 1, Mod 2, Amp/EQ, Reverb types plus Delay, Compressor, and Rotary, and tests compare renderProbe output changes.",
+            "Those processors are not connected to the live Web Audio path used by keybed playback; updateEffects changes state, but noteOn voices still connect directly through a simple filter/gain path to the layer bus.",
+            "Because the claimed effects do not process the audible browser instrument signal, the phase requirement for real audible effect coverage is largely unmet."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "rating": 1,
+          "evidence": [
+            "The UI updates focus, group, all-bypass, per-unit bypass, type, amount/rate/mix, delay feedback filter, global flags, and To Rotary-related state.",
+            "renderProbe applies focus/group/all-bypass, delay feedback filtering, reverb-before-rotary ordering, and rotary when Amp/EQ type is To Rotary.",
+            "Global flags are stored but do not alter routing, and none of the routing/bypass/wet-dry controls affect live keybed audio because the effect chain is disconnected from noteOn playback."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "rating": 2,
+          "evidence": [
+            "Key presses produce live Web Audio oscillator output, visual key pressed state updates, and piano type/performance controls update visible button/status state.",
+            "Some piano parameters affect live sound immediately through oscillator type, filter, detune, velocity curve, release, and master gain.",
+            "Effect controls provide visible movement/state only for the user-heard instrument, and Grand/Upright/Digital live playback collapse to the same triangle oscillator class rather than distinct recorded models."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "rating": 2,
+          "evidence": [
+            "The engine reports a labeled fallback when AudioContext is missing or construction fails, and MIDI unavailable/denied states are surfaced in the status strip.",
+            "Voice stealing, sustain release, blur cleanup, MIDI state-change cleanup, and unmount cleanup are implemented in source and partly exercised by tests.",
+            "There is no tested failed-recording or failed-asset recovery path, rapid effect changes are only tested through renderProbe state, and the current pnpm test command fails due to a 5s timeout in the surface render test."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 2,
+          "evidence": [
+            "The artifact separates hardware data, App UI, and a pianoEngine with injectable AudioContext and deterministic renderProbe support.",
+            "The live engine has clear layer, voice, master, sustain, and cleanup state, and implementation details truthfully declare generated sources.",
+            "The architecture forks actual playback from test/render processing: effects and several acoustic controls live in Float32Array probes rather than the audible AudioContext graph, which is a major Phase 2 boundary failure and weak Phase 3 extensibility."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "rating": 1,
+          "evidence": [
+            "tests/feature-matrix.json maps all required Phase 1 and Phase 2 IDs, but every feature maps to one broad src/App.test.tsx file.",
+            "The audio tests use FakeAudioContext and renderProbe Float32Array comparisons; they do not prove the live Web Audio graph routes through effects or recorded samples.",
+            "Running pnpm test in the sealed artifact fails: src/App.test.tsx times out in 'renders the complete visible surface with required landmarks and stable controls' after 5000ms."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "rating": 2,
+          "evidence": [
+            "pnpm typecheck, pnpm lint, and pnpm build pass; the production build completes and produces dist/index.html and bundled assets.",
+            "The code is small and readable enough for a benchmark artifact, with stable control IDs and no large external asset dependency.",
+            "The monolithic App.test.tsx is slow enough to fail the required test script, most behavior lives in large App.tsx/pianoEngine.ts modules, and the disconnected probe/live audio paths create high maintenance risk."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "critical",
+      "title": "Required recorded piano sample sets are absent",
+      "evidence": "IMPLEMENTATION_DETAILS.json declares sampleSources: [] and lists Grand, Upright, and Electric as generated approximations, not recordings."
+    },
+    {
+      "severity": "critical",
+      "title": "Effects are not connected to live keybed audio",
+      "evidence": "noteOn voices connect oscillator -> filter -> gain -> layer bus -> master; Mod/Delay/Amp/Compressor/Reverb/Rotary processing exists only in renderProbe()."
+    },
+    {
+      "severity": "major",
+      "title": "Required test gate fails",
+      "evidence": "pnpm test fails because the surface inventory test times out after 5000ms; 12 of 13 tests pass."
+    },
+    {
+      "severity": "major",
+      "title": "Functional control coverage is incomplete",
+      "evidence": "piano.section-on and piano.model-select are marked functional but do not implement canonical behavior; UI sustain pedal input is missing beyond SUSTPED routing toggles."
+    }
+  ]
+}
