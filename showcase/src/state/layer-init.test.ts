@@ -152,12 +152,14 @@ describe('programs.layer-init — panel', () => {
     expect(screen.queryByTestId('oled-layer-init-line')).toBeNull()
   })
 
-  it('a plain Section Edit press is truthfully inert; the LAYER INIT shift-legend opens the screen', () => {
+  it('a plain Section Edit press latches sticky mode; the LAYER INIT shift-legend opens the screen', () => {
     renderApp()
-    const oled = screen.getByTestId('oled-program')
-    const before = oled.textContent
+    // Plain press = the SECTION EDIT sticky latch (manual p. 43; the
+    // hardware's double-tap sticky maps to click = sticky latch).
     fireEvent.click(screen.getByRole('button', { name: 'Section Edit' }))
-    expect(oled.textContent).toBe(before)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Section Edit — edits apply to all Layers/)
+    fireEvent.click(screen.getByRole('button', { name: 'Section Edit' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Section Edit off/)
     // The printed LAYER INIT ▽ legend below the button is itself clickable
     // (the panel's hold-to-shift convention, manual p. 44).
     fireEvent.click(screen.getByRole('button', { name: 'Layer Init' }))

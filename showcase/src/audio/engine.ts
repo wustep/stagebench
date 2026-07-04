@@ -1693,6 +1693,18 @@ export class PianoEngine {
     this.arpTimer = this.boundary.timers.setTimeout(() => this.runArpStep(), delayMs)
   }
 
+  /** Sequence index for step counter `step` (Arp mode, non-Random). Zig Zag
+   *  (manual p. 35): "played notes will jump by two steps and then back one,
+   *  in a given direction" — the walked positions are 0, 2, 1, 3, 2, 4, 3…
+   *  (+2, -1 alternating) over the direction-expanded sequence, wrapping
+   *  modulo its length. Off: the plain step order. Purely a function of the
+   *  step counter, so determinism is unchanged. */
+  private arpSequenceIndex(step: number, length: number, zigZag: boolean): number {
+    if (!zigZag) return step % length
+    const position = Math.floor(step / 2) + (step % 2 === 1 ? 2 : 0)
+    return position % length
+  }
+
   private runArpStep(): void {
     if (!this.arpRunning) return
     const arp = this.state.synth.arp
@@ -1724,7 +1736,13 @@ export class PianoEngine {
       // path so zones/sustain stay consistent.
       const sequence = this.arpSequenceFor(held)
       if (sequence.length === 0) continue
-      const index = arp.direction === 'Random' ? Math.floor(this.nextArpRandom() * sequence.length) : this.arpStepIndex % sequence.length
+      // Random draws a fresh index each step (there is no defined order for
+      // a Zig Zag walk to traverse), so Zig Zag applies to the directed
+      // orders only — the deterministic xorshift path is untouched.
+      const index =
+        arp.direction === 'Random'
+          ? Math.floor(this.nextArpRandom() * sequence.length)
+          : this.arpSequenceIndex(this.arpStepIndex, sequence.length, arp.zigZag)
       const midi = sequence[index]!
       const previous = this.arpSoundingMidi[layer]
       if (previous !== null && previous !== midi) {

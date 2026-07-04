@@ -4,6 +4,7 @@ import { PRESET_BANKS } from '../model/presets'
 import { instrumentsOfType, SYNTH_SAMPLE_SETS, type InstrumentSpec } from '../audio/library'
 import type { InstrumentController } from '../input/controller'
 import {
+  ARP_DIRECTIONS,
   mappings,
   MORPH_DESTINATIONS,
   presetSectionName,
@@ -151,6 +152,9 @@ export class PresentationStore {
           return Math.round(((state.synth.arp.range - 1) / 3) * 127)
         case 'synth-dial-1': {
           const synth = state.synth.layers[state.synth.focusedLayer]
+          // Arp Menu (manual p. 35): dial 1 navigates the menu pages; only
+          // page 1 (Direction/Zig Zag) exists here, so it sits on 1/1.
+          if (state.synthArpMenuEdit) return 0
           // Osc Pitch edit (manual p. 28): dial 1 spans -24..+24 semitones.
           if (state.synthOscPitchEdit) return Math.round(((synth.oscPitch.semis + 24) / 48) * 127)
           if (state.synthVibratoEdit) return synth.voice.vibratoRate
@@ -161,6 +165,9 @@ export class PresentationStore {
         }
         case 'synth-dial-2': {
           const synth = state.synth.layers[state.synth.focusedLayer]
+          // Arp Menu page 1 (manual p. 35): dial 2 = Direction list position.
+          if (state.synthArpMenuEdit)
+            return Math.round((ARP_DIRECTIONS.indexOf(state.synth.arp.direction) / (ARP_DIRECTIONS.length - 1)) * 127)
           // Osc Pitch edit (manual p. 28): dial 2 spans ±50 cents fine tune.
           if (state.synthOscPitchEdit) return Math.round(((synth.oscPitch.cents + 50) / 100) * 127)
           if (state.synthVibratoEdit) return synth.voice.vibratoAmount
@@ -174,6 +181,8 @@ export class PresentationStore {
         }
         case 'synth-dial-3': {
           const synth = state.synth.layers[state.synth.focusedLayer]
+          // Arp Menu page 1 (manual p. 35): dial 3 = Zig Zag off/on.
+          if (state.synthArpMenuEdit) return state.synth.arp.zigZag ? 127 : 0
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.release
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.release
           if (state.synthEnvEdit === 'osc') return synth.oscEnvelope.release
@@ -287,6 +296,8 @@ export class PresentationStore {
           return state.synthVibratoEdit
         case 'osc-pitch-smp':
           return state.synthOscPitchEdit
+        case 'arp-menu':
+          return state.synthArpMenuEdit
         case 'filter-on':
           return state.synth.layers[state.synth.focusedLayer].filter.on
         case 'arp-run':
@@ -514,6 +525,10 @@ export class PresentationStore {
           return
         case 'synth-dial-1': {
           const state = store.getState()
+          // Arp Menu (manual p. 35): dial 1 navigates the menu pages. Only
+          // page 1 (Direction/Zig Zag) is implemented — the Pattern pages
+          // need preset-pattern semantics — so navigation stays on 1/1.
+          if (state.synthArpMenuEdit) return
           // Osc Pitch edit (manual p. 28): dial 1 = pitch -24..+24 semitones.
           if (state.synthOscPitchEdit) {
             store.setSynthOscPitchSemis(Math.round((clamped / 127) * 48) - 24)
@@ -531,6 +546,12 @@ export class PresentationStore {
         }
         case 'synth-dial-2': {
           const state = store.getState()
+          // Arp Menu page 1 (manual p. 35): dial 2 = Direction (Up/Down/
+          // Up-Down/Random) by absolute list position.
+          if (state.synthArpMenuEdit) {
+            store.selectArpDirection(Math.round((clamped / 127) * (ARP_DIRECTIONS.length - 1)))
+            return
+          }
           // Osc Pitch edit (manual p. 28): dial 2 = fine tune ±50 cents.
           if (state.synthOscPitchEdit) {
             store.setSynthOscPitchCents(Math.round((clamped / 127) * 100) - 50)
@@ -550,6 +571,11 @@ export class PresentationStore {
           return
         }
         case 'synth-dial-3': {
+          // Arp Menu page 1 (manual p. 35): dial 3 = Zig Zag off/on.
+          if (store.getState().synthArpMenuEdit) {
+            store.setArpZigZag(Math.round(clamped / 127) === 1)
+            return
+          }
           const edit = store.getState().synthEnvEdit
           if (edit === 'amp') store.setSynthAmpEnvelope({ release: clamped })
           else if (edit === 'filter') store.setSynthFilterEnvelope({ release: clamped })
@@ -798,6 +824,13 @@ export class PresentationStore {
           if (shift) store.toggleArpClockSync()
           else store.toggleArpRun()
           return
+        case 'arp-menu':
+          // MENU (manual p. 35): latches the Synth OLED dials onto page /
+          // Direction / Zig Zag. GROUP (Shift + Menu: all Layers share the
+          // arp settings) is out of scope — the shifted press visibly does
+          // nothing, matching the dim GROUP ▽ print.
+          if (!shift) store.setSynthArpMenuEdit(!store.getState().synthArpMenuEdit)
+          return
         case 'arp-mode':
           // Shift + ARP MODE = direction (manual adaptation: Direction shares
           // the Mode button's menu, no dedicated panel control).
@@ -901,11 +934,14 @@ export class PresentationStore {
           return
         case 'section-edit':
           // LAYER INIT = Shift + Section Edit (manual p. 43): opens the init
-          // screen on the Program OLED (PROGRAM 1-4 = soft buttons). The
-          // plain press stays truthfully inert — the hardware's hold/sticky
-          // Section Edit mode (edits apply to all Layers of the Section) is
-          // not modeled, so the button moves and changes nothing.
+          // screen on the Program OLED (PROGRAM 1-4 = soft buttons). A plain
+          // press latches SECTION EDIT (manual p. 43: edits done to a
+          // parameter are performed on all Layers of that Section) — the
+          // hardware's double-tap "sticky" mode maps to our click = sticky
+          // latch (declared adaptation, like Mon/Copy); click again or
+          // Shift/Exit leaves.
           if (shift) store.setLayerInitEdit(!store.getState().layerInitEdit)
+          else store.setSectionEdit(!store.getState().sectionEdit)
           return
         case 'mon-copy': {
           // MON/COPY (manual p. 43) — pointer-first adaptation (declared;
@@ -1142,6 +1178,12 @@ export class PresentationStore {
           }
           if (store.getState().layerInitEdit) {
             store.setLayerInitEdit(false)
+            return
+          }
+          // …then exits the Section Edit sticky latch (manual p. 43: "Press
+          // Section Edit again, or Shift/Exit, to exit sticky mode")…
+          if (store.getState().sectionEdit) {
+            store.setSectionEdit(false)
             return
           }
           // …and dropping Shift closes the numeric list view and the piano

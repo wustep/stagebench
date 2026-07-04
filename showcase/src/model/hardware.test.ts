@@ -49,7 +49,9 @@ describe('visual.control-inventory — normalized hardware model', () => {
     // including the optional Delayed/Pedal vibrato modes on the same cycle),
     // the VIBRATO MENU button (spec voice.vibrato.menu: latches dials 1/2
     // onto Rate/Amount editing), the arpeggiator/gate (run/mode/direction/
-    // rate/range/hold via KB Hold), and the optional Synth Mode
+    // rate/range/hold via KB Hold, plus the MENU button latching the dials
+    // onto page/Direction/Zig Zag — manual p. 35, page 1 only), and the
+    // optional Synth Mode
     // (Analog<->Samples cycle) are all functional now. Only Synth Mode's
     // Extern position stays spec-excluded (unreachable from the button,
     // which cycles only the two real modes).
@@ -91,6 +93,7 @@ describe('visual.control-inventory — normalized hardware model', () => {
       'arp-mode',
       'arp-rate',
       'arp-range',
+      'arp-menu',
       'kb-hold',
     ])
     for (const control of HARDWARE_CONTROLS.filter((c) => c.section === 'synth')) {

@@ -1092,6 +1092,124 @@ A discrepancy sweep against fresh high-detail crops of the reference photo
 - Gates: typecheck, test (404/404), lint, build, verify:layout (12/12,
   after re-tightening the piano tabs and Mod 1/2 ON rows).
 
+### 25 — Program strip: box palette corrections and header alignment (2026-07-03)
+
+User-directed corrections to the previous pass: VOICE, VIBRATO,
+ARPEGGIATOR/GATE and UNISON revert to the darker plate gray (only MODE,
+LFO, OSCILLATORS, FILTER and AMP are light panels on the reference); the
+PROGRAM box is a darker-gray body under a full-width light heading band;
+MORPH ASSIGN / SPLIT / MST CLK / TRANSP get the same light heading bands
+and now share the top row without clipping their buttons (flex shares +
+content-sized caps + minmax(0,1fr) program-grid columns beat a
+specificity conflict that kept ORGANIZE over-wide); the program layout
+top-aligns the MORPH ASSIGN band with the neighboring plates' header
+bands to the pixel; the FX FOCUS "A B C" caption is pinned to one line.
+Gates: typecheck, test 404/404, lint, build, verify:layout 12/12.
+### 26 — Panel-print fidelity: knob scales, LED segments, selector arrows, OLED (2026-07-03)
+
+Crop-by-crop audit against reference/nord-stage-4-73.jpg (per-section element
+screenshots vs matching photo crops), closing the largest remaining print
+gaps. Visual-only — no control behavior changed; 404/404 tests untouched.
+
+- **Printed knob scales**: `Knob` gained a decorative `scale` prop rendering
+  the reference's tick/numeral arc around every knob (default 0-10; bipolar
+  ±15 for Bass/Mid/Treble, ±10 for Osc Env Amt, the Hz ladder 200…8K for the
+  Amp Sim/EQ freq knob; Master Level stays bare like the photo). The SVG
+  matches the knob's own box and paints outside its viewBox, so it adds no
+  scroll size to any flex cell; dark print on the light synth boxes.
+- **LED ladders are rectangular segments** (photo: wide bars, not dots), and
+  every drawbar ladder now sits in a light-outlined frame with the printed
+  1-8 amount numerals — slim enough that all nine columns still fit.
+- **Effect type selectors match the panel print**: Mod 1/2, Amp Sim/EQ,
+  Delay Effects/Filter and Reverb replaced their one-line text token lists
+  with the reference's two-column label grids around central triangular LED
+  arrows (`SelectorLedGrid`), including the boxed A-WAH/WAH/PUMP and red
+  TO ROTARY / LP FILTER / HP FILTER tags. The Organ Model and Piano Select
+  grids' round LEDs became the same left/right arrows. Reverb's BRIGHT DARK
+  cap-label button became the photo's stacked BRIGHT/DARK LED legends beside
+  a blank button, left of the type grid.
+- **OLED restyle**: pale blue-white pixels on black (was green), inverted
+  full-width header band on the Synth display (OSC WAVEFORM / VIBRATO /
+  envelope titles) and inverted soft-dial caption pills (TYPE/CAT/LAYER,
+  ATTACK/DECAY/RELEASE…), matching the photo's display chrome.
+- **Organ**: the three group boxes stopped visually merging ("ORGAN
+  MOD VIB/CHORUS B3 PERCUSSION" read as one truncated title) — smaller
+  titles, real gaps; Vib/Chorus rebuilt to the reference's selector-button-
+  left + 2x3 scanner matrix (C2 V3 C3 / V2 C1 V1, exact-position LEDs,
+  up/down triangles).
+- **Piano**: TIMBRE became the photo's tall dark rocker left of the label
+  column (was a boxed panel with a gray cap), which also cleared the
+  SUSTPED/PSTICK label collision.
+- **Performance zone**: CLOSE MIC ▿ and MORPH moved off the button caps to
+  printed legends (blank tan/dark caps like the hardware); Drive knob wears
+  its 0-10 arc with room to breathe.
+- **"HANDMADE IN SWEDEN BY CLAVIA DMI AB v2.0 Rev.B"** vertical print on the
+  bare red right margin.
+- verify-layout hardened alongside: SVG internals (the scale arcs) are
+  exempt from the text-overflow audit only when a knob's text is exactly its
+  scale numerals; Mod 1/Reverb re-packed (compact selector fonts, inline
+  variation rows) so every effects box fits its grid track again.
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404 (one
+  rendered-audio test flaked red on a single full-suite run and passed on
+  two consecutive re-runs — the pre-existing load-dependent offline-render
+  flake documented in iterations 9/6, untouched by this visual-only pass).
+
+### 27 — Perf-zone geometry, program spacing, and a functional sweep (2026-07-03)
+
+User-directed corrections plus a live functional audit:
+
+- **Pitch stick moves side to side, like the hardware**: the slot is now a
+  landscape black recess (tilted ~-12°) with the wooden stick lying
+  horizontally in its left portion, and the DRAG AXIS is horizontal too —
+  `useContinuous` maps `stick`-type controls to clientX (right = bend up,
+  spring return unchanged), `aria-orientation` is `horizontal`, cursor
+  `ew-resize`. The decorative-controls drag test and the accessibility
+  orientation pin evolved truthfully with it.
+- **Mod wheel leans up-and-to-the-left** (was tilted the wrong way).
+- **Rotary Speaker strip sits on the red chassis** with a light outline and
+  its light title tab (was a dark slate panel fill).
+- **Branding enlarged and repositioned**: the Comfortaa logotype up to
+  1.18cqw with HAMMER ACTION 73 letter-spaced to span it, lifted off the
+  plate edge (overflow-checked at 1440 — the first spacing attempt tripped
+  `no-text-overflows-desktop` and was tightened).
+- **Program strip dead space closed**: the OLED now absorbs the strip's
+  spare height (`flex: 1`), so the bare red band between the display and
+  the PROGRAM box is gone.
+- **Functional sweep** (driven in the live browser, zero console errors):
+  vib/chorus cycle lights the exact scanner position on the new matrix;
+  program select, Shift/Shift-2 cross-latching, Mod 1 variation arrows,
+  Delay ON, rotary speed, knob/drawbar keyboard operation, timbre rocker,
+  key press → voice, master-clock tap + dial edit (300 BPM clamp), split
+  editor via Shift+Split (closes on Shift drop), morph capture on
+  delay-mix (assign → indicator dot → live wheel interpolation → clear),
+  arp run, Live Mode (L1), on-screen sustain + control pedal, and the
+  section-zoom overlay open/close. Two real fixes came out of it: the
+  rotary **MORPH LED** now truthfully lights while a morph source is
+  assigned to rotary speed (was hardwired unlit in iteration 26's rework),
+  and `setPointerCapture` is guarded so a pointer that disappears before
+  capture (touch cancellation, synthetic events) can't throw mid-gesture.
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404.
+
+### 28 — Program strip round 2 + centered side-to-side pitch stick (2026-07-03)
+
+- **Pitch stick centered, sliding side to side**: the wooden lever now rests
+  centered in its landscape slot and `translateX`-slides left/right with the
+  bend (right = up, spring back to center) instead of tilting — matching the
+  hardware's motion seen from above.
+- **Store cluster completed to the reference print**: STORE LED + red
+  button, a blank dark cap with STORE AS… / PAGE NAME printed beneath it
+  (the labels were on the cap before), and the MIDI / EXTERN indicator LEDs
+  beside the button. The cluster wraps its indicator column under the
+  buttons when print-size flooring leaves no side-by-side slack at 1440.
+- **Display block**: the Program OLED absorbs the strip's spare height up to
+  a cap (no more bare red band, without the display swallowing the column),
+  with the reference's four bezel tick marks attached beneath it; remaining
+  slack spreads between the center clusters.
+- **Right rail**: PRESET NAME printed under PROG VIEW; SOLO → PASTE now
+  share the reference's outlined box, and the SOLO LED truthfully lights
+  while a discarded edit is recoverable by SOLO UNDO (programs.undo).
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404.
+
 ### 29 — Workflow round: three-lens audit → nine implementation passes (2026-07-03)
 
 A multi-agent round: a parallel audit (manual features / reference-photo
@@ -1165,121 +1283,99 @@ then orchestrator-side geometry corrections. Tests 404 → 436.
 
 Gates: typecheck, lint, build, verify:layout 12/12, tests 436/436.
 
-### 28 — Program strip round 2 + centered side-to-side pitch stick (2026-07-03)
+### 30 — Rigorous reference-photo audit: 20+ fidelity fixes across the panel (2026-07-03)
 
-- **Pitch stick centered, sliding side to side**: the wooden lever now rests
-  centered in its landscape slot and `translateX`-slides left/right with the
-  bend (right = up, spring back to center) instead of tilting — matching the
-  hardware's motion seen from above.
-- **Store cluster completed to the reference print**: STORE LED + red
-  button, a blank dark cap with STORE AS… / PAGE NAME printed beneath it
-  (the labels were on the cap before), and the MIDI / EXTERN indicator LEDs
-  beside the button. The cluster wraps its indicator column under the
-  buttons when print-size flooring leaves no side-by-side slack at 1440.
-- **Display block**: the Program OLED absorbs the strip's spare height up to
-  a cap (no more bare red band, without the display swallowing the column),
-  with the reference's four bezel tick marks attached beneath it; remaining
-  slack spreads between the center clusters.
-- **Right rail**: PRESET NAME printed under PROG VIEW; SOLO → PASTE now
-  share the reference's outlined box, and the SOLO LED truthfully lights
-  while a discarded edit is recoverable by SOLO UNDO (programs.undo).
-- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404.
+A pixel-level audit against `reference/nord-stage-4-73.jpg` (section-by-
+section crops + color sampling), then a fix pass over everything it found:
 
-### 27 — Perf-zone geometry, program spacing, and a functional sweep (2026-07-03)
+- **Program display**: capped at the reference's wide ~2:1 letterbox
+  (`max-height` 3.2cqw; was a near-square 6cqw well of black).
+- **Drawbars are full-size fader-like controls**: a recessed full-travel
+  slot, dark gunmetal stem (was a thin tan stick) and large caps
+  (0.85 × 1.25cqw).
+- **Level-fader caps are light-gray ribbed rubber** with a dark center
+  groove (were solid black).
+- **Red shift-frames restored** on the synth `framed` buttons (Waveform,
+  Arp/Vibrato Menu, Osc Pitch/Env, Filter Type/Env, Amp Env) as a border
+  ring the active/lit shadow overrides can't strip; **ARP RUN** corrected
+  from a red cap to the photo's dark-cap-in-red-frame.
+- **Boxed panel tags**: MST CLK / GLOBAL / KB HOLD print as filled dark-red
+  boxes (lit = brighter box), SENS / PED / ENV / GATE / MID as filled
+  light-gray boxes, matching the print.
+- **Rear-connector legend row** (MONITOR IN … POWER ON/OFF) printed along
+  the top lip at pixel-measured positions, plus chassis screws along the
+  deck's bottom lip.
+- **Synth OSC display**: static INFO / LIST / LIST dial prints (hardware
+  print; live functions stay captioned by the display soft rows, whose
+  third caption now truthfully reads LFO DEST instead of LAYER), with
+  leader lines from display to dials.
+- **Piano header un-hides FX FOCUS / ON** (the old CSS assumed the photo
+  dropped them at this width — it doesn't); sized to fit without clipping
+  SOLO ▾.
+- **Filter box de-invented**: the made-up `LP12 · LP24 · …` and
+  `TRACK/DRIVE` text lines are gone (the display's last-edit line already
+  reads out type changes); GROUP ▿ / VELOCITY ▿ print under the buttons and
+  FILTER ON is the photo's vertical rocker at the box's right edge. OSC
+  CTRL's inline value moved off the panel print (the display shows it).
+- **Comp/Reverb layouts** re-seated per the photo: Comp's ON cluster low at
+  the left of the AMOUNT knob; Reverb on a 2×2 grid (tone+type row over
+  DRY WET | ON), knob back up to 0.85cqw.
+- **Endless encoders lose their pointer line** (knurled rim + domed center;
+  the rotating knurl is the only motion cue, like the hardware).
+- Minor: panel grays darkened to the sampled values, MASTER LEVEL's white
+  ring, finer mod-wheel ribs + slighter lean, slimmer pitch-stick dowel,
+  glossier black-key tops, PRESET LIBRARY title in the photo's dark red.
+- Also completed a concurrent session's `ArpState.zigZag` addition in
+  `factory-programs.ts` (missing property broke the build gate).
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 487/487.
 
-User-directed corrections plus a live functional audit:
+### 31 — Round 2 workflow: Preset Library, Drawbar Live, Mon/Copy, Section Edit, Arp Menu (2026-07-03)
 
-- **Pitch stick moves side to side, like the hardware**: the slot is now a
-  landscape black recess (tilted ~-12°) with the wooden stick lying
-  horizontally in its left portion, and the DRAG AXIS is horizontal too —
-  `useContinuous` maps `stick`-type controls to clientX (right = bend up,
-  spring return unchanged), `aria-orientation` is `horizontal`, cursor
-  `ew-resize`. The decorative-controls drag test and the accessibility
-  orientation pin evolved truthfully with it.
-- **Mod wheel leans up-and-to-the-left** (was tilted the wrong way).
-- **Rotary Speaker strip sits on the red chassis** with a light outline and
-  its light title tab (was a dark slate panel fill).
-- **Branding enlarged and repositioned**: the Comfortaa logotype up to
-  1.18cqw with HAMMER ACTION 73 letter-spaced to span it, lifted off the
-  plate edge (overflow-checked at 1440 — the first spacing attempt tripped
-  `no-text-overflows-desktop` and was tightened).
-- **Program strip dead space closed**: the OLED now absorbs the strip's
-  spare height (`flex: 1`), so the bare red band between the display and
-  the PROGRAM box is gone.
-- **Functional sweep** (driven in the live browser, zero console errors):
-  vib/chorus cycle lights the exact scanner position on the new matrix;
-  program select, Shift/Shift-2 cross-latching, Mod 1 variation arrows,
-  Delay ON, rotary speed, knob/drawbar keyboard operation, timbre rocker,
-  key press → voice, master-clock tap + dial edit (300 BPM clamp), split
-  editor via Shift+Split (closes on Shift drop), morph capture on
-  delay-mix (assign → indicator dot → live wheel interpolation → clear),
-  arp run, Live Mode (L1), on-screen sustain + control pedal, and the
-  section-zoom overlay open/close. Two real fixes came out of it: the
-  rotary **MORPH LED** now truthfully lights while a morph source is
-  assigned to rotary speed (was hardwired unlit in iteration 26's rework),
-  and `setPointerCapture` is guarded so a pointer that disappears before
-  capture (touch cancellation, synthetic events) can't throw mid-gesture.
-- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404.
+Six sequential agents (all manual-verified) plus orchestrator button-system
+and geometry work. Tests 436 → 494.
 
-### 26 — Panel-print fidelity: knob scales, LED segments, selector arrows, OLED (2026-07-03)
-
-Crop-by-crop audit against reference/nord-stage-4-73.jpg (per-section element
-screenshots vs matching photo crops), closing the largest remaining print
-gaps. Visual-only — no control behavior changed; 404/404 tests untouched.
-
-- **Printed knob scales**: `Knob` gained a decorative `scale` prop rendering
-  the reference's tick/numeral arc around every knob (default 0-10; bipolar
-  ±15 for Bass/Mid/Treble, ±10 for Osc Env Amt, the Hz ladder 200…8K for the
-  Amp Sim/EQ freq knob; Master Level stays bare like the photo). The SVG
-  matches the knob's own box and paints outside its viewBox, so it adds no
-  scroll size to any flex cell; dark print on the light synth boxes.
-- **LED ladders are rectangular segments** (photo: wide bars, not dots), and
-  every drawbar ladder now sits in a light-outlined frame with the printed
-  1-8 amount numerals — slim enough that all nine columns still fit.
-- **Effect type selectors match the panel print**: Mod 1/2, Amp Sim/EQ,
-  Delay Effects/Filter and Reverb replaced their one-line text token lists
-  with the reference's two-column label grids around central triangular LED
-  arrows (`SelectorLedGrid`), including the boxed A-WAH/WAH/PUMP and red
-  TO ROTARY / LP FILTER / HP FILTER tags. The Organ Model and Piano Select
-  grids' round LEDs became the same left/right arrows. Reverb's BRIGHT DARK
-  cap-label button became the photo's stacked BRIGHT/DARK LED legends beside
-  a blank button, left of the type grid.
-- **OLED restyle**: pale blue-white pixels on black (was green), inverted
-  full-width header band on the Synth display (OSC WAVEFORM / VIBRATO /
-  envelope titles) and inverted soft-dial caption pills (TYPE/CAT/LAYER,
-  ATTACK/DECAY/RELEASE…), matching the photo's display chrome.
-- **Organ**: the three group boxes stopped visually merging ("ORGAN
-  MOD VIB/CHORUS B3 PERCUSSION" read as one truncated title) — smaller
-  titles, real gaps; Vib/Chorus rebuilt to the reference's selector-button-
-  left + 2x3 scanner matrix (C2 V3 C3 / V2 C1 V1, exact-position LEDs,
-  up/down triangles).
-- **Piano**: TIMBRE became the photo's tall dark rocker left of the label
-  column (was a boxed panel with a gray cap), which also cleared the
-  SUSTPED/PSTICK label collision.
-- **Performance zone**: CLOSE MIC ▿ and MORPH moved off the button caps to
-  printed legends (blank tan/dark caps like the hardware); Drive knob wears
-  its 0-10 arc with room to breathe.
-- **"HANDMADE IN SWEDEN BY CLAVIA DMI AB v2.0 Rev.B"** vertical print on the
-  bare red right margin.
-- verify-layout hardened alongside: SVG internals (the scale arcs) are
-  exempt from the text-overflow audit only when a knob's text is exactly its
-  scale numerals; Mod 1/Reverb re-packed (compact selector fonts, inline
-  variation rows) so every effects box fits its grid track again.
-- Gates: typecheck, lint, build, verify:layout 12/12, tests 404/404 (one
-  rendered-audio test flaked red on a single full-suite run and passed on
-  two consecutive re-runs — the pre-existing load-dependent offline-render
-  flake documented in iterations 9/6, untouched by this visual-only pass).
-
-### 25 — Program strip: box palette corrections and header alignment (2026-07-03)
-
-User-directed corrections to the previous pass: VOICE, VIBRATO,
-ARPEGGIATOR/GATE and UNISON revert to the darker plate gray (only MODE,
-LFO, OSCILLATORS, FILTER and AMP are light panels on the reference); the
-PROGRAM box is a darker-gray body under a full-width light heading band;
-MORPH ASSIGN / SPLIT / MST CLK / TRANSP get the same light heading bands
-and now share the top row without clipping their buttons (flex shares +
-content-sized caps + minmax(0,1fr) program-grid columns beat a
-specificity conflict that kept ORGANIZE over-wide); the program layout
-top-aligns the MORPH ASSIGN band with the neighboring plates' header
-bands to the pixel; the FX FOCUS "A B C" caption is pinned to one line.
-Gates: typecheck, test 404/404, lint, build, verify:layout 12/12.
+- **Preset Library (manual p.38, 41-43)**: preset-organ/piano/synth are all
+  FUNCTIONAL. Three factory banks in src/model/presets.ts (14 synth / 13
+  piano / 12 organ presets — original names, engine-real parameters only,
+  organ registrations across all six models). Browse on the Program OLED:
+  dial/PAGE load presets live as ordinary dirty edits, PROG 1 = Cancel
+  (restores the pre-browse snapshot + dirty flag), Shift/Exit keeps; SINGLE
+  LAYER = Shift+Piano/Synth button loads the focused layer only; organ
+  presets are always whole-Section (shared chain, p.41); the p.43 scene
+  rule turns a Section off in the non-active Layer Scene on Section loads.
+  Storing INTO the banks + Num/Cat sorts are declared limitations. Two
+  rendered proofs (distinct synth and organ presets).
+- **Drawbar Live / PRESET + SYNC (p.19/21/39)**: per-layer presetOn
+  (snapshot key, backfilled); a global non-snapshot physical drawbar pose
+  survives program loads; Live layers sound from the pose with dark LED
+  graphs while stored values stay untouched; SYNC = Shift+Preset copies
+  pose→program (presetOn untouched, per p.21); drawbar morph writes are
+  gated for Live layers (p.39). Rendered proof included.
+- **Monitor / Copy / Paste (p.43)**: mon-copy latches monitor+copy mode
+  (knob moves display values read-only through the single setValue front
+  door), Shift latches Paste; Layer / effect-ON / Morph / PROGRAM buttons
+  copy their objects to a non-snapshot clipboard and paste with truthful
+  compatibility refusals; program paste writes + loads like a confirmed
+  Store.
+- **Section Edit (p.43)**: click = sticky latch; parameter edits fan out at
+  the shared layer-resolution funnels (piano/organ/synth layer patches, FX
+  chain units → all of that section's chains) with '— all Synth layers'
+  style lastEdit annotations; never program state.
+- **Arp Menu phase 1 (p.35-36)**: latched Synth-OLED dial mode — page 1
+  Direction + Zig Zag (the +2/−1 walk in the deterministic scheduler;
+  snapshot key with backfill). Pattern pages depend on undocumented factory
+  patterns and stay honestly unimplemented.
+- **Orchestrator passes between agent landings** (user-directed): the
+  rounded-cap-in-rectangular-housing button system (black/grey/red caps;
+  gray bases under gray caps, all-black section ON buttons, red STORE/ARP
+  RUN caps per user direction — deliberately overriding the photo's red
+  shift-frames and dark ARP RUN cap from the concurrent audit pass);
+  STORE AS… merged onto Shift+Store (one red button, p.41); the 🔍 MAGNIFY
+  loupe (inert 2.6x deck clone following the cursor); note keys unblocked
+  while panel controls hold focus (Space keeps its activation guard);
+  selector-arrow columns on fixed grid axes; Voice box to the reference's
+  wide two-column shape and the synth plate's 60/40 vertical split; rotary
+  strip bottom aligned to the Organ plate edge with air under MASTER
+  LEVEL; drawbar/oscillator print slimmed so the harness's font metrics
+  keep 12/12 layout checks green.
+- Gates: typecheck, lint, build, verify:layout 12/12, tests 494/494.

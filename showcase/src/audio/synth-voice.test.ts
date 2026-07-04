@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { fakeAssetBoundary, fakeAudioBoundary, FakeGain, FakeOscillator } from '../test/fakes'
+import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
 import { InstrumentStore, mappings } from '../state/instrument'
 import { PianoEngine } from './engine'
@@ -573,5 +573,150 @@ describe('synth.arp — MST CLK substitution', () => {
     expect(store.getState().synth.arp.mstClk).toBe(false)
     store.toggleArpClockSync()
     expect(store.getState().synth.arp.mstClk).toBe(true)
+  })
+})
+
+describe('synth.arp — Arpeggiator Menu page 1: Direction / Zig Zag (manual p. 35)', () => {
+  it('Zig Zag on, Up, held {60,64,67,71}: notes jump two steps forward then one back', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.setArpRate(127)
+    store.setArpZigZag(true)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    engine.noteOn(67, 0.8)
+    engine.noteOn(71, 0.8)
+
+    const heard: number[] = []
+    for (let i = 0; i < 8; i++) {
+      timers.advance(60000 / 300 + 1)
+      const sounding = [60, 64, 67, 71].filter((m) => engine.isNoteActive(m))
+      if (sounding.length > 0) heard.push(sounding[0]!)
+    }
+    // Manual p. 35: "played notes will jump by two steps and then back one,
+    // in a given direction" — the walked positions over [60,64,67,71] are
+    // 0,2,1,3,2,4,3,5,… wrapping modulo the sequence length.
+    expect(heard).toEqual([60, 67, 64, 71, 67, 60, 71, 64])
+  })
+
+  it('Zig Zag off keeps the existing plain Up order over the same held set', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.setArpRate(127)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    engine.noteOn(67, 0.8)
+    engine.noteOn(71, 0.8)
+
+    const heard: number[] = []
+    for (let i = 0; i < 8; i++) {
+      timers.advance(60000 / 300 + 1)
+      const sounding = [60, 64, 67, 71].filter((m) => engine.isNoteActive(m))
+      if (sounding.length > 0) heard.push(sounding[0]!)
+    }
+    expect(heard).toEqual([60, 64, 67, 71, 60, 64, 67, 71])
+  })
+
+  it('Random direction stays reproducible for a fixed seed with Zig Zag on (draw path untouched)', () => {
+    function runOnce(zigZag: boolean): number[] {
+      const { engine, store, timers } = makeSystem()
+      engine.ensureStarted()
+      store.setArpRate(127)
+      store.setArpZigZag(zigZag)
+      store.cycleArpDirection() // Up -> Down
+      store.cycleArpDirection() // Down -> UpDown
+      store.cycleArpDirection() // UpDown -> Random
+      store.toggleArpRun()
+      engine.noteOn(60, 0.8)
+      engine.noteOn(64, 0.8)
+      engine.noteOn(67, 0.8)
+      const heard: number[] = []
+      for (let i = 0; i < 5; i++) {
+        timers.advance(60000 / 300 + 1)
+        const sounding = [60, 64, 67].filter((m) => engine.isNoteActive(m))
+        if (sounding.length > 0) heard.push(sounding[0]!)
+      }
+      return heard
+    }
+    // Zig Zag has no defined order to apply to a fresh random draw each
+    // step, so the xorshift sequence must be byte-identical either way.
+    expect(runOnce(true)).toEqual(runOnce(false))
+  })
+
+  it('the MENU button latches the OLED dials onto page/Direction/Zig Zag; dial 1 stays on the one implemented page', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Synth Section On' }))
+    const menuButton = screen.getByRole('button', { name: 'Arpeggiator Menu' })
+    fireEvent.click(menuButton)
+    const line = () => screen.getByTestId('oled-synth-arp-menu-line').textContent
+    expect(line()).toMatch(/ARP MENU 1\/1 · DIR Up · ZIG ZAG Off/)
+    const dial2 = screen.getByRole('slider', { name: 'Synth Display Dial 2' })
+    fireEvent.keyDown(dial2, { key: 'End' }) // absolute list position -> Random
+    expect(line()).toMatch(/DIR Random/)
+    fireEvent.keyDown(dial2, { key: 'Home' }) // -> Up
+    expect(line()).toMatch(/DIR Up ·/)
+    const dial3 = screen.getByRole('slider', { name: 'Synth Display Dial 3' })
+    fireEvent.keyDown(dial3, { key: 'End' })
+    expect(line()).toMatch(/ZIG ZAG On/)
+    // Dial 1 navigates menu pages; only page 1 (Direction/Zig Zag) is
+    // implemented, so navigation truthfully stays on 1/1.
+    const dial1 = screen.getByRole('slider', { name: 'Synth Display Dial 1' })
+    fireEvent.keyDown(dial1, { key: 'End' })
+    expect(line()).toMatch(/ARP MENU 1\/1/)
+    // Closing the menu returns the OLED to its normal waveform view.
+    fireEvent.click(menuButton)
+    expect(screen.queryByTestId('oled-synth-arp-menu-line')).toBeNull()
+    expect(screen.getByTestId('oled-synth-ctrl-line')).toBeInTheDocument()
+  })
+
+  it('the ARP MENU edit mode is mutually exclusive with the other latched dial modes', () => {
+    const { store } = makeSystem()
+    store.setSynthArpMenuEdit(true)
+    expect(store.getState().synthArpMenuEdit).toBe(true)
+    store.setSynthEnvEdit('amp')
+    expect(store.getState().synthArpMenuEdit).toBe(false) // engaging an envelope edit closes it
+    store.setSynthArpMenuEdit(true)
+    expect(store.getState().synthEnvEdit).toBe(null) // and vice versa
+    store.setSynthVibratoEdit(true)
+    expect(store.getState().synthArpMenuEdit).toBe(false)
+    store.setSynthArpMenuEdit(true)
+    expect(store.getState().synthVibratoEdit).toBe(false)
+    store.setSynthOscPitchEdit(true)
+    expect(store.getState().synthArpMenuEdit).toBe(false)
+    store.setSynthArpMenuEdit(true)
+    expect(store.getState().synthOscPitchEdit).toBe(false)
+  })
+
+  it('arp.zigZag round-trips through the program snapshot', () => {
+    const { store } = makeSystem()
+    store.setArpZigZag(true)
+    expect(store.getState().programs.dirty).toBe(true)
+    store.storePress()
+    store.storePress() // store into the current slot
+    store.setArpZigZag(false)
+    store.selectProgram(1)
+    store.selectProgram(0)
+    expect(store.getState().synth.arp.zigZag).toBe(true)
+  })
+
+  it('an old persisted snapshot whose arp lacks zigZag backfills to Off', () => {
+    const seed = new InstrumentStore()
+    const strip = (slot: { name: string; snapshot: unknown }) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as { synth: { arp: Record<string, unknown> } }
+      delete snapshot.synth.arp.zigZag
+      return { name: slot.name, snapshot }
+    }
+    const rawBank = seed.getState().programs.bank.map(strip)
+    const rawLive = seed.getState().programs.live.map(strip)
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({ version: 1, bank: rawBank, live: rawLive, liveMode: false, current: 0 }),
+    })
+    expect(() => new InstrumentStore(storage)).not.toThrow()
+    const restored = new InstrumentStore(storage)
+    expect(restored.getState().synth.arp.zigZag).toBe(false)
+    restored.selectProgram(3)
+    expect(restored.getState().synth.arp.zigZag).toBe(false)
   })
 })

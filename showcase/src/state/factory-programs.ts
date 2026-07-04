@@ -156,7 +156,7 @@ export function buildFactoryContent(base: InstrumentState): { bank: ProgramSlot[
         waveform: synthWaveformIndex('Square'),
         ampEnvelope: { ...a.ampEnvelope, attack: 0, decay: 127, release: 15 },
       }
-      draft.synth.arp = { run: true, mode: 'Gate', rate: 64, mstClk: true, range: 3, direction: 'Up', hold: true }
+      draft.synth.arp = { run: true, mode: 'Gate', rate: 64, mstClk: true, range: 3, direction: 'Up', hold: true, zigZag: false }
       draft.kbHold = true
     }),
   ]

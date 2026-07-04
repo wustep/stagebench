@@ -375,10 +375,13 @@ export interface ArpState {
   range: 1 | 2 | 3 | 4
   direction: ArpDirection
   hold: boolean
+  /** Zig Zag (Arpeggiator Menu page 1, manual p. 35): "played notes will
+   *  jump by two steps and then back one, in a given direction". */
+  zigZag: boolean
 }
 
 function defaultArp(): ArpState {
-  return { run: false, mode: 'Arp', rate: 64, mstClk: false, range: 1, direction: 'Up', hold: false }
+  return { run: false, mode: 'Arp', rate: 64, mstClk: false, range: 1, direction: 'Up', hold: false, zigZag: false }
 }
 
 export interface SynthState {
@@ -614,6 +617,13 @@ export interface InstrumentState {
   /** LAYER INIT screen (Shift + Section Edit, manual p. 43): PROGRAM 1-4 act
    *  as the four soft buttons (All / Org AB / Pno / Syn). Not program state. */
   layerInitEdit: boolean
+  /** SECTION EDIT sticky latch (manual p. 43): while engaged, an edit done
+   *  to a parameter is performed on all Layers of that parameter's Section.
+   *  The hardware's double-tap "sticky" mode maps to our click = sticky
+   *  latch (declared adaptation, same convention as Mon/Copy); click again
+   *  or Shift/Exit leaves. Temporary panel state — never stored in programs
+   *  (manual p. 38). */
+  sectionEdit: boolean
   /** PRESET LIBRARY browse screen (manual p. 41-42): the Program dial steps
    *  the section's preset list, loading each preset live into the current
    *  program as an ordinary dirty edit. `preBrowse` is the snapshot the
@@ -661,6 +671,13 @@ export interface InstrumentState {
    *  Fine Tune cents instead of their normal roles. Mutually exclusive with
    *  synthEnvEdit and synthVibratoEdit. Not program state. */
   synthOscPitchEdit: boolean
+  /** Arpeggiator MENU button latched (manual p. 35): the Synth OLED dials
+   *  become page / Direction / Zig Zag. Only menu page 1 (Direction and
+   *  Zig Zag) is implemented, so dial 1's page navigation stays on 1/1;
+   *  pages 2-5 (Pattern presets/edit/accent/pan) are out of scope. Mutually
+   *  exclusive with synthEnvEdit, synthVibratoEdit and synthOscPitchEdit.
+   *  Not program state. */
+  synthArpMenuEdit: boolean
   /** Live morph source positions (mod wheel, control pedal 0..127). Not program state. */
   morphValues: Record<MorphSource, number>
   /** The ONE physical set of nine drawbars on the hardware: their current
@@ -804,6 +821,7 @@ function baseInstrumentState(): InstrumentState {
     clockEdit: false,
     transposeEdit: false,
     layerInitEdit: false,
+    sectionEdit: false,
     presetBrowse: null,
     morphArming: null,
     monCopy: null,
@@ -812,6 +830,7 @@ function baseInstrumentState(): InstrumentState {
     modelListView: false,
     synthVibratoEdit: false,
     synthOscPitchEdit: false,
+    synthArpMenuEdit: false,
     morphValues: { wheel: 0, pedal: 0 },
     // The physical pose boots matching the power-on focused layer's (A's)
     // registration so nothing jumps when a layer first goes Drawbar Live.
@@ -1071,6 +1090,18 @@ export class InstrumentStore {
 
   /* ------------------------------------------------------- piano layers -- */
 
+  /** SECTION EDIT-aware Piano layer patch (manual p. 43): the partial fans
+   *  out to BOTH Piano layers while the latch is on. Layer On/Off
+   *  (setLayerEnabled) and Mon/Copy layer paste stay deliberately un-fanned
+   *  — they are layer selection / clipboard operations, not parameter
+   *  edits (Layer Scenes own the on/off configurations). */
+  private patchPianoLayer(layer: LayerId, partial: Partial<PianoLayerState>, lastEdit: string, extra: Partial<InstrumentState> = {}): void {
+    const targets: readonly LayerId[] = this.state.sectionEdit ? ['A', 'B'] : [layer]
+    const layers = { ...this.state.layers }
+    for (const id of targets) layers[id] = { ...layers[id], ...partial }
+    this.patch({ layers, ...extra }, targets.length > 1 ? `${lastEdit} — both Piano layers` : lastEdit)
+  }
+
   setLayerEnabled(layer: LayerId, enabled: boolean): void {
     const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], enabled } }
     // Focus follows the layer being switched on; focusing a disabled layer is allowed on hardware.
@@ -1087,8 +1118,7 @@ export class InstrumentStore {
 
   setLayerLevel(layer: LayerId, level: number): void {
     const clamped = clamp(level)
-    const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], level: clamped } }
-    this.patch({ layers }, `Piano ${layer} Level ${clamped}`)
+    this.patchPianoLayer(layer, { level: clamped }, `Piano ${layer} Level ${clamped}`)
   }
 
   setFocusedLayer(layer: LayerId): void {
@@ -1102,8 +1132,7 @@ export class InstrumentStore {
   shiftOctave(layer: LayerId, delta: -1 | 1): void {
     const current = this.state.layers[layer].octave
     const next = Math.max(-1, Math.min(1, current + delta)) as -1 | 0 | 1
-    const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], octave: next } }
-    this.patch({ layers }, `Piano ${layer} Octave ${next > 0 ? `+${next}` : next}`)
+    this.patchPianoLayer(layer, { octave: next }, `Piano ${layer} Octave ${next > 0 ? `+${next}` : next}`)
   }
 
   setPianoSectionOn(on: boolean): void {
@@ -1122,10 +1151,11 @@ export class InstrumentStore {
   selectPianoType(type: PianoType): void {
     const layer = this.state.focusedLayer
     const populated = instrumentsOfType(type).length > 0
-    const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], type, model: 0 } }
-    this.patch(
-      { layers, pianoNotFound: populated ? null : type },
+    this.patchPianoLayer(
+      layer,
+      { type, model: 0 },
       populated ? `Piano ${layer}: ${instrumentsOfType(type)[0]!.name}` : `Piano not found (${type})`,
+      { pianoNotFound: populated ? null : type },
     )
   }
 
@@ -1134,8 +1164,11 @@ export class InstrumentStore {
     const models = instrumentsOfType(this.state.layers[layer].type)
     if (models.length === 0) return
     const clamped = Math.max(0, Math.min(models.length - 1, Math.round(model)))
-    const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], model: clamped } }
-    this.patch({ layers, pianoNotFound: null }, `Piano ${layer}: ${models[clamped]!.name}`)
+    // The partial carries the focused layer's type too: a fanned Section
+    // Edit model selection means "this instrument on both layers" — a bare
+    // model index would be meaningless (or out of range) under the other
+    // layer's type. Without the latch the type write is a no-op.
+    this.patchPianoLayer(layer, { type: this.state.layers[layer].type, model: clamped }, `Piano ${layer}: ${models[clamped]!.name}`, { pianoNotFound: null })
   }
 
   /** Model list view (Shift + Piano Model dial, spec.scope.optional): shows
@@ -1358,6 +1391,21 @@ export class InstrumentStore {
     this.patch(
       { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null } : {}) },
       on ? 'Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn' : 'Layer Init closed',
+    )
+  }
+
+  /** SECTION EDIT (manual p. 43): while engaged, edits done to a parameter
+   *  are performed on all Layers of that parameter's Section (the per-layer
+   *  patch funnels and updateUnit fan out). The hardware's double-tap
+   *  "sticky" mode maps to our click = sticky latch (declared adaptation,
+   *  same convention as Mon/Copy); click again or Shift/Exit leaves. Not a
+   *  Program-OLED edit mode — the latch coexists with them. Temporary panel
+   *  state, never stored in programs (manual p. 38). */
+  setSectionEdit(on: boolean): void {
+    if (on === this.state.sectionEdit) return
+    this.patch(
+      { sectionEdit: on },
+      on ? 'Section Edit — edits apply to all Layers of the Section' : 'Section Edit off',
     )
   }
 
@@ -1706,8 +1754,7 @@ export class InstrumentStore {
     const sectionLabel = section === 'piano' ? 'Piano' : section === 'synth' ? 'Synth' : 'Organ'
     const label = `${sectionLabel} ${layer} KB Zone ${next.from + 1}–${next.to + 1}`
     if (section === 'piano') {
-      const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer as LayerId], zone: next } }
-      this.patch({ layers }, label)
+      this.patchPianoLayer(layer as LayerId, { zone: next }, label)
     } else if (section === 'synth') {
       this.patchSynthLayer(layer as SynthLayerId, { zone: next }, label)
     } else {
@@ -2303,9 +2350,17 @@ export class InstrumentStore {
     this.patch({ organ: { ...this.state.organ, ...partial } }, lastEdit)
   }
 
+  /** SECTION EDIT-aware Organ layer patch (manual p. 43): the partial fans
+   *  out to BOTH Organ layers while the latch is on (level, octave, model,
+   *  Preset/Drawbar-Live, vibrato on/off, SYNC, zones). Layer On/Off
+   *  (toggleOrganLayerEnabled) and Mon/Copy layer paste stay deliberately
+   *  un-fanned — layer selection / clipboard operations, not parameter
+   *  edits. Percussion and the scanner type are already section-shared. */
   private patchOrganLayer(layer: LayerId, partial: Partial<OrganLayerState>, lastEdit: string): void {
-    const layers = { ...this.state.organ.layers, [layer]: { ...this.state.organ.layers[layer], ...partial } }
-    this.patchOrgan({ layers }, lastEdit)
+    const targets: readonly LayerId[] = this.state.sectionEdit ? ['A', 'B'] : [layer]
+    const layers = { ...this.state.organ.layers }
+    for (const id of targets) layers[id] = { ...layers[id], ...partial }
+    this.patchOrgan({ layers }, targets.length > 1 ? `${lastEdit} — both Organ layers` : lastEdit)
   }
 
   setOrganSectionOn(on: boolean): void {
@@ -2360,14 +2415,19 @@ export class InstrumentStore {
       this.patch({ organDrawbarPose }, `Drawbar ${index + 1}: ${clamped} (Live)`)
       return
     }
-    const drawbars = [...layerState.drawbars]
-    drawbars[index] = clamped
+    // SECTION EDIT (manual p. 43): the registration edit fans out to both
+    // layers' stored drawbars. The Drawbar-Live path above is untouched —
+    // a pose move is not a parameter edit, so there is nothing to fan.
+    const targets: readonly LayerId[] = this.state.sectionEdit ? ['A', 'B'] : [layer]
+    const layers = { ...this.state.organ.layers }
+    for (const id of targets) {
+      const drawbars = [...layers[id].drawbars]
+      drawbars[index] = clamped
+      layers[id] = { ...layers[id], drawbars }
+    }
     this.patch(
-      {
-        organDrawbarPose,
-        organ: { ...this.state.organ, layers: { ...this.state.organ.layers, [layer]: { ...layerState, drawbars } } },
-      },
-      `Drawbar ${index + 1}: ${clamped}`,
+      { organDrawbarPose, organ: { ...this.state.organ, layers } },
+      targets.length > 1 ? `Drawbar ${index + 1}: ${clamped} — both Organ layers` : `Drawbar ${index + 1}: ${clamped}`,
     )
   }
 
@@ -2438,9 +2498,22 @@ export class InstrumentStore {
     this.patch({ synth: { ...this.state.synth, ...partial } }, lastEdit)
   }
 
+  /** SECTION EDIT-aware Synth layer patch (manual p. 43: "especially useful
+   *  for synchronizing Synth parameters across Layers"): `partialFor` sees
+   *  each target layer, so nested objects (filter/lfo/voice/envelopes/
+   *  oscPitch) merge against that layer's OWN state and only the edited
+   *  fields fan out. Layer On/Off (toggleSynthLayerEnabled) and Mon/Copy
+   *  layer paste stay deliberately un-fanned — layer selection / clipboard
+   *  operations, not parameter edits. */
+  private patchSynthLayers(layer: SynthLayerId, partialFor: (current: SynthLayerState) => Partial<SynthLayerState>, lastEdit: string): void {
+    const targets: readonly SynthLayerId[] = this.state.sectionEdit ? SYNTH_LAYER_IDS : [layer]
+    const layers = { ...this.state.synth.layers }
+    for (const id of targets) layers[id] = { ...layers[id], ...partialFor(layers[id]) }
+    this.patchSynth({ layers }, targets.length > 1 ? `${lastEdit} — all Synth layers` : lastEdit)
+  }
+
   private patchSynthLayer(layer: SynthLayerId, partial: Partial<SynthLayerState>, lastEdit: string): void {
-    const layers = { ...this.state.synth.layers, [layer]: { ...this.state.synth.layers[layer], ...partial } }
-    this.patchSynth({ layers }, lastEdit)
+    this.patchSynthLayers(layer, () => partial, lastEdit)
   }
 
   setSynthSectionOn(on: boolean): void {
@@ -2562,7 +2635,7 @@ export class InstrumentStore {
           : 'release' in partial
             ? `Synth ${layer} Amp Release ${envelope.release}`
             : `Synth ${layer} Amp Velocity ${envelope.velocity}`
-    this.patchSynthLayer(layer, { ampEnvelope: envelope }, label)
+    this.patchSynthLayers(layer, (l) => ({ ampEnvelope: { ...l.ampEnvelope, ...partial } }), label)
   }
 
   cycleSynthAmpVelocity(): void {
@@ -2590,6 +2663,7 @@ export class InstrumentStore {
         synthEnvEdit: edit,
         synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
         synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+        synthArpMenuEdit: edit ? false : this.state.synthArpMenuEdit,
       },
       label,
     )
@@ -2599,8 +2673,7 @@ export class InstrumentStore {
 
   private patchSynthFilter(partial: Partial<SynthFilterState>, lastEdit: string): void {
     const layer = this.state.synth.focusedLayer
-    const filter = { ...this.state.synth.layers[layer].filter, ...partial }
-    this.patchSynthLayer(layer, { filter }, lastEdit)
+    this.patchSynthLayers(layer, (l) => ({ filter: { ...l.filter, ...partial } }), lastEdit)
   }
 
   toggleSynthFilterOn(): void {
@@ -2660,7 +2733,9 @@ export class InstrumentStore {
           : 'release' in partial
             ? `Synth ${layer} Filter Release ${envelope.release}`
             : `Synth ${layer} Filter Velocity ${envelope.velocity ? 'On' : 'Off'}`
-    this.patchSynthFilter({ envelope }, label)
+    // Two-level merge so a fanned Section Edit write syncs only the edited
+    // envelope fields against each layer's own filter envelope.
+    this.patchSynthLayers(layer, (l) => ({ filter: { ...l.filter, envelope: { ...l.filter.envelope, ...partial } } }), label)
   }
 
   toggleSynthFilterEnvVelocity(): void {
@@ -2683,7 +2758,7 @@ export class InstrumentStore {
             : 'amount' in partial
               ? `Synth ${layer} Osc Env Amt ${envelope.amount}`
               : `Synth ${layer} Osc Velocity ${envelope.velocity ? 'On' : 'Off'}`
-    this.patchSynthLayer(layer, { oscEnvelope: envelope }, label)
+    this.patchSynthLayers(layer, (l) => ({ oscEnvelope: { ...l.oscEnvelope, ...partial } }), label)
   }
 
   toggleOscEnvToPitch(): void {
@@ -2696,8 +2771,7 @@ export class InstrumentStore {
 
   private patchSynthLfo(partial: Partial<SynthLfoState>, lastEdit: string): void {
     const layer = this.state.synth.focusedLayer
-    const lfo = { ...this.state.synth.layers[layer].lfo, ...partial }
-    this.patchSynthLayer(layer, { lfo }, lastEdit)
+    this.patchSynthLayers(layer, (l) => ({ lfo: { ...l.lfo, ...partial } }), lastEdit)
   }
 
   cycleSynthLfoWaveform(): void {
@@ -2763,8 +2837,7 @@ export class InstrumentStore {
 
   private patchSynthVoice(partial: Partial<SynthVoiceState>, lastEdit: string): void {
     const layer = this.state.synth.focusedLayer
-    const voice = { ...this.state.synth.layers[layer].voice, ...partial }
-    this.patchSynthLayer(layer, { voice }, lastEdit)
+    this.patchSynthLayers(layer, (l) => ({ voice: { ...l.voice, ...partial } }), lastEdit)
   }
 
   /** VOICE MODE (manual p. 35): cycles Poly -> Mono -> Legato -> Poly. */
@@ -2829,6 +2902,7 @@ export class InstrumentStore {
         synthVibratoEdit: edit,
         synthEnvEdit: edit ? null : this.state.synthEnvEdit,
         synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+        synthArpMenuEdit: edit ? false : this.state.synthArpMenuEdit,
       },
       edit ? 'Synth Vibrato Menu — dials: Rate · Amount' : 'Synth Vibrato Menu closed',
     )
@@ -2847,6 +2921,7 @@ export class InstrumentStore {
         synthOscPitchEdit: edit,
         synthEnvEdit: edit ? null : this.state.synthEnvEdit,
         synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
+        synthArpMenuEdit: edit ? false : this.state.synthArpMenuEdit,
       },
       edit ? 'Synth Osc Pitch — dials: Pitch · Fine Tune' : 'Synth Osc Pitch closed',
     )
@@ -2857,8 +2932,7 @@ export class InstrumentStore {
   setSynthOscPitchSemis(semis: number): void {
     const layer = this.state.synth.focusedLayer
     const clamped = Math.max(-24, Math.min(24, Math.round(semis)))
-    const oscPitch = { ...this.state.synth.layers[layer].oscPitch, semis: clamped }
-    this.patchSynthLayer(layer, { oscPitch }, `Synth ${layer} Osc Pitch ${fmtSemitones(clamped)} st`)
+    this.patchSynthLayers(layer, (l) => ({ oscPitch: { ...l.oscPitch, semis: clamped } }), `Synth ${layer} Osc Pitch ${fmtSemitones(clamped)} st`)
   }
 
   /** Osc Pitch fine tune (manual p. 28: "Fine Tune has a range of ± 50
@@ -2866,8 +2940,7 @@ export class InstrumentStore {
   setSynthOscPitchCents(cents: number): void {
     const layer = this.state.synth.focusedLayer
     const clamped = Math.max(-50, Math.min(50, Math.round(cents)))
-    const oscPitch = { ...this.state.synth.layers[layer].oscPitch, cents: clamped }
-    this.patchSynthLayer(layer, { oscPitch }, `Synth ${layer} Fine Tune ${fmtSemitones(clamped)} c`)
+    this.patchSynthLayers(layer, (l) => ({ oscPitch: { ...l.oscPitch, cents: clamped } }), `Synth ${layer} Fine Tune ${fmtSemitones(clamped)} c`)
   }
 
   /* --------------------------------------------------------- arpeggiator -- */
@@ -2895,6 +2968,40 @@ export class InstrumentStore {
     const current = this.state.synth.arp.direction
     const next = ARP_DIRECTIONS[(ARP_DIRECTIONS.indexOf(current) + 1) % ARP_DIRECTIONS.length]!
     this.patchArp({ direction: next }, `Arp Direction: ${next}`)
+  }
+
+  /** Arpeggiator MENU dial 2 (manual p. 35, page 1): Direction by absolute
+   *  list position — the panel's "dial = absolute list position" convention. */
+  selectArpDirection(index: number): void {
+    const clamped = Math.max(0, Math.min(ARP_DIRECTIONS.length - 1, Math.round(index)))
+    const direction = ARP_DIRECTIONS[clamped]!
+    if (direction === this.state.synth.arp.direction) return
+    this.patchArp({ direction }, `Arp Direction: ${direction}`)
+  }
+
+  /** Arpeggiator MENU dial 3 (manual p. 35, page 1): Zig Zag on/off. */
+  setArpZigZag(zigZag: boolean): void {
+    if (zigZag === this.state.synth.arp.zigZag) return
+    this.patchArp({ zigZag }, `Arp Zig Zag ${zigZag ? 'On' : 'Off'}`)
+  }
+
+  /** Arpeggiator MENU button (manual p. 35): latches the Synth OLED dials
+   *  onto page / Direction / Zig Zag, mirroring setSynthEnvEdit's
+   *  dial-repurposing pattern. Only page 1 is implemented (the Pattern
+   *  pages need preset-pattern semantics the panel cannot honor yet), so
+   *  the menu truthfully reads 1/1. Mutually exclusive with synthEnvEdit,
+   *  synthVibratoEdit and synthOscPitchEdit. */
+  setSynthArpMenuEdit(edit: boolean): void {
+    if (edit === this.state.synthArpMenuEdit) return
+    this.patch(
+      {
+        synthArpMenuEdit: edit,
+        synthEnvEdit: edit ? null : this.state.synthEnvEdit,
+        synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
+        synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+      },
+      edit ? 'Arp Menu — dials: Page · Direction · Zig Zag' : 'Arp Menu closed',
+    )
   }
 
   setArpRate(value: number): void {
@@ -2941,15 +3048,19 @@ export class InstrumentStore {
     return this.state.chains[this.state.focusedLayer]
   }
 
-  /** Chains an effect edit targets: focused layer, or both in Group/global mode. */
+  /** Chains an effect edit targets: focused layer, or both in Group/global
+   *  mode — or while SECTION EDIT is latched (manual p. 43: "setting up just
+   *  some of the effects the same for a whole Section"). */
   private targetLayers(unit: keyof EffectChainState): LayerId[] {
     const global = (unit === 'delay' && this.state.fxGlobal.delay) || (unit === 'comp' && this.state.fxGlobal.comp) || (unit === 'reverb' && this.state.fxGlobal.reverb)
-    if (global || this.state.fxGroupPiano) return ['A', 'B']
+    if (global || this.state.fxGroupPiano || this.state.sectionEdit) return ['A', 'B']
     return [this.state.focusedLayer]
   }
 
   updateUnit<K extends keyof EffectChainState>(unit: K, partial: Partial<EffectChainState[K]>, label?: string): void {
     if (this.state.fxSection === 'organ') {
+      // The single shared Organ chain is already section-wide (manual
+      // p. 18), so SECTION EDIT changes nothing here.
       const organChain = {
         ...this.state.organChain,
         [unit]: { ...this.state.organChain[unit], ...partial },
@@ -2958,18 +3069,22 @@ export class InstrumentStore {
       return
     }
     if (this.state.fxSection === 'synth') {
+      // SECTION EDIT (manual p. 43) fans the unit edit to all three synth
+      // layer chains, like Group mode.
+      const targets = this.fxGroupSynth || this.state.sectionEdit ? SYNTH_LAYER_IDS : [this.state.synth.focusedLayer]
       const synthChains = { ...this.state.synthChains }
-      for (const layer of this.fxGroupSynth ? SYNTH_LAYER_IDS : [this.state.synth.focusedLayer]) {
+      for (const layer of targets) {
         synthChains[layer] = { ...synthChains[layer], [unit]: { ...synthChains[layer][unit], ...partial } }
       }
-      this.patch({ synthChains }, label)
+      this.patch({ synthChains }, label && this.state.sectionEdit && targets.length > 1 ? `${label} — all Synth chains` : label)
       return
     }
+    const targets = this.targetLayers(unit)
     const chains = { ...this.state.chains }
-    for (const layer of this.targetLayers(unit)) {
+    for (const layer of targets) {
       chains[layer] = { ...chains[layer], [unit]: { ...chains[layer][unit], ...partial } }
     }
-    this.patch({ chains }, label)
+    this.patch({ chains }, label && this.state.sectionEdit && targets.length > 1 ? `${label} — both Piano chains` : label)
   }
 
   private get fxGroupSynth(): boolean {

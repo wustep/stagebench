@@ -23,10 +23,12 @@ import type { SectionId } from './variant'
  * state, with SYNC as its Shift pairing. All three PRESET
  * LIBRARY buttons are functional (manual p. 41-42), each browsing/loading
  * its factory bank. Prog View is functional: it cycles the Program display's
- * four view modes (manual p. 42). Section Edit is functional through its
- * Shift pairing only — LAYER INIT (manual p. 43) opens the four-soft-button
- * init screen on the Program OLED, while the plain press truthfully does
- * nothing (the hold/sticky Section Edit mode is not modeled).
+ * four view modes (manual p. 42). Section Edit is fully functional: a plain
+ * press latches the p. 43 sticky mode — edits done to a parameter fan out
+ * to all Layers of that Section (the hardware's double-tap sticky maps to
+ * click = sticky latch, a declared adaptation) — and LAYER INIT (Shift +
+ * Section Edit, manual p. 43) opens the four-soft-button init screen on the
+ * Program OLED.
  */
 export type ControlType = 'knob' | 'encoder' | 'button' | 'fader' | 'drawbar' | 'wheel' | 'stick'
 
@@ -138,8 +140,10 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'page-right',
   'live-mode',
   'solo-undo',
-  // LAYER INIT = Shift + Section Edit (manual p. 43): the button's Shift
-  // pairing opens the init screen; its plain press is truthfully inert.
+  // SECTION EDIT (manual p. 43): a plain press latches sticky mode — edits
+  // done to a parameter fan out to all Layers of that Section (the
+  // hardware's double-tap sticky maps to click = sticky latch, a declared
+  // adaptation). LAYER INIT = Shift + Section Edit opens the init screen.
   'section-edit',
   // MONITOR / COPY / PASTE (manual p. 43): the Mon/Copy click latches the
   // monitor/copy mode, Shift + click latches Paste (pointer-first
@@ -199,6 +203,7 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'arp-mode',
   'arp-rate',
   'arp-range',
+  'arp-menu',
   'kb-hold',
   'fx-focus-synth',
   // Optional scope: Synth Mode (Analog <-> Samples; Extern stays
@@ -339,8 +344,9 @@ const programControls = section('program', [
   push('solo-undo', 'Solo/Undo'),
   // ONE physical button (reference photo): LAYER INIT is its Shift pairing
   // (manual p. 43, printed as the ▽ shift-legend below the cap). The plain
-  // press stays truthfully inert — the hardware's hold/sticky Section Edit
-  // mode is not modeled.
+  // press latches the p. 43 SECTION EDIT sticky mode — edits done to a
+  // parameter fan out to all Layers of that Section (the hardware's
+  // double-tap sticky maps to click = sticky latch, a declared adaptation).
   push('section-edit', 'Section Edit'),
   push('mon-copy', 'Monitor/Copy Paste'),
   toggle('shift', 'Shift/Exit'),

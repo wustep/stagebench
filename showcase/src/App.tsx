@@ -31,6 +31,27 @@ import { VARIANT } from './model/variant'
 type ZoomableSectionId = 'organ' | 'piano' | 'synth' | 'effects'
 const ZOOM_TITLES: Record<ZoomableSectionId, string> = { organ: 'Organ', piano: 'Piano', synth: 'Synth', effects: 'Layer Effects' }
 
+/** Rear-connector legends printed along the top lip, [label, left%] pairs
+ *  pixel-measured from reference/nord-stage-4-73.jpg. Multi-line labels wrap
+ *  at the \n like the reference's stacked print. */
+const REAR_LEGENDS: [string, number][] = [
+  ['MONITOR\nIN', 15],
+  ['HEAD\nPHONES', 16.5],
+  ['OUT 1 — OUT 2', 18.5],
+  ['OUT 3 — OUT 4', 21.4],
+  ['CONTROL\nPEDAL', 23.5],
+  ['ORGAN\nSWELL', 25.1],
+  ['SUSTAIN\nPEDAL', 26.7],
+  ['TRIPLE\nPEDAL', 28.3],
+  ['MIDI IN', 33.4],
+  ['MIDI OUT', 38.1],
+  ['ROTOR\nPEDAL', 40.3],
+  ['USB', 41.9],
+  ['FOOT\nSWITCH', 43.4],
+  ['AC IN', 61],
+  ['POWER ON/OFF', 65.3],
+]
+
 export interface AppProps {
   audioBoundary?: AudioBoundary
   midiBoundary?: MidiBoundary
@@ -107,9 +128,10 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   const [zoomedSection, setZoomedSection] = useState<ZoomableSectionId | null>(null)
 
   // Magnifier loupe: while toggled on, a floating lens follows the pointer
-  // over the control deck showing a 2.6x view of the panel under the cursor.
-  // The lens content is a second, inert render of the deck (aria-hidden,
-  // pointer-events none) — purely visual, the real deck stays interactive.
+  // over the deck block (top-rail rear legends + control deck) showing a
+  // 2.6x view of the panel under the cursor. The lens content is a second,
+  // inert render of the deck (aria-hidden, pointer-events none) — purely
+  // visual, the real deck stays interactive.
   const [magnify, setMagnify] = useState(false)
   const realDeckRef = useRef<HTMLDivElement>(null)
   const lensRef = useRef<HTMLDivElement>(null)
@@ -316,8 +338,22 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       >
         <div className="chassis" data-testid="chassis">
           <div className="deck-block" data-testid="deck-block" style={{ height: '54%' }}>
-            <div className="top-rail" aria-hidden="true" />
+            {/* Rear-connector legends printed on the top lip (reference
+                photo); purely decorative print — the jacks are on the back. */}
+            <div className="top-rail" aria-hidden="true">
+              {REAR_LEGENDS.map(([label, left]) => (
+                <span key={label} className="rear-legend" style={{ left: `${left}%` }}>
+                  {label}
+                </span>
+              ))}
+            </div>
             <div className="control-deck" data-testid="control-deck" ref={realDeckRef}>
+              {/* Chassis screws along the deck's bottom lip (reference). */}
+              <span className="deck-screws" aria-hidden="true">
+                {[13.6, 32.6, 40.7, 52.6, 76.4, 94.8].map((left) => (
+                  <i key={left} style={{ left: `${left}%` }} />
+                ))}
+              </span>
               <PerformanceSection store={store} instrument={instrument} />
               <OrganSection store={store} instrument={instrument} onZoom={() => setZoomedSection('organ')} />
               <PianoSection store={store} instrument={instrument} engine={engine} onZoom={() => setZoomedSection('piano')} />

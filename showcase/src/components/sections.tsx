@@ -11,7 +11,6 @@ import {
   SPLIT_POINT_NAMES,
   SPLIT_POSITION_NAMES,
   SPLIT_POSITIONS,
-  SYNTH_FILTER_TYPES,
   SYNTH_WAVEFORMS,
   timbreListFor,
   useInstrumentState,
@@ -1079,7 +1078,14 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                 <Legend className="dim">UNDO</Legend>
               </span>
               <span className="rail-cell">
-                <Legend>SECTION EDIT ⇕</Legend>
+                {/* Lit while the Section Edit sticky latch is on (manual
+                    p. 43: edits apply to all Layers of the Section) — the
+                    tiny-led-row convention for latched modes on push
+                    buttons. */}
+                <span className="tiny-led-row">
+                  <Led color="yellow" on={state.sectionEdit} />
+                  <Legend>SECTION EDIT ⇕</Legend>
+                </span>
                 <PanelButton store={store} id="section-edit" className="dark tiny" />
                 {/* LAYER INIT = Shift + Section Edit (manual p. 43). The
                     printed ▽ shift-legend below the cap is itself clickable
@@ -1156,6 +1162,8 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
         : state.synthEnvEdit === 'osc'
           ? { label: 'OSC ENVELOPE', ...oscEnvelope }
           : null
+  // Manual p. 35 display spellings ("UP/DOWN" on the reference OLED).
+  const arpDirectionLabel = synth.arp.direction === 'UpDown' ? 'Up/Down' : synth.arp.direction
   return (
     <SectionShell id="synth">
       <div className="plate">
@@ -1196,7 +1204,8 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               <span className="hold-cell">
                 <span className="tiny-led-row" aria-hidden="true">
                   <Led color="red" on={state.kbHold} />
-                  <Legend>KB HOLD</Legend>
+                  {/* Boxed red label, as printed on the reference panel. */}
+                  <Legend className="red-tag">KB HOLD</Legend>
                 </span>
                 <PanelButton store={store} id="kb-hold" className="dark tiny" />
                 <Legend className="dim">EXCLUDE ▿</Legend>
@@ -1205,6 +1214,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <span className="tiny-led-row" aria-hidden="true">
                   <Legend>ARP RUN</Legend>
                 </span>
+                {/* User direction: ARP RUN wears a RED cap (like STORE). */}
                 <PanelButton store={store} id="arp-run" className="red tiny" />
                 <Legend className={`dim ${synth.arp.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
               </span>
@@ -1224,7 +1234,32 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <Oled
                   section="synth"
                   lines={
-                    state.synthOscPitchEdit
+                    state.synthArpMenuEdit
+                      ? [
+                          <span key="t" className="oled-dim">
+                            ARPEGGIATOR
+                          </span>,
+                          <b key="w" className="oled-name" data-testid="oled-synth-name-line">
+                            {displayName}
+                          </b>,
+                          <span key="am" data-testid="oled-synth-arp-menu-line">
+                            ARP MENU 1/1 · DIR {arpDirectionLabel} · ZIG ZAG {synth.arp.zigZag ? 'On' : 'Off'}
+                          </span>,
+                          <span key="m" className="oled-menu">
+                            <span>
+                              {/* Only page 1 (Direction/Zig Zag) is implemented;
+                                  the manual's Pattern pages are out of scope. */}
+                              1/1 <b>PAGE</b>
+                            </span>
+                            <span>
+                              {arpDirectionLabel} <b>DIRECTION</b>
+                            </span>
+                            <span>
+                              {synth.arp.zigZag ? 'On' : 'Off'} <b>ZIG ZAG</b>
+                            </span>
+                          </span>,
+                        ]
+                      : state.synthOscPitchEdit
                       ? [
                           <span key="t" className="oled-dim">
                             OSC PITCH
@@ -1243,7 +1278,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                               {fmtSigned(focused.oscPitch.cents)} c <b>FINE TUNE</b>
                             </span>
                             <span>
-                              {synth.focusedLayer} <b>LAYER</b>
+                              {focused.lfo.destination ?? 'OFF'} <b>LFO DEST</b>
                             </span>
                           </span>,
                         ]
@@ -1267,7 +1302,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                               {mappings.vibratoAmountDisplay(focused.voice.vibratoAmount).toFixed(1)} <b>AMOUNT</b>
                             </span>
                             <span>
-                              {synth.focusedLayer} <b>LAYER</b>
+                              {focused.lfo.destination ?? 'OFF'} <b>LFO DEST</b>
                             </span>
                           </span>,
                         ]
@@ -1313,24 +1348,34 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                               {isSamplesMode ? '—' : synthCategoryLabel(wave.category)} <b>CAT</b>
                             </span>
                             <span>
-                              {synth.focusedLayer} <b>LAYER</b>
+                              {focused.lfo.destination ?? 'OFF'} <b>LFO DEST</b>
                             </span>
                           </span>,
                         ]
                   }
                 />
+                {/* Leader lines from the display's soft captions down to the
+                    three dials (reference print). */}
+                <span className="synth-dial-leads" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
                 <div className="synth-dials">
+                  {/* Static panel print (reference: INFO / LIST / LIST); the
+                      dials' live functions are captioned by the display's
+                      soft rows above, like the hardware. */}
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-1" className="small" />
-                    <Legend className="dim">{editedEnvelope ? 'ATTACK' : 'INFO'}</Legend>
+                    <Legend className="dim">INFO</Legend>
                   </span>
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-2" className="small" />
-                    <Legend className="dim">{editedEnvelope ? 'DECAY' : 'WAVE'}</Legend>
+                    <Legend className="dim">LIST</Legend>
                   </span>
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-3" className="small" />
-                    <Legend className="dim">{editedEnvelope ? 'RELEASE' : 'LFO DEST'}</Legend>
+                    <Legend className="dim">LIST</Legend>
                   </span>
                 </div>
               </div>
@@ -1379,7 +1424,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                             Arp is the unlit base mode (reference print). */}
                         <Legend>ARP</Legend>
                         <Led color="red" on={synth.arp.mode === 'Gate'} />
-                        <Legend>GATE</Legend>
+                        <Legend className="tag-box">GATE</Legend>
                       </span>
                       <PanelButton store={store} id="arp-mode" className="dark tiny" led="green" />
                       {/* PATTERN LED stays dark: arp patterns are not
@@ -1393,13 +1438,17 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     </span>
                     <span className="knob-cell">
                       <Knob store={store} id="arp-range" className="small" />
-                      <Legend>{synth.arp.mode === 'Gate' ? 'HARDNESS' : 'RANGE'} ENV</Legend>
+                      <Legend>
+                        {synth.arp.mode === 'Gate' ? 'HARDNESS' : 'RANGE'} <b className="tag-box">ENV</b>
+                      </Legend>
                     </span>
                     <span className="arp-mode-cell">
-                      {/* LED binds to the menu latch when the Arp Menu
-                          feature lands; dark until then. */}
+                      {/* MENU latch (manual p. 35): the Synth OLED dials
+                          become page / Direction / Zig Zag. GROUP ▿ stays a
+                          print — Shift + Menu's all-Layers sharing is out of
+                          scope. */}
                       <span className="tiny-led-row" aria-hidden="true">
-                        <Led color="red" />
+                        <Led color="red" on={state.synthArpMenuEdit} />
                         <Legend>MENU</Legend>
                       </span>
                       <PanelButton store={store} id="arp-menu" className="framed tiny" />
@@ -1526,10 +1575,10 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 </Legend>
                 <span className="knob-pair">
                   <span className="knob-cell">
+                    {/* The live value reads out on the display's OSC CTRL
+                        line; the panel print stays static (reference). */}
                     <Knob store={store} id="osc-ctrl" />
-                    <Legend>
-                      OSC CTRL <b>{(focused.oscCtrl / 12.7).toFixed(1)}</b>
-                    </Legend>
+                    <Legend>OSC CTRL</Legend>
                   </span>
                   <span className="knob-cell">
                     <Knob store={store} id="osc-env-amt" className="small" scale={['-10', null, '-5', '0', '5', null, '10']} />
@@ -1552,10 +1601,13 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <PanelButton store={store} id="filter-type" className="framed tiny" />
                   <PanelButton store={store} id="filter-envelope" className="framed tiny" />
                 </span>
-                <TokenRow tokens={[...SYNTH_FILTER_TYPES]} active={filter.type} />
-                <Legend className="dim">
-                  TRACK {['OFF', '1/3', '2/3', '1'][filter.tracking]} ▿ · DRIVE {['OFF', '1', '2', '3'][filter.drive]} ▿
-                </Legend>
+                {/* Reference print: GROUP ▿ under TYPE, VELOCITY ▿ under
+                    ENVELOPE — the active filter type reads out on the
+                    display's last-edit line, not as invented panel text. */}
+                <span className="button-cell-legends" aria-hidden="true">
+                  <Legend className="dim">GROUP ▿</Legend>
+                  <Legend className="dim">VELOCITY ▿</Legend>
+                </span>
                 <span className="knob-pair">
                   <span className="knob-cell">
                     <Knob store={store} id="filter-freq" />
@@ -1570,9 +1622,14 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     <Legend>ENV AMT</Legend>
                   </span>
                 </span>
-                <span className="filter-on-cell">
-                  <Legend>FILTER ON</Legend>
-                  <PanelButton store={store} id="filter-on" className="dark tiny" led="red" />
+                {/* Reference: FILTER ON is a vertical light rocker at the
+                    box's right edge with its red LED printed above. */}
+                <span className="fx-on-cell filter-on-cell">
+                  <span className="tiny-led-row" aria-hidden="true">
+                    <Led color="red" on={filter.on} />
+                    <Legend>FILTER ON</Legend>
+                  </span>
+                  <PanelButton store={store} id="filter-on" className="rocker fx-on-rocker" />
                 </span>
               </GroupBox>
               <div className="amp-unison-column">
@@ -1658,19 +1715,6 @@ function SelectorLedGrid({ rows }: { rows: SelectorRow[] }) {
   )
 }
 
-function TokenRow({ tokens, active }: { tokens: string[]; active?: string }) {
-  return (
-    <Legend className="dim token-row">
-      {tokens.map((token, i) => (
-        <span key={token} className="type-token" data-on={active !== undefined && token === active ? 'true' : undefined}>
-          {i > 0 ? ' · ' : ''}
-          {token}
-        </span>
-      ))}
-    </Legend>
-  )
-}
-
 export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps) {
   const state = useInstrumentState(instrument)
   const chain = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
@@ -1737,7 +1781,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             <GroupBox title="Mod 1" className="fx-box mod1-box">
               <span className="knob-cell">
                 <Knob store={store} id="mod1-rate" className="small" />
-                <Legend>RATE <i className="dim">SENS</i></Legend>
+                <Legend>RATE <b className="tag-box">SENS</b></Legend>
                 <Legend className={`dim red-tag ${chain.mod1.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
               </span>
               <span className="knob-cell">
@@ -1759,7 +1803,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                 <span className="variation-row">
                   <PanelButton store={store} id="mod1-variation" className="dark tiny" />
                   <Legend className="dim">
-                    VARIATION <i>PED</i> ▿
+                    VARIATION <b className="tag-box">PED</b> ▿
                   </Legend>
                 </span>
               </span>
@@ -1936,7 +1980,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="knob-cell">
                 <Knob store={store} id="amp-freq" className="small" scale={['200', '250', '400', '600', '1K', '2K', '4K', '6K', '8K']} />
-                <Legend>FREQ <i className="dim">MID</i></Legend>
+                <Legend>FREQ <b className="tag-box">MID</b></Legend>
               </span>
               <span className="variation-cell">
                 <SelectorLedGrid

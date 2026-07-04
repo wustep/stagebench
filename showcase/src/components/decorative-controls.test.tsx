@@ -227,16 +227,14 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
 
   it('the OLED content does not react to decorative program controls', () => {
     // Program buttons, Store, the dial, Prog View (display view modes,
-    // manual p. 42), the three Preset Library buttons and Mon/Copy (manual
-    // p. 43) belong to the functional Programs cluster now — the one
-    // still-decorative control here is Morph A.T. Section Edit is
-    // functional only through its LAYER INIT Shift pairing (manual p. 43);
-    // its plain press stays truthfully inert.
+    // manual p. 42), the three Preset Library buttons, Mon/Copy (manual
+    // p. 43) and Section Edit (plain press = the p. 43 sticky latch,
+    // Shift = Layer Init) belong to the functional Programs cluster now —
+    // the one still-decorative control here is Morph A.T.
     renderApp()
     const oled = screen.getByTestId('oled-program')
     const before = oled.textContent
     fireEvent.click(screen.getByRole('button', { name: 'Morph Assign Aftertouch' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Section Edit' }))
     expect(oled.textContent).toBe(before)
   })
 })

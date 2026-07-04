@@ -170,11 +170,11 @@ export const Knob = memo(function Knob({ store, id, className, scale = 'ten' }: 
 export const Encoder = memo(function Encoder({ store, id, className }: ContinuousProps) {
   const { value, min, range, sliderProps } = useContinuous(store, id)
   const angle = ((value - min) / range) * 330
+  // Endless encoders have NO pointer line (reference photo) — the knurled
+  // rim rotating is the only visual motion, exactly like the hardware.
   return (
     <div {...sliderProps} className={`encoder ${className ?? ''}`}>
-      <div className="encoder-cap" style={{ transform: `rotate(${angle}deg)` }}>
-        <div className="knob-index" />
-      </div>
+      <div className="encoder-cap" style={{ transform: `rotate(${angle}deg)` }} />
     </div>
   )
 })
