@@ -113,10 +113,11 @@ function SectionHeader({
   onSoloHold?: () => void
 }) {
   // Reference: the section ON state is a RED LED below the ON print, left
-  // of the switch; FX FOCUS prints above its dot the same way. The tall
-  // band tab ends right after the switch and SOLO ▾ prints on the thin
-  // BOTTOM-aligned strip that continues to the plate's right edge (red
-  // above it). The narrow Piano plate is one full-width band instead.
+  // of the switch; FX FOCUS prints above its dot the same way. SOLO ▾
+  // prints on the TALL band right of the switch; only after it does the
+  // band step down (rounded corner) to the thin BOTTOM-aligned strip that
+  // continues to the plate's right edge (red above it). The narrow Piano
+  // plate is one full-width band with no step.
   const lit = usePresentationToggle(store, onId)
   return (
     <div className={`plate-header${fullBand ? ' plate-header-full' : ''}`}>
@@ -133,13 +134,9 @@ function SectionHeader({
           </span>
           <PanelButton store={store} id={onId} className="pill" holdAction={onSoloHold} />
         </span>
-        {fullBand && <Legend className="dim solo-print">SOLO ▾</Legend>}
+        <Legend className="dim solo-print">SOLO ▾</Legend>
       </div>
-      {!fullBand && (
-        <div className="plate-header-strip">
-          <Legend className="dim solo-print">SOLO ▾</Legend>
-        </div>
-      )}
+      {!fullBand && <div className="plate-header-strip" aria-hidden="true" />}
     </div>
   )
 }

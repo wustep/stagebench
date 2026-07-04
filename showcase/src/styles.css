@@ -10,6 +10,11 @@
   --panel: #3d4450;
   --panel-dark: #333945;
   --panel-line: #5c6371;
+  /* The light header/tab band: nearly FLAT bluish gray in the photo
+     (sampled ~rgb(190,198,211)) — the old values were lighter and too
+     gradient-heavy. One material shared by every light tab on the panel. */
+  --band-hi: #c6cbd7;
+  --band-lo: #bcc2cf;
   --key-black: #0b0b0b;
   --key-white: #dcdcdc;
   --legend: #e6e2da;
@@ -497,8 +502,8 @@ body {
 /* The reference's section header is a full-width LIGHT band with dark navy
    text (title, SECTION, FX FOCUS, ON, SOLO all sit on it). */
 /* Photo: each plate's light band is a TALL tab (title, FX FOCUS, ON,
-   SOLO ▾) that steps down after the switch to a THIN strip running to the
-   plate's right edge. */
+   SOLO ▾) that steps down AFTER the SOLO print to a THIN strip running to
+   the plate's right edge. */
 .plate-header {
   flex: none;
   display: flex;
@@ -512,19 +517,19 @@ body {
   display: flex;
   align-items: center;
   gap: 0.42cqw;
-  padding: 0.08cqw 0.4cqw 0.1cqw;
-  /* The tall LIGHT tab (photo): title, FX FOCUS and ON print dark on it;
-     it ends right after the switch, both top corners rounded against the
-     red above. */
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
-  border-radius: 0.3cqw 0.3cqw 0 0;
+  padding: 0.08cqw 0.5cqw 0.1cqw 0.4cqw;
+  /* The tall LIGHT tab (photo): title, FX FOCUS, ON and SOLO ▾ print dark
+     on it; it steps down after SOLO. The top-left corner is a SMALL radius,
+     the step corner (top-right) a visibly larger one. */
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
+  border-radius: 0.14cqw 0.22cqw 0 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.35);
 }
 
 /* Full-width band variant (Piano — the plate is too narrow for a step). */
 .plate-header-full .plate-header-tab {
   flex: 1;
-  border-radius: 0.3cqw 0.3cqw 0 0;
+  border-radius: 0.14cqw 0.14cqw 0 0;
 }
 
 /* FX FOCUS and ON print ABOVE their LEDs (photo). */
@@ -540,26 +545,18 @@ body {
   white-space: nowrap;
 }
 
-/* Photo: the section ON switch rides LOW on the band, its housing edge
-   poking just below the band line. */
-.plate-header-tab .on-cluster .panel-button.pill {
-  margin-bottom: -0.14cqw;
-  margin-top: -0.02cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
-  border-radius: 0.3cqw 0 0.24cqw 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
-}
+/* Photo: the black switch housing sits directly ON the light band, fully
+   contained within the band's height (no light frame of its own). */
 
 .plate-header-strip {
   flex: 1;
-  height: 0.5cqw;
-  display: flex;
-  align-items: center;
-  padding-left: 0.22cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c9cdd6 100%);
-  /* Bottom-aligned continuation (photo): red sits above it, its outer end
-     rounds up at the plate corner. */
-  border-radius: 0.14cqw 0.3cqw 0 0;
+  /* Photo: the strip is about HALF the band's height, bottom-aligned. */
+  height: 0.64cqw;
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
+  /* Bottom-aligned continuation (photo): red sits above it; the inside
+     corner under the step is crisp, the outer end rounds at the plate
+     corner. */
+  border-radius: 0 0.14cqw 0 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.3);
 }
 
@@ -567,8 +564,12 @@ body {
   color: #232a38;
 }
 
+/* Photo: SECTION prints in the same dark ink as the title, bold, with only
+   modest tracking — not a faded wide-spaced caption. */
 .plate-header .plate-subtitle {
-  color: #4d5464;
+  color: #2a3140;
+  font-weight: 700;
+  letter-spacing: 0.06cqw;
 }
 
 .plate-header .legend {
@@ -1039,11 +1040,15 @@ body {
 .plate-header .panel-button.pill {
   background: linear-gradient(180deg, #17181b 0%, #060708 100%);
   border: 0.05cqw solid #000;
-  border-radius: 0.08cqw;
+  border-radius: 0.05cqw;
+  /* Faint top-edge bevel on the housing (photo). */
+  box-shadow: inset 0 0.03cqw 0 rgba(255, 255, 255, 0.14);
 }
 
+/* Photo: the cap is a warm charcoal (slightly olive) dome, light at the
+   crown falling to near-black at the base. */
 .plate-header .panel-button.pill .panel-button-cap {
-  background: linear-gradient(180deg, #3d4148 0%, #17191d 100%);
+  background: linear-gradient(180deg, #45463f 0%, #34352f 45%, #1d1e1b 100%);
 }
 
 /* Light ON/OFF tab above each layer button: dark text, layer LED inside.
@@ -1052,7 +1057,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.07cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   border-radius: 0.12cqw;
   padding: 0.03cqw 0.09cqw;
 }
@@ -1917,7 +1922,7 @@ body {
   width: calc(100% + 0.4cqw);
   margin: -0.25cqw -0.2cqw 0.02cqw;
   padding: 0.1cqw 0 0.12cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   border-radius: 0.26cqw 0.26cqw 0 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.3);
   font-size: 0.4cqw;
@@ -2311,6 +2316,13 @@ body {
   height: 0.28cqw;
 }
 
+/* Photo: the piano band is the shortest, so its (uniform-size) ON switch
+   housing pokes slightly below the band line — unlike the wide plates,
+   where the housing sits fully inside the band. */
+.deck-section[data-section='piano'] .plate-header .panel-button.pill {
+  transform: translateY(0.06cqw);
+}
+
 .deck-section[data-section='piano'] .plate-header .on-cluster {
   gap: 0.1cqw;
 }
@@ -2630,7 +2642,7 @@ body {
   text-align: center;
   border-radius: 0.14cqw 0.14cqw 0 0;
   color: #232a38;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
 }
 
 .deck-section[data-section='program'] .panel-button.tiny {
@@ -2775,7 +2787,7 @@ body {
   font-size: 0.34cqw;
   letter-spacing: 0.03cqw;
   color: #232a38;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   white-space: nowrap;
   max-width: 100%;
 }
@@ -3935,7 +3947,7 @@ body {
 /* Second Shift/Exit on its light tab (reference), pinned at the strip foot. */
 .fx-shift {
   margin-top: auto;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   border-radius: 0.25cqw 0.25cqw 0 0;
   padding: 0.1cqw 0.25cqw 0.15cqw;
 }
