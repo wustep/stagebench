@@ -1,0 +1,33 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "audio": {
+    "strategy": "One basic piano voice produced by honest real-time synthesis in a single Web Audio AudioContext. Each note is a small additive oscillator stack (a triangle fundamental, a slightly detuned sine for body, and sine partials at the octave and twelfth) shaped by a per-note gain envelope. Velocity scales the peak gain on a squared curve; note-off applies a per-note linear release; sustain (UI/keyboard/MIDI CC64) holds released notes until the damper lifts. All voices route through one master gain into a DynamicsCompressor acting as a soft limiter, then to the single AudioContext.destination. Polyphony is bounded (16 voices) with deterministic oldest-first voice stealing. There are NO recorded samples in this phase.",
+    "generatedSources": [
+      {
+        "name": "Phase 1 basic piano voice",
+        "type": "generated",
+        "synthesis": "Additive oscillator stack (triangle fundamental + detuned sine + octave/twelfth sine partials) with a velocity-scaled amplitude envelope and per-note release.",
+        "implementation": "src/audio/webAudioBackend.ts (WebAudioTone) and src/audio/pianoEngine.ts (PianoEngine).",
+        "license": "Generated at runtime; no third-party asset, no license required.",
+        "notes": "This is synthesized, not a recording. It is a deliberately simple, dependable placeholder for the Phase 2 recorded sample sets (Grand/Upright/Electric), which are NOT present yet."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "No recorded sample sets are bundled in Phase 1. Grand/Upright/Electric recorded sample sets are Phase 2 scope.",
+      "The audio boundary is injectable (src/audio/types.ts). Tests use src/audio/fakeBackend.ts — no real AudioContext, no audio output, no network, no MIDI device.",
+      "If no AudioContext is available, the app enters a truthful, labeled silent 'fallback' status that still tracks the note lifecycle and never reports the primary voice as ready.",
+      "Every panel control other than the keybed and sustain input is honestly decorative: it moves/presses and stores presentation-only state (src/state/controlStore.ts). No decorative control produces audio or mutates program/effect/system state (honesty contract)."
+    ]
+  },
+  "decorativeControls": {
+    "summary": "All panel controls outside the keybed are decorative in Phase 1. They have stable IDs, accessible names/roles/values, respond to pointer and keyboard, and show state (buttons light, knobs turn, faders/drawbars slide, selectors cycle). None affects audio or system state.",
+    "inventory": "src/model/controls.ts (CONTROLS); presentation state in src/state/controlStore.ts."
+  },
+  "functional": {
+    "keybed": "73 keys (E1..E7), pointer + independent multi-touch + accessible computer keyboard + Web MIDI note/velocity + CC64 sustain, through one shared note lifecycle (src/input/noteRouter.ts).",
+    "sustainInput": "UI is not a functional Phase 1 requirement; sustain is functional from computer-keyboard-independent MIDI CC64 and the router API. The SUSTPED panel toggles are decorative in Phase 1."
+  }
+}

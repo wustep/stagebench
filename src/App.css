@@ -31,6 +31,25 @@ button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; }
 
+/* Hidden until focused, then a panel-style chip so keyboard users can jump
+   past the 40+ playable keys in the header. */
+.skip-link {
+  position: absolute;
+  z-index: calc(var(--z-modal) + 1);
+  top: 10px;
+  left: 10px;
+  padding: 9px 14px;
+  border: 1px solid var(--white);
+  background: var(--black);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 14px));
+}
+
+.skip-link:focus-visible { transform: none; outline-offset: 1px; }
+
 .instrument-header {
   position: relative;
   padding-bottom: 60px;
@@ -290,6 +309,8 @@ a { color: inherit; }
 
 .black-key .key-label { bottom: 4px; color: oklch(79% 0.03 29); }
 
+/* A slice of the black control deck: the showcase reads as part of the
+   instrument rather than a marketing card. */
 .showcase-band {
   display: flex;
   align-items: center;
@@ -298,17 +319,18 @@ a { color: inherit; }
   width: min(1180px, calc(100% - 48px));
   margin: 40px auto 0;
   padding: 24px 28px;
-  border: 1px solid var(--ink);
-  border-left: 5px solid var(--nord-red);
-  background: var(--white);
-  transition: box-shadow .18s ease, border-left-width .18s ease;
+  border-radius: 3px;
+  background: linear-gradient(180deg, oklch(26% 0.01 30), var(--panel) 45%);
+  box-shadow:
+    inset 0 1px color-mix(in oklch, var(--white) 14%, transparent),
+    0 16px 30px -22px oklch(15% 0.03 29 / .8);
+  color: var(--white);
 }
 
-.showcase-band:hover { border-left-width: 8px; box-shadow: 0 12px 28px -18px oklch(30% 0.1 29 / .55); }
-
-.showcase-flag { display: inline-block; margin-bottom: 8px; color: var(--nord-red-dark); font: 900 11px/1 'Barlow Condensed', sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.showcase-flag { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 9px; color: var(--red-led); font: 900 11px/1 'Barlow Condensed', sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.showcase-flag::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--red-led); box-shadow: 0 0 6px oklch(65% 0.25 29 / .8); }
 .showcase-copy h2 { margin: 0 0 6px; font: 800 30px/1 'Barlow Condensed', sans-serif; letter-spacing: -.01em; }
-.showcase-copy p { max-width: 60ch; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.showcase-copy p { max-width: 60ch; margin: 0; color: color-mix(in oklch, var(--white) 72%, transparent); font-size: 12.5px; line-height: 1.5; }
 .showcase-band .open-preview { flex: none; justify-content: center; padding: 0 22px; }
 
 @media (max-width: 720px) { .showcase-band { flex-direction: column; align-items: flex-start; } .showcase-band .open-preview { align-self: stretch; } }
@@ -355,10 +377,7 @@ a { color: inherit; }
   transition: background-color .16s ease, box-shadow .16s ease;
 }
 
-.run-row:hover {
-  background: oklch(97% 0.006 29);
-  box-shadow: inset 3px 0 0 var(--nord-red);
-}
+.run-row:hover { background: oklch(97.5% 0.005 29); }
 
 .run-model h3 {
   margin: 10px 0 6px;
@@ -370,8 +389,8 @@ a { color: inherit; }
 .run-model p { margin: 0; color: var(--muted); font: 500 10px/1.4 ui-monospace, monospace; }
 .run-status-line { display: flex; align-items: center; gap: 9px; }
 .run-status { display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
-.run-row.result-legacy { border-left: 4px solid var(--line); opacity: .9; }
-.model-target { padding: 3px 6px; border: 1px solid var(--line); color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.run-row.result-legacy { opacity: .88; }
+.model-target { padding: 3px 6px; border: 1px solid var(--line); color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 
 .run-score {
   display: flex;

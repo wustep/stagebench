@@ -156,7 +156,7 @@ function getPhaseName(run: RunEntry, phase: PhaseNumber) {
 
 function getResultClass(run: RunEntry) {
   if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 1, description: 'Runs recorded under earlier protocol versions, kept for reference with their frozen evaluation reports.' }
-  return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: 'Runs recorded under the current benchmark protocol.' }
+  return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: 'Benchmark evaluation reports are not rigorous and are just for fun.' }
 }
 
 function StatusLight({ status }: { status: StageStatus | RunEntry['status'] | 'off' }) {
@@ -540,6 +540,7 @@ function App() {
 
   return (
     <main>
+      <a className="skip-link" href="#runs">Skip to runs</a>
       <header className="instrument-header">
         <nav className="topbar" aria-label="Primary navigation">
           <a className="wordmark" href="#runs" aria-label="Stagebench runs">
@@ -550,8 +551,8 @@ function App() {
 
         <div className="header-intro">
           <div>
-            <h1>Nord Stage 4 benchmark</h1>
-            <p>Compare agent-built recreations across the complete surface and basic Piano, multi-Piano effects, then the full Stage 4 system.</p>
+            <h1>Nord Stage{'\u00A0'}4 benchmark</h1>
+            <p>Coding agents recreate the Nord Stage 4 as a playable browser instrument in three cumulative phases — panel and Piano, Piano library and effects, then the complete system.</p>
           </div>
         </div>
 
@@ -614,6 +615,7 @@ function App() {
               const resultClass = getResultClass(run)
               const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
               const phaseList = getPhaseList(run)
+              const telemetry = formatTelemetry(run.telemetry)
               return (
               <Fragment key={run.id}>
               {resultClass.id !== previousClass && (
@@ -625,7 +627,7 @@ function App() {
               <article className={`run-row result-${resultClass.id}`}>
                 <div className="run-model">
                   <div className="run-status-line">
-                    <span className="run-status"><StatusLight status={run.status} />{run.status}</span>
+                    <span className="run-status"><StatusLight status={run.status} />{run.status.replace(/-/g, ' ')}</span>
                     <span className="model-target">{run.target}</span>
                   </div>
                   <h3>{getRunTitle(run)}</h3>
@@ -635,8 +637,8 @@ function App() {
                       <span>/100</span>
                     </div>
                   )}
-                  <p>{formatDate(run.startedAt)} · {run.model}</p>
-                  {formatTelemetry(run.telemetry) && <p className="run-telemetry">{formatTelemetry(run.telemetry)}</p>}
+                  <p>{formatDate(run.startedAt)}{run.model !== getRunTitle(run) && ` · ${run.model}`}</p>
+                  {telemetry && <p className="run-telemetry">{telemetry}</p>}
                 </div>
 
                 <ol className="stage-track" aria-label={`${getRunTitle(run)} phase progress`} style={{ gridTemplateColumns: `repeat(${phaseList.length}, 1fr)` }}>
