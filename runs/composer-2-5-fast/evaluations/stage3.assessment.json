@@ -1,0 +1,177 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "composer-2-5-fast",
+  "stage": 3,
+  "evaluator": "independent-evaluator (Composer)",
+  "evaluatedAt": "2026-07-04T08:10:00.000Z",
+  "summary": "Phase 3 delivers a credible full-system Stage 4: 32 program slots with Live mode, splits/scenes/morph/clock/transpose/panic, live organ and synth engines integrated through the inherited single-AudioContext graph, and an unsupported-controls audit. All gates pass (74/74 tests, 38/38 feature IDs). Inherited weaknesses remain: piano Grand/Upright/Electric are still synthesized buffers (sampleSources: 0), visual surface is schematic CSS from Phase 1, and LFO/rotary polish is simplified. Program round-trips and cross-engine integration are tested with rendered-audio assertions on organ/synth distinctions.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 3,
+          "evidence": [
+            "Stage3 visual audit confirms 54/46 deck/keybed split, six-section layout, and Phase 1–2 chassis preserved.",
+            "Sealed captures at 1440×900 and 390×844 report zero console errors; regression.phase1 and regression.phase2 mapped in feature matrix.",
+            "Materials/typography remain simplified CSS from Phase 1 — structure retained, photo fidelity not improved."
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "rating": 3,
+          "evidence": [
+            "Program OLED shows page.button and name; Synth OLED shows waveform category; split/scene/morph LEDs wired in integration tests.",
+            "Organ drawbar LEDs, model selectors, and synth layer groups reflect state through control bindings.",
+            "Spec-excluded controls listed in unsupported-controls.ts and stay decorative."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 3,
+          "evidence": [
+            "programs.test.ts covers 32-slot navigation (pages/dial/list), Store/Store As, dirty indicator, edit-discard, and 8 Live auto-store slots.",
+            "Eight factory programs shipped; round-trip serialization restores supported state fields."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 3,
+          "evidence": [
+            "integration.test.ts exercises splits at documented positions, Off/±6/±12 crossfades, zone assignment, Scenes I/II, morph wheel/pedal assign/clear.",
+            "Master clock BPM, transpose ±6, and Panic covered in morph-clock and integration tests."
+          ]
+        },
+        {
+          "id": "organSystem",
+          "rating": 3,
+          "evidence": [
+            "organ.test.ts covers two-layer note lifecycle, B3/Vox/Farf/Pipe spectral distinctions via signalsDiffer, drawbar level changes, percussion, vibrato/chorus toggles.",
+            "Shared effect chain and rotary slow/fast routing tested with rendered audio."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 3,
+          "evidence": [
+            "synth.test.ts covers three layers, Pure/Sync/Multi/Super/FM-H waveform distinctions, filter/envelope parameter effects, poly/mono/legato, glide, unison, deterministic arp/gate.",
+            "LFO settings stored and partially exercised via filter/resonance; full LFO audio modulation simplified per candidate audit."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 3,
+          "evidence": [
+            "Organ models and synth waveform families produce measurably distinct offline-rendered signals in dedicated tests.",
+            "Piano types remain synthesized OfflineAudioContext profiles — audibly distinct but not recorded sample sets."
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "rating": 3,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS declares one AudioContext: piano A/B buses, shared organ chain, synth A/B/C chains, shared Rotary, master gain/limiter.",
+            "integration.test.ts verifies organ and synth voices route through inherited effect graph without second context."
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "rating": 2,
+          "evidence": [
+            "Test suite ~49s at seal; sample synthesis at init dominates startup.",
+            "Rotary acceleration uses shared ramp approximation; layered play cleanup tested but musical polish/latency not deeply profiled."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "rating": 3,
+          "evidence": [
+            "programs.test.ts round-trips piano layers, effects params, splits, scenes, morph assignments, and focus state across save/load.",
+            "system.integration feature ID mapped to programs.test.ts and integration.test.ts."
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "rating": 3,
+          "evidence": [
+            "hardware.bindings tested via integration.test.ts; unsupported-controls.ts documents spec-excluded panel IDs.",
+            "No silent no-op claims on required controls — excluded items honestly decorative."
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "rating": 3,
+          "evidence": [
+            "Integration tests combine program change with split/scene state, morph interpolation, and multi-engine focus routing.",
+            "Panic clears voices across piano/organ/synth paths."
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "rating": 3,
+          "evidence": [
+            "All Phase 1–2 test files retained and green; regression.phase2 mapped to engine.test.ts and integration.test.ts.",
+            "Verification: 38/38 required features, four package gates pass."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "architecture",
+          "rating": 3,
+          "evidence": [
+            "Clear module boundaries: programs.ts, organ-voice.ts, synth-voice.ts, zones.ts, morph-clock.ts, program-types.ts.",
+            "Canonical serializable program state with control-bindings wiring panel to engines."
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "rating": 3,
+          "evidence": [
+            "74 tests across 9 files; feature matrix maps every Phase 1–3 ID.",
+            "Rendered-audio helpers reused from Phase 2; dedicated organ/synth/program/integration test modules."
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "rating": 2,
+          "evidence": [
+            "Seal test duration ~50s; 252 KB JS bundle.",
+            "Zero capture console errors; voice cleanup tests pass but load-time synthesis remains costly."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "category": "audioIntegration",
+      "description": "Piano Grand/Upright/Electric remain synthesized buffers (sampleSources: 0), inherited from Phase 2."
+    },
+    {
+      "severity": "minor",
+      "category": "featureCompletion",
+      "description": "Synth LFO audio modulation and organ rotary acceleration are simplified relative to the manual spec."
+    }
+  ]
+}

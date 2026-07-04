@@ -51,13 +51,13 @@
     <small>Stagebench evaluation · rubric 3.1.0</small>
     <h1>Composer 2.5 Fast</h1>
     <p>Evidence-backed evaluation of visual fidelity, feature completion, interaction, audio behavior, and engineering quality. Scores use phase-specific weights and automated technical gates.</p>
-    <div class="aggregate"><strong>71</strong><span>/100</span></div>
+    <div class="aggregate"><strong>66</strong><span>/100</span></div>
   </header>
   <main>
     <section class="overview">
       <h2>Run overview</h2>
-      <p>Run <code>composer-2-5-fast</code> · complete · 1/1 selected phases evaluated · generated Jul 4, 2026, 12:13 AM UTC</p>
-      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th></tr></thead><tbody><tr><td>Phase 1</td><td>Complete surface and basic piano</td><td><strong>71</strong>/100</td></tr></tbody></table>
+      <p>Run <code>composer-2-5-fast</code> · in-progress · 2/3 selected phases evaluated · generated Jul 4, 2026, 7:58 AM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th></tr></thead><tbody><tr><td>Phase 1</td><td>Complete surface and basic piano</td><td><strong>71</strong>/100</td></tr><tr><td>Phase 2</td><td>Piano library and working effects</td><td><strong>63</strong>/100</td></tr><tr><td>Phase 3</td><td>queued</td><td>—</td></tr></tbody></table>
     </section>
     <section class="overview implementation-details" id="implementation-details">
       <div class="section-intro">
@@ -71,6 +71,13 @@
           <div><h4>Application libraries</h4><ul class="library-list"><li><code>@vitejs/plugin-react</code><span>^6.0.2</span></li><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>typescript</code><span>~6.0.2</span></li><li><code>vite</code><span>^8.1.0</span></li></ul></div>
           <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@testing-library/jest-dom</code><span>^6.9.1</span></li><li><code>@testing-library/react</code><span>^16.3.2</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>jsdom</code><span>^28.0.0</span></li><li><code>oxlint</code><span>^1.69.0</span></li><li><code>vitest</code><span>^4.1.0</span></li></ul></div>
           <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>Phase 1 basic piano via honest additive synthesis (triangle + sine overtone oscillators with AD envelope). No recorded samples in Phase 1.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>basic-piano-voice</strong></li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Phase 1 uses live Web Audio synthesis only; recorded sample sets are Phase 2 scope.</li><li>Polyphony limit 32 with deterministic oldest-voice stealing.</li><li>Sustain pedal supported via note lifecycle and MIDI CC64.</li></ul></dd></div></dl></div>
+        </div>
+      </section><section class="implementation-phase">
+        <header><span>Phase 2</span><h3>Piano library and working effects</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>@vitejs/plugin-react</code><span>^6.0.2</span></li><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>typescript</code><span>~6.0.2</span></li><li><code>vite</code><span>^8.1.0</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@testing-library/jest-dom</code><span>^6.9.1</span></li><li><code>@testing-library/react</code><span>^16.3.2</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>jsdom</code><span>^28.0.0</span></li><li><code>node-web-audio-api</code><span>^2.0.0</span></li><li><code>oxlint</code><span>^1.69.0</span></li><li><code>vitest</code><span>^4.1.0</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>One AudioContext with Piano A/B layer buses, per-layer effect chains (Mod1→Mod2→Delay→Amp/EQ→Compressor→Reverb), shared Rotary via To Rotary, master gain and limiter. Grand/Upright/Electric/Clav/Digital/Misc use programmatically synthesized offline sample sets (not field recordings).</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>piano-sample-sets</strong></li><li><strong>synth-fallback-voice</strong></li><li><strong>effects-impulse-responses</strong></li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Grand, Upright, and Electric are audibly distinct synthesized sample sets — honestly declared as generated, not recordings.</li><li>Organ, Synth, and Program controls remain presentation-only (Phase 1 honesty preserved).</li><li>Master Level knob scales master gain; Panic via blur/all-notes-off clears voices.</li><li>Sustain honors per-layer SUSTPED toggle.</li><li>Polyphony limit 32 with deterministic oldest-voice stealing per layer pool.</li></ul></dd></div></dl></div>
         </div>
       </section>
     </section>
@@ -205,6 +212,166 @@
       <td>3/4</td>
       <td>75</td>
       <td><ul><li>Sealed verification: test/typecheck/lint/build all passed; 26/26 tests in ~2.9s.</li><li>Playwright capture reports zero console messages and zero page errors at desktop and narrow profiles.</li><li>Production build produces `dist/index.html` (211 KB JS bundle); preview at `/previews/composer-2-5-fast/stage1/index.html`.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  <section class="stage-report" id="stage-2">
+    <header class="stage-heading">
+      <div><span>Phase 2</span><h2>Piano library and working effects</h2></div>
+      <div class="stage-score"><strong>63</strong><span>/100</span></div>
+    </header>
+
+    <p class="summary">Phase 2 extends Phase 1 with a working dual-layer piano engine, per-layer effect chains, and Master Level on one AudioContext — all four gates pass (38/38 tests) with rendered-audio assertions. The decorative boundary for Organ/Synth/Program is preserved. The main gap is sample provenance: Grand/Upright/Electric are programmatically synthesized OfflineAudioContext buffers (sampleSources: 0), honestly declared but not bundled recorded sample sets as the piano spec requires. Effects processing, bypass, and layer routing are tested; global-mode and exhaustive per-type variant coverage are partial.</p>
+
+    <div class="report-columns">
+      <section>
+        <h3>Category scores</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+          <tbody><tr><td>Visual and interaction retention</td><td>10%</td><td><strong>75</strong></td><td>7</td></tr><tr><td>Piano library and performance</td><td>35%</td><td><strong>60</strong></td><td>21</td></tr><tr><td>Effects and signal graph</td><td>30%</td><td><strong>56</strong></td><td>16</td></tr><tr><td>System behavior and UX</td><td>10%</td><td><strong>75</strong></td><td>7</td></tr><tr><td>Engineering quality</td><td>15%</td><td><strong>68</strong></td><td>10</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h3>What worked</h3>
+        <ul class="findings"><li><strong>Surface fidelity retention</strong><span>Stage2 visual audit confirms 73-key keybed, six-section layout, ~150 decorative controls, and Program/Synth OLED placement unchanged from Phase 1.</span></li><li><strong>Piano/effect hardware state</strong><span>Piano type LEDs, layer enable/level/octave, and performance toggles wired via control-bindings to audio state.</span></li><li><strong>Two-layer Piano behavior</strong><span>Engine tests cover layer A/B enable, focus, level fader binding, and per-layer voice ownership.</span></li><li><strong>Detailed Piano controls</strong><span>Tests assert KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res alter rendered RMS or envelope timing.</span></li></ul>
+      </section>
+    </div>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <ol><li>[object Object]</li><li>[object Object]</li></ol>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-pass">Passed</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>dist/index.html present</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Visual and interaction retention</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Surface fidelity retention</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Stage2 visual audit confirms 73-key keybed, six-section layout, ~150 decorative controls, and Program/Synth OLED placement unchanged from Phase 1.</li><li>Sealed verification passed with 20/20 feature IDs including regression.phase1 mapped to inherited Phase 1 test files.</li><li>Capture harness reports zero console errors at desktop and narrow profiles.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Piano/effect hardware state</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Piano type LEDs, layer enable/level/octave, and performance toggles wired via control-bindings to audio state.</li><li>Effects knobs and bypass toggles update focused piano layer parameters; Master Level scales master gain.</li><li>Status bar shows load state and active voice count.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Piano library and performance</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Distinct Piano instruments</strong></td>
+      <td>1/4</td>
+      <td>25</td>
+      <td><ul><li>IMPLEMENTATION_DETAILS.json declares sampleSources: 0; Grand/Upright/Electric are OfflineAudioContext-generated buffers, not bundled recordings.</li><li>Rendered-audio tests assert six types produce measurably distinct signals (signalsDiffer), and strategy text is truthful about synthesis.</li><li>Meets audibly-distinct/offline honesty but fails the recorded-sample-set requirement that drives Phase 2 piano library scoring.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Two-layer Piano behavior</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Engine tests cover layer A/B enable, focus, level fader binding, and per-layer voice ownership.</li><li>SUSTPED honored per layer; octave shift changes playback rate/root selection in tests.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Detailed Piano controls</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Tests assert KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res alter rendered RMS or envelope timing.</li><li>Master Level changes master output gain through the limiter path.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Input and fallback reliability</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Inherited Phase 1 input tests remain green: pointer, keyboard repeat suppression, MIDI mock port with CC64 sustain.</li><li>Fallback voice test enters labeled synth fallback when sample load is forced to fail.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Effects and signal graph</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Shared graph and gain staging</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>effects.graph tests assert one AudioContext, ordered Mod1→Reverb chain, shared Rotary, master gain/limiter, and voice cleanup to zero.</li><li>Per-layer buses feed independent effect chains before mix bus.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Audible effect coverage</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>effects.processing tests prove bypass/wet-dry and measurable signal change for representative units.</li><li>Not every named type variant (e.g. all six Mod1 types) has individual rendered-audio assertions.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Routing and control</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Focus follows layer focus; group bypass and all-effects bypass tested.</li><li>Global mode toggles for Delay/Compressor/Reverb referenced but simplified relative to full spec panel inventory.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>System behavior and UX</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Audible/visible feedback</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Rendered-audio tests use AnalyserNode/offline RMS utilities; effect on produces higher RMS than bypass.</li><li>Type and layer changes produce non-identical signals.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Failure and stress behavior</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Forced sample failure enters labeled fallback without reporting primary library ready.</li><li>Polyphony stealing and all-notes-off cleanup tests pass after rapid note bursts.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Engineering quality</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Audio architecture</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Clear separation: samples.ts, effects-chain.ts, engine.ts orchestrator, control-bindings.ts.</li><li>IMPLEMENTATION_PLAN includes signal graph diagram and hard-gate checklist.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Real-boundary tests</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>node-web-audio-api enables deterministic rendered-audio tests in Vitest/jsdom.</li><li>Feature matrix maps all Phase 2 IDs including regression.phase1 to real test files.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Performance and maintainability</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Test suite ~25s dominated by six-type sample synthesis at engine init.</li><li>234 KB production bundle; architecture readable but sample generation at load adds startup cost.</li></ul></td>
     </tr></tbody>
           </table>
         </section>

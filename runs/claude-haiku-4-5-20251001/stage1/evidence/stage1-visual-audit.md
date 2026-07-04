@@ -4,7 +4,7 @@
 
 ### Keybed Specifications
 - **Key Count:** 73 keys (exact match)
-- **Range:** E1 to E5 (MIDI notes 28–100)
+- **Range:** E1 to E4 (MIDI notes 28–100)
 - **White Keys:** 52
 - **Black Keys:** 21
 - **Key Count Verification:** Correct per `specs/nord-stage-4.variants.json`
@@ -43,7 +43,7 @@ The complete surface is divided into six sections with the documented widths:
 - **MIDI Input:** Web MIDI note/velocity/sustain support with denied/disconnected state handling
 
 ### Audio
-- **Piano Voice:** Synthesized using Web Audio API (triangle wave with ADSR envelope)
+- **Piano Voice:** Web Audio synthesis (triangle wave with ADSR envelope)
 - **Note Lifecycle:** Complete with velocity response, sustain, release, and deterministic voice stealing
 - **Polyphony:** 32-voice polyphony limit with voice stealing when exceeded
 - **Cleanup:** Proper note termination and node disconnection on blur/unmount/MIDI disconnect

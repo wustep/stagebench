@@ -1,0 +1,162 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "composer-2-5-fast",
+  "stage": 2,
+  "evaluator": "independent-evaluator (Composer)",
+  "evaluatedAt": "2026-07-04T08:00:00.000Z",
+  "summary": "Phase 2 extends Phase 1 with a working dual-layer piano engine, per-layer effect chains, and Master Level on one AudioContext — all four gates pass (38/38 tests) with rendered-audio assertions. The decorative boundary for Organ/Synth/Program is preserved. The main gap is sample provenance: Grand/Upright/Electric are programmatically synthesized OfflineAudioContext buffers (sampleSources: 0), honestly declared but not bundled recorded sample sets as the piano spec requires. Effects processing, bypass, and layer routing are tested; global-mode and exhaustive per-type variant coverage are partial.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "rating": 3,
+          "evidence": [
+            "Stage2 visual audit confirms 73-key keybed, six-section layout, ~150 decorative controls, and Program/Synth OLED placement unchanged from Phase 1.",
+            "Sealed verification passed with 20/20 feature IDs including regression.phase1 mapped to inherited Phase 1 test files.",
+            "Capture harness reports zero console errors at desktop and narrow profiles."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "rating": 3,
+          "evidence": [
+            "Piano type LEDs, layer enable/level/octave, and performance toggles wired via control-bindings to audio state.",
+            "Effects knobs and bypass toggles update focused piano layer parameters; Master Level scales master gain.",
+            "Status bar shows load state and active voice count."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 1,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares sampleSources: 0; Grand/Upright/Electric are OfflineAudioContext-generated buffers, not bundled recordings.",
+            "Rendered-audio tests assert six types produce measurably distinct signals (signalsDiffer), and strategy text is truthful about synthesis.",
+            "Meets audibly-distinct/offline honesty but fails the recorded-sample-set requirement that drives Phase 2 piano library scoring."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "rating": 3,
+          "evidence": [
+            "Engine tests cover layer A/B enable, focus, level fader binding, and per-layer voice ownership.",
+            "SUSTPED honored per layer; octave shift changes playback rate/root selection in tests."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 3,
+          "evidence": [
+            "Tests assert KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res alter rendered RMS or envelope timing.",
+            "Master Level changes master output gain through the limiter path."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "rating": 3,
+          "evidence": [
+            "Inherited Phase 1 input tests remain green: pointer, keyboard repeat suppression, MIDI mock port with CC64 sustain.",
+            "Fallback voice test enters labeled synth fallback when sample load is forced to fail."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 3,
+          "evidence": [
+            "effects.graph tests assert one AudioContext, ordered Mod1→Reverb chain, shared Rotary, master gain/limiter, and voice cleanup to zero.",
+            "Per-layer buses feed independent effect chains before mix bus."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "rating": 2,
+          "evidence": [
+            "effects.processing tests prove bypass/wet-dry and measurable signal change for representative units.",
+            "Not every named type variant (e.g. all six Mod1 types) has individual rendered-audio assertions."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "rating": 2,
+          "evidence": [
+            "Focus follows layer focus; group bypass and all-effects bypass tested.",
+            "Global mode toggles for Delay/Compressor/Reverb referenced but simplified relative to full spec panel inventory."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "rating": 3,
+          "evidence": [
+            "Rendered-audio tests use AnalyserNode/offline RMS utilities; effect on produces higher RMS than bypass.",
+            "Type and layer changes produce non-identical signals."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "rating": 3,
+          "evidence": [
+            "Forced sample failure enters labeled fallback without reporting primary library ready.",
+            "Polyphony stealing and all-notes-off cleanup tests pass after rapid note bursts."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 3,
+          "evidence": [
+            "Clear separation: samples.ts, effects-chain.ts, engine.ts orchestrator, control-bindings.ts.",
+            "IMPLEMENTATION_PLAN includes signal graph diagram and hard-gate checklist."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "rating": 3,
+          "evidence": [
+            "node-web-audio-api enables deterministic rendered-audio tests in Vitest/jsdom.",
+            "Feature matrix maps all Phase 2 IDs including regression.phase1 to real test files."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "rating": 2,
+          "evidence": [
+            "Test suite ~25s dominated by six-type sample synthesis at engine init.",
+            "234 KB production bundle; architecture readable but sample generation at load adds startup cost."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "category": "pianoLibrary",
+      "description": "Grand/Upright/Electric are synthesized buffers, not bundled recorded sample sets (sampleSources: 0); truthful declaration limits rubric score on instrumentBreadth."
+    },
+    {
+      "severity": "minor",
+      "category": "effectsAudio",
+      "description": "Effect type enumeration and global routing controls are partially implemented relative to the full effects spec."
+    }
+  ]
+}

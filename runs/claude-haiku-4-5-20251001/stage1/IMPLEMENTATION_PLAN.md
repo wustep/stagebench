@@ -2,7 +2,7 @@
 
 ## Assigned Specs
 - `specs/nord-stage-4.visual.json` — complete visual surface geometry, sections, control inventory
-- `specs/nord-stage-4.piano.json` — piano voice behavior, input handling, sustain/polyphony
+- `specs/nord-stage-4.piano.json` — basic piano engine with keybed
 
 ## Phase 1 Hard Gates (Checklist)
 
@@ -16,7 +16,7 @@
 
 ### Visual Surface
 - Implemented the complete Nord Stage 4 73-key variant with accurate section geometry
-- Built all six sections (Performance, Organ, Piano, Program/Morph, Synth, Layer Effects) with documented widths
+- Built all six sections (Performance, Organ, Piano, Program/Morph, Synth, Layer Effects)
 - Modeled every visible control with stable IDs and accessible interaction
 
 ### Piano Voice
@@ -36,3 +36,11 @@
 - TypeScript type safety across all components
 - All visual controls properly respond to input but remain presentation-only (no side effects)
 - Build, typecheck, and lint all pass without warnings
+
+## Control Binding Audit
+
+All visible controls in Phase 1 are either:
+1. **Functional**: Keybed (note input), Sustain Pedal
+2. **Decorative (intentional)**: All panel controls move/press but do nothing
+
+No silent no-op fallbacks - every control is explicitly functional or decorative.

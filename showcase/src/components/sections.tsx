@@ -1870,9 +1870,13 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               <Led color="red" on={!state.allFxOff} />
               <PanelButton store={store} id="effects-on" className="pill" />
             </span>
-            <span className="fx-focus-tab" aria-hidden="true">FX FOCUS</span>
           </div>
           <div className="effects-grid">
+            {/* FX FOCUS prints on a light tab hanging below the band's left
+                edge (photo) — anchored to the grid's top-left corner so it
+                overlays the MOD 1 box edge without creating scroll overflow
+                on the header. */}
+            <span className="fx-focus-tab" aria-hidden="true">FX FOCUS</span>
             <GroupBox title="Mod 1" className="fx-box mod1-box">
               <span className="knob-cell">
                 <Knob store={store} id="mod1-rate" className="small" />

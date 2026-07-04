@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>claude-haiku-4-5-20251001 · Stagebench evaluation</title>
+  <style>
+    :root { color-scheme: light; --red:#a51f24; --red-dark:#70191e; --ink:#211c1d; --muted:#665d5f; --line:#d6cdcf; --surface:#f5f3f3; --panel:#fff; --green:#2c7a45; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.55 Inter, ui-sans-serif, system-ui, sans-serif; }
+    a { color:var(--red-dark); }
+    .report-header { padding:42px max(24px,calc((100% - 1080px)/2)); background:var(--red); color:#fff; }
+    .report-header small { display:block; margin-bottom:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .report-header h1 { max-width:760px; margin:0; font-size:clamp(34px,6vw,62px); line-height:1; letter-spacing:-.03em; text-wrap:balance; }
+    .report-header p { max-width:70ch; margin:18px 0 0; color:#ffecec; }
+    .aggregate { display:flex; align-items:baseline; gap:9px; margin-top:28px; }
+    .aggregate strong { font-size:48px; line-height:1; }
+    .aggregate span { font-weight:800; text-transform:uppercase; }
+    main { width:min(1080px,calc(100% - 32px)); margin:0 auto; padding:42px 0 72px; }
+    .overview, .stage-report { margin-bottom:34px; padding:26px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+    h2,h3,h4 { text-wrap:balance; } h2 { margin:0; font-size:28px; } h3 { margin:0 0 12px; font-size:15px; } h4 { margin:0 0 10px; color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { color:var(--muted); font-size:11px; text-align:left; text-transform:uppercase; }
+    th,td { padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    .section-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; } .section-intro span,.implementation-phase header span { color:var(--red); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; } .section-intro a { font-size:12px; font-weight:800; }
+    .implementation-details > p { max-width:76ch; color:var(--muted); }
+    .implementation-phase { padding:22px 0; border-top:1px solid var(--line); } .implementation-phase:last-child { padding-bottom:0; } .implementation-phase h3 { margin:2px 0 14px; font-size:18px; }
+    .implementation-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.05fr) minmax(0,1.4fr); gap:24px; }
+    .library-list { margin:0; padding:0; list-style:none; } .library-list li { display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #eee8e9; } .library-list span { color:var(--muted); font-size:11px; }
+    .audio-details { margin:0; } .audio-details > div { display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; padding:5px 0; border-bottom:1px solid #eee8e9; } .audio-details dt { color:var(--muted); font-size:11px; font-weight:800; } .audio-details dd { margin:0; } .audio-details ul { margin:0; padding-left:17px; } .audio-details span { color:var(--muted); font-size:12px; } .empty-detail { color:var(--muted); }
+    .stage-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+    .stage-heading > div:first-child span { color:var(--red); font-size:11px; font-weight:800; text-transform:uppercase; }
+    .stage-score { display:flex; align-items:baseline; gap:5px; color:var(--red-dark); } .stage-score strong { font-size:34px; line-height:1; } .stage-score span { font-size:11px; font-weight:800; text-transform:uppercase; }
+    .summary { max-width:78ch; margin:20px 0 26px; color:#3f383a; }
+    .report-columns { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:28px; }
+    .findings { margin:0; padding:0; list-style:none; } .findings li { padding:0 0 12px; } .findings strong,.findings span { display:block; } .findings span { margin-top:3px; color:var(--muted); font-size:12px; }
+    .issues { margin:28px 0; padding:20px; background:#f8eded; border-radius:8px; } .issues ol { margin:0; padding-left:20px; } .issues li + li { margin-top:8px; }
+    .gate { display:inline-block; margin:0 0 12px; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; } .gate-pass { background:#e3f2e7; color:#225d34; } .gate-fail { background:#f5dfe0; color:#821b20; }
+    details { margin-top:26px; border-top:1px solid var(--line); } summary { padding:18px 0; font-weight:800; cursor:pointer; } .criteria-group + .criteria-group { margin-top:24px; } .criteria-table ul { margin:0; padding-left:18px; } .criteria-table li + li { margin-top:6px; }
+    footer { padding:24px; background:var(--ink); color:#cfc7c9; font-size:11px; text-align:center; }
+    @media (max-width:800px) { .implementation-grid { grid-template-columns:1fr; } }
+    @media (max-width:720px) { .report-columns { grid-template-columns:1fr; } .overview,.stage-report { padding:18px; } .stage-heading { align-items:flex-start; flex-direction:column; } .section-intro { align-items:flex-start; flex-direction:column; } .audio-details > div { grid-template-columns:1fr; gap:2px; } table { display:block; overflow-x:auto; } }
+    @media print { .report-header { background:#fff; color:#000; padding-top:0; } .report-header p { color:#333; } body { background:#fff; } .overview,.stage-report { break-inside:avoid; border-color:#999; } details > * { display:block; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <small>Stagebench evaluation · rubric 3.1.0</small>
+    <h1>claude-haiku-4-5-20251001</h1>
+    <p>Evidence-backed evaluation of visual fidelity, feature completion, interaction, audio behavior, and engineering quality. Scores use phase-specific weights and automated technical gates.</p>
+    <div class="aggregate"><strong>100</strong><span>/100</span></div>
+  </header>
+  <main>
+    <section class="overview">
+      <h2>Run overview</h2>
+      <p>Run <code>claude-haiku-4-5-20251001-4</code> · complete · 1/3 selected phases evaluated · generated Jul 4, 2026, 7:56 AM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th></tr></thead><tbody><tr><td>Phase 1</td><td>Complete surface and basic piano</td><td><strong>100</strong>/100</td></tr><tr><td>Phase 2</td><td>complete</td><td>—</td></tr><tr><td>Phase 3</td><td>complete</td><td>—</td></tr></tbody></table>
+    </section>
+    <section class="overview implementation-details" id="implementation-details">
+      <div class="section-intro">
+        <div><span>Generated inventory</span><h2>Implementation details</h2></div>
+        <a href="implementation-details.json">View JSON</a>
+      </div>
+      <p>Libraries come from each phase's package manifest. Audio files are detected from the artifact, while sound-generation and sample provenance are explicitly declared by the benchmark implementation.</p>
+      <section class="implementation-phase">
+        <header><span>Phase 1</span><h3>Complete surface and basic piano</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>@vitejs/plugin-react</code><span>^6.0.2</span></li><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>typescript</code><span>~6.0.2</span></li><li><code>vite</code><span>^8.1.0</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@testing-library/jest-dom</code><span>^6.9.1</span></li><li><code>@testing-library/react</code><span>^16.3.2</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>jsdom</code><span>^28.0.0</span></li><li><code>oxlint</code><span>^1.69.0</span></li><li><code>vitest</code><span>^4.1.0</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>Phase 1 uses Web Audio API synthesis for the basic piano voice. No recorded samples are used in Phase 1.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>Basic synthesized piano voice</strong> — Web Audio API OscillatorNode + GainNode envelope</li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Phase 1 is not required to use recorded samples; the spec permits honest synthesis.</li><li>All visible controls move/press but only the keybed and sustain pedal affect audio.</li><li>The piano voice is the only functional audio source in Phase 1.</li><li>Sustain pedal extends release time from 0.3s to 1.0s.</li><li>Voice stealing is deterministic: oldest voices are stolen first when polyphony exceeds 32.</li><li>Velocity range is 1-127 (MIDI standard); affects voice amplitude.</li><li>No effects, tone controls, or multi-model selection in Phase 1 - these are Phase 2 scope.</li></ul></dd></div></dl></div>
+        </div>
+      </section><section class="implementation-phase">
+        <header><span>Phase 2</span><h3>Piano library and working effects</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>@vitejs/plugin-react</code><span>^6.0.2</span></li><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>typescript</code><span>~6.0.2</span></li><li><code>vite</code><span>^8.1.0</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@testing-library/jest-dom</code><span>^6.9.1</span></li><li><code>@testing-library/react</code><span>^16.3.2</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>jsdom</code><span>^28.0.0</span></li><li><code>oxlint</code><span>^1.69.0</span></li><li><code>vitest</code><span>^4.1.0</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>Phase 2 extends Phase 1 with a multi-layer piano engine and complete effects chain. Six piano types are selectable with synthesis fallback. All effects process real audio through a single AudioContext with per-layer buses and master gain/limiter.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>Basic synthesized piano voice</strong> — Web Audio API OscillatorNode + GainNode envelope</li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Phase 1 is not required to use recorded samples; the spec permits honest synthesis.</li><li>All visible controls move/press but only the keybed and sustain pedal affect audio.</li><li>The piano voice is the only functional audio source in Phase 1.</li><li>Sustain pedal extends release time from 0.3s to 1.0s.</li><li>Voice stealing is deterministic: oldest voices are stolen first when polyphony exceeds 32.</li><li>Velocity range is 1-127 (MIDI standard); affects voice amplitude.</li><li>No effects, tone controls, or multi-model selection in Phase 1 - these are Phase 2 scope.</li></ul></dd></div></dl></div>
+        </div>
+      </section><section class="implementation-phase">
+        <header><span>Phase 3</span><h3>Complete Stage 4 system</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>@vitejs/plugin-react</code><span>^6.0.2</span></li><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>typescript</code><span>~6.0.2</span></li><li><code>vite</code><span>^8.1.0</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@testing-library/jest-dom</code><span>^6.9.1</span></li><li><code>@testing-library/react</code><span>^16.3.2</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>jsdom</code><span>^28.0.0</span></li><li><code>oxlint</code><span>^1.69.0</span></li><li><code>vitest</code><span>^4.1.0</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>Phase 3 extends Phase 2 with a program/performance system (32 program slots + 8 Live), Organ engine (B3/Vox/Farf/Pipe with harmonic drawbars), and Synth engine (oscillators/filters/voice modes). All sections share one AudioContext with per-layer buses, effects chains, and master destination.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>Basic synthesized piano voice</strong> — Web Audio API OscillatorNode + GainNode envelope</li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>Phase 3 extends Phase 2 with complete program state serialization and Organ/Synth engines.</li><li>Piano section from Phase 2 continues with full layer mixing and effects integration.</li><li>Organ engine provides B3/Vox/Farf/Pipe models with harmonic differentiation via drawbar spectrum.</li><li>Synth engine provides Pure waveforms (Sine/Saw/Square/Triangle) with independent oscillators.</li><li>All sections (Piano/Organ/Synth) share one AudioContext with per-layer buses and master effects.</li><li>Programs store complete state: section enables/models/parameters, master clock/transpose.</li><li>Program storage uses localStorage for persistence (32 programs + 8 Live slots).</li><li>Organ percussion/key-click implement harmonic attack on B3 model.</li><li>Synth voice modes (Poly/Mono/Legato) implement note stealing strategy.</li><li>All Phase 1 and Phase 2 tests remain passing (45 regression tests).</li><li>Factory programs demonstrate Piano, Organ (B3 tonewheel), and Synth (lead) configurations.</li><li>Splits/Scenes/Morphs/Clock/Transpose/Panic are type-defined but UI integration pending for evaluation.</li></ul></dd></div></dl></div>
+        </div>
+      </section>
+    </section>
+    
+  <section class="stage-report" id="stage-1">
+    <header class="stage-heading">
+      <div><span>Phase 1</span><h2>Complete surface and basic piano</h2></div>
+      <div class="stage-score"><strong>100</strong><span>/100</span></div>
+    </header>
+
+    <p class="summary">Phase 1 complete: Visual surface with complete Nord Stage 4 geometry and section layout, basic piano voice with multi-input support (pointer, keyboard, MIDI, sustain), proper polyphony and cleanup. All visible controls respond to input, panel controls are decorative as specified.</p>
+
+    <div class="report-columns">
+      <section>
+        <h3>Category scores</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+          <tbody><tr><td>Complete visual fidelity</td><td>45%</td><td><strong>100</strong></td><td>45</td></tr><tr><td>Basic Piano functionality</td><td>25%</td><td><strong>100</strong></td><td>25</td></tr><tr><td>Surface interaction and honesty</td><td>15%</td><td><strong>100</strong></td><td>15</td></tr><tr><td>Engineering quality</td><td>15%</td><td><strong>100</strong></td><td>15</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h3>What worked</h3>
+        <ul class="findings"><li><strong>Silhouette, chassis, and geometry</strong><span>Nord Stage 4 73-key variant with accurate keybed range, section widths match spec (Performance 15%, Organ 15%, Piano 30%, Program 10%, Synth 20%, Effects 10%), visible in screenshots</span></li><li><strong>Complete hardware inventory and placement</strong><span>All controls present: knobs, faders, buttons, wheels, drawbars, encoders; correct section structure; OLEDs in correct positions (Program and Synth as specified)</span></li><li><strong>Materials, color, typography, and displays</strong><span>Button states clear, labels visible, LED graph positions match hardware; fonts legible across viewport sizes</span></li><li><strong>Narrow retention</strong><span>No overflow at desktop (1440x900) or narrow (390x844) viewports; keyboard responsive; all controls accessible</span></li></ul>
+      </section>
+    </div>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <p>No issues were recorded.</p>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-pass">Passed</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>dist/index.html present</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Complete visual fidelity</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Silhouette, chassis, and geometry</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Nord Stage 4 73-key variant with accurate keybed range, section widths match spec (Performance 15%, Organ 15%, Piano 30%, Program 10%, Synth 20%, Effects 10%), visible in screenshots</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Complete hardware inventory and placement</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>All controls present: knobs, faders, buttons, wheels, drawbars, encoders; correct section structure; OLEDs in correct positions (Program and Synth as specified)</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Materials, color, typography, and displays</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Button states clear, labels visible, LED graph positions match hardware; fonts legible across viewport sizes</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Narrow retention</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>No overflow at desktop (1440x900) or narrow (390x844) viewports; keyboard responsive; all controls accessible</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Basic Piano functionality</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Unified playable inputs</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Pointer, touch, keyboard (QWERTY mapped to notes), MIDI all functional; sustain (UI button, keyboard, CC64) working; unified NoteLifecycle interface</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Voice lifecycle and performance</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Note on/off, overlapping notes, polyphony (32 voices), voice stealing (oldest first), release, sustain extension (0.3s→1.0s); cleanup on blur</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Basic source and status honesty</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Web Audio API triangle wave oscillator with ADSR envelope; no samples used; synthesis is transparent in IMPLEMENTATION_DETAILS.json</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Surface interaction and honesty</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Control movement and feedback</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>All panel knobs, faders, buttons, wheels move/press with visual feedback; no console errors; accessibility tests confirm element roles and labels</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Decorative-control boundary</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Panel controls (timbre, comp, unison, etc.) move but do not affect audio; only keybed and sustain pedal are functional; behavior matches spec requirement</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Engineering quality</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Data structure and tests</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>45 tests passing (hardware, note-lifecycle, synth-voice, App tests); TypeScript compilation clean; no lint warnings; all test categories covered</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Runtime quality</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Build succeeds (207 kB gzip); no console errors; responsive viewport; proper cleanup on unmount; browser console clean during interaction</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  </main>
+  <footer>Academic UI/audio reconstruction benchmark · Not affiliated with Nord Keyboards.</footer>
+</body>
+</html>
