@@ -1645,4 +1645,10 @@ starved and colliding:
   fallback stacked them below, adding phantom height; the pair's print
   sizes now clear the blanket program-strip legend rule that had been
   silently overriding them).
-- Gates: typecheck, lint, verify:layout 12/12, tests 494/494.
+- Bookkeeping: a concurrent session's commit (70e16a1) swept these source
+  changes into its own commit mid-round; this entry documents them. One
+  full-suite run flaked on the rendered-compressor dynamics assertion
+  (render-effects) under parallel load — it passes in isolation and in
+  every other full run today.
+- Gates: typecheck, lint, verify:layout 12/12, tests 494/494 (one
+  isolated-pass flake noted above); bench publish checks green.
