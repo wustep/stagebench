@@ -1091,8 +1091,20 @@ body {
    can't strip it (focus-visible temporarily replaces it, which is fine). */
 .panel-button.framed {
   border: none;
-  outline: 0.07cqw solid #8c2530;
-  outline-offset: 0.11cqw;
+  outline: none;
+  isolation: isolate;
+}
+
+/* The photo's red shift-frame is a FILLED red pad the black switch sits
+   on — a small solid background, not a hairline ring. */
+.panel-button.framed::before {
+  content: '';
+  position: absolute;
+  inset: -0.17cqw;
+  background: linear-gradient(180deg, #96242e 0%, #7c1d26 100%);
+  border-radius: 0.16cqw;
+  box-shadow: inset 0 0.04cqw 0.06cqw rgba(255, 255, 255, 0.12);
+  z-index: -1;
 }
 
 /* Paired '● LABEL' rows above the Oscillators/Filter button pairs. */
@@ -1225,30 +1237,40 @@ body {
    (~1cqw, measured on the reference); the endless DIALS (model/OLED dials)
    are one bigger size; PROGRAM VALUE and MASTER LEVEL are the two large
    dials. `.small` survives only as a legacy alias for the canonical knob. */
+/* ONE knob size (user directive): every knob and knurled dial — Master
+   Level, Program/Model dials, the dense box knobs — shares 1.14cqw.
+   .small/.large survive as inert aliases. */
 .knob,
-.knob.small {
-  position: relative;
-  width: 1.02cqw;
-  height: 1.02cqw;
-  flex: none;
-  cursor: ns-resize;
-  touch-action: none;
-}
-
-.encoder,
-.encoder.small {
-  position: relative;
-  width: 1.3cqw;
-  height: 1.3cqw;
-  flex: none;
-  cursor: ns-resize;
-  touch-action: none;
-}
-
+.knob.small,
 .knob.large,
+.encoder,
+.encoder.small,
 .encoder.large {
-  width: 1.7cqw;
-  height: 1.7cqw;
+  position: relative;
+  width: 1.14cqw;
+  height: 1.14cqw;
+  flex: none;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+/* Drag/hover affordance: the cap brightens and the pointer line pops while
+   engaged. */
+.knob:hover,
+.encoder:hover {
+  filter: brightness(1.08);
+}
+
+.knob[data-dragging='true'],
+.encoder[data-dragging='true'] {
+  filter: brightness(1.18);
+}
+
+.knob:focus-visible,
+.encoder:focus-visible {
+  outline: 2px solid #d8a03c;
+  outline-offset: 2px;
+  border-radius: 50%;
 }
 
 .knob-cap,
@@ -2177,20 +2199,24 @@ body {
 .drawbar-scale {
   display: inline-flex;
   align-items: stretch;
-  gap: 0.05cqw;
-  padding: 0.1cqw 0.05cqw;
-  /* Crisp light outline on the bare plate (photo) — no filled background,
-     which washed the frames out. */
-  border: 0.055cqw solid rgba(214, 219, 230, 0.75);
-  border-radius: 0.12cqw;
-  background: none;
+  gap: 0.07cqw;
+  padding: 0.08cqw 0.07cqw;
+  /* Photo: a SOLID light plate holding the digits and the red cells, and
+     it spans only the upper half of the drawbar well — the cap travels
+     alongside it. */
+  align-self: flex-start;
+  height: 56%;
+  border: none;
+  border-radius: 0.1cqw;
+  background: linear-gradient(180deg, #ccd0da 0%, #b7bcc8 100%);
+  box-shadow: inset 0 0.03cqw 0.05cqw rgba(0, 0, 0, 0.18);
 }
 
-/* Thin sliver segments like the level meters (photo). */
+/* Chunky red cells at a tight pitch (photo), recessed in the plate. */
 .drawbar-scale .led {
-  width: 0.24cqw;
-  height: 0.09cqw;
-  border-radius: 0.025cqw;
+  width: 0.3cqw;
+  height: 0.19cqw;
+  border-radius: 0.03cqw;
 }
 
 .drawbar-scale-nums {
@@ -2200,7 +2226,7 @@ body {
   font-size: 0.24cqw;
   font-weight: 700;
   line-height: 1;
-  color: var(--legend);
+  color: #232a38;
   font-style: normal;
 }
 
@@ -3801,10 +3827,11 @@ body {
 
 .button-cell {
   display: flex;
-  gap: 0.34cqw;
+  gap: 0.5cqw;
 }
 
 .knob-pair {
+  column-gap: 0.34cqw;
   display: flex;
   gap: 0.12cqw;
   align-items: flex-end;

@@ -62,6 +62,7 @@ function useContinuous(store: PresentationStore, id: string) {
       // A pointer can be gone by the time capture is requested (touch
       // cancellation, synthetic events); the drag still tracks via move events.
     }
+    event.currentTarget.setAttribute('data-dragging', 'true')
     dragState.current = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY, value }
   }
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -84,8 +85,16 @@ function useContinuous(store: PresentationStore, id: string) {
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (dragState.current?.pointerId !== event.pointerId) return
     dragState.current = null
+    event.currentTarget.removeAttribute('data-dragging')
     if (control.springLoaded) store.setValue(id, control.initial ?? 0)
   }
+
+  // Double-click resets knobs/dials to their initial position — a standard
+  // continuous-control affordance (drawbars/faders keep their registration).
+  const onDoubleClick =
+    control.type === 'knob' || control.type === 'encoder'
+      ? () => store.setValue(id, control.initial ?? min)
+      : undefined
 
   // Scroll-wheel stepping. Attached as a NATIVE non-passive listener via a
   // ref callback: React's synthetic onWheel rides the root's passive listener,
@@ -130,6 +139,7 @@ function useContinuous(store: PresentationStore, id: string) {
     onPointerMove,
     onPointerUp: endDrag,
     onPointerCancel: endDrag,
+    onDoubleClick,
   }
   return { control, value, min, max, range, sliderProps }
 }
@@ -211,12 +221,15 @@ export const Fader = memo(function Fader({ store, id, className }: ContinuousPro
 
 export const Drawbar = memo(function Drawbar({ store, id, className }: ContinuousProps) {
   const { value, min, range, sliderProps } = useContinuous(store, id)
-  // Drawbar pulled OUT (toward the player) = higher value = cap travels down.
-  const travel = ((value - min) / range) * 100
+  // Drawbar pulled OUT (toward the player) = higher value = cap travels
+  // down. The travel tops out beside the LED strip's last cell (photo: the
+  // strip spans the upper ~56% of the well, and a full pull parks the cap
+  // just below it — not at the well's bottom).
+  const travel = ((value - min) / range) * 56
   return (
     <div {...sliderProps} className={`drawbar ${className ?? ''}`}>
       <div className="drawbar-shaft" style={{ height: `${travel}%` }} />
-      <div className="drawbar-cap" style={{ top: `calc(${travel}% - ${travel / 100} * var(--drawbar-cap-h))` }}>
+      <div className="drawbar-cap" style={{ top: `calc(${travel}% - ${travel / 100} * 0.35 * var(--drawbar-cap-h))` }}>
         <span className="drawbar-line" />
       </div>
     </div>
