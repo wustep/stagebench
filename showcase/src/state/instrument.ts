@@ -664,7 +664,31 @@ export type ProgramSnapshot = Pick<
 export interface ProgramSlot {
   name: string
   snapshot: ProgramSnapshot
+  /** STORE AS category assignment (manual p. 41); absent = uncategorized. */
+  category?: string
 }
+
+/** Categories offered by the STORE AS Cat soft button (manual p. 41). */
+export const PROGRAM_CATEGORIES = [
+  'None',
+  'Acoustic',
+  'Ballad',
+  'Bass',
+  'EPiano',
+  'Fantasy',
+  'Funk',
+  'Jazz',
+  'Lead',
+  'Organ',
+  'Pad',
+  'Piano',
+  'Pop',
+  'Rock',
+  'Soul',
+  'Strings',
+  'Synth',
+  'Vocal',
+] as const
 
 export interface ProgramsState {
   /** One bank of 32 programs: 4 pages × 8 program buttons. */
@@ -690,8 +714,10 @@ export interface ProgramsState {
     destination: number
     captured: ProgramSlot
   } | null
-  /** STORE AS naming step before destination selection (manual p. 41). */
-  naming: { name: string; cursor: number } | null
+  /** STORE AS naming step before destination selection (manual p. 41):
+   *  dial = letter (or category while `catSelect`), PAGE = cursor, and the
+   *  PROG 1-4 soft buttons are ABC / Cat / Del / Ins. */
+  naming: { name: string; cursor: number; category: string | null; catSelect: boolean } | null
   /** Single-level undo: the edited state discarded by the last program change. */
   undo: { slot: number; liveMode: boolean; snapshot: ProgramSnapshot } | null
   /** Numeric list view (Shift + Program dial, manual p. 41). */
@@ -1164,7 +1190,7 @@ export class InstrumentStore {
     if (programs.liveMode) {
       const live = [...programs.live]
       const slot = live[programs.current]
-      if (slot) live[programs.current] = { name: slot.name, snapshot: snapshotOf(next) }
+      if (slot) live[programs.current] = { name: slot.name, snapshot: snapshotOf(next), ...(slot.category ? { category: slot.category } : {}) }
       const result = { ...next, programs: { ...programs, live, dirty: false } }
       // The in-memory Live slot updates synchronously (auto-store, manual
       // p. 13); only the localStorage serialization is debounced — writing
@@ -2490,6 +2516,14 @@ export class InstrumentStore {
     }
     const programs = this.state.programs
     if (programs.naming) {
+      if (programs.naming.catSelect) {
+        // Cat latched (manual p. 41): the dial walks the category list.
+        const index = Math.round((value / 127) * (PROGRAM_CATEGORIES.length - 1))
+        const picked = PROGRAM_CATEGORIES[index]!
+        const category = picked === 'None' ? null : picked
+        this.patchPrograms({ naming: { ...programs.naming, category } }, `Cat: ${picked}`)
+        return
+      }
       const index = Math.round((value / 127) * (NAMING_CHARSET.length - 1))
       const chars = programs.naming.name.padEnd(programs.naming.cursor + 1, ' ').split('')
       chars[programs.naming.cursor] = NAMING_CHARSET[index]!
@@ -2537,8 +2571,10 @@ export class InstrumentStore {
       this.confirmStore()
       return
     }
-    const name = programs.naming ? programs.naming.name.trim() || 'Unnamed' : this.activeBank()[programs.current]!.name
-    const captured: ProgramSlot = { name, snapshot: snapshotOf(this.state) }
+    const currentSlot = this.activeBank()[programs.current]!
+    const name = programs.naming ? programs.naming.name.trim() || 'Unnamed' : currentSlot.name
+    const category = programs.naming ? (programs.naming.category ?? undefined) : currentSlot.category
+    const captured: ProgramSlot = { name, snapshot: snapshotOf(this.state), ...(category ? { category } : {}) }
     this.patchPrograms(
       {
         naming: null,
@@ -2562,8 +2598,43 @@ export class InstrumentStore {
     }
     const programs = this.state.programs
     if (programs.storePending) return
-    const name = programs.naming ? programs.naming.name : this.activeBank()[programs.current]!.name
-    this.patchPrograms({ naming: { name, cursor: 0 } }, `Name: ${name} (dial = letter, PAGE = cursor)`)
+    const slot = this.activeBank()[programs.current]!
+    const name = programs.naming ? programs.naming.name : slot.name
+    this.patchPrograms(
+      { naming: { name, cursor: 0, category: programs.naming?.category ?? slot.category ?? null, catSelect: false } },
+      `Name: ${name} (dial = letter · PROG: ABC/Cat/Del/Ins)`,
+    )
+  }
+
+  /** Cat soft button (manual p. 41): latches the dial onto the category list. */
+  toggleNamingCat(): void {
+    const naming = this.state.programs.naming
+    if (!naming) return
+    const catSelect = !naming.catSelect
+    this.patchPrograms(
+      { naming: { ...naming, catSelect } },
+      catSelect ? `Cat: ${naming.category ?? 'None'} — dial selects` : `Name: ${naming.name}`,
+    )
+  }
+
+  /** Del soft button (manual p. 41): removes the character under the cursor. */
+  namingDelete(): void {
+    const naming = this.state.programs.naming
+    if (!naming) return
+    const chars = naming.name.split('')
+    if (naming.cursor < chars.length) chars.splice(naming.cursor, 1)
+    const name = chars.join('')
+    this.patchPrograms({ naming: { ...naming, name, cursor: Math.min(naming.cursor, Math.max(0, name.length - 1)) } }, `Name: ${name}`)
+  }
+
+  /** Ins soft button (manual p. 41): inserts a blank at the cursor. */
+  namingInsert(): void {
+    const naming = this.state.programs.naming
+    if (!naming) return
+    const chars = naming.name.padEnd(naming.cursor, ' ').split('')
+    chars.splice(naming.cursor, 0, ' ')
+    const name = chars.join('').slice(0, 16)
+    this.patchPrograms({ naming: { ...naming, name } }, `Name: ${name}`)
   }
 
   /** Navigating during a Store auditions the destination slot (manual p. 13). */
@@ -2591,6 +2662,7 @@ export class InstrumentStore {
     bank[pending.destination] = {
       name: pending.captured.name,
       snapshot: cloneSnapshot(pending.captured.snapshot),
+      ...(pending.captured.category ? { category: pending.captured.category } : {}),
     }
     this.commit({
       ...this.state,

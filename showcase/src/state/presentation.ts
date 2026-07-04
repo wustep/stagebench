@@ -1108,7 +1108,8 @@ export class PresentationStore {
             store.getState().presetBrowse !== null ||
             store.getState().organize !== null ||
             store.getState().programs.numPad ||
-            store.getState().programs.storePending !== null
+            store.getState().programs.storePending !== null ||
+            store.getState().programs.naming !== null
           if (shift && !editModeActive) {
             if (button === 0) store.openMenu('system')
             else if (button === 1) store.openMenu('sound')
@@ -1120,6 +1121,17 @@ export class PresentationStore {
             // Menu screen: our pages hold one setting each, so the soft-button
             // row only re-prints the navigation hint.
             store.setLastEdit('Menu — dial: set · PAGE: page · EXIT: leave')
+            return
+          }
+          if (store.getState().programs.naming) {
+            // STORE AS soft-button row (manual p. 41): ABC · Cat · Del · Ins.
+            // ABC (the hardware's hold-for-character-row) is covered by the
+            // dial directly, so PROG 1 re-prints the hint.
+            if (button === 0) store.setLastEdit('Name: dial = letter · PAGE = cursor')
+            else if (button === 1) store.toggleNamingCat()
+            else if (button === 2) store.namingDelete()
+            else if (button === 3) store.namingInsert()
+            else store.setLastEdit('Store As — PROG 1: ABC · 2: Cat · 3: Del · 4: Ins')
             return
           }
           if (store.getState().organize) {

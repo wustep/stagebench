@@ -734,6 +734,18 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
     </b>
   )
   const chainForFocused = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
+  // STORE AS screen (manual p. 41): category readout + the soft-button row.
+  const namingRows = naming
+    ? [
+        <span key="nm1" className="oled-slot" data-testid="oled-naming-cat">
+          Cat: {naming.category ?? 'None'}
+          {naming.catSelect ? ' — dial selects' : ''}
+        </span>,
+        <span key="nm2" className="oled-slot">
+          PROG 1: ABC · 2: Cat · 3: Del · 4: Ins
+        </span>,
+      ]
+    : null
   const organizeRows = state.organize
     ? (() => {
         const organize = state.organize
@@ -1081,7 +1093,8 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               lines={[
                 <span key="p" className={`oled-program${xl}`} data-testid="oled-program-line">{programReadout}</span>,
                 <span key="n">{nameLine}</span>,
-                ...(organizeRows ??
+                ...(namingRows ??
+                  organizeRows ??
                   menuRows ??
                   presetRows ??
                   layerInitRows ??

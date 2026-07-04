@@ -260,6 +260,42 @@ describe('programs.undo-cancel — single-level undo and store abort', () => {
     expect(store.getState().programs.bank[12]!.name).toBe(changed)
     expect(store.getState().programs.current).toBe(12)
   })
+
+  it('Store As Ins/Del soft buttons edit the name at the cursor (manual p. 41, audit E4)', () => {
+    const store = new InstrumentStore()
+    store.storeAsPress() // "Royal Grand"
+    store.namingInsert() // blank at cursor 0
+    expect(store.getState().programs.naming!.name).toBe(' Royal Grand')
+    store.namingDelete()
+    expect(store.getState().programs.naming!.name).toBe('Royal Grand')
+    store.shiftProgramPage(1) // cursor to 1
+    store.namingDelete() // deletes the 'o'
+    expect(store.getState().programs.naming!.name).toBe('Ryal Grand')
+  })
+
+  it('Store As Cat assigns a category that stores with the slot and persists (audit E4)', () => {
+    const storage = fakeStorageBoundary()
+    const store = new InstrumentStore(storage)
+    store.storeAsPress()
+    store.toggleNamingCat()
+    expect(store.getState().programs.naming!.catSelect).toBe(true)
+    store.dialProgram(127) // last category in the list
+    expect(store.getState().programs.naming!.category).toBe('Vocal')
+    store.toggleNamingCat() // back to letter entry
+    store.storePress() // name -> destination
+    store.selectProgram(9)
+    store.storePress() // confirm into slot 9
+    expect(store.getState().programs.bank[9]!.category).toBe('Vocal')
+    // Categories survive the storage boundary round-trip.
+    const second = new InstrumentStore(storage)
+    expect(second.getState().programs.bank[9]!.category).toBe('Vocal')
+    // A plain re-store of the same slot keeps its category.
+    second.selectProgram(9)
+    second.setLayerLevel('A', 90)
+    second.storePress()
+    second.storePress()
+    expect(second.getState().programs.bank[9]!.category).toBe('Vocal')
+  })
 })
 
 describe('programs.snapshot-hygiene — loads are complete and latch-free (audit C3/C4/C5)', () => {
