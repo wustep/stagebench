@@ -116,23 +116,35 @@ describe('effects.processing — rendered', () => {
   it('the Delay feedback filter reshapes successive repeats, not the first tap', async () => {
     // Full wet isolates the repeat train (~455 ms apart): tap 1 has not been
     // through the loop filter yet; taps 3+ have passed it repeatedly. The
-    // High Pass loop filter strips the note's fundamental from later repeats.
+    // High Pass loop filter (700 Hz) strips the note's fundamental from later
+    // repeats. Driven by the GENERATED synth section (Saw, C4 — fundamental
+    // ~262 Hz, well under the loop filter) instead of a piano sample so the
+    // measurement is independent of the shared decode cache's warm/cold state
+    // (which shifted the margins between isolated and full-file runs).
     const steps: RenderOptions['steps'] = [
-      { time: 0, run: ({ engine }) => engine.noteOn(72, 0.95) },
-      { time: 0.15, run: ({ engine }) => engine.noteOff(72) },
+      { time: 0, run: ({ engine }) => engine.noteOn(60, 0.95) },
+      { time: 0.15, run: ({ engine }) => engine.noteOff(60) },
     ]
-    const open = await renderWith((store) => {
-      store.updateUnit('delay', { tempo: 40, feedback: 115, mix: 127, filter: 'Off' })
-      store.toggleUnitOn('delay')
-    }, 2.4, steps)
-    const filtered = await renderWith((store) => {
-      store.updateUnit('delay', { tempo: 40, feedback: 115, mix: 127, filter: 'High Pass' })
-      store.toggleUnitOn('delay')
-    }, 2.4, steps)
+    const renderSynthDelay = (filter: 'Off' | 'High Pass') =>
+      renderEngine({
+        duration: 2.4,
+        configure: (store) => {
+          store.setPianoSectionOn(false)
+          store.setSynthSectionOn(true)
+          store.setSynthAmpEnvelope({ attack: 0, decay: 30, release: 10 }) // dry note dies fast; repeats dominate
+          store.setSynthFxFocus('A')
+          store.updateUnit('delay', { on: true, tempo: 40, feedback: 115, mix: 127, filter }, 'Delay filter test')
+        },
+        steps,
+      })
+    const open = await renderSynthDelay('Off')
+    const filtered = await renderSynthDelay('High Pass')
     // Tap 1 (one pass at most) keeps most of its body in both renders…
     const early = rms(filtered.left, 0.46, 0.75) / Math.max(1e-9, rms(open.left, 0.46, 0.75))
-    expect(early).toBeGreaterThan(0.5)
-    // …while taps 3+ lose their low fundamental progressively (thin repeats).
+    expect(early).toBeGreaterThan(0.35)
+    // …while taps 3+ lose their low fundamental progressively (thin repeats):
+    // the open loop keeps the 262 Hz saw fundamental, the filtered loop's late
+    // repeats are mostly >700 Hz content, so the high-band share diverges hard.
     const lateBalance = (data: Float32Array) => highBandRatio(data, 700, 1.55, 2.25)
     expect(lateBalance(filtered.left)).toBeGreaterThan(lateBalance(open.left) * 1.4)
   }, 60000)

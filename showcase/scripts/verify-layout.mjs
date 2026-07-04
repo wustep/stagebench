@@ -38,16 +38,32 @@ if (!existsSync(join(ROOT, 'dist', 'index.html'))) {
 }
 
 function findChromium() {
-  const cache = join(homedir(), 'Library', 'Caches', 'ms-playwright')
-  const dirs = readdirSync(cache)
-    .filter((d) => /^chromium-\d+$/.test(d))
-    .sort()
-    .reverse()
-  for (const dir of dirs) {
-    const path = join(cache, dir, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing')
-    if (existsSync(path)) return path
+  // Probe every Playwright cache root and browser bundle layout so the audit
+  // runs on macOS and Linux alike (CI, cloud agents, contributor machines).
+  const caches = [
+    join(homedir(), 'Library', 'Caches', 'ms-playwright'), // macOS
+    join(homedir(), '.cache', 'ms-playwright'), // Linux
+  ]
+  const bundles = [
+    join('chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join('chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join('chrome-linux64', 'chrome'),
+    join('chrome-linux', 'chrome'),
+  ]
+  for (const cache of caches) {
+    if (!existsSync(cache)) continue
+    const dirs = readdirSync(cache)
+      .filter((d) => /^chromium-\d+$/.test(d))
+      .sort()
+      .reverse()
+    for (const dir of dirs) {
+      for (const bundle of bundles) {
+        const path = join(cache, dir, bundle)
+        if (existsSync(path)) return path
+      }
+    }
   }
-  throw new Error('No cached Playwright Chromium found')
+  throw new Error('No cached Playwright Chromium found — run `pnpm exec playwright-core install chromium`')
 }
 
 /* --------------------------------------------------------- static server -- */
@@ -75,7 +91,16 @@ function record(name, pass, detail) {
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}  ${detail}`)
 }
 
-const browser = await chromium.launch({ executablePath: findChromium(), headless: true, args: ['--mute-audio'] })
+// A launch failure (e.g. no cached Chromium) must still kill the preview
+// server — a leaked server camps on the port and makes the NEXT run die with
+// a misleading "vite preview exited early".
+let browser
+try {
+  browser = await chromium.launch({ executablePath: findChromium(), headless: true, args: ['--mute-audio'] })
+} catch (error) {
+  server.kill()
+  throw error
+}
 try {
   const consoleErrors = []
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
