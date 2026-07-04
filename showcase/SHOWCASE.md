@@ -1553,3 +1553,12 @@ is the Shift print under the single TRANSP switch; manual p. 40
 candidate for a canonical hold-to-set rework.
 
 - Gates: typecheck, lint, verify:layout 12/12, tests 494/494.
+
+### 37 — FX FOCUS tab under the LAYER EFFECTS band (2026-07-04)
+
+- The FX FOCUS print moved off the top of the red selector strip onto the
+  photo's light tab hanging directly below the LEFT edge of the LAYER
+  EFFECTS header band (rounded bottom corners, dark text, painted over the
+  MOD 1 box edge it overlaps). The red strip keeps its `FX Focus` group
+  label for accessibility; the tab itself is decorative print.
+- Gates: typecheck, lint, verify:layout 12/12, tests 494/494.

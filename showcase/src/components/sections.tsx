@@ -1808,12 +1808,13 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
   return (
     <SectionShell id="effects">
       <div className="effects-wrap">
-        {/* FX FOCUS is a standalone strip on exposed red chassis between the
-            Synth and Layer Effects plates (reference photo), not part of the
-            effects plate. The organ entry has ONE focus LED captioned "A B":
-            both organ layers share a single FX chain. */}
+        {/* The FX FOCUS selectors are a standalone strip on exposed red
+            chassis between the Synth and Layer Effects plates; the FX FOCUS
+            print itself is a light tab hanging below the left edge of the
+            LAYER EFFECTS header band (reference photo). The organ entry has
+            ONE focus LED captioned "A B": both organ layers share a single
+            FX chain. */}
         <div className="fx-strip" role="group" aria-label="FX Focus">
-          <span className="fx-strip-tab">FX FOCUS</span>
           <span className="focus-cell">
             <Legend>ORGAN</Legend>
             <span className="tiny-led-row" aria-hidden="true">
@@ -1864,6 +1865,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               <Led color="red" on={!state.allFxOff} />
               <PanelButton store={store} id="effects-on" className="pill" />
             </span>
+            <span className="fx-focus-tab" aria-hidden="true">FX FOCUS</span>
           </div>
           <div className="effects-grid">
             <GroupBox title="Mod 1" className="fx-box mod1-box">
