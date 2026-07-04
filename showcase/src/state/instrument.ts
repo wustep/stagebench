@@ -1036,7 +1036,20 @@ export class InstrumentStore {
 
   private withEditApplied(next: InstrumentState): InstrumentState {
     const programs = next.programs
-    if (programs.liveMode && !programs.storePending) {
+    if (programs.storePending) {
+      // Edits between the two STORE presses are audible — refresh the
+      // pending capture so what is heard is what gets stored, instead of
+      // silently dropping the tweak (and mark the origin edited so a
+      // cancelled Store restores it as such). Live auto-store stays
+      // suppressed while the Store flow owns the capture.
+      const storePending = {
+        ...programs.storePending,
+        originDirty: true,
+        captured: { ...programs.storePending.captured, snapshot: snapshotOf(next) },
+      }
+      return { ...next, programs: { ...programs, storePending } }
+    }
+    if (programs.liveMode) {
       const live = [...programs.live]
       const slot = live[programs.current]
       if (slot) live[programs.current] = { name: slot.name, snapshot: snapshotOf(next) }
@@ -1481,7 +1494,10 @@ export class InstrumentStore {
   setLayerInitEdit(on: boolean): void {
     if (on === this.state.layerInitEdit) return
     this.patch(
-      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null } : {}) },
+      // Also drops the Section Edit latch: both live on the same physical
+      // button (Layer Init = Shift + Section Edit), so both lit at once
+      // would be a panel lie — the OLED can only show one of them.
+      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null, sectionEdit: false } : {}) },
       on ? 'Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn' : 'Layer Init closed',
     )
   }
@@ -1496,7 +1512,9 @@ export class InstrumentStore {
   setSectionEdit(on: boolean): void {
     if (on === this.state.sectionEdit) return
     this.patch(
-      { sectionEdit: on },
+      // Mutually exclusive with Layer Init (the same physical button's
+      // shift pairing) — see setLayerInitEdit.
+      { sectionEdit: on, ...(on ? { layerInitEdit: false } : {}) },
       on ? 'Section Edit — edits apply to all Layers of the Section' : 'Section Edit off',
     )
   }
@@ -1870,6 +1888,16 @@ export class InstrumentStore {
     if (!arming) this.applyMorphNow(source)
   }
 
+  /** Re-applies both morph sources at their parked positions after a
+   *  snapshot load (program change / store / undo / bank switch): with the
+   *  wheel left high, the loaded program must sound and display the
+   *  interpolated values immediately — not on the source's next move.
+   *  Never dirties (interpolation writes use a bare commit). */
+  private reapplyMorphSources(): void {
+    this.applyMorphNow('wheel')
+    this.applyMorphNow('pedal')
+  }
+
   /** Interpolates every destination of a source at its current position. */
   private applyMorphNow(source: MorphSource): void {
     const t = this.state.morphValues[source] / 127
@@ -2024,11 +2052,20 @@ export class InstrumentStore {
       pianoNotFound: null,
       // A program load replaces the whole sound: the Preset Library browse
       // screen closes (its loaded-preset edit was just discarded like any
-      // other edit) and the Preset Name display state resets (manual p. 42).
+      // other edit), the Preset Name display state resets (manual p. 42),
+      // and the transient edit latches (morph assignment, the OLED edit
+      // modes, Layer Init) drop — they belonged to the previous program's
+      // editing session.
       presetBrowse: null,
+      morphArming: null,
+      layerInitEdit: false,
+      clockEdit: false,
+      transposeEdit: false,
+      splitEdit: null,
       programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `${programLabel(clamped, programs.liveMode)} ${slot.name}`,
     })
+    this.reapplyMorphSources()
     this.persistPrograms(this.state)
   }
 
@@ -2189,6 +2226,7 @@ export class InstrumentStore {
       programs: { ...programs, liveMode, storePending: { ...pending, destination: clamped } },
       lastEdit: `Store "${pending.captured.name}" to ${programLabel(clamped, liveMode)}? STORE confirms`,
     })
+    this.reapplyMorphSources()
   }
 
   private confirmStore(): void {
@@ -2213,6 +2251,7 @@ export class InstrumentStore {
       },
       lastEdit: `Stored ${programLabel(pending.destination, programs.liveMode)} ${pending.captured.name}`,
     })
+    this.reapplyMorphSources()
     this.persistPrograms(this.state)
   }
 
@@ -2243,6 +2282,7 @@ export class InstrumentStore {
       },
       lastEdit: 'Store cancelled',
     })
+    this.reapplyMorphSources()
     return true
   }
 
@@ -2267,8 +2307,14 @@ export class InstrumentStore {
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
-      // Switching banks loads a program — the preset browse screen closes.
+      // Switching banks loads a program — the preset browse screen closes
+      // and the transient edit latches drop (see selectProgram).
       presetBrowse: null,
+      morphArming: null,
+      layerInitEdit: false,
+      clockEdit: false,
+      transposeEdit: false,
+      splitEdit: null,
       programs: {
         ...programs,
         liveMode,
@@ -2284,6 +2330,7 @@ export class InstrumentStore {
       },
       lastEdit: `${liveMode ? 'Live Mode' : 'Program Mode'} — ${programLabel(target, liveMode)} ${slot.name}`,
     })
+    this.reapplyMorphSources()
     this.persistPrograms(this.state)
   }
 
@@ -2299,9 +2346,16 @@ export class InstrumentStore {
       ...this.state,
       ...cloneSnapshot(undo.snapshot),
       pianoNotFound: null,
+      // An undo is a program change too: transient latches drop (see selectProgram).
+      morphArming: null,
+      layerInitEdit: false,
+      clockEdit: false,
+      transposeEdit: false,
+      splitEdit: null,
       programs: { ...programs, liveMode: undo.liveMode, current: undo.slot, dirty: true, undo: null },
       lastEdit: `Undo — back to ${programLabel(undo.slot, undo.liveMode)} (edited)`,
     })
+    this.reapplyMorphSources()
   }
 
   /* ------------------------------------------------ monitor / copy / paste -- */
@@ -3544,7 +3598,18 @@ function normalizeSynthState(synth: Partial<SynthState> | null | undefined): Syn
  *  record — every snapshot spread in the store routes through this so old
  *  programs never crash the engine on a missing nested key. */
 function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
-  const cloned = JSON.parse(JSON.stringify(snapshot)) as ProgramSnapshot
+  const partial = JSON.parse(JSON.stringify(snapshot)) as Partial<ProgramSnapshot>
+  // EVERY top-level snapshot key missing from a persisted payload falls
+  // back to its power-on default — never to the previous program's value,
+  // which the `{ ...state, ...cloneSnapshot(...) }` spreads at the load
+  // sites would otherwise silently leak into the loaded program.
+  const defaults = snapshotOf(baseInstrumentState()) as unknown as Record<string, unknown>
+  const merged: Record<string, unknown> = { ...defaults }
+  for (const key of PROGRAM_SNAPSHOT_KEYS) {
+    const value = (partial as Record<string, unknown>)[key]
+    if (value !== undefined) merged[key] = value
+  }
+  const cloned = merged as unknown as ProgramSnapshot
   // Organ layers persisted before the PRESET / Drawbar Live field existed
   // (manual p. 21) lack `presetOn`: backfill the hardware default (On).
   const backfillOrganLayer = (layer: OrganLayerState): OrganLayerState => ({

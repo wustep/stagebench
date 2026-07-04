@@ -262,6 +262,69 @@ describe('programs.undo-cancel — single-level undo and store abort', () => {
   })
 })
 
+describe('programs.snapshot-hygiene — loads are complete and latch-free (audit C3/C4/C5)', () => {
+  it('a snapshot missing ANY top-level key falls back to power-on defaults, never the previous program', () => {
+    // Persist a payload whose slot 1 lacks masterClock/split/morph — the
+    // shape of a payload saved before those keys existed.
+    const seed = new InstrumentStore()
+    const rawBank = seed.getState().programs.bank.map((slot, i) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as Record<string, unknown>
+      if (i === 1) {
+        delete snapshot.masterClock
+        delete snapshot.split
+        delete snapshot.morph
+      }
+      return { name: slot.name, snapshot }
+    })
+    const rawLive = seed.getState().programs.live.map((slot) => ({ name: slot.name, snapshot: slot.snapshot }))
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({ version: 1, bank: rawBank, live: rawLive, liveMode: false, current: 0 }),
+    })
+    const store = new InstrumentStore(storage)
+    // Make the CURRENT program's values distinctive, then load the stripped slot.
+    store.setMasterClockBpm(207)
+    store.toggleSplit()
+    store.selectProgram(1)
+    expect(store.getState().masterClock.bpm).toBe(120) // default, not 207 leaked
+    expect(store.getState().split.on).toBe(false) // default, not the previous program's
+    expect(store.getState().morph.wheel).toEqual([])
+  })
+
+  it('edits between the two STORE presses are captured, not silently dropped', () => {
+    const store = new InstrumentStore()
+    store.storePress() // capture + destination selection
+    store.updateUnit('delay', { mix: 111 }, 'Delay Dry/Wet 111') // audible tweak while pending
+    store.storePress() // confirm
+    expect(store.getState().chains.A.delay.mix).toBe(111)
+    store.selectProgram(4)
+    store.selectProgram(0)
+    expect(store.getState().chains.A.delay.mix).toBe(111) // what was heard is what was stored
+  })
+
+  it('a program change drops the transient edit latches', () => {
+    const store = new InstrumentStore()
+    store.toggleMorphArming('wheel')
+    store.setLayerInitEdit(true)
+    store.selectProgram(3)
+    expect(store.getState().morphArming).toBeNull()
+    expect(store.getState().layerInitEdit).toBe(false)
+    store.setClockEdit(true)
+    store.toggleLiveMode()
+    expect(store.getState().clockEdit).toBe(false)
+  })
+
+  it('Section Edit and Layer Init (one physical button) are mutually exclusive', () => {
+    const store = new InstrumentStore()
+    store.setSectionEdit(true)
+    store.setLayerInitEdit(true)
+    expect(store.getState().sectionEdit).toBe(false)
+    expect(store.getState().layerInitEdit).toBe(true)
+    store.setSectionEdit(true)
+    expect(store.getState().layerInitEdit).toBe(false)
+    expect(store.getState().sectionEdit).toBe(true)
+  })
+})
+
 describe('programs.store-live — Live slots auto-store and persist', () => {
   it('Live mode edits store instantly, without a dirty flag', () => {
     const store = new InstrumentStore()

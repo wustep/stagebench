@@ -249,6 +249,23 @@ describe('morph.assignments — id-encoded destinations resolve their own layer 
   })
 })
 
+describe('morph.assignments — program loads re-apply parked sources (audit C2)', () => {
+  it('loading a program while the wheel is parked high interpolates the fresh snapshot immediately', () => {
+    const store = new InstrumentStore()
+    store.recordMorphEdit('wheel', 'delay-mix', 'A', 64, 127)
+    store.storePress()
+    store.storePress() // program 1.1 now stores the assignment
+    store.setMorphSource('wheel', 127)
+    expect(store.getState().chains.A.delay.mix).toBe(127)
+    store.selectProgram(4) // a program without assignments
+    store.selectProgram(0) // back — the wheel is STILL parked at 127
+    expect(store.getState().chains.A.delay.mix).toBe(127) // interpolated on load, not on next wheel move
+    expect(store.getState().programs.dirty).toBe(false) // re-application is not an edit
+    store.setMorphSource('wheel', 0)
+    expect(store.getState().chains.A.delay.mix).toBe(64)
+  })
+})
+
 describe('morph.assignments — MIDI CC1 wheel and pitch bend (audit D1)', () => {
   it('MIDI CC1 drives the Wheel morph source and the on-screen wheel follows', async () => {
     const rendered = renderApp()
