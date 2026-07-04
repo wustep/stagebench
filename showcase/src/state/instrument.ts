@@ -386,7 +386,9 @@ export interface ArpState {
   mode: ArpMode
   rate: number // 0..127 -> mappings.arpRateBpm, or master-clock BPM when mstClk
   mstClk: boolean
-  range: 1 | 2 | 3 | 4
+  /** Octave range 1..4 in half steps (manual p. 35: values in between add
+   *  "a fifth on top" — 2.5 = 2 octaves and a fifth). */
+  range: number
   direction: ArpDirection
   hold: boolean
   /** Zig Zag (Arpeggiator Menu page 1, manual p. 35): "played notes will
@@ -3207,14 +3209,17 @@ export class InstrumentStore {
     this.patchArp({ mstClk }, `Arp MST CLK ${mstClk ? 'On' : 'Off'}`)
   }
 
-  /** ARP RANGE knob (1..4 octaves, or gate hardness in Gate mode — spec
-   *  arpeggiatorGate.range). Always stored as 1..4; Gate mode's engine-side
-   *  interpretation repurposes the same stored value as hardness. */
+  /** ARP RANGE knob (1..4 octaves in half steps — manual p. 35 allows
+   *  values in between whole octaves, adding a fifth on top: 2.5 = "2
+   *  octaves and a fifth"; or gate hardness in Gate mode — spec
+   *  arpeggiatorGate.range). Gate mode's engine-side interpretation
+   *  repurposes the same stored value as hardness. */
   setArpRange(value: number): void {
-    const clamped = Math.max(1, Math.min(4, Math.round(1 + (clamp(value) / 127) * 3))) as 1 | 2 | 3 | 4
-    const label =
-      this.state.synth.arp.mode === 'Gate' ? `Arp Gate Hardness ${clamped}` : `Arp Range ${clamped} octave${clamped > 1 ? 's' : ''}`
-    this.patchArp({ range: clamped }, label)
+    const range = 1 + Math.round((clamp(value) / 127) * 6) * 0.5
+    const whole = Math.floor(range)
+    const octaves = `${whole} octave${whole > 1 ? 's' : ''}${range % 1 ? ' + a 5th' : ''}`
+    const label = this.state.synth.arp.mode === 'Gate' ? `Arp Gate Hardness ${range}` : `Arp Range ${octaves}`
+    this.patchArp({ range }, label)
   }
 
   /** KB HOLD (manual p. 36): held notes (and the arp's held-note set) keep

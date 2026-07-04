@@ -538,6 +538,10 @@ export class PianoEngine {
   private organChain: OrganSharedChain | null = null
   private synthChannels: Record<SynthLayerId, SynthChannel> | null = null
   private rotary: RotaryUnit | null = null
+  /** Summed pre-master bus (all layer sends + rotary) feeding the shared
+   *  post-rotary Global Reverb (manual p. 52-53). */
+  private preMaster: GainNodeLike | null = null
+  private globalReverb: EffectUnit<EffectChainState['reverb']> | null = null
 
   private voices = new Map<number, Voice>()
   private releasingVoices = new Set<Voice>()
@@ -684,7 +688,18 @@ export class PianoEngine {
       tail.connect(context.destination)
       this.masterGain = master
       this.rotary = createRotary(context)
-      this.rotary.output.connect(master)
+      // Global Reverb placement (manual p. 52-53): reverb precedes the
+      // rotary "unless the Reverb is set to Global mode, in which case the
+      // Reverb is placed after the Rotary Speaker". One shared reverb sits
+      // on the summed pre-master bus (post-rotary); it idles as a dry pass
+      // until GLOBAL reverb is engaged, when the per-chain reverbs bypass
+      // and this one takes over.
+      const preMaster = context.createGain()
+      this.preMaster = preMaster
+      this.globalReverb = createReverb(context)
+      preMaster.connect(this.globalReverb.input)
+      this.globalReverb.output.connect(master)
+      this.rotary.output.connect(preMaster)
       this.channels = { A: this.buildChannel(context), B: this.buildChannel(context) }
       // Organ channels (with their always-running scanner LFOs) are built
       // lazily on first Organ-section use — a piano-only session never pays
@@ -783,7 +798,7 @@ export class PianoEngine {
     units.reverb.output.connect(levelGain)
     levelGain.connect(toMaster)
     levelGain.connect(toRotary)
-    toMaster.connect(this.masterGain!)
+    toMaster.connect(this.preMaster ?? this.masterGain!)
     toRotary.connect(this.rotary!.input)
 
     return { voiceBus, timbreBass, timbreTreble, dynComp, dynMakeup, levelGain, resSend, resConvolver, units, toMaster, toRotary }
@@ -839,7 +854,7 @@ export class PianoEngine {
     toRotary.gain.value = 0.0001
     units.reverb.output.connect(toMaster)
     units.reverb.output.connect(toRotary)
-    toMaster.connect(this.masterGain!)
+    toMaster.connect(this.preMaster ?? this.masterGain!)
     toRotary.connect(this.rotary!.input)
 
     return { input, units, toMaster, toRotary }
@@ -883,7 +898,7 @@ export class PianoEngine {
     units.reverb.output.connect(levelGain)
     levelGain.connect(toMaster)
     levelGain.connect(toRotary)
-    toMaster.connect(this.masterGain!)
+    toMaster.connect(this.preMaster ?? this.masterGain!)
     toRotary.connect(this.rotary!.input)
 
     return { voiceBus, levelGain, units, toMaster, toRotary, lfo: this.buildSynthLfo(context), vibrato: this.buildSynthVibrato(context) }
@@ -1207,6 +1222,14 @@ export class PianoEngine {
     if (!this.channels || !this.rotary) return
     this.rotary.update(state.rotary, now)
 
+    // GLOBAL Reverb relocation (manual p. 52-53): with Reverb in Global
+    // mode the ONE shared post-rotary reverb takes over and every chain's
+    // local reverb bypasses; otherwise the shared unit idles as a dry pass.
+    // All chains mirror the same reverb settings in Global mode, so chain
+    // A's state speaks for all of them.
+    const globalReverbOn = state.fxGlobal.reverb
+    this.globalReverb?.update(state.chains.A.reverb, !state.allFxOff && globalReverbOn && state.chains.A.reverb.on, now)
+
     // Master-clock sync (manual p. 17/40/49/51): while a unit's MST CLK is
     // lit its OWN Rate/Tempo knob selects a subdivision of the master beat
     // (½ = half notes, 1/8T = eighth triplets …) — the knob stays musical,
@@ -1257,7 +1280,7 @@ export class PianoEngine {
       channel.units.delay.update(syncDelay(chain.delay), fxOn && chain.delay.on, now)
       channel.units.ampEq.update(chain.ampEq, fxOn && chain.ampEq.on, now)
       channel.units.comp.update(chain.comp, fxOn && chain.comp.on, now)
-      channel.units.reverb.update(chain.reverb, fxOn && chain.reverb.on, now)
+      channel.units.reverb.update(chain.reverb, fxOn && chain.reverb.on && !globalReverbOn, now)
 
       // Routing: Amp unit in "To Rotary" mode sends this layer through the
       // single rotary instance (post-reverb: Reverb precedes Rotary).
@@ -1292,7 +1315,7 @@ export class PianoEngine {
       organChain.units.delay.update(syncDelay(organFxState.delay), organFxOn && organFxState.delay.on, now)
       organChain.units.ampEq.update(organFxState.ampEq, organFxOn && organFxState.ampEq.on, now)
       organChain.units.comp.update(organFxState.comp, organFxOn && organFxState.comp.on, now)
-      organChain.units.reverb.update(organFxState.reverb, organFxOn && organFxState.reverb.on, now)
+      organChain.units.reverb.update(organFxState.reverb, organFxOn && organFxState.reverb.on && !globalReverbOn, now)
 
       // Routing: the ORGAN button in the Rotary group (manual p. 53) OR the
       // shared chain's Amp unit in "To Rotary" mode sends the organ through
@@ -1322,7 +1345,7 @@ export class PianoEngine {
         channel.units.delay.update(syncDelay(synthChain.delay), fxOn && synthChain.delay.on, now)
         channel.units.ampEq.update(synthChain.ampEq, fxOn && synthChain.ampEq.on, now)
         channel.units.comp.update(synthChain.comp, fxOn && synthChain.comp.on, now)
-        channel.units.reverb.update(synthChain.reverb, fxOn && synthChain.reverb.on, now)
+        channel.units.reverb.update(synthChain.reverb, fxOn && synthChain.reverb.on && !globalReverbOn, now)
 
         // Routing: the layer's Amp unit in "To Rotary" mode sends it through
         // the single rotary instance, post-reverb (mirrors a Piano layer).
@@ -1808,8 +1831,14 @@ export class PianoEngine {
     const arp = this.state.synth.arp
     const sorted = [...held].sort((a, b) => a - b)
     const expanded: number[] = []
-    for (let octave = 0; octave < arp.range; octave++) {
+    const whole = Math.floor(arp.range)
+    for (let octave = 0; octave < whole; octave++) {
       for (const midi of sorted) expanded.push(midi + octave * 12)
+    }
+    // Half-step ranges add "a fifth on top" (manual p. 35: e.g. 2 octaves
+    // and a fifth): the held notes once more, a fifth above the top octave.
+    if (arp.range % 1 !== 0) {
+      for (const midi of sorted) expanded.push(midi + (whole - 1) * 12 + 7)
     }
     if (arp.direction === 'Up') return expanded
     if (arp.direction === 'Down') return [...expanded].reverse()
@@ -3345,6 +3374,14 @@ export class PianoEngine {
     this.synthSoundingMidi = { A: null, B: null, C: null }
     this.rotary?.dispose()
     this.rotary = null
+    this.globalReverb?.dispose()
+    this.globalReverb = null
+    try {
+      this.preMaster?.disconnect()
+    } catch {
+      /* detached */
+    }
+    this.preMaster = null
     try {
       this.limiter?.disconnect()
     } catch {
@@ -3390,6 +3427,8 @@ export class PianoEngine {
     organChainToMaster: GainNodeLike | null
     organChainToRotary: GainNodeLike | null
     synthChannels: Record<SynthLayerId, SynthChannel> | null
+    /** The shared post-rotary Global Reverb unit (manual p. 52-53). */
+    globalReverb: EffectUnit<EffectChainState['reverb']> | null
   } {
     return {
       context: this.context,
@@ -3402,6 +3441,7 @@ export class PianoEngine {
       organChainToMaster: this.organChain?.toMaster ?? null,
       organChainToRotary: this.organChain?.toRotary ?? null,
       synthChannels: this.synthChannels,
+      globalReverb: this.globalReverb,
     }
   }
 }

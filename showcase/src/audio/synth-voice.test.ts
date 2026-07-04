@@ -652,6 +652,29 @@ describe('synth.arp — deterministic scheduler', () => {
     engine.noteOff(60)
   })
 
+  it('half-step ranges add "a fifth on top" (manual p. 35): range 1.5 steps the root then a fifth up', () => {
+    const { engine, store, timers, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setArpRate(127)
+    store.setArpRange(21) // 7-step knob: this lands on 1.5 = 1 octave + a 5th
+    expect(store.getState().synth.arp.range).toBe(1.5)
+    expect(store.getState().lastEdit).toMatch(/1 octave \+ a 5th/)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+
+    const fundamentals: number[] = []
+    for (let i = 0; i < 2; i++) {
+      const before = context.nodes.length
+      timers.advance(60000 / 300 + 1)
+      const created = voiceSourcesFor(context, before)
+      expect(created).toHaveLength(1)
+      fundamentals.push(created[0]!.frequency.value)
+    }
+    expect(fundamentals[1]! / fundamentals[0]!).toBeCloseTo(Math.pow(2, 7 / 12), 3) // a perfect fifth up
+    engine.noteOff(60)
+  })
+
   it('ARP RUN off stops the scheduler: no further steps sound', () => {
     const { engine, store, timers, getContext } = makeSystem()
     engine.ensureStarted()

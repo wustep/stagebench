@@ -225,6 +225,25 @@ describe('effects.routing', () => {
     expect(toMaster.gain.value).toBeGreaterThan(0.9)
   })
 
+  it('Global Reverb relocates post-Rotary: the shared unit takes over, chain reverbs bypass (manual p. 52-53)', () => {
+    const { store, engine } = makeSystem()
+    const diag = engine.diagnostics()
+    store.toggleUnitOn('reverb')
+    const chainDry = dryGainOf(diag.channels!.A.units.reverb)
+    const globalDry = dryGainOf(diag.globalReverb!)
+    expect(chainDry.gain.value).toBeLessThan(1) // local reverb engaged
+    expect(globalDry.gain.value).toBe(1) // shared post-rotary unit idles dry
+    store.toggleFxGlobal('reverb')
+    expect(chainDry.gain.value).toBe(1) // local reverb bypassed
+    expect(globalDry.gain.value).toBeLessThan(1) // the post-rotary reverb took over
+    // Placement: rotary output -> pre-master sum -> global reverb input.
+    const preMaster = (diag.rotary!.output as FakeNode).connections[0]!
+    expect(preMaster.connections.includes(diag.globalReverb!.input as FakeNode)).toBe(true)
+    store.toggleFxGlobal('reverb') // leaving Global restores the local reverb
+    expect(chainDry.gain.value).toBeLessThan(1)
+    expect(globalDry.gain.value).toBe(1)
+  })
+
   it('rotary speed and stop controls retarget the rotor/horn LFO frequencies with inertia', () => {
     const { store, engine, getContext } = makeSystem()
     const context = getContext()!
