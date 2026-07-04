@@ -734,6 +734,25 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
     </b>
   )
   const chainForFocused = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
+  const organizeRows = state.organize
+    ? (() => {
+        const organize = state.organize
+        const liveMode = programs.liveMode
+        const bank = liveMode ? programs.live : programs.bank
+        const slotLine = (index: number) => `${programLabel(index, liveMode)} ${bank[index]!.name}`
+        return [
+          <span key="og1" className="oled-slot" data-testid="oled-organize-line">
+            ⇅ ORGANIZE —{' '}
+            {organize.pending
+              ? `${organize.pending.op === 'swap' ? 'SWAP' : 'MOVE'} ${slotLine(organize.pending.source)} → ${slotLine(organize.cursor)}`
+              : slotLine(organize.cursor)}
+          </span>,
+          <span key="og2" className="oled-slot" data-testid="oled-organize-action">
+            {organize.pending ? 'dial: destination · PROG 1: Undo · 2: Ok' : 'dial: select · PROG 1: Swap · 2: Move'}
+          </span>,
+        ]
+      })()
+    : null
   const menuRows = state.menu
     ? (() => {
         const pages = MENU_PAGES[state.menu.id]
@@ -1062,7 +1081,8 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               lines={[
                 <span key="p" className={`oled-program${xl}`} data-testid="oled-program-line">{programReadout}</span>,
                 <span key="n">{nameLine}</span>,
-                ...(menuRows ??
+                ...(organizeRows ??
+                  menuRows ??
                   presetRows ??
                   layerInitRows ??
                   splitRows ??

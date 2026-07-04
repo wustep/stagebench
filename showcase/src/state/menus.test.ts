@@ -57,8 +57,8 @@ describe('system.menus — panel navigation', () => {
   it('the unimplemented Shift + PROG menus say so instead of pretending', () => {
     renderApp()
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Program 3' }))
-    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Organize menu — not implemented/)
+    fireEvent.click(screen.getByRole('button', { name: 'Program 4' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Aux KB menu — not implemented/)
     expect(screen.queryByTestId('oled-menu-line')).toBeNull()
   })
 

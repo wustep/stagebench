@@ -738,6 +738,11 @@ export interface InstrumentState {
   /** Open menu screen (Shift + PROGRAM 1/2, manual p. 57): PAGE navigates,
    *  the dial changes the setting, EXIT (Shift) leaves. Not program state. */
   menu: { id: 'system' | 'sound'; page: number } | null
+  /** ORGANIZE view (Shift + PROGRAM 3, manual p. 45): dial selects a slot,
+   *  Swap/Move (PROG 1/2) pick the operation, then the dial selects the
+   *  destination and Undo/Ok (PROG 1/2) cancel or commit. Works on the
+   *  active bank (Program or Live). Not program state. */
+  organize: { cursor: number; pending: { op: 'swap' | 'move'; source: number } | null } | null
   /** The global menu settings themselves (manual p. 57-58). Persisted to
    *  storage; independent of programs. */
   globalSettings: GlobalSettingsState
@@ -953,6 +958,7 @@ function baseInstrumentState(): InstrumentState {
     clockExternal: false,
     transposeEdit: false,
     menu: null,
+    organize: null,
     globalSettings: defaultGlobalSettings(),
     soloLayer: null,
     layerInitEdit: false,
@@ -1485,7 +1491,7 @@ export class InstrumentStore {
   setClockEdit(on: boolean): void {
     if (on === this.state.clockEdit) return
     this.patch(
-      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null } : {}) },
+      { clockEdit: on, ...(on ? { transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null, organize: null } : {}) },
       on ? 'Mst Clk Edit — dial: BPM · PROG: sync/KBS/ped tap' : 'Mst Clk Edit closed',
     )
   }
@@ -1511,7 +1517,7 @@ export class InstrumentStore {
   setTransposeEdit(on: boolean): void {
     if (on === this.state.transposeEdit) return
     this.patch(
-      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null } : {}) },
+      { transposeEdit: on, ...(on ? { clockEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null, organize: null } : {}) },
       on ? 'Transpose Edit — dial: -6…+6 st' : 'Transpose Edit closed',
     )
   }
@@ -1580,7 +1586,7 @@ export class InstrumentStore {
   setSplitEdit(on: boolean): void {
     if (on === !!this.state.splitEdit) return
     this.patch(
-      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null } : {}) },
+      { splitEdit: on ? { point: 1 } : null, ...(on ? { clockEdit: false, transposeEdit: false, layerInitEdit: false, presetBrowse: null, monCopy: null, menu: null, organize: null } : {}) },
       on ? 'Split Edit — dial: position · PAGE: point · PROG 1/2: on/xfade' : 'Split Edit closed',
     )
   }
@@ -1638,7 +1644,7 @@ export class InstrumentStore {
       // Also drops the Section Edit latch: both live on the same physical
       // button (Layer Init = Shift + Section Edit), so both lit at once
       // would be a panel lie — the OLED can only show one of them.
-      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null, sectionEdit: false, menu: null } : {}) },
+      { layerInitEdit: on, ...(on ? { clockEdit: false, transposeEdit: false, splitEdit: null, presetBrowse: null, monCopy: null, sectionEdit: false, menu: null, organize: null } : {}) },
       on ? 'Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn' : 'Layer Init closed',
     )
   }
@@ -1672,6 +1678,7 @@ export class InstrumentStore {
     this.patch(
       {
         menu: { id, page: 0 },
+        organize: null,
         clockEdit: false,
         transposeEdit: false,
         splitEdit: null,
@@ -1734,6 +1741,108 @@ export class InstrumentStore {
 
   private persistSettings(settings: GlobalSettingsState): void {
     this.storage?.save(SETTINGS_STORAGE_KEY, JSON.stringify({ version: 1, settings }))
+  }
+
+  /* ----- Organize view (Shift + PROGRAM 3, manual p. 45) ----- */
+
+  /** Enters/leaves the Organize view for the active bank (Program or Live). */
+  openOrganize(): void {
+    if (this.state.organize) {
+      this.closeOrganize()
+      return
+    }
+    this.patch(
+      {
+        organize: { cursor: this.state.programs.current, pending: null },
+        menu: null,
+        clockEdit: false,
+        transposeEdit: false,
+        splitEdit: null,
+        layerInitEdit: false,
+        presetBrowse: null,
+        monCopy: null,
+      },
+      'Organize — dial: select · PROG 1: Swap · 2: Move · EXIT: leave',
+    )
+  }
+
+  closeOrganize(): void {
+    if (!this.state.organize) return
+    this.patch({ organize: null }, 'Organize closed')
+  }
+
+  /** PROGRAM dial in the Organize view: moves the slot cursor (the source
+   *  before Swap/Move is pressed, the destination while one is pending). */
+  organizeDial(dial: number): void {
+    const organize = this.state.organize
+    if (!organize) return
+    const count = this.activeBank().length
+    const cursor = Math.max(0, Math.min(count - 1, Math.round((Math.max(0, Math.min(127, dial)) / 127) * (count - 1))))
+    if (cursor === organize.cursor) return
+    const liveMode = this.state.programs.liveMode
+    const label = `${programLabel(cursor, liveMode)} ${this.activeBank()[cursor]!.name}`
+    this.patch(
+      { organize: { ...organize, cursor } },
+      organize.pending ? `${organize.pending.op === 'swap' ? 'Swap' : 'Move'} → ${label}? PROG 2: Ok` : `Organize: ${label}`,
+    )
+  }
+
+  /** Swap/Move soft button: marks the cursor slot as the operation source. */
+  organizeBegin(op: 'swap' | 'move'): void {
+    const organize = this.state.organize
+    if (!organize || organize.pending) return
+    const liveMode = this.state.programs.liveMode
+    this.patch(
+      { organize: { ...organize, pending: { op, source: organize.cursor } } },
+      `${op === 'swap' ? 'Swap' : 'Move'} ${programLabel(organize.cursor, liveMode)} — dial: destination · PROG 1: Undo · 2: Ok`,
+    )
+  }
+
+  /** Undo soft button: abandons the pending Swap/Move (manual p. 45). */
+  organizeCancel(): void {
+    const organize = this.state.organize
+    if (!organize?.pending) return
+    this.patch({ organize: { ...organize, pending: null } }, 'Organize: operation cancelled')
+  }
+
+  /** Ok soft button: commits the pending Swap/Move. Swap interchanges the
+   *  two slots; Move re-inserts the source at the destination, shifting the
+   *  programs in between one step (manual p. 45). The loaded program's slot
+   *  pointer follows its program so the sound never changes. */
+  organizeCommit(): void {
+    const organize = this.state.organize
+    if (!organize?.pending) return
+    const { op, source } = organize.pending
+    const destination = organize.cursor
+    const programs = this.state.programs
+    const liveMode = programs.liveMode
+    if (source === destination) {
+      this.patch({ organize: { ...organize, pending: null } }, 'Organize: same slot — nothing to do')
+      return
+    }
+    const bank = [...this.activeBank()]
+    let current = programs.current
+    if (op === 'swap') {
+      const a = bank[source]!
+      bank[source] = bank[destination]!
+      bank[destination] = a
+      if (current === source) current = destination
+      else if (current === destination) current = source
+    } else {
+      const [moved] = bank.splice(source, 1)
+      bank.splice(destination, 0, moved!)
+      if (current === source) current = destination
+      else if (source < current && destination >= current) current -= 1
+      else if (source > current && destination <= current) current += 1
+    }
+    const bankKey = liveMode ? 'live' : 'bank'
+    this.commit({
+      ...this.state,
+      organize: { cursor: destination, pending: null },
+      programs: { ...programs, [bankKey]: bank, current },
+      lastEdit: `${op === 'swap' ? 'Swapped' : 'Moved'} ${programLabel(source, liveMode)} → ${programLabel(destination, liveMode)}`,
+    })
+    this.persistPrograms(this.state)
   }
 
   private restoreSettings(): GlobalSettingsState | null {
@@ -1858,6 +1967,7 @@ export class InstrumentStore {
         layerInitEdit: false,
         monCopy: null,
         menu: null,
+        organize: null,
       },
       single ? `${name} Preset — Single Layer ${focused} · dial: load` : `${name} Preset — dial: load · PROG 1: Cancel`,
     )
@@ -2295,6 +2405,7 @@ export class InstrumentStore {
       transposeEdit: false,
       splitEdit: null,
       menu: null,
+      organize: null,
       programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `${programLabel(clamped, programs.liveMode)} ${slot.name}`,
     })
@@ -2559,6 +2670,7 @@ export class InstrumentStore {
       transposeEdit: false,
       splitEdit: null,
       menu: null,
+      organize: null,
       programs: {
         ...programs,
         liveMode,
@@ -2597,6 +2709,7 @@ export class InstrumentStore {
       transposeEdit: false,
       splitEdit: null,
       menu: null,
+      organize: null,
       programs: { ...programs, liveMode: undo.liveMode, current: undo.slot, dirty: true, undo: null },
       lastEdit: `Undo — back to ${programLabel(undo.slot, undo.liveMode)} (edited)`,
     })
@@ -2618,7 +2731,7 @@ export class InstrumentStore {
     this.patch(
       {
         monCopy: mode,
-        ...(mode ? { clockEdit: false, transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, menu: null } : {}),
+        ...(mode ? { clockEdit: false, transposeEdit: false, splitEdit: null, layerInitEdit: false, presetBrowse: null, menu: null, organize: null } : {}),
       },
       mode === 'copy'
         ? 'Mon/Copy — turn a knob: monitor · Layer/FX On/Morph/Program: copy'

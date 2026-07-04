@@ -576,6 +576,30 @@ describe('programs.progview — display view modes and Preset Name (manual p. 42
     expect(screen.getByTestId('oled-piano-line')).toBeInTheDocument()
   })
 
+  it('panel: ORGANIZE (Shift + Prog 3) swaps two slots with the Swap → Ok soft buttons', () => {
+    renderApp()
+    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
+    const store = new InstrumentStore()
+    const firstName = store.getState().programs.bank[0]!.name
+    const lastName = store.getState().programs.bank[31]!.name
+    fireEvent.click(shift)
+    fireEvent.click(screen.getByRole('button', { name: 'Program 3' }))
+    expect(screen.getByTestId('oled-organize-line').textContent).toContain(`A:11 ${firstName}`)
+    fireEvent.click(screen.getByRole('button', { name: 'Program 1' })) // Swap (source = A:11)
+    const dial = screen.getByRole('slider', { name: 'Program Dial' })
+    fireEvent.keyDown(dial, { key: 'End' }) // destination = last slot
+    expect(screen.getByTestId('oled-organize-line').textContent).toMatch(/SWAP A:11 .* → A:48/)
+    fireEvent.click(screen.getByRole('button', { name: 'Program 2' })) // Ok
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Swapped A:11 → A:48/)
+    expect(screen.getByTestId('oled-organize-line').textContent).toContain(`A:48 ${firstName}`)
+    // The loaded program's pointer followed its program: still the same name.
+    expect(screen.getByTestId('oled-name-line').textContent).toBe(firstName)
+    expect(screen.getByTestId('oled-program-line').textContent).toContain('A:48')
+    void lastName
+    fireEvent.click(shift) // EXIT closes the view
+    expect(screen.queryByTestId('oled-organize-line')).toBeNull()
+  })
+
   it('panel: PRESET NAME (Shift + Prog View) shows source names and resets on program load', () => {
     renderApp()
     expect(screen.getByTestId('oled-piano-line').textContent).toContain('A: Salamander Grand')
@@ -586,5 +610,79 @@ describe('programs.progview — display view modes and Preset Name (manual p. 42
     // Loading a program resets the Preset Name state (manual p. 42).
     fireEvent.click(screen.getByRole('button', { name: 'Program 2' }))
     expect(screen.getByTestId('oled-piano-line').textContent).not.toContain('Electric / ')
+  })
+})
+
+describe('programs.organize — Swap and Move (manual p. 45)', () => {
+  it('Swap interchanges two slots and the loaded pointer follows its program', () => {
+    const store = new InstrumentStore()
+    const names = store.getState().programs.bank.map((s) => s.name)
+    store.openOrganize()
+    store.organizeBegin('swap') // source = current cursor (slot 0)
+    store.organizeDial(127) // destination = slot 31
+    store.organizeCommit()
+    const bank = store.getState().programs.bank
+    expect(bank[31]!.name).toBe(names[0])
+    expect(bank[0]!.name).toBe(names[31])
+    expect(store.getState().programs.current).toBe(31) // pointer followed
+    expect(store.getState().programs.dirty).toBe(false) // the sound never changed
+  })
+
+  it('Move re-inserts the source and shifts the programs in between one step', () => {
+    const store = new InstrumentStore()
+    const names = store.getState().programs.bank.map((s) => s.name)
+    store.selectProgram(1) // load slot 1 so the pointer reindexing is observable
+    store.openOrganize()
+    store.organizeDial(0) // source cursor = slot 0
+    store.organizeBegin('move')
+    store.organizeDial(Math.round((2 / 31) * 127)) // destination = slot 2
+    expect(store.getState().organize!.cursor).toBe(2)
+    store.organizeCommit()
+    const bank = store.getState().programs.bank
+    expect(bank[0]!.name).toBe(names[1]) // shifted up
+    expect(bank[1]!.name).toBe(names[2])
+    expect(bank[2]!.name).toBe(names[0]) // the moved program
+    expect(store.getState().programs.current).toBe(0) // loaded slot 1 slid to 0
+  })
+
+  it('Undo abandons a pending operation; a same-slot Ok is a no-op', () => {
+    const store = new InstrumentStore()
+    const names = store.getState().programs.bank.map((s) => s.name)
+    store.openOrganize()
+    store.organizeBegin('swap')
+    store.organizeDial(127)
+    store.organizeCancel() // Undo
+    expect(store.getState().programs.bank.map((s) => s.name)).toEqual(names)
+    expect(store.getState().organize!.pending).toBeNull()
+    store.organizeBegin('move')
+    store.organizeCommit() // destination === source
+    expect(store.getState().programs.bank.map((s) => s.name)).toEqual(names)
+    expect(store.getState().lastEdit).toMatch(/same slot/)
+  })
+
+  it('an organize commit persists the new order through the storage boundary', () => {
+    const storage = fakeStorageBoundary()
+    const first = new InstrumentStore(storage)
+    const names = first.getState().programs.bank.map((s) => s.name)
+    first.openOrganize()
+    first.organizeBegin('swap')
+    first.organizeDial(127)
+    first.organizeCommit()
+    const second = new InstrumentStore(storage)
+    expect(second.getState().programs.bank[31]!.name).toBe(names[0])
+    expect(second.getState().programs.bank[0]!.name).toBe(names[31])
+  })
+
+  it('organize works on the Live bank too and a program load closes the view', () => {
+    const store = new InstrumentStore()
+    store.toggleLiveMode()
+    const names = store.getState().programs.live.map((s) => s.name)
+    store.openOrganize()
+    store.organizeBegin('swap')
+    store.organizeDial(127) // Live slot 8
+    store.organizeCommit()
+    expect(store.getState().programs.live[7]!.name).toBe(names[0])
+    store.selectProgram(3)
+    expect(store.getState().organize).toBeNull()
   })
 })

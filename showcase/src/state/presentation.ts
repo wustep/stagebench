@@ -127,6 +127,10 @@ export class PresentationStore {
             }
             return Math.round((((value as number) - def.min!) / (def.max! - def.min!)) * 127)
           }
+          if (state.organize) {
+            const count = state.programs.liveMode ? state.programs.live.length : state.programs.bank.length
+            return Math.round((state.organize.cursor / (count - 1)) * 127)
+          }
           // Preset Library browse (manual p. 41): the dial spans the preset list.
           if (state.presetBrowse)
             return Math.round((state.presetBrowse.index / (PRESET_BANKS[state.presetBrowse.section].length - 1)) * 127)
@@ -448,6 +452,11 @@ export class PresentationStore {
           // Menu screens repurpose the dial for the focused setting (manual p. 57).
           if (store.getState().menu) {
             store.setMenuValueFromDial(clamped)
+            return
+          }
+          // The Organize view's slot cursor (manual p. 45).
+          if (store.getState().organize) {
+            store.organizeDial(clamped)
             return
           }
           // Split-edit mode repurposes the dial for the point position.
@@ -1097,11 +1106,13 @@ export class PresentationStore {
             store.getState().splitEdit !== null ||
             store.getState().layerInitEdit ||
             store.getState().presetBrowse !== null ||
+            store.getState().organize !== null ||
             store.getState().programs.numPad ||
             store.getState().programs.storePending !== null
           if (shift && !editModeActive) {
             if (button === 0) store.openMenu('system')
             else if (button === 1) store.openMenu('sound')
+            else if (button === 2) store.openOrganize()
             else store.setLastEdit(`${PROGRAM_BUTTON_LEGENDS[button]} menu — not implemented in this showcase`)
             return
           }
@@ -1109,6 +1120,21 @@ export class PresentationStore {
             // Menu screen: our pages hold one setting each, so the soft-button
             // row only re-prints the navigation hint.
             store.setLastEdit('Menu — dial: set · PAGE: page · EXIT: leave')
+            return
+          }
+          if (store.getState().organize) {
+            // Organize soft buttons (manual p. 45): PROG 1/2 are Swap/Move,
+            // then Undo/Ok while an operation is pending.
+            const pending = store.getState().organize!.pending
+            if (button === 0) {
+              if (pending) store.organizeCancel()
+              else store.organizeBegin('swap')
+            } else if (button === 1) {
+              if (pending) store.organizeCommit()
+              else store.organizeBegin('move')
+            } else {
+              store.setLastEdit(pending ? 'Organize — PROG 1: Undo · 2: Ok' : 'Organize — PROG 1: Swap · 2: Move')
+            }
             return
           }
           if (store.getState().clockEdit) {
@@ -1291,6 +1317,12 @@ export class PresentationStore {
           // …then leaves an open System/Sound menu (EXIT, manual p. 57)…
           if (store.getState().menu) {
             store.closeMenu()
+            return
+          }
+          // …then leaves the Organize view (a pending Swap/Move first, manual p. 45)…
+          if (store.getState().organize) {
+            if (store.getState().organize!.pending) store.organizeCancel()
+            else store.closeOrganize()
             return
           }
           // …then leaves the Preset Library screen, KEEPING the loaded
