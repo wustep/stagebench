@@ -54,7 +54,16 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
   }
 }
 
-const runs = (runsData as RawRunEntry[]).map(normalizeRunEntry)
+// GPT5.6 runs are hidden from the main gallery until the visitor unlocks
+// them at /secret (same access password, separate cookie set by middleware.js).
+const EXTRA_MODEL_PREFIX = 'gpt-5.6'
+const extraModelsUnlocked =
+  typeof document !== 'undefined' &&
+  document.cookie.split(';').some((entry) => entry.trim().startsWith('stagebench_extras='))
+
+const runs = (runsData as RawRunEntry[])
+  .map(normalizeRunEntry)
+  .filter((run) => extraModelsUnlocked || !run.model.startsWith(EXTRA_MODEL_PREFIX))
 // Phase display names come from the phase manifest via src/data/protocol.json
 // (generated at reindex time); legacy/v2 mappings live there too because the
 // current spec has no data for those retired protocol layouts.
