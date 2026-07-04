@@ -117,7 +117,9 @@ body {
      sections start ~0.3% from the left edge but stop ~4.6% short of the
      right edge (bare red chassis). SECTIONS fractions normalize to this
      content width. */
-  padding: 0.35cqw 4.6cqw 0.4cqw 0.3cqw;
+  /* 73 photo: the deck stops ~1.8% short of the right edge (the old 4.6%
+     was the 88's logo margin) — Layer Effects gets the reclaimed width. */
+  padding: 0.35cqw 1.8cqw 0.4cqw 0.3cqw;
   gap: 0.25cqw;
 }
 
@@ -237,7 +239,7 @@ body {
 .made-in {
   position: absolute;
   bottom: 0.45cqw;
-  right: 1.6cqw;
+  right: 0.55cqw;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   font-size: 0.3cqw;
@@ -441,6 +443,10 @@ body {
   max-width: 100%;
 }
 
+.legend.layer-init-print {
+  white-space: nowrap;
+}
+
 .legend.dim {
   color: var(--legend-dim);
   font-weight: 600;
@@ -457,6 +463,16 @@ body {
   padding: 0.02cqw 0.12cqw;
   /* One-line box like the printed tag (never a wrapped two-line lozenge). */
   white-space: nowrap;
+}
+
+/* Photo: the MST CLK / GLOBAL tags carry a small round LED inside their
+   red box, left of the text. */
+.legend .led.tag-led {
+  display: inline-block;
+  width: 0.2cqw;
+  height: 0.2cqw;
+  vertical-align: 8%;
+  margin-right: 0.04cqw;
 }
 
 .legend .list-tag {
@@ -495,6 +511,18 @@ body {
   align-items: center;
   gap: 0.5cqw;
   padding: 0.08cqw 0.45cqw 0.1cqw;
+  /* The tall LIGHT tab itself (photo): title, FX FOCUS, ON and SOLO ▾ all
+     print dark on it; it steps down to the thin strip at its right. */
+  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  border-radius: 0.3cqw 0 0.24cqw 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+/* Photo: the section ON switch rides LOW on the band, its housing edge
+   poking just below the band line. */
+.plate-header-tab .on-cluster .panel-button.pill {
+  margin-bottom: -0.14cqw;
+  margin-top: -0.02cqw;
   background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
   border-radius: 0.3cqw 0 0.24cqw 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.35);
@@ -1116,11 +1144,15 @@ body {
 }
 
 .panel-button:active .panel-button-cap,
+.panel-button[data-pressed='true'] .panel-button-cap,
 .panel-button[data-lit='true'] .panel-button-cap {
   transform: translateY(6%);
 }
 
-.panel-button:active {
+/* data-pressed mirrors :active through the shared store so the magnifier
+   lens clone and section-zoom render travel with the press too. */
+.panel-button:active,
+.panel-button[data-pressed='true'] {
   box-shadow:
     inset 0 0.1cqw 0.15cqw rgba(0, 0, 0, 0.6),
     0 0.04cqw 0.08cqw rgba(0, 0, 0, 0.4);
@@ -1432,15 +1464,15 @@ body {
   inset: 3.5% 14% 4.5% 1%;
   border-radius: 0.3cqw / 0.6cqw;
   overflow: hidden;
-  background-color: #5f636a;
+  background-color: #4b4e54;
   background-image:
     linear-gradient(
       180deg,
       rgba(6, 5, 5, 0.85) 0%,
       rgba(30, 26, 26, 0.4) 8%,
-      rgba(255, 255, 255, 0.18) 20%,
-      rgba(255, 255, 255, 0.4) 32%,
-      rgba(255, 255, 255, 0.16) 50%,
+      rgba(255, 255, 255, 0.12) 20%,
+      rgba(255, 255, 255, 0.27) 32%,
+      rgba(255, 255, 255, 0.1) 50%,
       rgba(58, 30, 28, 0.22) 76%,
       rgba(10, 6, 6, 0.8) 100%
     ),
@@ -1731,24 +1763,29 @@ body {
   text-align: center;
 }
 
-/* Reference: MASTER LEVEL wears a thin printed white ARC around the cap —
-   open at the bottom (the potentiometer sweep), not a closed circle. */
+/* Reference: MASTER LEVEL wears a BOLD printed white arc around the cap —
+   open toward the lower left (the potentiometer sweep), well clear of the
+   label above. */
 .perf-master .knob.large::before {
   content: '';
   position: absolute;
-  inset: -16%;
+  inset: -21%;
   border-radius: 50%;
-  padding: 0.06cqw;
+  padding: 0.13cqw;
   background: conic-gradient(
-    from 210deg,
-    rgba(240, 236, 228, 0.85) 0deg 300deg,
-    transparent 300deg 360deg
+    from 262deg,
+    rgba(240, 236, 228, 0.92) 0deg 305deg,
+    transparent 305deg 360deg
   );
   mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
+}
+
+.perf-master {
+  gap: 0.34cqw;
 }
 
 /* Pitch stick upper-left, mod wheel below and to the right. Paddings and
@@ -1808,13 +1845,15 @@ body {
    directly on the RED chassis (no dark panel fill). */
 .rotary-strip {
   /* Stretches so its bottom border lines up with the Organ plate's bottom
-     edge; the outline closes there even when content ends at MORPH. */
+     edge. Photo rhythm: the clusters distribute down the column with
+     breathing room and MORPH landing at the bottom. */
   flex: 1;
   min-height: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: space-between;
   gap: 0.12cqw;
   background: none;
   border-radius: 0.3cqw;
@@ -1897,6 +1936,17 @@ body {
 .layer-letter {
   font-size: 0.3cqw;
   white-space: nowrap;
+}
+
+.layer-letter-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12cqw;
+}
+
+.layer-letter-row .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
 }
 
 .layer-fader-row {
@@ -2037,6 +2087,20 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.14cqw;
+}
+
+/* 'POLY ▿' / 'ON' print on one line each (photo); the percussion row runs
+   a notch tighter so the nowrap print stays inside its box. */
+.perc-on .legend {
+  white-space: nowrap;
+}
+
+.organ-perc .perc-on {
+  gap: 0.09cqw;
+}
+
+.organ-perc .perc-on .legend {
+  font-size: 0.21cqw;
 }
 
 .drawbar-bank {
@@ -2499,7 +2563,7 @@ body {
 .deck-section[data-section='program'] .program-grid-box {
   background: linear-gradient(180deg, #454c58 0%, var(--panel-dark) 100%);
   border-color: rgba(20, 24, 32, 0.5);
-  padding-top: 0.7cqw;
+  padding-top: 0.88cqw;
   overflow: hidden;
 }
 
@@ -2884,8 +2948,10 @@ body {
 }
 
 .deck-section[data-section='program'] .program-grid-box {
-  /* A touch more air around the 8-button grid (reference proportions). */
-  padding: 0.42cqw 0.16cqw 0.26cqw;
+  /* A touch more air around the 8-button grid (reference proportions).
+     Top padding must clear the full-width heading band (its earlier rule
+     sets 0.88cqw — keep it, or the band covers the 1-4 LED row). */
+  padding: 0.88cqw 0.16cqw 0.26cqw;
   min-height: 4.4cqw;
 }
 
@@ -3109,7 +3175,28 @@ body {
 .synth-display-block {
   display: flex;
   flex-direction: column;
-  gap: 0.2cqw;
+  gap: 0.12cqw;
+}
+
+.synth-dial-leads {
+  flex: 1;
+  min-height: 0.5cqw;
+  /* Photo: the leader lines run LONG — the dials sit well below the
+     display, about half the display's height further down. */
+  max-height: 1.5cqw;
+  width: calc(100% - 2.4cqw);
+  align-self: center;
+  overflow: visible;
+}
+
+.synth-dial-leads polyline {
+  fill: none;
+  stroke: var(--panel-line);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.synth-display-block {
   /* Photo: the OLED block is ~35% of the synth main area. */
   width: 35.5%;
   flex: none;
@@ -3136,22 +3223,6 @@ body {
 
 .deck-section[data-section='synth'] .oled .oled-name {
   font-size: 0.6cqw;
-}
-
-/* Printed leader lines from the display's soft captions to the dials. */
-.synth-dial-leads {
-  display: flex;
-  justify-content: space-around;
-  height: 0.28cqw;
-  margin: -0.12cqw 0.6cqw -0.06cqw;
-}
-
-.synth-dial-leads i {
-  width: 0.06cqw;
-  height: 100%;
-  border-radius: 0.05cqw;
-  background: var(--legend-dim);
-  opacity: 0.7;
 }
 
 .synth-dials {
@@ -3188,8 +3259,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.05cqw;
-  /* Photo: a slim print column — WAVEFORM / KEEP EDITS ▿ over the framed
+  gap: 0.06cqw;
+  /* Photo: a slim print column — WAVEFORM / ● KEEP EDITS ▿ over the framed
      switch, SOUND INIT beneath. Cap it so the arp box keeps its room. */
   flex: none;
   width: 1.8cqw;
@@ -3199,6 +3270,35 @@ body {
   text-align: center;
   font-size: 0.26cqw;
   letter-spacing: 0;
+}
+
+.waveform-cluster .tiny-led-row {
+  gap: 0.05cqw;
+}
+
+/* '● KEEP EDITS ▿' stays one line (it may run past the slim column edges
+   symmetrically, like panel ink). */
+.waveform-cluster .tiny-led-row .legend {
+  font-size: 0.22cqw;
+  white-space: nowrap;
+  max-width: none;
+}
+
+.waveform-cluster .tiny-led-row .led {
+  width: 0.24cqw;
+  height: 0.24cqw;
+}
+
+/* The red shift-frame paints 0.18cqw outside the switch: keep it clear of
+   the KEEP EDITS ▿ row above and the SOUND INIT print below. */
+.waveform-cluster .panel-button {
+  margin: 0.2cqw 0 0.22cqw;
+}
+
+/* Photo: SOUND INIT prints bright, centered on two lines. */
+.waveform-cluster .sound-init-print {
+  max-width: 1.1cqw;
+  line-height: 1.3;
 }
 
 .arp-column {
@@ -3306,12 +3406,14 @@ body {
   min-height: 0;
 }
 
-/* Voice: mode cluster left, GLIDE knob right (reference proportions). */
+/* Voice: mode cluster left, GLIDE knob right (reference proportions). The
+   knob's numeral arc overhangs its cell — the wide gap keeps it (and the
+   GLIDE print) clear of the MONO/LEGATO cluster. */
 .voice-cols {
   display: flex;
-  align-items: center;
-  justify-content: space-evenly;
-  gap: 0.3cqw;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.62cqw;
   width: 100%;
   flex: 1;
 }
@@ -3320,11 +3422,21 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1cqw;
+  gap: 0.09cqw;
+}
+
+/* ● LO ▿ ● HI ▿ shift print under the mode button (photo). */
+.glide-shift-row {
+  gap: 0.06cqw;
+}
+
+.glide-shift-row .led {
+  width: 0.2cqw;
+  height: 0.2cqw;
 }
 
 .voice-cols .knob-cell {
-  margin-top: 0.24cqw;
+  margin-top: 0.34cqw;
 }
 
 .voice-box,
@@ -3436,20 +3548,53 @@ body {
 }
 
 .voice-box .knob-cell {
-  margin-top: 0.26cqw;
+  margin-top: 0.34cqw;
 }
 
 /* The LFO box stacks two scaled knobs in one short column: slightly smaller
    knobs + tighter cell gaps keep the pair inside the box. */
 .lfo-box .knob-cell {
   margin-top: 0.02cqw;
-  gap: 0.02cqw;
+  gap: 0.06cqw;
 }
 
 /* Beats .synth-bottom .group-box's shared gap/padding for this short box. */
 .synth-bottom .lfo-box {
   gap: 0.04cqw;
   padding-bottom: 0.03cqw;
+}
+
+/* Photo quadrants: WAVEFORM cluster TL, MOD AMT TR, RATE/TIME BL, the
+   destination list + its button BR. */
+.synth-bottom .lfo-box {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  grid-template-areas:
+    'wave modamt'
+    'rate dest';
+  align-items: center;
+  justify-items: center;
+  row-gap: 0.1cqw;
+}
+
+.lfo-q-tl {
+  grid-area: wave;
+}
+
+.lfo-q-tr {
+  grid-area: modamt;
+}
+
+.lfo-q-bl {
+  grid-area: rate;
+}
+
+.lfo-q-br {
+  grid-area: dest;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.06cqw;
 }
 
 /* WAVEFORM button cluster left, destination LED list right (reference). */
@@ -3524,6 +3669,20 @@ body {
   margin-top: 0.24cqw;
 }
 
+/* The Oscillators red frames overhang like the Filter's — same clearance. */
+.osc-box > .button-cell {
+  margin: 0.16cqw 0 0.14cqw;
+}
+
+/* Every other red-framed switch in the synth clusters gets the same
+   clearance from the prints above/below its painted frame. */
+.arp-mode-cell .panel-button.framed,
+.vibrato-menu-cell .panel-button.framed,
+.amp-box .panel-button.framed,
+.lfo-wave-cell .panel-button.framed {
+  margin: 0.14cqw 0 0.12cqw;
+}
+
 .synth-bottom .group-box {
   padding: 0.36cqw 0.1cqw 0.1cqw;
   gap: 0.1cqw;
@@ -3540,7 +3699,7 @@ body {
 
 .lfo-box {
   /* Wide enough for the WAVEFORM cluster + destination LED list row. */
-  flex: 1.2;
+  flex: 1.12;
 }
 
 /* The knob numeral arcs print upward — keep them clear of the GROUP ▿ /
@@ -3555,13 +3714,54 @@ body {
 }
 
 .filter-box {
-  flex: 1.2;
+  flex: 1.34;
 }
 
-.lfo-box,
+/* Photo: buttons cluster LEFT (~2/3 width), ENV AMT knob top-RIGHT with its
+   numeral arc clear of the ENVELOPE frame and the GROUP/VELOCITY prints. */
+.filter-top {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.14cqw;
+}
+
+.filter-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.06cqw;
+  flex: none;
+  min-width: 0;
+}
+
+/* The red shift-frames paint 0.18cqw OUTSIDE the switch — clear them from
+   the LED-legend rows above and the GROUP/VELOCITY prints below. */
+.filter-buttons .button-cell {
+  margin: 0.16cqw 0 0.14cqw;
+}
+
+.filter-envamt-cell {
+  flex: none;
+  /* Headroom for the upward numeral arc + keep the arc's side numerals
+     inside the box edge. */
+  padding-top: 0.34cqw;
+  margin-right: 0.22cqw;
+}
+
+.filter-bottom {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.12cqw;
+  padding: 0 0.1cqw 0.05cqw;
+}
+
 .osc-box,
 .filter-box {
-  justify-content: flex-start;
+  justify-content: space-between;
 }
 
 .button-cell {
@@ -3579,29 +3779,33 @@ body {
   gap: 0.12cqw;
 }
 
-/* FILTER ON: a vertical light rocker pinned at the filter box's right edge
-   with the LED + label printed above it (reference). */
-.synth-bottom .filter-box {
-  padding-right: 1.15cqw;
-}
-
+/* FILTER ON: the dark vertical switch sits IN FLOW at the box's
+   bottom-right, under a two-line FILTER / ● ON print (reference). */
 .filter-box .filter-on-cell {
-  position: absolute;
-  right: 0.12cqw;
-  top: 50%;
-  transform: translateY(-50%);
   gap: 0.08cqw;
+  align-self: flex-end;
 }
 
-.filter-box .filter-on-cell .legend {
-  font-size: 0.2cqw;
-  max-width: 1cqw;
-  text-align: center;
-}
-
-.filter-box .filter-on-cell .tiny-led-row {
+.filter-on-print {
+  display: inline-flex;
   flex-direction: column;
-  gap: 0.04cqw;
+  align-items: center;
+  gap: 0.03cqw;
+}
+
+.filter-on-print .legend {
+  font-size: 0.22cqw;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.filter-on-print .tiny-led-row {
+  gap: 0.06cqw;
+}
+
+.filter-on-print .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
 }
 
 .amp-unison-column {
@@ -3714,7 +3918,7 @@ body {
   box-shadow:
     inset 0 0.1cqw 0.15cqw rgba(255, 255, 255, 0.12),
     inset 0 -0.15cqw 0.25cqw rgba(0, 0, 0, 0.3);
-  padding: 0.3cqw 0.35cqw;
+  padding: 0.32cqw 0.42cqw;
 }
 
 .effects-grid {
@@ -3730,7 +3934,7 @@ body {
     'mod1 delay delay'
     'mod2 delay delay'
     'ampsim comp reverb';
-  gap: 0.2cqw;
+  gap: 0.26cqw;
 }
 
 .fx-box {
@@ -3738,8 +3942,8 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-evenly;
-  gap: 0.08cqw 0.12cqw;
-  padding: 0.32cqw 0.1cqw 0.08cqw;
+  gap: 0.08cqw 0.14cqw;
+  padding: 0.32cqw 0.14cqw 0.08cqw;
   min-height: 0;
 }
 
@@ -3754,6 +3958,15 @@ body {
 .mod1-box .knob-cell .legend,
 .mod2-box .knob-cell .legend {
   font-size: 0.26cqw;
+}
+
+/* Clearance between each knob's downward 0/10 numerals and its print
+   (photo: the label line sits below the numeral ends, never on them). */
+.mod1-box .knob-cell,
+.mod2-box .knob-cell,
+.delay-box .knob-cell,
+.comp-box .knob-cell {
+  gap: 0.12cqw;
 }
 
 .reverb-box .variation-cell .legend {
@@ -3863,6 +4076,9 @@ body {
 .tap-box .legend,
 .tap-box .legend.dim {
   color: #232a38;
+  /* '● TAP/SET ▾' and '● ANALOG ▿' print on one line each (photo). */
+  white-space: nowrap;
+  max-width: none;
 }
 
 .tap-box .panel-button.tap-button {
@@ -4056,6 +4272,56 @@ body {
   gap: 0.06cqw;
 }
 
+/* Delay/Reverb ON (photo): a light HORIZONTAL rocker with the ON print +
+   LED stacked at its LEFT; Comp shares the print column beside its dark
+   horizontal button. */
+.fx-on-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12cqw;
+}
+
+.fx-on-print {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05cqw;
+}
+
+.fx-on-print .legend {
+  font-size: 0.24cqw;
+}
+
+.fx-on-print .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
+}
+
+/* The horizontal flavor of the light rocker: the SAME uniform switch
+   rotated 90° (1.5 x 0.92), housing reveal back on the short sides. */
+.panel-button.rocker.fx-on-h {
+  min-width: 1.5cqw;
+  min-height: 0.92cqw;
+  padding: 0.12cqw 0.18cqw;
+}
+
+/* Round LED beside the effect VARIATION buttons (photo print; no variation
+   latch is modeled, so they stay unlit). */
+.variation-row .led.variation-led {
+  width: 0.26cqw;
+  height: 0.26cqw;
+  flex: none;
+}
+
+/* Photo: the VARIATION legends print BELOW their button, not beside it. */
+.mod1-box .variation-row .legend,
+.mod2-box .variation-row .legend,
+.amp-sim-box .variation-row .legend,
+.reverb-box .variation-row .legend {
+  flex-basis: 100%;
+  text-align: center;
+}
+
 /* Mod 1/2 and Amp Sim ON: a vertical light rocker pinned at the box's right
    edge with the ON ● print above it (reference). Absolute so the wrapping
    flex row never pushes it out of the short grid tracks. */
@@ -4076,6 +4342,34 @@ body {
   right: 0.22cqw;
   top: 50%;
   transform: translateY(-50%);
+}
+
+/* Photo: the Amp Sim ON rocker rides LOW, level with the BASS/MID/TREBLE
+   row — not vertically centered. */
+.amp-sim-box .fx-on-cell {
+  top: auto;
+  bottom: 0.2cqw;
+  transform: none;
+}
+
+/* Photo: an ON + red LED print in the Amp Sim box's top-left corner. */
+.amp-onled {
+  position: absolute;
+  top: 0.24cqw;
+  left: 0.16cqw;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05cqw;
+}
+
+.amp-onled .legend {
+  font-size: 0.24cqw;
+}
+
+.amp-onled .led {
+  width: 0.26cqw;
+  height: 0.26cqw;
 }
 
 .fx-box .fx-on-cell .tiny-led-row .legend {
