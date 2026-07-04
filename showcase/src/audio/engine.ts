@@ -1704,7 +1704,9 @@ export class PianoEngine {
     this.scheduleArpStep(0)
   }
 
-  private stopArp(): void {
+  /** `resound = false` (dispose/teardown): just halt the scheduler — there
+   *  is no graph left to release voices into or re-sound held keys on. */
+  private stopArp(resound = true): void {
     this.arpRunning = false
     if (this.arpTimer !== null) {
       this.boundary.timers.clearTimeout(this.arpTimer)
@@ -1712,7 +1714,7 @@ export class PianoEngine {
     }
     this.arpSoundingMidi = { A: null, B: null, C: null }
     const context = this.context
-    if (!context) return
+    if (!context || !resound || !this.synthChannels) return
     const now = context.currentTime
     // Release every voice the scheduler was sounding — a run-off between
     // step boundaries otherwise leaves the last arp note hanging until its
@@ -3289,7 +3291,7 @@ export class PianoEngine {
       }
       this.synthChannels = null
     }
-    this.stopArp()
+    this.stopArp(false)
     this.voicePool.length = 0
     this.synthHeld = { A: [], B: [], C: [] }
     this.synthSoundingMidi = { A: null, B: null, C: null }
