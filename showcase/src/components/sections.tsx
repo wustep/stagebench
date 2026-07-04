@@ -95,6 +95,7 @@ function SectionHeader({
   store,
   onId,
   fxFocusLit = false,
+  fullBand = false,
   onZoom,
   onSoloHold,
 }: {
@@ -102,6 +103,8 @@ function SectionHeader({
   store: PresentationStore
   onId: string
   fxFocusLit?: boolean
+  /** Narrow plates (Piano): one full-width band, SOLO printed on it. */
+  fullBand?: boolean
   /** Opens the section-zoom overlay (narrow-viewport legend legibility). */
   onZoom?: () => void
   /** Holding the ON button ~half a second performs SOLO (manual p. 18); a
@@ -109,27 +112,34 @@ function SectionHeader({
    *  keyboard-accessible equivalent, wired in presentation.ts's toggle(). */
   onSoloHold?: () => void
 }) {
-  // Reference: the section ON state is a RED LED between the ON print and
-  // the button, on the header strip — not a lamp on the button cap.
+  // Reference: the section ON state is a RED LED below the ON print, left
+  // of the switch; FX FOCUS prints above its dot the same way. The tall
+  // band tab ends right after the switch and SOLO ▾ prints on the thin
+  // BOTTOM-aligned strip that continues to the plate's right edge (red
+  // above it). The narrow Piano plate is one full-width band instead.
   const lit = usePresentationToggle(store, onId)
   return (
-    <div className="plate-header">
-      {/* Photo: the light band is a TALL tab through SOLO ▾, then steps
-          down to a thin strip that continues to the plate's right edge. */}
+    <div className={`plate-header${fullBand ? ' plate-header-full' : ''}`}>
       <div className="plate-header-tab">
         <PlateTitle title={title} onZoom={onZoom} subtitle="SECTION" />
         <span className="fx-focus">
-          <Led color="yellow" on={fxFocusLit} />
           <Legend>FX FOCUS</Legend>
+          <Led color="yellow" on={fxFocusLit} />
         </span>
         <span className="on-cluster">
-          <Legend>ON</Legend>
-          <Led color="red" on={lit} />
+          <span className="on-stack">
+            <Legend>ON</Legend>
+            <Led color="red" on={lit} />
+          </span>
           <PanelButton store={store} id={onId} className="pill" holdAction={onSoloHold} />
-          <Legend className="dim">SOLO ▾</Legend>
         </span>
+        {fullBand && <Legend className="dim solo-print">SOLO ▾</Legend>}
       </div>
-      <div className="plate-header-strip" aria-hidden="true" />
+      {!fullBand && (
+        <div className="plate-header-strip">
+          <Legend className="dim solo-print">SOLO ▾</Legend>
+        </div>
+      )}
     </div>
   )
 }
@@ -502,6 +512,7 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
           store={store}
           onId="piano-on"
           fxFocusLit={state.fxSection === 'piano'}
+          fullBand
           onZoom={onZoom}
           onSoloHold={() => instrument.soloSection('piano')}
         />
@@ -972,8 +983,8 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                   <Led color="red" on={programs.liveMode} />
                   <Legend>LIVE MODE</Legend>
                 </span>
-                {/* Dark cap on the photo (not a tan pill). */}
-                <PanelButton store={store} id="live-mode" className="dark tiny" />
+                {/* Photo: LIVE MODE is a light gray pill cap. */}
+                <PanelButton store={store} id="live-mode" className="pill small blank" />
                 {/* NUM PAD = Shift + Live Mode (manual p. 44): the LED lights
                     while two-digit page.slot entry is active. */}
                 <span className="tiny-led-row">
@@ -1887,8 +1898,10 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             <div className="plate-header-tab">
               <PlateTitle title="LAYER EFFECTS" onZoom={onZoom} />
               <span className="on-cluster">
-                <Legend>ON</Legend>
-                <Led color="red" on={!state.allFxOff} />
+                <span className="on-stack">
+                  <Legend>ON</Legend>
+                  <Led color="red" on={!state.allFxOff} />
+                </span>
                 <PanelButton store={store} id="effects-on" className="pill" />
               </span>
             </div>
