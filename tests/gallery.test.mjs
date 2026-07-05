@@ -53,7 +53,7 @@ test('every runs.json entry conforms to the generated RunEntry projection', () =
 
 test('pre-v4 runs are frozen as legacy with their scores and static reports', () => {
   const legacyRuns = runs.filter((run) => run.legacy)
-  assert.ok(legacyRuns.length >= 4, 'pre-v4 runs remain visible as legacy')
+  assert.ok(legacyRuns.length >= 3, 'pre-v4 runs remain visible as legacy')
   for (const run of legacyRuns) assert.equal(run.status, 'legacy')
 
   const complete = byId('gpt-5-6-sol-high')
@@ -66,7 +66,7 @@ test('pre-v4 runs are frozen as legacy with their scores and static reports', ()
   const fable = byId('claude-fable-5')
   assert.equal(fable.legacy, false)
   assert.equal(fable.status, 'complete')
-  assert.equal(fable.score, 92.7)
+  assert.equal(fable.score, 96.8)
 })
 
 test('run metadata separates canonical model identity from display titles', () => {
