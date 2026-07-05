@@ -811,6 +811,13 @@ export interface RotaryTuning {
 export interface RotaryState {
   speed: RotarySpeed
   drive: number
+  /** CLOSE MIC (manual p. 54): the close-miked model — wider stereo image
+   *  and a stronger sense of motion on the horn band. */
+  closeMic?: boolean
+  /** ANGLE (manual p. 54): 'Free' lets the horn/rotor park wherever they
+   *  happen to be when Stop Mode engages; a fixed angle (degrees) parks the
+   *  amp/pan pose deterministically so Stop Mode always sounds the same. */
+  stopAngle?: 'Free' | number
   /** Global Sound-menu tuning; omitted = Normal everywhere. */
   tuning?: RotaryTuning
 }
@@ -965,11 +972,32 @@ export function createRotary(ctx: AudioContextLike): RotaryUnit {
       hornLfo.frequency.setTargetAtTime(hornTarget, now, 0.8 * accScale(tuning?.hornAcc))
       rotorLfo.frequency.cancelScheduledValues(now)
       rotorLfo.frequency.setTargetAtTime(rotorTarget, now, 1.9 * accScale(tuning?.rotorAcc))
-      const depthScale = state.speed === 'stop' ? 0.15 : 1
-      setParam(hornAmpDepth.gain, 0.22 * depthScale, now, 0.5)
-      setParam(hornPanDepth.gain, 0.75 * depthScale, now, 0.5)
+      // CLOSE MIC (manual p. 54): mics moved toward the horn — deeper
+      // amplitude modulation and a wider pan sweep on the horn band (the
+      // "more pronounced stereo effect and increased sense of motion"), and
+      // slightly more of the horn's doppler shimmer. The rotor band is
+      // untouched (the mics move at the horn, not the woofer).
+      const closeMic = state.closeMic === true
+      const hornAmpBase = closeMic ? 0.32 : 0.22
+      const hornPanBase = closeMic ? 0.95 : 0.75
+      setParam(hornDopplerDepth.gain, closeMic ? 0.0006 : 0.00045, now, 0.5)
+      // ANGLE (manual p. 54): with a fixed stop angle the wobble depth goes
+      // to zero and the amp/pan pose parks at that angle's projections —
+      // Stop Mode then "sounds exactly the same every time". Free keeps the
+      // legacy residual drift, so the parked pose varies.
+      const fixedAngle = state.speed === 'stop' && state.stopAngle !== undefined && state.stopAngle !== 'Free' ? (state.stopAngle * Math.PI) / 180 : null
+      const depthScale = state.speed === 'stop' ? (fixedAngle !== null ? 0 : 0.15) : 1
+      setParam(hornAmpDepth.gain, hornAmpBase * depthScale, now, 0.5)
+      setParam(hornPanDepth.gain, hornPanBase * depthScale, now, 0.5)
       setParam(rotorAmpDepth.gain, 0.14 * depthScale, now, 0.5)
       setParam(rotorPanDepth.gain, 0.35 * depthScale, now, 0.5)
+      // The parked pose rides the params' BASE values (the LFO contribution
+      // sums on top and is zero-depth while parked at a fixed angle): amp at
+      // cos(angle) — facing the mic = loudest — and pan at sin(angle).
+      setParam(hornAmp.gain, 0.8 + (fixedAngle !== null ? hornAmpBase * Math.cos(fixedAngle) : 0), now, 0.5)
+      setParam(hornPan.pan, fixedAngle !== null ? hornPanBase * Math.sin(fixedAngle) : 0, now, 0.5)
+      setParam(rotorAmp.gain, 0.85 + (fixedAngle !== null ? 0.14 * Math.cos(fixedAngle) : 0), now, 0.5)
+      setParam(rotorPan.pan, fixedAngle !== null ? 0.35 * Math.sin(fixedAngle) : 0, now, 0.5)
     },
     dispose() {
       stopAndDisconnect([

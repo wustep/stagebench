@@ -9,6 +9,7 @@ import {
   FakeGain,
   FakeNode,
   FakeStereoPanner,
+  fakeStorageBoundary,
 } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
 import { InstrumentStore } from '../state/instrument'
@@ -256,6 +257,110 @@ describe('effects.routing', () => {
     store.toggleRotaryStop() // stop
     expect(lfos.every((o) => o.frequency.value < 0.1)).toBe(true)
     expect(engine.diagnostics().rotary).toBeTruthy()
+  })
+
+  it('CLOSE MIC (Shift + Organ, manual p. 54, audit E11) widens the horn band\'s pan/amp modulation', () => {
+    const { store, getContext } = makeSystem()
+    const context = getContext()!
+    const gains = () => context.nodes.filter((n): n is FakeGain => n.kind === 'gain')
+    // Default mic distance: horn pan depth 0.75, horn amp depth 0.22.
+    expect(gains().some((g) => g.gain.value === 0.75)).toBe(true)
+    expect(store.getState().rotary.closeMic).toBe(false)
+    store.toggleRotaryCloseMic()
+    expect(store.getState().rotary.closeMic).toBe(true)
+    expect(store.getState().programs.dirty).toBe(true) // stored per program (manual p. 54)
+    // Close-miked model: the SAME depth nodes ramp to the wider values.
+    expect(gains().some((g) => g.gain.value === 0.95)).toBe(true) // horn pan sweep
+    expect(gains().some((g) => g.gain.value === 0.32)).toBe(true) // horn amp motion
+    expect(gains().some((g) => g.gain.value === 0.0006)).toBe(true) // doppler shimmer
+    store.toggleRotaryCloseMic()
+    expect(gains().some((g) => g.gain.value === 0.95)).toBe(false)
+    expect(gains().some((g) => g.gain.value === 0.75)).toBe(true)
+  })
+
+  it('a fixed stop ANGLE (Shift + Stop Mode, manual p. 54) parks the pose deterministically; Free keeps the drift', () => {
+    const { store, getContext } = makeSystem()
+    const context = getContext()!
+    // The ping-pong delay panners park permanently at ±0.85; the rotary's
+    // pose panners are the ones that move between 0 and the parked values.
+    const posePans = () =>
+      context.nodes
+        .filter((n): n is FakeStereoPanner => n.kind === 'panner')
+        .map((p) => p.pan.value)
+        .filter((v) => Math.abs(v) !== 0.85)
+    const gains = () => context.nodes.filter((n): n is FakeGain => n.kind === 'gain')
+    // Free (default) + stop: residual wobble remains (depth scaled to 0.15).
+    store.toggleRotaryStop()
+    expect(store.getState().rotary.stopAngle).toBe('Free')
+    expect(gains().some((g) => Math.abs(g.gain.value - 0.75 * 0.15) < 1e-9)).toBe(true)
+    expect(posePans().every((v) => v === 0)).toBe(true) // no forced pose
+    // Cycle Free -> 0° -> 45° -> 90°: the wobble depth drops to zero and the
+    // horn/rotor pan park at sin(90°) of their sweep widths — the same pose
+    // every time Stop Mode engages.
+    store.cycleRotaryStopAngle()
+    expect(store.getState().rotary.stopAngle).toBe(0)
+    store.cycleRotaryStopAngle()
+    store.cycleRotaryStopAngle()
+    expect(store.getState().rotary.stopAngle).toBe(90)
+    expect(gains().some((g) => Math.abs(g.gain.value - 0.75 * 0.15) < 1e-9)).toBe(false)
+    expect(posePans().some((v) => Math.abs(v - 0.75) < 1e-9)).toBe(true) // horn parked
+    expect(posePans().some((v) => Math.abs(v - 0.35) < 1e-9)).toBe(true) // rotor parked
+    // Leaving Stop Mode releases the pose and restores the full sweep.
+    store.toggleRotaryStop()
+    expect(posePans().every((v) => v === 0)).toBe(true)
+    expect(gains().some((g) => g.gain.value === 0.75)).toBe(true)
+  })
+
+  it('Close Mic and Stop Angle are program state: they round-trip through Store and backfill on old snapshots', () => {
+    const store = new InstrumentStore()
+    store.toggleRotaryCloseMic()
+    store.cycleRotaryStopAngle() // Free -> 0°
+    store.cycleRotaryStopAngle() // 0° -> 45°
+    store.storePress()
+    store.storePress()
+    store.selectProgram(4) // an untouched program: hardware defaults
+    expect(store.getState().rotary.closeMic).toBe(false)
+    expect(store.getState().rotary.stopAngle).toBe('Free')
+    store.selectProgram(0)
+    expect(store.getState().rotary.closeMic).toBe(true)
+    expect(store.getState().rotary.stopAngle).toBe(45)
+    // Programs persisted before these fields existed (rotary = { speed,
+    // drive } only) load with the hardware defaults, not a crash.
+    const strip = (slot: { name: string; snapshot: unknown }) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as { rotary: Record<string, unknown> }
+      delete snapshot.rotary.closeMic
+      delete snapshot.rotary.stopAngle
+      return { name: slot.name, snapshot }
+    }
+    const rawBank = store.getState().programs.bank.map(strip)
+    const rawLive = store.getState().programs.live.map(strip)
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({ version: 1, bank: rawBank, live: rawLive, liveMode: false, current: 0 }),
+    })
+    expect(() => new InstrumentStore(storage)).not.toThrow()
+    const restored = new InstrumentStore(storage)
+    expect(restored.getState().rotary.closeMic).toBe(false)
+    expect(restored.getState().rotary.stopAngle).toBe('Free')
+  })
+
+  it('panel: Shift + Organ toggles CLOSE MIC (LED lit), Shift + Stop Mode cycles the ANGLE list', () => {
+    renderApp()
+    const closeMicLed = document.querySelectorAll('.rotary-strip .rotary-led-row')[1]!.querySelector('.led')!
+    expect((closeMicLed as HTMLElement).dataset.on).toBe('false')
+    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
+    fireEvent.click(shift)
+    fireEvent.click(screen.getByRole('button', { name: 'Rotary Organ Source' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Rotary Close Mic On/)
+    expect((closeMicLed as HTMLElement).dataset.on).toBe('true')
+    // ANGLE = Shift + Stop Mode steps Free -> 0° -> 45° …
+    fireEvent.click(screen.getByRole('button', { name: 'Rotary Stop Mode' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Rotary Stop Angle: 0°/)
+    fireEvent.click(screen.getByRole('button', { name: 'Rotary Stop Mode' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Rotary Stop Angle: 45°/)
+    fireEvent.click(shift) // unlatch
+    // A plain Stop Mode press still toggles Stop, untouched by the new pairing.
+    fireEvent.click(screen.getByRole('button', { name: 'Rotary Stop Mode' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Rotary Stop/)
   })
 
   it('the panel focus button cycles Piano A/B; GROUP is the printed Shift pairing (manual p. 46)', () => {

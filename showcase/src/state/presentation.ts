@@ -849,7 +849,9 @@ export class PresentationStore {
           else store.shiftOrganOctave(store.getState().organ.focusedLayer, 1)
           return
         case 'rotary-source':
-          store.toggleOrganRotary()
+          // CLOSE MIC = Shift + Organ (manual p. 54): the close-miked model.
+          if (shift) store.toggleRotaryCloseMic()
+          else store.toggleOrganRotary()
           return
         case 'synth-on':
           // Shift + click SOLOs the Synth section (manual p. 18 pattern).
@@ -1374,7 +1376,9 @@ export class PresentationStore {
           return
         }
         case 'rotary-stop-mode':
-          store.toggleRotaryStop()
+          // ANGLE = Shift + Stop Mode (manual p. 54): steps the stop-angle list.
+          if (shift) store.cycleRotaryStopAngle()
+          else store.toggleRotaryStop()
           return
         case 'shift':
           // Shift/Exit first aborts an ongoing Store or naming step (manual p. 13)…

@@ -263,19 +263,20 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
             <Led color="yellow" on={state.organ.toRotary} />
             <Legend>ORGAN</Legend>
           </span>
-          {/* Reference: blank tan cap with CLOSE MIC printed on the panel
-              beneath it. The app has no close-mic state (manual p. 53's
-              Shift+Organ close-mic variant is not modeled), so its LED stays
-              truthfully unlit and the legend is a declared print. */}
+          {/* CLOSE MIC = Shift + Organ (manual p. 54, audit E11): switches
+              to the close-miked rotary model; the LED lights truthfully from
+              the program-stored state. */}
           <PanelButton store={store} id="rotary-source" className="pill small blank" />
           <span className="rotary-led-row">
-            <Led color="yellow" />
-            <Legend className="dim">CLOSE MIC ▿</Legend>
+            <Led color="yellow" on={state.rotary.closeMic} />
+            <Legend>CLOSE MIC ▿</Legend>
           </span>
           <span className="rotary-led-row">
             <Led color="yellow" on={state.rotary.speed === 'stop'} />
             <Legend>STOP MODE</Legend>
           </span>
+          {/* ANGLE = Shift + Stop Mode (manual p. 54, audit E11): cycles the
+              stop-angle list (Free / fixed park positions) on the OLED. */}
           <PanelButton store={store} id="rotary-stop-mode" className="dark small" />
           <Legend>ANGLE</Legend>
           <span className="rotary-led-row">

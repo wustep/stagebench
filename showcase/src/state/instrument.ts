@@ -56,6 +56,11 @@ export type ReverbType = 'Room' | 'Stage' | 'Booth' | 'Hall' | 'Spring' | 'Cathe
 export type DelayFilter = 'Off' | 'Low Pass' | 'High Pass' | 'Band Pass'
 export type DelayEffect = 'Off' | 'Chorus' | 'Vibe' | 'Ensemble' | 'Flam' | 'Space'
 export type RotarySpeed = 'slow' | 'fast' | 'stop'
+/** ANGLE (Shift + Stop Mode, manual p. 54): where the horn/rotor park when
+ *  Stop Mode engages. 'Free' (the default) leaves them wherever they happen
+ *  to be; a fixed angle makes Stop Mode sound identical every time. */
+export type RotaryStopAngle = 'Free' | 0 | 45 | 90 | 135 | 180
+export const ROTARY_STOP_ANGLES: readonly RotaryStopAngle[] = ['Free', 0, 45, 90, 135, 180]
 
 export const MOD1_TYPES: readonly Mod1Type[] = ['A-Pan', 'Tremolo', 'Ring Mod', 'A-Wah', 'Wah', 'Pump']
 export const MOD2_TYPES: readonly Mod2Type[] = ['Phaser', 'Flanger', 'Vibe', 'Chorus', 'Ensemble', 'Spin']
@@ -1001,7 +1006,11 @@ export interface InstrumentState {
    *  after keys are lifted, section-wide. */
   kbHold: boolean
   fxGlobal: { delay: boolean; comp: boolean; reverb: boolean }
-  rotary: { speed: RotarySpeed; drive: number }
+  /** Rotary Speaker (manual p. 53-54). closeMic (Shift + Organ) switches to
+   *  the close-miked model; stopAngle (Shift + Stop Mode) fixes the parked
+   *  positions. Both are program-stored ("This setting is stored per
+   *  program", p. 54). */
+  rotary: { speed: RotarySpeed; drive: number; closeMic: boolean; stopAngle: RotaryStopAngle }
   /** Truthful last-edit readout shown on the Program display. */
   lastEdit: string
   /** Set when a Clav/Digital/Misc type with no bundled model is selected. */
@@ -1175,7 +1184,7 @@ function baseInstrumentState(): InstrumentState {
     synthChains: { A: defaultChain(), B: defaultChain(), C: defaultChain() },
     fxSection: 'piano',
     fxGlobal: { delay: false, comp: false, reverb: false },
-    rotary: { speed: 'slow', drive: 64 },
+    rotary: { speed: 'slow', drive: 64, closeMic: false, stopAngle: 'Free' },
     kbHold: false,
     programs: {
       bank: [],
@@ -4652,6 +4661,27 @@ export class InstrumentStore {
     this.patch({ rotary: { ...this.state.rotary, drive: clamped } }, `Rotary Drive ${clamped}`)
   }
 
+  /** CLOSE MIC (Shift + Organ, manual p. 54): switches to the close-miked
+   *  rotary model — a more pronounced stereo effect and an increased sense
+   *  of motion. Program-stored. */
+  toggleRotaryCloseMic(): void {
+    const closeMic = !this.state.rotary.closeMic
+    this.patch({ rotary: { ...this.state.rotary, closeMic } }, `Rotary Close Mic ${closeMic ? 'On' : 'Off'}`)
+  }
+
+  /** ANGLE (Shift + Stop Mode, manual p. 54): steps through the stop-angle
+   *  list — Free (positions vary) or a fixed parked angle, so Stop Mode
+   *  sounds identical every time. The hardware's OLED list maps to a
+   *  press-to-cycle here (a declared pointer-first adaptation). */
+  cycleRotaryStopAngle(): void {
+    const index = ROTARY_STOP_ANGLES.indexOf(this.state.rotary.stopAngle)
+    const stopAngle = ROTARY_STOP_ANGLES[(index + 1) % ROTARY_STOP_ANGLES.length]!
+    this.patch(
+      { rotary: { ...this.state.rotary, stopAngle } },
+      `Rotary Stop Angle: ${stopAngle === 'Free' ? 'Free' : `${stopAngle}°`}`,
+    )
+  }
+
   setLastEdit(text: string): void {
     this.patch({}, text)
   }
@@ -4759,6 +4789,15 @@ function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
     at: partialMorph.at ?? [],
     pedal: partialMorph.pedal ?? [],
   }
+  // Programs persisted before Close Mic / Stop Angle existed (audit E11)
+  // store only { speed, drive }: backfill the hardware defaults.
+  const partialRotary = cloned.rotary as Partial<ProgramSnapshot['rotary']>
+  const normalizedRotary: ProgramSnapshot['rotary'] = {
+    speed: partialRotary.speed ?? 'slow',
+    drive: partialRotary.drive ?? 64,
+    closeMic: partialRotary.closeMic ?? false,
+    stopAngle: partialRotary.stopAngle ?? 'Free',
+  }
   return {
     ...cloned,
     ...(normalizedOrgan ? { organ: normalizedOrgan } : {}),
@@ -4766,6 +4805,7 @@ function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
     synthChains: normalizedSynthChains,
     masterClock: normalizedClock,
     morph: normalizedMorph,
+    rotary: normalizedRotary,
     fxGroupSynth: cloned.fxGroupSynth ?? false,
     kbHold: cloned.kbHold ?? false,
   }
