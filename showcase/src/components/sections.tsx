@@ -4,6 +4,8 @@ import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
 import { usePresentationMorphRange, usePresentationToggle, usePresentationValue } from '../state/presentation'
 import {
+  ARP_MENU_PAGES,
+  ARP_PATTERN_PRESETS,
   BANK_LETTERS,
   mappings,
   MENU_PAGES,
@@ -1273,6 +1275,45 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
           : null
   // Manual p. 35 display spellings ("UP/DOWN" on the reference OLED).
   const arpDirectionLabel = synth.arp.direction === 'UpDown' ? 'Up/Down' : synth.arp.direction
+  // Arp Menu pages 2-5 (manual p. 35-36): the pattern rendered as a step
+  // grid — gate ▪/▬/·, accents ▴, pans L/C/R — with the Position cursor
+  // bracketed on the editing pages.
+  const arpPattern = synth.arp.pattern
+  const arpCursor = Math.min(state.synthArpPatternCursor, arpPattern.length - 1)
+  const arpGrid = (glyph: (step: (typeof arpPattern.steps)[number]) => string, cursor: boolean) =>
+    arpPattern.steps
+      .slice(0, arpPattern.length)
+      .map((step, i) => (cursor && i === arpCursor ? `[${glyph(step)}]` : glyph(step)))
+      .join('')
+  const gateGlyph = (step: (typeof arpPattern.steps)[number]) => (step.gate === 0 ? '·' : step.gate === 2 ? '▬' : '▪')
+  const arpMenuPage = state.synthArpMenuPage
+  const arpStep = arpPattern.steps[arpCursor]!
+  const arpPresetName = ARP_PATTERN_PRESETS[Math.min(arpPattern.preset, ARP_PATTERN_PRESETS.length - 1)]!.name
+  const arpMenuLine =
+    arpMenuPage === 1
+      ? `ARP MENU 1/${ARP_MENU_PAGES.length} · DIR ${arpDirectionLabel} · ZIG ZAG ${synth.arp.zigZag ? 'On' : 'Off'}`
+      : arpMenuPage === 2
+        ? `ARP MENU 2/${ARP_MENU_PAGES.length} · PATTERN ${arpPresetName}${arpPattern.on ? '' : ' (Off)'} · LEN ${arpPattern.length}`
+        : `ARP MENU ${arpMenuPage}/${ARP_MENU_PAGES.length} · ${arpGrid(
+            arpMenuPage === 4 ? (step) => (step.accent ? '▴' : '·') : arpMenuPage === 5 ? (step) => step.pan : gateGlyph,
+            true,
+          )}`
+  const arpMenuDial2 =
+    arpMenuPage === 1
+      ? { value: arpDirectionLabel, label: 'DIRECTION' }
+      : arpMenuPage === 2
+        ? { value: arpPresetName, label: 'PRESET' }
+        : { value: String(arpCursor + 1), label: 'POSITION' }
+  const arpMenuDial3 =
+    arpMenuPage === 1
+      ? { value: synth.arp.zigZag ? 'On' : 'Off', label: 'ZIG ZAG' }
+      : arpMenuPage === 2
+        ? { value: String(arpPattern.length), label: 'LENGTH' }
+        : arpMenuPage === 3
+          ? { value: arpStep.gate === 0 ? 'Off' : arpStep.gate === 2 ? 'Long' : 'On', label: 'GATE' }
+          : arpMenuPage === 4
+            ? { value: arpStep.accent ? 'On' : 'Off', label: 'ACCENT' }
+            : { value: arpStep.pan, label: 'PAN' }
   return (
     <SectionShell id="synth">
       <div className="plate">
@@ -1353,25 +1394,23 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     state.synthArpMenuEdit
                       ? [
                           <span key="t" className="oled-dim">
-                            ARPEGGIATOR
+                            ARPEGGIATOR{synth.arp.group ? ' · GROUP' : ''}
                           </span>,
                           <b key="w" className="oled-name" data-testid="oled-synth-name-line">
                             {displayName}
                           </b>,
                           <span key="am" data-testid="oled-synth-arp-menu-line">
-                            ARP MENU 1/1 · DIR {arpDirectionLabel} · ZIG ZAG {synth.arp.zigZag ? 'On' : 'Off'}
+                            {arpMenuLine}
                           </span>,
                           <span key="m" className="oled-menu">
                             <span>
-                              {/* Only page 1 (Direction/Zig Zag) is implemented;
-                                  the manual's Pattern pages are out of scope. */}
-                              1/1 <b>PAGE</b>
+                              {state.synthArpMenuPage}/{ARP_MENU_PAGES.length} <b>PAGE</b>
                             </span>
                             <span>
-                              {arpDirectionLabel} <b>DIRECTION</b>
+                              {arpMenuDial2.value} <b>{arpMenuDial2.label}</b>
                             </span>
                             <span>
-                              {synth.arp.zigZag ? 'On' : 'Off'} <b>ZIG ZAG</b>
+                              {arpMenuDial3.value} <b>{arpMenuDial3.label}</b>
                             </span>
                           </span>,
                         ]
@@ -1558,13 +1597,12 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                         <Legend className="tag-box">GATE</Legend>
                       </span>
                       <PanelButton store={store} id="arp-mode" className="dark tiny" led="green" />
-                      {/* PATTERN LED stays dark: arp patterns are not
-                          implemented (Shift + this button cycles Direction,
-                          reported on the OLED edit line and in the Arp
-                          Menu — the photo prints nothing more here). */}
+                      {/* PATTERN = Shift + Mode (manual p. 35-36): the LED
+                          lights while the menu-defined pattern shapes the
+                          arp/gate rhythm. */}
                       <span className="tiny-led-row" aria-hidden="true">
-                        <Led color="red" />
-                        <Legend className="dim">PATTERN ▿</Legend>
+                        <Led color="red" on={synth.arp.pattern.on} />
+                        <Legend className={synth.arp.pattern.on ? undefined : 'dim'}>PATTERN ▿</Legend>
                       </span>
                     </span>
                     <span className="knob-cell">
@@ -1576,17 +1614,17 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     </span>
                     <span className="arp-mode-cell">
                       {/* MENU latch (manual p. 35): the Synth OLED dials
-                          become page / Direction / Zig Zag. GROUP ▿ stays a
-                          print — Shift + Menu's all-Layers sharing is out of
-                          scope. */}
+                          become page / setting / setting across the five
+                          menu pages. GROUP = Shift + Menu (manual p. 36):
+                          all Layers share the arp. */}
                       <span className="tiny-led-row" aria-hidden="true">
                         <Led color="red" on={state.synthArpMenuEdit} />
                         <Legend>MENU</Legend>
                       </span>
                       <PanelButton store={store} id="arp-menu" className="vertical framed" />
                       <span className="tiny-led-row" aria-hidden="true">
-                        <Led color="red" />
-                        <Legend className="dim">GROUP ▿</Legend>
+                        <Led color="red" on={synth.arp.group} />
+                        <Legend className={synth.arp.group ? undefined : 'dim'}>GROUP ▿</Legend>
                       </span>
                     </span>
                   </div>

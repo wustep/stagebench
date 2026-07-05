@@ -1,8 +1,8 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator } from '../test/fakes'
+import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator, FakeStereoPanner } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
-import { InstrumentStore, mappings, SYNTH_WAVEFORMS } from '../state/instrument'
+import { ARP_PATTERN_PRESETS, InstrumentStore, mappings, SYNTH_WAVEFORMS } from '../state/instrument'
 import { PianoEngine } from './engine'
 
 /**
@@ -891,13 +891,13 @@ describe('synth.arp — Arpeggiator Menu page 1: Direction / Zig Zag (manual p. 
     expect(runOnce(true)).toEqual(runOnce(false))
   })
 
-  it('the MENU button latches the OLED dials onto page/Direction/Zig Zag; dial 1 stays on the one implemented page', () => {
+  it('the MENU button latches the OLED dials onto page/Direction/Zig Zag; dial 1 walks the five pages', () => {
     renderApp()
     fireEvent.click(screen.getByRole('button', { name: 'Synth Section On' }))
     const menuButton = screen.getByRole('button', { name: 'Arpeggiator Menu' })
     fireEvent.click(menuButton)
     const line = () => screen.getByTestId('oled-synth-arp-menu-line').textContent
-    expect(line()).toMatch(/ARP MENU 1\/1 · DIR Up · ZIG ZAG Off/)
+    expect(line()).toMatch(/ARP MENU 1\/5 · DIR Up · ZIG ZAG Off/)
     const dial2 = screen.getByRole('slider', { name: 'Synth Display Dial 2' })
     fireEvent.keyDown(dial2, { key: 'End' }) // absolute list position -> Random
     expect(line()).toMatch(/DIR Random/)
@@ -906,11 +906,12 @@ describe('synth.arp — Arpeggiator Menu page 1: Direction / Zig Zag (manual p. 
     const dial3 = screen.getByRole('slider', { name: 'Synth Display Dial 3' })
     fireEvent.keyDown(dial3, { key: 'End' })
     expect(line()).toMatch(/ZIG ZAG On/)
-    // Dial 1 navigates menu pages; only page 1 (Direction/Zig Zag) is
-    // implemented, so navigation truthfully stays on 1/1.
+    // Dial 1 navigates the five menu pages (manual p. 35): End = page 5.
     const dial1 = screen.getByRole('slider', { name: 'Synth Display Dial 1' })
     fireEvent.keyDown(dial1, { key: 'End' })
-    expect(line()).toMatch(/ARP MENU 1\/1/)
+    expect(line()).toMatch(/ARP MENU 5\/5/)
+    fireEvent.keyDown(dial1, { key: 'Home' })
+    expect(line()).toMatch(/ARP MENU 1\/5/)
     // Closing the menu returns the OLED to its normal waveform view.
     fireEvent.click(menuButton)
     expect(screen.queryByTestId('oled-synth-arp-menu-line')).toBeNull()
@@ -964,5 +965,169 @@ describe('synth.arp — Arpeggiator Menu page 1: Direction / Zig Zag (manual p. 
     expect(restored.getState().synth.arp.zigZag).toBe(false)
     restored.selectProgram(3)
     expect(restored.getState().synth.arp.zigZag).toBe(false)
+  })
+})
+
+describe('synth.arp — Pattern pages + GROUP (manual p. 35-36, audit E8)', () => {
+  const STEP = 60000 / 300 + 1 // fastest rate: one scheduler step
+
+  it('menu page 2 loads a preset pattern; length and the page 3-5 step edits stick', () => {
+    const { store } = makeSystem()
+    store.selectArpPatternPreset(1) // Offbeat
+    let pattern = store.getState().synth.arp.pattern
+    expect(pattern.preset).toBe(1)
+    expect(pattern.length).toBe(ARP_PATTERN_PRESETS[1]!.length)
+    expect(pattern.steps[0]!.gate).toBe(0) // offbeat starts silent
+    expect(pattern.steps[1]!.gate).toBe(1)
+    store.setArpPatternLength(4)
+    store.setArpPatternCursor(2)
+    store.setArpPatternStepGate(2)
+    store.setArpPatternStepAccent(true)
+    store.setArpPatternStepPan('L')
+    pattern = store.getState().synth.arp.pattern
+    expect(pattern.length).toBe(4)
+    expect(pattern.steps[2]).toEqual({ gate: 2, accent: true, pan: 'L' })
+    expect(pattern.steps[1]!.accent).toBe(false) // only the cursor step changed
+  })
+
+  it('the pattern (but not the transient cursor) round-trips through the program snapshot', () => {
+    const { store } = makeSystem()
+    store.toggleArpPattern()
+    store.selectArpPatternPreset(2) // Tresillo
+    store.setArpPatternCursor(3)
+    store.storePress()
+    store.storePress()
+    store.selectProgram(1)
+    expect(store.getState().synth.arp.pattern.on).toBe(false) // other program: default pattern
+    store.selectProgram(0)
+    const pattern = store.getState().synth.arp.pattern
+    expect(pattern.on).toBe(true)
+    expect(pattern.preset).toBe(2)
+    expect(store.getState().synthArpPatternCursor).toBe(3) // transient — survives, not program state
+  })
+
+  it('Pattern On puts holes in the rhythm: an Offbeat silent step sounds nothing', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.setArpRate(127)
+    store.toggleArpPattern()
+    store.selectArpPatternPreset(1) // Offbeat: silent, on, silent, on …
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    timers.advance(STEP) // step 1: silent
+    expect(engine.isNoteActive(60)).toBe(false)
+    timers.advance(STEP) // step 2: sounds
+    expect(engine.isNoteActive(60)).toBe(true)
+    timers.advance(STEP) // step 3: silent again — the ringing note is cut
+    expect(engine.isNoteActive(60)).toBe(false)
+  })
+
+  it('silent steps shape the rhythm without skipping arpeggio notes (melodic order intact)', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.setArpRate(127)
+    store.toggleArpPattern()
+    store.selectArpPatternPreset(1) // Offbeat
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    engine.noteOn(64, 0.8)
+    engine.noteOn(67, 0.8)
+    const heard: number[] = []
+    for (let i = 0; i < 6; i++) {
+      timers.advance(STEP)
+      const sounding = [60, 64, 67].filter((m) => engine.isNoteActive(m))
+      if (sounding.length > 0) heard.push(sounding[0]!)
+    }
+    // Only the even steps sound — and they walk C, E, G in order, not C, G.
+    expect(heard).toEqual([60, 64, 67])
+  })
+
+  it('a panned pattern step routes the arp voice through a StereoPanner', () => {
+    const { engine, store, timers, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    store.setArpRate(127)
+    store.toggleArpPattern()
+    store.selectArpPatternPreset(6) // Ping Pong: L R L R …
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    const before = context.nodes.length
+    timers.advance(STEP)
+    const panners = (context.nodes as unknown[]).slice(before).filter((n) => n instanceof FakeStereoPanner)
+    expect(panners.length).toBe(1)
+    expect((panners[0] as FakeStereoPanner).pan.value).toBeLessThan(0) // step 1 pans Left
+  })
+
+  it('GROUP Off: the arp drives the focused layer only — other layers play normally', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.toggleSynthLayerEnabled('B')
+    store.setSynthFocusedLayer('A')
+    store.setArpRate(127)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    // Layer B sounded immediately (normal play); focused layer A waits for the scheduler.
+    expect(engine.layerVoiceCount('B', 'synth')).toBe(1)
+    expect(engine.layerVoiceCount('A', 'synth')).toBe(0)
+    timers.advance(STEP)
+    expect(engine.layerVoiceCount('A', 'synth')).toBe(1) // the arp's own voice
+  })
+
+  it('GROUP On (Shift + Menu): every enabled layer shares the arp', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.toggleSynthLayerEnabled('B')
+    store.setSynthFocusedLayer('A')
+    store.toggleArpGroup()
+    store.setArpRate(127)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    // Neither layer sounds on the key press — the scheduler owns both.
+    expect(engine.layerVoiceCount('A', 'synth')).toBe(0)
+    expect(engine.layerVoiceCount('B', 'synth')).toBe(0)
+    timers.advance(STEP)
+    expect(engine.layerVoiceCount('A', 'synth')).toBe(1)
+    expect(engine.layerVoiceCount('B', 'synth')).toBe(1)
+  })
+
+  it('dropping GROUP mid-run releases the layers the arp no longer drives', () => {
+    const { engine, store, timers } = makeSystem()
+    engine.ensureStarted()
+    store.toggleSynthLayerEnabled('B')
+    store.setSynthFocusedLayer('A')
+    store.toggleArpGroup()
+    store.setArpRate(127)
+    store.toggleArpRun()
+    engine.noteOn(60, 0.8)
+    timers.advance(STEP)
+    expect(engine.layerVoiceCount('B', 'synth')).toBe(1)
+    store.toggleArpGroup() // Group off: only focused layer A stays arp-driven
+    timers.advance(STEP)
+    expect(engine.layerVoiceCount('B', 'synth')).toBe(0)
+    expect(engine.layerVoiceCount('A', 'synth')).toBe(1)
+  })
+
+  it('panel: PATTERN = Shift + Arp Mode, GROUP = Shift + Arp Menu; the menu shows the pattern pages', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Synth Section On' }))
+    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
+    fireEvent.click(shift) // latches until clicked again
+    fireEvent.click(screen.getByRole('button', { name: 'Arpeggiator Mode' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toContain('Arp Pattern On')
+    fireEvent.click(screen.getByRole('button', { name: 'Arpeggiator Menu' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toContain('Arp Group On')
+    // Drop Shift, open the menu and walk to page 2: the preset row appears.
+    fireEvent.click(shift)
+    fireEvent.click(screen.getByRole('button', { name: 'Arpeggiator Menu' }))
+    const dial1 = screen.getByRole('slider', { name: 'Synth Display Dial 1' })
+    fireEvent.keyDown(dial1, { key: 'PageUp' })
+    const line = () => screen.getByTestId('oled-synth-arp-menu-line').textContent
+    expect(line()).toMatch(/ARP MENU 2\/5 · PATTERN Straight · LEN 8/)
+    // Page 3 draws the step grid with the position cursor bracketed.
+    fireEvent.keyDown(dial1, { key: 'PageUp' })
+    expect(line()).toMatch(/ARP MENU 3\/5 · \[▪\]▪▪▪▪▪▪▪/)
+    const dial3 = screen.getByRole('slider', { name: 'Synth Display Dial 3' })
+    fireEvent.keyDown(dial3, { key: 'Home' }) // Gate -> Off at the cursor
+    expect(line()).toMatch(/\[·\]▪▪▪▪▪▪▪/)
   })
 })

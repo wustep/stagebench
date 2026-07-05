@@ -378,6 +378,61 @@ export const ARP_MODES: readonly ArpMode[] = ['Arp', 'Poly', 'Gate']
 export type ArpDirection = 'Up' | 'Down' | 'UpDown' | 'Random'
 export const ARP_DIRECTIONS: readonly ArpDirection[] = ['Up', 'Down', 'UpDown', 'Random']
 
+/** One arp pattern step (manual p. 35-36, menu pages 3-5): gate 0 = silent
+ *  step, 1 = normal, 2 = long (rings into the next step — the Gate dial's
+ *  "altering the length of a selected step"). */
+export interface ArpPatternStep {
+  gate: 0 | 1 | 2
+  accent: boolean
+  pan: 'L' | 'C' | 'R'
+}
+
+/** PATTERN (Shift + Arp Mode, manual p. 35-36): a 2-16 step rhythm the
+ *  arp/gate conforms to while On. Steps always hold 16 entries; `length`
+ *  trims playback. */
+export interface ArpPatternState {
+  on: boolean
+  /** Last preset loaded on menu page 2 (edits on pages 3-5 detach the sound
+   *  but keep the index as the browse position). */
+  preset: number
+  length: number
+  steps: ArpPatternStep[]
+}
+
+/** Compact preset-table row: gates 'x'=on '.'=off '='=long, accents '>' at
+ *  accented positions, pans 'L'/'R' at panned positions (else Center). */
+function patternSteps(gates: string, accents = '', pans = ''): ArpPatternStep[] {
+  return Array.from({ length: 16 }, (_, i) => ({
+    gate: gates[i] === '.' ? 0 : gates[i] === '=' ? 2 : 1,
+    accent: accents[i] === '>',
+    pan: pans[i] === 'L' ? 'L' : pans[i] === 'R' ? 'R' : 'C',
+  }))
+}
+
+/** Preset patterns (manual p. 36: "a number of preset patterns … designed to
+ *  provide both simple and complex rhythms in both mono and stereo modes").
+ *  The hardware's exact tables are not published; these are honest stand-ins
+ *  covering the same ground — straight, offbeat, clave-style syncopation,
+ *  accented and stereo-panned rows. */
+export const ARP_PATTERN_PRESETS: readonly { name: string; length: number; steps: readonly ArpPatternStep[] }[] = [
+  { name: 'Straight', length: 8, steps: patternSteps('xxxxxxxxxxxxxxxx') },
+  { name: 'Offbeat', length: 8, steps: patternSteps('.x.x.x.x.x.x.x.x') },
+  { name: 'Tresillo', length: 8, steps: patternSteps('x..x..x.x..x..x.') },
+  { name: 'Son Clave', length: 16, steps: patternSteps('x..x..x...x.x...') },
+  { name: 'Long-Short', length: 8, steps: patternSteps('=.x.=.x.=.x.=.x.') },
+  { name: 'Accent 4s', length: 16, steps: patternSteps('xxxxxxxxxxxxxxxx', '>...>...>...>...') },
+  { name: 'Ping Pong', length: 8, steps: patternSteps('xxxxxxxxxxxxxxxx', '', 'LRLRLRLRLRLRLRLR') },
+  { name: 'Wide Sweep', length: 8, steps: patternSteps('xxxxxxxxxxxxxxxx', '', 'LLCCRRCCLLCCRRCC') },
+]
+
+function defaultArpPattern(): ArpPatternState {
+  const preset = ARP_PATTERN_PRESETS[0]!
+  return { on: false, preset: 0, length: preset.length, steps: preset.steps.map((step) => ({ ...step })) }
+}
+
+/** The five Arp Menu pages (manual p. 35). */
+export const ARP_MENU_PAGES: readonly string[] = ['Direction / Zig Zag', 'Pattern Preset / Length', 'Pattern Edit', 'Pattern Accent', 'Pattern Pan']
+
 /** Section-level arpeggiator/gate (spec arpeggiatorGate): shared by every
  *  enabled synth layer, driven by a deterministic scheduler on the injected
  *  timer boundary. */
@@ -394,10 +449,28 @@ export interface ArpState {
   /** Zig Zag (Arpeggiator Menu page 1, manual p. 35): "played notes will
    *  jump by two steps and then back one, in a given direction". */
   zigZag: boolean
+  /** PATTERN (Shift + Arp Mode, manual p. 35-36) — menu pages 2-5. */
+  pattern: ArpPatternState
+  /** GROUP (Shift + Arp Menu, manual p. 36): "allows all Layers to share the
+   *  same settings". Adaptation: this build's single section-level arp
+   *  drives every enabled layer with Group On, and only the focused layer
+   *  with Group Off (the full per-layer arpeggiator is out of scope). */
+  group: boolean
 }
 
 function defaultArp(): ArpState {
-  return { run: false, mode: 'Arp', rate: 64, mstClk: false, range: 1, direction: 'Up', hold: false, zigZag: false }
+  return {
+    run: false,
+    mode: 'Arp',
+    rate: 64,
+    mstClk: false,
+    range: 1,
+    direction: 'Up',
+    hold: false,
+    zigZag: false,
+    pattern: defaultArpPattern(),
+    group: false,
+  }
 }
 
 export interface SynthState {
@@ -885,6 +958,11 @@ export interface InstrumentState {
    *  exclusive with synthEnvEdit, synthVibratoEdit and synthOscPitchEdit.
    *  Not program state. */
   synthArpMenuEdit: boolean
+  /** Which Arp Menu page (1-5, manual p. 35) the dials sit on. Not program state. */
+  synthArpMenuPage: number
+  /** Position cursor shared by the Pattern Edit/Accent/Pan pages (manual
+   *  p. 36). Not program state. */
+  synthArpPatternCursor: number
   /** Live morph source positions (mod wheel, control pedal 0..127). Not program state. */
   morphValues: Record<MorphSource, number>
   /** The ONE physical set of nine drawbars on the hardware: their current
@@ -1046,6 +1124,8 @@ function baseInstrumentState(): InstrumentState {
     synthVibratoEdit: false,
     synthOscPitchEdit: false,
     synthArpMenuEdit: false,
+    synthArpMenuPage: 1,
+    synthArpPatternCursor: 0,
     morphValues: { wheel: 0, pedal: 0 },
     // The physical pose boots matching the power-on focused layer's (A's)
     // registration so nothing jumps when a layer first goes Drawbar Live.
@@ -4043,13 +4123,29 @@ export class InstrumentStore {
     this.patchArp({ mode: next }, `Arp Mode: ${next}`)
   }
 
-  /** Shift + ARP MODE (manual adaptation — Direction shares the Mode
-   *  button's menu, no dedicated panel control here): cycles Up -> Down ->
-   *  Up/Down -> Random -> Up. */
+  /** Cycles Up -> Down -> Up/Down -> Random -> Up (the Arp Menu's Direction
+   *  setting, kept as a store-level shortcut for tests and MIDI mapping —
+   *  the panel edits Direction on menu page 1, manual p. 35). */
   cycleArpDirection(): void {
     const current = this.state.synth.arp.direction
     const next = ARP_DIRECTIONS[(ARP_DIRECTIONS.indexOf(current) + 1) % ARP_DIRECTIONS.length]!
     this.patchArp({ direction: next }, `Arp Direction: ${next}`)
+  }
+
+  /** PATTERN (Shift + Arp Mode, manual p. 35-36): the arp/gate conforms to
+   *  the pattern defined on menu pages 2-5 while On. */
+  toggleArpPattern(): void {
+    const pattern = this.state.synth.arp.pattern
+    const on = !pattern.on
+    this.patchArp({ pattern: { ...pattern, on } }, `Arp Pattern ${on ? 'On' : 'Off'}`)
+  }
+
+  /** GROUP (Shift + Arp Menu, manual p. 36: "allows all Layers to share the
+   *  same settings"). Adaptation: the single section-level arp drives every
+   *  enabled layer with Group On, only the focused layer with Group Off. */
+  toggleArpGroup(): void {
+    const group = !this.state.synth.arp.group
+    this.patchArp({ group }, `Arp Group ${group ? 'On — all Layers share the arp' : 'Off — arp follows the focused Layer'}`)
   }
 
   /** Arpeggiator MENU dial 2 (manual p. 35, page 1): Direction by absolute
@@ -4068,22 +4164,95 @@ export class InstrumentStore {
   }
 
   /** Arpeggiator MENU button (manual p. 35): latches the Synth OLED dials
-   *  onto page / Direction / Zig Zag, mirroring setSynthEnvEdit's
-   *  dial-repurposing pattern. Only page 1 is implemented (the Pattern
-   *  pages need preset-pattern semantics the panel cannot honor yet), so
-   *  the menu truthfully reads 1/1. Mutually exclusive with synthEnvEdit,
-   *  synthVibratoEdit and synthOscPitchEdit. */
+   *  onto page / setting / setting, mirroring setSynthEnvEdit's
+   *  dial-repurposing pattern. Five pages — 1 Direction/Zig Zag, 2 Pattern
+   *  Preset/Length, 3 Pattern Edit, 4 Pattern Accent, 5 Pattern Pan.
+   *  Mutually exclusive with synthEnvEdit, synthVibratoEdit and
+   *  synthOscPitchEdit. */
   setSynthArpMenuEdit(edit: boolean): void {
     if (edit === this.state.synthArpMenuEdit) return
     this.patch(
       {
         synthArpMenuEdit: edit,
+        synthArpMenuPage: 1,
         synthEnvEdit: edit ? null : this.state.synthEnvEdit,
         synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
         synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
       },
-      edit ? 'Arp Menu — dials: Page · Direction · Zig Zag' : 'Arp Menu closed',
+      edit ? 'Arp Menu — dial 1: Page 1-5' : 'Arp Menu closed',
     )
+  }
+
+  /** Arp Menu dial 1 (manual p. 35): navigates the five menu pages. */
+  selectArpMenuPage(page: number): void {
+    const clamped = Math.max(1, Math.min(ARP_MENU_PAGES.length, Math.round(page)))
+    if (clamped === this.state.synthArpMenuPage) return
+    this.patch({ synthArpMenuPage: clamped }, `Arp Menu ${clamped}/${ARP_MENU_PAGES.length} — ${ARP_MENU_PAGES[clamped - 1]!}`)
+  }
+
+  /** Arp Menu page 2 Preset dial (manual p. 36): loads a preset pattern's
+   *  steps and length (later edits on pages 3-5 detach the sound but keep
+   *  the browse position). */
+  selectArpPatternPreset(index: number): void {
+    const clamped = Math.max(0, Math.min(ARP_PATTERN_PRESETS.length - 1, Math.round(index)))
+    const preset = ARP_PATTERN_PRESETS[clamped]!
+    const pattern = this.state.synth.arp.pattern
+    if (clamped === pattern.preset && pattern.steps.every((step, i) => step.gate === preset.steps[i]!.gate)) return
+    this.patchArp(
+      { pattern: { ...pattern, preset: clamped, length: preset.length, steps: preset.steps.map((step) => ({ ...step })) } },
+      `Arp Pattern: ${preset.name}`,
+    )
+  }
+
+  /** Arp Menu page 2 Length dial (manual p. 36): 2-16 steps. */
+  setArpPatternLength(length: number): void {
+    const clamped = Math.max(2, Math.min(16, Math.round(length)))
+    const pattern = this.state.synth.arp.pattern
+    if (clamped === pattern.length) return
+    this.patch({ synthArpPatternCursor: Math.min(this.state.synthArpPatternCursor, clamped - 1) })
+    this.patchArp({ pattern: { ...pattern, length: clamped } }, `Arp Pattern Length ${clamped}`)
+  }
+
+  /** Position dial shared by the Pattern Edit/Accent/Pan pages (manual p. 36). */
+  setArpPatternCursor(position: number): void {
+    const pattern = this.state.synth.arp.pattern
+    const clamped = Math.max(0, Math.min(pattern.length - 1, Math.round(position)))
+    if (clamped === this.state.synthArpPatternCursor) return
+    this.patch({ synthArpPatternCursor: clamped }, `Arp Pattern step ${clamped + 1}/${pattern.length}`)
+  }
+
+  /** Writes one field of the step under the cursor (pages 3-5). */
+  private patchArpPatternStep(partial: Partial<ArpPatternStep>, lastEdit: string): void {
+    const pattern = this.state.synth.arp.pattern
+    const cursor = Math.min(this.state.synthArpPatternCursor, pattern.length - 1)
+    const steps = pattern.steps.map((step, i) => (i === cursor ? { ...step, ...partial } : step))
+    this.patchArp({ pattern: { ...pattern, steps } }, lastEdit)
+  }
+
+  /** Arp Menu page 3 Gate dial (manual p. 36): the selected step's gate —
+   *  Off (silent), On, or Long (rings into the next step). */
+  setArpPatternStepGate(gate: 0 | 1 | 2): void {
+    const pattern = this.state.synth.arp.pattern
+    const cursor = Math.min(this.state.synthArpPatternCursor, pattern.length - 1)
+    if (pattern.steps[cursor]!.gate === gate) return
+    this.patchArpPatternStep({ gate }, `Arp Pattern step ${cursor + 1}: ${gate === 0 ? 'Off' : gate === 1 ? 'On' : 'Long'}`)
+  }
+
+  /** Arp Menu page 4 Accent dial (manual p. 36): accents the selected step
+   *  (needs a velocity-sensitive parameter to be audible, as the manual notes). */
+  setArpPatternStepAccent(accent: boolean): void {
+    const pattern = this.state.synth.arp.pattern
+    const cursor = Math.min(this.state.synthArpPatternCursor, pattern.length - 1)
+    if (pattern.steps[cursor]!.accent === accent) return
+    this.patchArpPatternStep({ accent }, `Arp Pattern step ${cursor + 1}: accent ${accent ? 'On' : 'Off'}`)
+  }
+
+  /** Arp Menu page 5 Pan dial (manual p. 36): Left/Center/Right per step. */
+  setArpPatternStepPan(pan: 'L' | 'C' | 'R'): void {
+    const pattern = this.state.synth.arp.pattern
+    const cursor = Math.min(this.state.synthArpPatternCursor, pattern.length - 1)
+    if (pattern.steps[cursor]!.pan === pan) return
+    this.patchArpPatternStep({ pan }, `Arp Pattern step ${cursor + 1}: pan ${pan === 'L' ? 'Left' : pan === 'R' ? 'Right' : 'Center'}`)
   }
 
   setArpRate(value: number): void {
@@ -4431,7 +4600,7 @@ function normalizeSynthState(synth: Partial<SynthState> | null | undefined): Syn
       B: normalizeSynthLayer(layers?.B),
       C: normalizeSynthLayer(layers?.C),
     },
-    arp: { ...defaultArp(), ...synth.arp },
+    arp: { ...defaultArp(), ...synth.arp, pattern: { ...defaultArpPattern(), ...synth.arp?.pattern } },
   }
 }
 

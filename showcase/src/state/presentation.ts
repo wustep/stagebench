@@ -4,6 +4,8 @@ import { instrumentsOfType, SYNTH_SAMPLE_SETS, type InstrumentSpec } from '../au
 import type { InstrumentController } from '../input/controller'
 import {
   ARP_DIRECTIONS,
+  ARP_MENU_PAGES,
+  ARP_PATTERN_PRESETS,
   mappings,
   MENU_PAGES,
   MORPH_DESTINATIONS,
@@ -188,9 +190,8 @@ export class PresentationStore {
           return Math.round(((state.synth.arp.range - 1) / 3) * 127)
         case 'synth-dial-1': {
           const synth = state.synth.layers[state.synth.focusedLayer]
-          // Arp Menu (manual p. 35): dial 1 navigates the menu pages; only
-          // page 1 (Direction/Zig Zag) exists here, so it sits on 1/1.
-          if (state.synthArpMenuEdit) return 0
+          // Arp Menu (manual p. 35): dial 1 navigates the five menu pages.
+          if (state.synthArpMenuEdit) return Math.round(((state.synthArpMenuPage - 1) / (ARP_MENU_PAGES.length - 1)) * 127)
           // Osc Pitch edit (manual p. 28): dial 1 spans -24..+24 semitones.
           if (state.synthOscPitchEdit) return Math.round(((synth.oscPitch.semis + 24) / 48) * 127)
           if (state.synthVibratoEdit) return synth.voice.vibratoRate
@@ -201,9 +202,16 @@ export class PresentationStore {
         }
         case 'synth-dial-2': {
           const synth = state.synth.layers[state.synth.focusedLayer]
-          // Arp Menu page 1 (manual p. 35): dial 2 = Direction list position.
-          if (state.synthArpMenuEdit)
+          // Arp Menu (manual p. 35-36): dial 2 = Direction (page 1), Pattern
+          // Preset (page 2) or the shared Position cursor (pages 3-5).
+          if (state.synthArpMenuEdit) {
+            const page = state.synthArpMenuPage
+            if (page === 2)
+              return Math.round((state.synth.arp.pattern.preset / (ARP_PATTERN_PRESETS.length - 1)) * 127)
+            if (page >= 3)
+              return Math.round((state.synthArpPatternCursor / Math.max(1, state.synth.arp.pattern.length - 1)) * 127)
             return Math.round((ARP_DIRECTIONS.indexOf(state.synth.arp.direction) / (ARP_DIRECTIONS.length - 1)) * 127)
+          }
           // Osc Pitch edit (manual p. 28): dial 2 spans ±50 cents fine tune.
           if (state.synthOscPitchEdit) return Math.round(((synth.oscPitch.cents + 50) / 100) * 127)
           if (state.synthVibratoEdit) return synth.voice.vibratoAmount
@@ -218,8 +226,18 @@ export class PresentationStore {
         }
         case 'synth-dial-3': {
           const synth = state.synth.layers[state.synth.focusedLayer]
-          // Arp Menu page 1 (manual p. 35): dial 3 = Zig Zag off/on.
-          if (state.synthArpMenuEdit) return state.synth.arp.zigZag ? 127 : 0
+          // Arp Menu (manual p. 35-36): dial 3 = Zig Zag (page 1), Length
+          // (page 2) or the cursor step's Gate/Accent/Pan (pages 3-5).
+          if (state.synthArpMenuEdit) {
+            const page = state.synthArpMenuPage
+            const pattern = state.synth.arp.pattern
+            const step = pattern.steps[Math.min(state.synthArpPatternCursor, pattern.length - 1)]!
+            if (page === 2) return Math.round(((pattern.length - 2) / 14) * 127)
+            if (page === 3) return Math.round((step.gate / 2) * 127)
+            if (page === 4) return step.accent ? 127 : 0
+            if (page === 5) return step.pan === 'L' ? 0 : step.pan === 'C' ? 64 : 127
+            return state.synth.arp.zigZag ? 127 : 0
+          }
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.release
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.release
           if (state.synthEnvEdit === 'osc') return synth.oscEnvelope.release
@@ -559,10 +577,11 @@ export class PresentationStore {
           return
         case 'synth-dial-1': {
           const state = store.getState()
-          // Arp Menu (manual p. 35): dial 1 navigates the menu pages. Only
-          // page 1 (Direction/Zig Zag) is implemented — the Pattern pages
-          // need preset-pattern semantics — so navigation stays on 1/1.
-          if (state.synthArpMenuEdit) return
+          // Arp Menu (manual p. 35): dial 1 navigates the five menu pages.
+          if (state.synthArpMenuEdit) {
+            store.selectArpMenuPage(1 + Math.round((clamped / 127) * (ARP_MENU_PAGES.length - 1)))
+            return
+          }
           // Osc Pitch edit (manual p. 28): dial 1 = pitch -24..+24 semitones.
           if (state.synthOscPitchEdit) {
             store.setSynthOscPitchSemis(Math.round((clamped / 127) * 48) - 24)
@@ -580,10 +599,14 @@ export class PresentationStore {
         }
         case 'synth-dial-2': {
           const state = store.getState()
-          // Arp Menu page 1 (manual p. 35): dial 2 = Direction (Up/Down/
-          // Up-Down/Random) by absolute list position.
+          // Arp Menu (manual p. 35-36): dial 2 = Direction (page 1), Pattern
+          // Preset (page 2) or the shared Position cursor (pages 3-5) — all
+          // by absolute list position.
           if (state.synthArpMenuEdit) {
-            store.selectArpDirection(Math.round((clamped / 127) * (ARP_DIRECTIONS.length - 1)))
+            const page = state.synthArpMenuPage
+            if (page === 2) store.selectArpPatternPreset(Math.round((clamped / 127) * (ARP_PATTERN_PRESETS.length - 1)))
+            else if (page >= 3) store.setArpPatternCursor(Math.round((clamped / 127) * (state.synth.arp.pattern.length - 1)))
+            else store.selectArpDirection(Math.round((clamped / 127) * (ARP_DIRECTIONS.length - 1)))
             return
           }
           // Osc Pitch edit (manual p. 28): dial 2 = fine tune ±50 cents.
@@ -612,9 +635,15 @@ export class PresentationStore {
           return
         }
         case 'synth-dial-3': {
-          // Arp Menu page 1 (manual p. 35): dial 3 = Zig Zag off/on.
+          // Arp Menu (manual p. 35-36): dial 3 = Zig Zag (page 1), Length
+          // (page 2) or the cursor step's Gate/Accent/Pan (pages 3-5).
           if (store.getState().synthArpMenuEdit) {
-            store.setArpZigZag(Math.round(clamped / 127) === 1)
+            const page = store.getState().synthArpMenuPage
+            if (page === 2) store.setArpPatternLength(2 + Math.round((clamped / 127) * 14))
+            else if (page === 3) store.setArpPatternStepGate(Math.round((clamped / 127) * 2) as 0 | 1 | 2)
+            else if (page === 4) store.setArpPatternStepAccent(Math.round(clamped / 127) === 1)
+            else if (page === 5) store.setArpPatternStepPan(clamped < 43 ? 'L' : clamped > 85 ? 'R' : 'C')
+            else store.setArpZigZag(Math.round(clamped / 127) === 1)
             return
           }
           const edit = store.getState().synthEnvEdit
@@ -927,16 +956,16 @@ export class PresentationStore {
           else store.toggleArpRun()
           return
         case 'arp-menu':
-          // MENU (manual p. 35): latches the Synth OLED dials onto page /
-          // Direction / Zig Zag. GROUP (Shift + Menu: all Layers share the
-          // arp settings) is out of scope — the shifted press visibly does
-          // nothing, matching the dim GROUP ▽ print.
-          if (!shift) store.setSynthArpMenuEdit(!store.getState().synthArpMenuEdit)
+          // MENU (manual p. 35): latches the Synth OLED dials onto the five
+          // menu pages. GROUP = Shift + Menu (manual p. 36: all Layers share
+          // the arp).
+          if (shift) store.toggleArpGroup()
+          else store.setSynthArpMenuEdit(!store.getState().synthArpMenuEdit)
           return
         case 'arp-mode':
-          // Shift + ARP MODE = direction (manual adaptation: Direction shares
-          // the Mode button's menu, no dedicated panel control).
-          if (shift) store.cycleArpDirection()
+          // PATTERN = Shift + ARP MODE (manual p. 35-36): the arp/gate
+          // conforms to the menu-defined pattern while On.
+          if (shift) store.toggleArpPattern()
           else store.cycleArpMode()
           return
         case 'kb-hold':

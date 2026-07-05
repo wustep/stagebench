@@ -63,6 +63,7 @@ import {
   selectedInstrumentId,
   timbreListFor,
   zoneGainFor,
+  type ArpPatternStep,
   type EffectChainState,
   type InstrumentState,
   type LayerId,
@@ -583,6 +584,9 @@ export class PianoEngine {
   /** Arp scheduler: null while ARP RUN is off. */
   private arpTimer: number | null = null
   private arpStepIndex = 0
+  /** Melodic position, advanced only on SOUNDING steps — a pattern's silent
+   *  steps shape the rhythm without skipping notes of the arpeggio. */
+  private arpNoteIndex = 0
   /** Arp-mode's one sounding note per layer (so each step releases the
    *  previous note before sounding the next — Poly mode ignores this and
    *  retriggers every held note in place each step, per spec). */
@@ -1666,6 +1670,7 @@ export class PianoEngine {
    *  clock phase (and everything else synced to it) is left untouched. */
   private kbsResync(mode: 'On' | 'Soft'): void {
     this.arpStepIndex = 0
+    this.arpNoteIndex = 0
     if (mode === 'Soft') return
     if (this.arpTimer !== null) {
       this.boundary.timers.clearTimeout(this.arpTimer)
@@ -1692,10 +1697,14 @@ export class PianoEngine {
     const held = this.synthHeld[layer]
     const alreadyHeld = held.includes(midi)
     if (!alreadyHeld) held.push(midi)
-    // Arp/Poly modes: the scheduler sounds notes itself. Gate mode does NOT
-    // start notes — it rhythmically gates normally-played voices (manual
-    // p. 35), so key presses must keep sounding voices while it runs.
-    if (this.state.synth.arp.run && this.state.synth.arp.mode !== 'Gate') return
+    // Arp/Poly modes: the scheduler sounds notes itself — but only on the
+    // layers the arp drives (GROUP, manual p. 36: every enabled layer with
+    // Group On, the focused layer only with Group Off); other layers keep
+    // sounding normally. Gate mode does NOT start notes — it rhythmically
+    // gates normally-played voices (manual p. 35), so key presses must keep
+    // sounding voices while it runs.
+    const arp = this.state.synth.arp
+    if (arp.run && arp.mode !== 'Gate' && (arp.group || layer === this.state.synth.focusedLayer)) return
 
     const voiceState = this.state.synth.layers[layer].voice
     if (voiceState.mode === 'Poly') {
@@ -1788,6 +1797,7 @@ export class PianoEngine {
   private startArp(): void {
     this.arpRunning = true
     this.arpStepIndex = 0
+    this.arpNoteIndex = 0
     this.arpSoundingMidi = { A: null, B: null, C: null }
     // Deterministic xorshift RNG, reseeded per run-start (spec determinism).
     this.arpRngState = 0x2f6e2b1
@@ -1905,28 +1915,81 @@ export class PianoEngine {
     return position % length
   }
 
+  /** The layers the arp/gate drives this step (GROUP, manual p. 36):
+   *  every enabled layer with Group On, the focused layer only with Group
+   *  Off (this build's adaptation of the per-layer arpeggiator). */
+  private arpLayerSet(): SynthLayerId[] {
+    const synth = this.state.synth
+    return SYNTH_LAYER_IDS.filter((layer) => synth.layers[layer].enabled && (synth.arp.group || layer === synth.focusedLayer))
+  }
+
+  /** The pattern step under the rhythm position, or null while PATTERN is
+   *  off (manual p. 35-36: "the notes of the arpeggio or steps of the gate
+   *  conform to the rhythm defined by the selected pattern"). */
+  private arpPatternStep(): ArpPatternStep | null {
+    const pattern = this.state.synth.arp.pattern
+    if (!pattern.on) return null
+    return pattern.steps[this.arpStepIndex % Math.max(2, pattern.length)] ?? null
+  }
+
   private runArpStep(): void {
     if (!this.arpRunning) return
     const arp = this.state.synth.arp
-    // The arp's note source is every enabled synth layer's held set combined
-    // (a layer with no held notes simply contributes nothing this step).
-    const heldByLayer = SYNTH_LAYER_IDS.filter((layer) => this.state.synth.layers[layer].enabled && this.synthHeld[layer].length > 0)
+    // The arp's note source is each driven layer's held set (a layer with
+    // no held notes simply contributes nothing this step).
+    const arpLayers = this.arpLayerSet()
+    const heldByLayer = arpLayers.filter((layer) => this.synthHeld[layer].length > 0)
+    // A layer that left the driven set (focus moved, Group dropped) keeps
+    // its last arp note ringing otherwise — release it.
+    for (const layer of SYNTH_LAYER_IDS) {
+      if (arpLayers.includes(layer) || this.arpSoundingMidi[layer] === null) continue
+      const voice = this.voices.get(voiceKey('synth', layer, this.arpSoundingMidi[layer]!))
+      if (voice) this.releaseVoice(voice, QUICK_RELEASE_SECONDS)
+      this.arpSoundingMidi[layer] = null
+    }
     if (heldByLayer.length === 0 || !this.synthChannels) {
       this.scheduleArpStep(this.arpStepMs())
       return
     }
+    const patternStep = this.arpPatternStep()
+    // Pattern silent step: nothing sounds — Arp mode also cuts the note the
+    // previous step left ringing, so the rhythm has actual holes in it.
+    if (patternStep && patternStep.gate === 0) {
+      for (const layer of heldByLayer) {
+        if (arp.mode === 'Gate') {
+          this.arpGateStep(layer, patternStep)
+          continue
+        }
+        const sounding = this.arpSoundingMidi[layer]
+        if (sounding !== null) {
+          const voice = this.voices.get(voiceKey('synth', layer, sounding))
+          if (voice) this.releaseVoice(voice, QUICK_RELEASE_SECONDS)
+          this.arpSoundingMidi[layer] = null
+        }
+      }
+      this.arpStepIndex++
+      this.scheduleArpStep(this.arpStepMs())
+      return
+    }
+    // Accent (manual p. 36): a velocity boost — audible only when a
+    // velocity-sensitive parameter is active, exactly as the manual notes.
+    const velocity = patternStep?.accent ? 1 : 0.8
     for (const layer of heldByLayer) {
       const held = this.synthHeld[layer]
       const layerState = this.state.synth.layers[layer]
       const zone = layerState.zone
       if (arp.mode === 'Gate') {
-        this.arpGateStep(layer)
+        this.arpGateStep(layer, patternStep)
         continue
       }
       if (arp.mode === 'Poly') {
         for (const midi of held) {
           const zoneGain = zoneGainFor(this.state.split, zone, midi)
-          if (zoneGain > 0.005) this.startSynthVoice(layer, midi, 0.8, zoneGain).arpDriven = true
+          if (zoneGain > 0.005) {
+            const voice = this.startSynthVoice(layer, midi, velocity, zoneGain)
+            voice.arpDriven = true
+            this.applyArpStepShape(voice, layer, patternStep)
+          }
         }
         continue
       }
@@ -1942,7 +2005,7 @@ export class PianoEngine {
       const index =
         arp.direction === 'Random'
           ? Math.floor(this.nextArpRandom() * sequence.length)
-          : this.arpSequenceIndex(this.arpStepIndex, sequence.length, arp.zigZag)
+          : this.arpSequenceIndex(this.arpNoteIndex, sequence.length, arp.zigZag)
       const midi = sequence[index]!
       const previous = this.arpSoundingMidi[layer]
       if (previous !== null && previous !== midi) {
@@ -1951,19 +2014,51 @@ export class PianoEngine {
       }
       const zoneGain = zoneGainFor(this.state.split, zone, midi)
       if (zoneGain > 0.005) {
-        this.startSynthVoice(layer, midi, 0.8, zoneGain).arpDriven = true
+        const voice = this.startSynthVoice(layer, midi, velocity, zoneGain)
+        voice.arpDriven = true
+        this.applyArpStepShape(voice, layer, patternStep)
         this.arpSoundingMidi[layer] = midi
       }
     }
     this.arpStepIndex++
+    this.arpNoteIndex++
     this.scheduleArpStep(this.arpStepMs())
+  }
+
+  /** Pattern shaping for one arp-started voice (manual p. 36): a normal
+   *  step (gate 1) closes its dedicated gate stage at ~60% of the step —
+   *  Long (gate 2) rings into the next step's release instead — and a
+   *  panned step routes the voice through a StereoPanner before the layer
+   *  bus (Pattern Pan, "Left, Center and Right in the stereo panorama"). */
+  private applyArpStepShape(voice: Voice, layer: SynthLayerId, patternStep: ArpPatternStep | null): void {
+    const context = this.context
+    if (!patternStep || !context || !this.synthChannels) return
+    const now = context.currentTime
+    const gate = voice.gateGain
+    if (patternStep.gate === 1 && gate) {
+      const stepSeconds = this.arpStepMs() / 1000
+      gate.gain.setTargetAtTime(0.0001, now + stepSeconds * 0.6, stepSeconds * 0.06)
+    }
+    if (patternStep.pan !== 'C' && gate) {
+      const bus = this.synthChannels[layer].voiceBus
+      const panner = context.createStereoPanner()
+      panner.pan.setValueAtTime(patternStep.pan === 'L' ? -0.8 : 0.8, now)
+      gate.disconnect(bus)
+      gate.connect(panner)
+      panner.connect(bus)
+      voice.ownedNodes.push(panner)
+    }
   }
 
   /** Gate mode (spec: "do not retrigger — modulate the sounding synth voice
    *  gains with a gate envelope whose hardness comes from the range knob's
    *  repurposed value"): pulses every currently-sounding voice of the layer
-   *  between full and a hardness-scaled floor, without starting new voices. */
-  private arpGateStep(layer: SynthLayerId): void {
+   *  between full and a hardness-scaled floor, without starting new voices.
+   *  With PATTERN on (manual p. 35: "the steps of the gate conform to the
+   *  rhythm defined by the selected pattern") a silent step stays closed,
+   *  a Long step stays open, and an accent pulses to full against a
+   *  slightly ducked normal peak. */
+  private arpGateStep(layer: SynthLayerId, patternStep: ArpPatternStep | null = null): void {
     const context = this.context
     if (!context) return
     const arp = this.state.synth.arp
@@ -1972,16 +2067,24 @@ export class PianoEngine {
     const hardness = arp.range / 4 // range 1..4 repurposed as gate hardness
     const floor = Math.max(0.0001, 1 - hardness) // harder = deeper gate dips
     const onFraction = 0.5 + hardness * 0.3 // harder = shorter, punchier gate-on
+    const peak = patternStep ? (patternStep.accent ? 1 : 0.75) : 1
     for (const voice of this.voices.values()) {
       if (voice.section !== 'synth' || voice.layer !== layer) continue
-      // Pulse the dedicated gate stage between 1 and the hardness floor; the
-      // amp envelope's own gain keeps every ramp it scheduled at note-on.
+      // Pulse the dedicated gate stage between the peak and the hardness
+      // floor; the amp envelope's own gain keeps every ramp it scheduled at
+      // note-on.
       const gate = voice.gateGain
       if (!gate) continue
       gate.gain.cancelScheduledValues(now)
-      gate.gain.setValueAtTime(1, now)
+      if (patternStep && patternStep.gate === 0) {
+        // Silent pattern step: the gate stays closed for the whole step.
+        gate.gain.setTargetAtTime(floor, now, stepSeconds * 0.08)
+        continue
+      }
+      gate.gain.setValueAtTime(peak, now)
+      if (patternStep?.gate === 2) continue // Long: open for the whole step
       gate.gain.setTargetAtTime(floor, now, stepSeconds * 0.08)
-      gate.gain.setTargetAtTime(1, now + stepSeconds * onFraction, stepSeconds * 0.08)
+      gate.gain.setTargetAtTime(peak, now + stepSeconds * onFraction, stepSeconds * 0.08)
     }
   }
 
