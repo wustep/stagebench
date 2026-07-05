@@ -98,6 +98,34 @@ interface OverlayNudge {
 }
 const NUDGE_IDENTITY: OverlayNudge = { dx: 0, dy: 0, scale: 1 }
 
+/** Dev-only measure tool: a drag-drawn bounding box over the chassis. The
+ *  geometry (x/y/w/h) is stored as FRACTIONS of the chassis box — x and w of
+ *  its width, y and h of its height — so drawn boxes stay pinned through
+ *  window resizes. The printed measurements are snapshotted from the chassis
+ *  rect at draw time; cqw is the canonical unit (1cqw = 1% of chassis width,
+ *  the unit every panel CSS size uses — the visual spec's fractions are
+ *  cqw/100), with raw px and % of chassis height alongside. */
+interface MeasureBox {
+  x: number
+  y: number
+  w: number
+  h: number
+  wCqw: number
+  hCqw: number
+  hPctH: number
+  wPx: number
+  hPx: number
+}
+
+/** Live pointer position for the measure readout, chassis-relative. */
+interface MeasureCursor {
+  xCqw: number
+  yCqw: number
+  yPctH: number
+  xPx: number
+  yPx: number
+}
+
 /** The photo ghosted over a chassis box. Rendered inside the real chassis
  *  and again inside the magnifier's lens clone, so the loupe magnifies the
  *  comparison too. Non-interactive; mode paints via data-mode (styles.css):
@@ -338,6 +366,99 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     if (!rect || rect.width <= 0) return
     setOverlayWipe(Math.min(98, Math.max(2, ((event.clientX - rect.left) / rect.width) * 100)))
   }
+
+  // Dev-only measure mode: a crosshair layer over the chassis reporting the
+  // pointer position (readout pinned to the viewport's bottom-right) plus
+  // drag-drawn bounding boxes labeled with their width x height. Gated to
+  // import.meta.env.DEV — the toggle and layer never render in published
+  // builds. While on, the layer swallows panel input on purpose: measuring
+  // a knob must not twist it.
+  const [measure, setMeasure] = useState(false)
+  const [measureCursor, setMeasureCursor] = useState<MeasureCursor | null>(null)
+  const [measureBoxes, setMeasureBoxes] = useState<MeasureBox[]>([])
+  const [measureDraft, setMeasureDraft] = useState<MeasureBox | null>(null)
+  // In-flight drag origin (chassis fractions); a ref so pointermove doesn't
+  // depend on render freshness mid-drag.
+  const measureAnchor = useRef<{ xf: number; yf: number } | null>(null)
+
+  const measurePointAt = (event: ReactPointerEvent): { xf: number; yf: number; rect: DOMRect } | null => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return null
+    const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
+    return {
+      xf: clamp01((event.clientX - rect.left) / rect.width),
+      yf: clamp01((event.clientY - rect.top) / rect.height),
+      rect,
+    }
+  }
+  const measureBoxFrom = (a: { xf: number; yf: number }, b: { xf: number; yf: number }, rect: DOMRect): MeasureBox => {
+    const w = Math.abs(a.xf - b.xf)
+    const h = Math.abs(a.yf - b.yf)
+    return {
+      x: Math.min(a.xf, b.xf),
+      y: Math.min(a.yf, b.yf),
+      w,
+      h,
+      wCqw: w * 100,
+      hCqw: (h * rect.height * 100) / rect.width,
+      hPctH: h * 100,
+      wPx: w * rect.width,
+      hPx: h * rect.height,
+    }
+  }
+  const onMeasureMove = (event: ReactPointerEvent) => {
+    const p = measurePointAt(event)
+    if (!p) return
+    setMeasureCursor({
+      xCqw: p.xf * 100,
+      yCqw: (p.yf * p.rect.height * 100) / p.rect.width,
+      yPctH: p.yf * 100,
+      xPx: p.xf * p.rect.width,
+      yPx: p.yf * p.rect.height,
+    })
+    if (measureAnchor.current) setMeasureDraft(measureBoxFrom(measureAnchor.current, p, p.rect))
+  }
+  const onMeasureDown = (event: ReactPointerEvent) => {
+    const p = measurePointAt(event)
+    if (!p) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    measureAnchor.current = { xf: p.xf, yf: p.yf }
+    setMeasureDraft(measureBoxFrom(p, p, p.rect))
+  }
+  const onMeasureUp = (event: ReactPointerEvent) => {
+    const anchor = measureAnchor.current
+    measureAnchor.current = null
+    setMeasureDraft(null)
+    const p = measurePointAt(event)
+    if (!anchor || !p) return
+    const box = measureBoxFrom(anchor, p, p.rect)
+    // Sub-3px drags are stray clicks, not measurements — don't keep specks.
+    if (box.wPx > 3 || box.hPx > 3) setMeasureBoxes((boxes) => [...boxes, box])
+  }
+  const onMeasureLeave = () => {
+    if (!measureAnchor.current) setMeasureCursor(null)
+  }
+  const toggleMeasure = () => {
+    measureAnchor.current = null
+    setMeasureDraft(null)
+    setMeasureBoxes([])
+    setMeasureCursor(null)
+    setMeasure((on) => !on)
+  }
+  // Esc wipes the drawn boxes (and any in-flight drag) while measuring.
+  useEffect(() => {
+    if (!measure) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Escape') return
+      measureAnchor.current = null
+      setMeasureDraft(null)
+      setMeasureBoxes([])
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [measure])
+  // The readout's box line tracks the drag live, else the last drawn box.
+  const measureReadoutBox = measureDraft ?? measureBoxes[measureBoxes.length - 1] ?? null
   const lensRef = useRef<HTMLDivElement>(null)
   const lensCanvasRef = useRef<HTMLDivElement>(null)
   const lensCursorRef = useRef<HTMLSpanElement>(null)
@@ -723,6 +844,33 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               <span className="overlay-wipe-grip" aria-hidden="true" />
             </div>
           )}
+          {import.meta.env.DEV && measure && (
+            <div
+              className="measure-overlay"
+              data-testid="measure-overlay"
+              onPointerDown={onMeasureDown}
+              onPointerMove={onMeasureMove}
+              onPointerUp={onMeasureUp}
+              onPointerLeave={onMeasureLeave}
+            >
+              {[...measureBoxes, ...(measureDraft ? [measureDraft] : [])].map((box, index) => (
+                <div
+                  key={index}
+                  className="measure-box"
+                  data-testid="measure-box"
+                  style={{
+                    left: `${box.x * 100}%`,
+                    top: `${box.y * 100}%`,
+                    width: `${box.w * 100}%`,
+                    height: `${box.h * 100}%`,
+                  }}
+                  data-label={box.y + box.h > 0.92 ? 'above' : 'below'}
+                >
+                  <span className="measure-box-label">{`${box.wCqw.toFixed(2)} × ${box.hCqw.toFixed(2)} cqw`}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       {zoomedSection && (
@@ -801,6 +949,22 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             </span>
           </div>
         </div>
+      )}
+      {import.meta.env.DEV && measure && (
+        <aside className="measure-readout" data-testid="measure-readout" aria-hidden="true">
+          <span className="measure-title">measure · 1 cqw = 1% of chassis width</span>
+          <span data-testid="measure-cursor">
+            {measureCursor
+              ? `x ${measureCursor.xCqw.toFixed(2)} · y ${measureCursor.yCqw.toFixed(2)} cqw  (${Math.round(measureCursor.xPx)}, ${Math.round(measureCursor.yPx)} px · y ${measureCursor.yPctH.toFixed(1)}%H)`
+              : 'move the pointer over the chassis'}
+          </span>
+          {measureReadoutBox && (
+            <span data-testid="measure-box-readout">
+              {`w ${measureReadoutBox.wCqw.toFixed(2)} · h ${measureReadoutBox.hCqw.toFixed(2)} cqw  (${Math.round(measureReadoutBox.wPx)} × ${Math.round(measureReadoutBox.hPx)} px · h ${measureReadoutBox.hPctH.toFixed(1)}%H)`}
+            </span>
+          )}
+          <span className="measure-hint">drag draws a box · Esc clears · panel input paused</span>
+        </aside>
       )}
       <footer
         className={`status-strip ${chrome === 'minimal' ? 'chrome-minimal' : ''}`}
@@ -890,62 +1054,82 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             </svg>
             Overlay
           </button>
-          {overlayActive && (
-            <span className="overlay-modes" role="group" aria-label="Overlay compare mode">
-              {(
-                [
-                  ['ghost', 'Ghost', 'Photo at slider opacity'],
-                  ['diff', 'Diff', 'Difference blend — matches go black, mismatches glow'],
-                  ['wipe', 'Wipe', 'Photo left of a draggable seam'],
-                ] as const
-              ).map(([mode, label, title]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className="chrome-toggle overlay-mode"
-                  data-testid={`overlay-mode-${mode}`}
-                  aria-pressed={overlayMode === mode}
-                  title={title}
-                  onClick={() => {
-                    setOverlayMode(mode)
-                    // Diff and wipe read best at full strength; ghost keeps
-                    // whatever the slider says.
-                    if (mode !== 'ghost') setOverlayOpacity(100)
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </span>
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              className="chrome-toggle"
+              data-testid="measure-toggle"
+              aria-pressed={measure}
+              aria-label="Toggle measure mode (dev only)"
+              onClick={toggleMeasure}
+            >
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <rect x="0.9" y="3.8" width="10.2" height="4.4" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M3.4 3.8v2.1 M6 3.8v2.1 M8.6 3.8v2.1" stroke="currentColor" strokeWidth="1" fill="none" />
+              </svg>
+              Measure
+            </button>
           )}
-          {overlayActive && (
-            <label className="ctrl-pedal overlay-opacity">
-              <span className="ctrl-pedal-label">Photo</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={overlayOpacity}
-                aria-label="Reference overlay opacity"
-                data-testid="overlay-opacity"
-                onChange={(event) => setOverlayOpacity(Number(event.target.value))}
-              />
-              <span className="ctrl-pedal-value" aria-hidden="true">
-                {overlayOpacity}%
-              </span>
-            </label>
-          )}
-          {overlayActive && (overlayNudge.dx !== 0 || overlayNudge.dy !== 0 || overlayNudge.scale !== 1) && (
-            <span className="overlay-nudge" data-testid="overlay-nudge">
-              Δ {overlayNudge.dx.toFixed(1)}, {overlayNudge.dy.toFixed(1)} · ×{overlayNudge.scale.toFixed(3)}
-              <button type="button" className="chrome-toggle overlay-mode" onClick={() => setOverlayNudge(NUDGE_IDENTITY)}>
-                Reset
-              </button>
-            </span>
-          )}
-          {overlay && overlayMissing && (
-            <span className="overlay-missing" data-testid="overlay-missing" role="status">
-              reference photo unavailable — dev server with reference/ fetched (pnpm bench fetch)
+          {(overlayActive || (overlay && overlayMissing)) && (
+            <span className="chrome-overlay-tools">
+              {overlayActive && (
+                <>
+                  <span className="overlay-modes" role="group" aria-label="Overlay compare mode">
+                    {(
+                      [
+                        ['ghost', 'Ghost', 'Photo at slider opacity'],
+                        ['diff', 'Diff', 'Difference blend — matches go black, mismatches glow'],
+                        ['wipe', 'Wipe', 'Photo left of a draggable seam'],
+                      ] as const
+                    ).map(([mode, label, title]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className="chrome-toggle overlay-mode"
+                        data-testid={`overlay-mode-${mode}`}
+                        aria-pressed={overlayMode === mode}
+                        title={title}
+                        onClick={() => {
+                          setOverlayMode(mode)
+                          // Diff and wipe read best at full strength; ghost keeps
+                          // whatever the slider says.
+                          if (mode !== 'ghost') setOverlayOpacity(100)
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </span>
+                  <label className="ctrl-pedal overlay-opacity">
+                    <span className="ctrl-pedal-label">Photo</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={overlayOpacity}
+                      aria-label="Reference overlay opacity"
+                      data-testid="overlay-opacity"
+                      onChange={(event) => setOverlayOpacity(Number(event.target.value))}
+                    />
+                    <span className="ctrl-pedal-value" aria-hidden="true">
+                      {overlayOpacity}%
+                    </span>
+                  </label>
+                  {(overlayNudge.dx !== 0 || overlayNudge.dy !== 0 || overlayNudge.scale !== 1) && (
+                    <span className="overlay-nudge" data-testid="overlay-nudge">
+                      Δ {overlayNudge.dx.toFixed(1)}, {overlayNudge.dy.toFixed(1)} · ×{overlayNudge.scale.toFixed(3)}
+                      <button type="button" className="chrome-toggle overlay-mode" onClick={() => setOverlayNudge(NUDGE_IDENTITY)}>
+                        Reset
+                      </button>
+                    </span>
+                  )}
+                </>
+              )}
+              {overlay && overlayMissing && (
+                <span className="overlay-missing" data-testid="overlay-missing" role="status">
+                  reference photo unavailable — dev server with reference/ fetched (pnpm bench fetch)
+                </span>
+              )}
             </span>
           )}
         </span>

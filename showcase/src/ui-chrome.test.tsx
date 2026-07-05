@@ -177,6 +177,51 @@ describe('ui chrome — minimal by default with an INFO toggle', () => {
     expect(lens.querySelectorAll('.overlay-wipe')).toHaveLength(0)
   })
 
+  it('measure mode (dev-only): live cqw cursor readout, drag-drawn boxes, Esc clears', () => {
+    renderApp()
+    expect(screen.queryByTestId('measure-overlay')).toBeNull()
+    expect(screen.queryByTestId('measure-readout')).toBeNull()
+
+    const toggle = screen.getByTestId('measure-toggle')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    const overlay = screen.getByTestId('measure-overlay')
+    // A HUD, not chrome: aria-hidden and pointer-transparent to the a11y tree.
+    expect(screen.getByTestId('measure-readout').getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByTestId('measure-cursor').textContent).toContain('move the pointer')
+
+    // jsdom computes no layout; pin the chassis rect at 1000x500 so the
+    // fraction math resolves to round numbers (1cqw = 10px here).
+    overlay.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500 }) as DOMRect
+
+    fireEvent.pointerMove(overlay, { pointerId: 1, clientX: 250, clientY: 100 })
+    // x: 250/1000 = 25cqw. y: 100px = 100/1000 of the WIDTH = 10cqw, and
+    // 100/500 = 20% of the chassis height.
+    expect(screen.getByTestId('measure-cursor').textContent).toBe('x 25.00 · y 10.00 cqw  (250, 100 px · y 20.0%H)')
+
+    fireEvent.pointerDown(overlay, { pointerId: 1, clientX: 250, clientY: 100 })
+    fireEvent.pointerMove(overlay, { pointerId: 1, clientX: 450, clientY: 200 })
+    fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 450, clientY: 200 })
+    const box = screen.getByTestId('measure-box')
+    expect(box.style.left).toBe('25%')
+    expect(box.style.width).toBe('20%')
+    expect(box.textContent).toBe('20.00 × 10.00 cqw')
+    expect(screen.getByTestId('measure-box-readout').textContent).toBe('w 20.00 · h 10.00 cqw  (200 × 100 px · h 20.0%H)')
+
+    // A sub-3px drag is a stray click: no second box appears.
+    fireEvent.pointerDown(overlay, { pointerId: 1, clientX: 600, clientY: 300 })
+    fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 601, clientY: 301 })
+    expect(screen.getAllByTestId('measure-box')).toHaveLength(1)
+
+    fireEvent.keyDown(window, { code: 'Escape' })
+    expect(screen.queryByTestId('measure-box')).toBeNull()
+    expect(screen.queryByTestId('measure-box-readout')).toBeNull()
+
+    fireEvent.click(toggle)
+    expect(screen.queryByTestId('measure-overlay')).toBeNull()
+    expect(screen.queryByTestId('measure-readout')).toBeNull()
+  })
+
   it('a failed photo load reports unavailable instead of faking the overlay', () => {
     renderApp()
     fireEvent.click(screen.getByTestId('overlay-toggle'))
