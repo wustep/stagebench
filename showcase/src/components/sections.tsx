@@ -1217,7 +1217,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                     buttons. */}
                 <span className="tiny-led-row">
                   <Led color="yellow" on={state.sectionEdit} />
-                  <Legend>SECTION EDIT ⇟</Legend>
+                  <Legend className="section-edit-legend">SECTION EDIT ⇟</Legend>
                 </span>
                 <PanelButton store={store} id="section-edit" className="dark tiny" />
                 {/* LAYER INIT = Shift + Section Edit (manual p. 43). The

@@ -966,6 +966,26 @@ function App() {
         </section>
       </section>
 
+      {extraModelsUnlocked && (
+        <section className="artifacts" aria-labelledby="artifacts-heading">
+          <h3 id="artifacts-heading">Artifacts</h3>
+          <p className="artifacts-lead">
+            Side experiments and study pieces — not benchmark runs. Unlocked via <code>/secret</code>.
+          </p>
+          <ul className="artifact-list">
+            <li>
+              <a href="/artifacts/nord-stage-4-recreation.html" target="_blank" rel="noopener">
+                <strong>Nord Stage 4 — vector recreation study <span aria-hidden="true">→</span></strong>
+                <span>
+                  A from-scratch SVG trace of the reference photo, drawn on the photo&rsquo;s own frame with an
+                  overlay tool (opacity / diff / wipe) for measuring drift against the real product shot.
+                </span>
+              </a>
+            </li>
+          </ul>
+        </section>
+      )}
+
       <footer>
         <span>Stagebench</span>
         <p>

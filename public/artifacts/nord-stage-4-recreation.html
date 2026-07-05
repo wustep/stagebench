@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nord Stage 4 — vector recreation study</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #17181b;
+    color: #d7d9dd;
+    font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 16px;
+    background: #202126;
+    border-bottom: 1px solid #33353b;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  header h1 { font-size: 13px; font-weight: 600; margin: 0 10px 0 0; color: #fff; letter-spacing: 0.02em; }
+  header label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .group { display: inline-flex; gap: 2px; background: #2b2d33; border-radius: 6px; padding: 2px; }
+  .group button {
+    border: 0;
+    background: transparent;
+    color: #b9bcc2;
+    font: inherit;
+    padding: 3px 11px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .group button[aria-pressed='true'] { background: #4a5160; color: #fff; }
+  input[type='range'] { width: 140px; accent-color: #8a93a6; }
+  .val { font-variant-numeric: tabular-nums; min-width: 3ch; color: #c6c9cf; }
+  .note { color: #8d9099; }
+  .note b { color: #c6c9cf; font-weight: 600; }
+  #missing { color: #e2a24a; display: none; }
+  main { flex: 1; padding: 18px; }
+  #stage {
+    position: relative;
+    width: min(100%, 1900px);
+    margin: 0 auto;
+    aspect-ratio: 11600 / 3866;
+    background: repeating-conic-gradient(#212227 0% 25%, #26272c 0% 50%) 0 0 / 26px 26px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  #stage img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  /* The recreation is the base; the photo is the overlay whose opacity/blend
+     the tool controls. Same frame (11600x3866) so they stack 1:1. */
+  #stage[data-mode='diff'] #photo { mix-blend-mode: difference; }
+  #stage[data-mode='recreation'] #photo { visibility: hidden; }
+  #stage[data-mode='photo'] #recreation { visibility: hidden; }
+  #stage[data-mode='wipe'] #photo { clip-path: inset(0 0 0 var(--wipe, 50%)); }
+  #wipe-seam {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #ffcf3d;
+    transform: translateX(-1px);
+    display: none;
+    pointer-events: none;
+  }
+  #stage[data-mode='wipe'] #wipe-seam { display: block; }
+  footer { padding: 8px 16px 20px; color: #6f727a; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Nord Stage 4 73 — vector recreation study</h1>
+  <span class="group" role="group" aria-label="Overlay mode">
+    <button data-mode="recreation">Recreation</button>
+    <button data-mode="overlay" aria-pressed="true">Overlay</button>
+    <button data-mode="diff">Diff</button>
+    <button data-mode="wipe">Wipe</button>
+    <button data-mode="photo">Photo</button>
+  </span>
+  <label>Photo <input id="opacity" type="range" min="0" max="100" value="55" /> <span class="val" id="opv">55%</span></label>
+  <label id="wipe-ctrl" hidden>Seam <input id="wipe" type="range" min="0" max="100" value="50" /></label>
+  <label><input id="sections" type="checkbox" /> Section splits</label>
+  <span class="note">Photo overlay is the real product shot via the <b>/reference</b> route (dev bridge, or <b>/secret</b> unlock on production). Hold <b>V</b> to peek the photo.</span>
+  <span id="missing" role="status">reference photo unavailable — showing the recreation on its own</span>
+</header>
+<main>
+  <div id="stage" data-mode="overlay" style="--wipe:50%">
+    <img id="recreation" src="./nord-stage-4-recreation.svg" alt="Vector recreation of the Nord Stage 4 73" />
+    <img id="photo" src="/reference/nord-stage-4-73.jpg" alt="Nord Stage 4 73 reference photo" />
+    <div id="wipe-seam"></div>
+  </div>
+</main>
+<footer>Regenerate the recreation with <code>node scripts/generate-recreation.mjs</code>.</footer>
+<script>
+  const stage = document.getElementById('stage')
+  const photo = document.getElementById('photo')
+  const recreation = document.getElementById('recreation')
+  const opacity = document.getElementById('opacity')
+  const opv = document.getElementById('opv')
+  const wipe = document.getElementById('wipe')
+  const wipeCtrl = document.getElementById('wipe-ctrl')
+  const buttons = [...document.querySelectorAll('.group button[data-mode]')]
+
+  function apply() {
+    const mode = stage.dataset.mode
+    // Overlay + wipe honor the slider; diff and the solo views read full-strength.
+    photo.style.opacity = mode === 'overlay' || mode === 'wipe' ? String(opacity.valueAsNumber / 100) : '1'
+    opv.textContent = opacity.value + '%'
+    wipeCtrl.hidden = mode !== 'wipe'
+    for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.mode === mode))
+  }
+  function setMode(mode) {
+    stage.dataset.mode = mode
+    apply()
+  }
+  for (const b of buttons) b.addEventListener('click', () => setMode(b.dataset.mode))
+  opacity.addEventListener('input', apply)
+  wipe.addEventListener('input', () => stage.style.setProperty('--wipe', wipe.value + '%'))
+
+  photo.addEventListener('error', () => {
+    document.getElementById('missing').style.display = 'inline'
+    setMode('recreation')
+  })
+
+  // Toggle the hidden benchmark section-split guides baked into the SVG by
+  // reloading it with the group's display attribute flipped on.
+  document.getElementById('sections').addEventListener('change', async (event) => {
+    const res = await fetch('./nord-stage-4-recreation.svg')
+    let svg = await res.text()
+    if (event.target.checked) svg = svg.replace('<g id="sections" display="none">', '<g id="sections">')
+    recreation.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+  })
+
+  // Hold V to peek the raw photo (blink compare); release restores the mode.
+  let peekReturn = null
+  window.addEventListener('keydown', (event) => {
+    if (event.code === 'KeyV' && !event.repeat && peekReturn === null) {
+      peekReturn = stage.dataset.mode
+      setMode('photo')
+    }
+  })
+  window.addEventListener('keyup', (event) => {
+    if (event.code === 'KeyV' && peekReturn !== null) {
+      setMode(peekReturn)
+      peekReturn = null
+    }
+  })
+  apply()
+</script>
+</body>
+</html>
