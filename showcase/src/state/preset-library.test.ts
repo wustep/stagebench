@@ -1,20 +1,23 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { renderApp } from '../test/renderApp'
+import { fakeStorageBoundary } from '../test/fakes'
 import { ORGAN_PRESETS, PIANO_PRESETS, SYNTH_PRESETS } from '../model/presets'
 import { InstrumentStore, SYNTH_WAVEFORMS } from './instrument'
 
 /**
- * programs.preset-library — PRESET LIBRARY (manual p. 41-42), the ORGAN,
+ * programs.preset-library — PRESET LIBRARY (manual p. 41-43), the ORGAN,
  * PIANO and SYNTH banks: entering browse captures the current sound and
  * loads NOTHING until the dial turns; the dial then loads each preset live
  * as an ordinary dirty edit; Shift/Exit or the library button leaves
- * keeping the sound; the PROGRAM 1 soft button is Cancel (the manual's
- * Cancel — restores the pre-browse sound). SINGLE LAYER (Shift + button)
- * loads only the focused Piano/Synth layer; Organ presets are always
- * whole-Section (manual p. 41 note: both Organ layers share one chain).
- * Section preset loads turn their Section off in the non-active Layer
- * Scene; Single Layer loads leave the other scene untouched (manual p. 43).
+ * keeping the sound; PROG 1/2/3 are the manual's Num · Cat · Cancel soft
+ * buttons (Num/Cat sort the list, Cancel restores the pre-browse sound).
+ * SINGLE LAYER (Shift + button) loads only the focused Piano/Synth layer;
+ * Organ presets are always whole-Section (manual p. 41 note: both Organ
+ * layers share one chain). Section preset loads turn their Section off in
+ * the non-active Layer Scene; Single Layer loads leave the other scene
+ * untouched (manual p. 43). User presets store to the library via STORE
+ * from the Preset screen (or a Preset Library button during a Store).
  */
 
 const presetIndex = (name: string): number => SYNTH_PRESETS.findIndex((p) => p.name === name)
@@ -265,20 +268,41 @@ describe('programs.preset-library — Layer Scene rule (manual p. 43)', () => {
 })
 
 describe('programs.preset-library — panel', () => {
-  it('the SYNTH button opens browse (OLED rows, E coupling); PROG 1 cancels; a second press keeps', () => {
+  it('the SYNTH button opens browse (OLED rows, E coupling); PROG 3 cancels; a second press keeps', () => {
     renderApp()
     const button = screen.getByRole('button', { name: 'Preset Library Synth' })
     fireEvent.click(button)
     expect(screen.getByTestId('oled-preset-line').textContent).toMatch(/SYNTH PRESET/)
     // Focused, not-yet-loaded preset carries the manual's E coupling.
     expect(screen.getByTestId('oled-preset-list-0').textContent).toMatch(/▸ 1\/\d+ .* E$/)
-    fireEvent.click(screen.getByRole('button', { name: 'Program 1' })) // Cancel soft button
+    fireEvent.click(screen.getByRole('button', { name: 'Program 3' })) // Cancel soft button
     expect(screen.queryByTestId('oled-preset-line')).toBeNull()
     expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Preset cancelled/)
     fireEvent.click(button)
     expect(screen.getByTestId('oled-preset-line')).toBeTruthy()
     fireEvent.click(button) // the same library button leaves, keeping the sound
     expect(screen.queryByTestId('oled-preset-line')).toBeNull()
+  })
+
+  it('PROG 1/2 switch the Num/Cat sort; Cat shows the current category (manual p. 42, audit E6)', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Preset Library Synth' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Program 2' })) // Cat
+    expect(screen.getByTestId('oled-preset-line').textContent).toContain('CAT:')
+    fireEvent.click(screen.getByRole('button', { name: 'Program 1' })) // Num
+    expect(screen.getByTestId('oled-preset-line').textContent).not.toContain('CAT:')
+    fireEvent.click(screen.getByRole('button', { name: 'Program 3' })) // Cancel leaves
+    expect(screen.queryByTestId('oled-preset-line')).toBeNull()
+  })
+
+  it('panel: STORE from the Preset screen stores a user preset (Store Preset To, manual p. 43)', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Preset Library Synth' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Store' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Store Synth Preset .* to U1 \(new\)\? STORE confirms/)
+    expect(screen.queryByTestId('oled-preset-line')).toBeNull() // browse closed for the store step
+    fireEvent.click(screen.getByRole('button', { name: 'Store' })) // confirm
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Stored Synth Preset U1/)
   })
 
   it('Shift + SYNTH opens SINGLE LAYER browse; Shift/Exit leaves it', () => {
@@ -324,5 +348,119 @@ describe('programs.preset-library — panel', () => {
     const line = screen.getByTestId('oled-preset-line').textContent
     expect(line).toMatch(/ORGAN PRESET/)
     expect(line).not.toMatch(/LAYER/)
+  })
+})
+
+describe('programs.preset-library — Num/Cat sorting (manual p. 42, audit E6)', () => {
+  it('Cat sort groups by category and PAGE jumps to the neighboring category', () => {
+    const store = new InstrumentStore()
+    store.enterPresetBrowse('synth', false)
+    store.setPresetSort('cat')
+    const cats = [...new Set(SYNTH_PRESETS.map((p) => p.category))].sort((a, b) => a.localeCompare(b))
+    store.dialPreset(0) // the first preset of the alphabetically first category
+    const first = store.getState().presetBrowse!.index
+    expect(SYNTH_PRESETS[first]!.category).toBe(cats[0])
+    expect(first).toBe(SYNTH_PRESETS.findIndex((p) => p.category === cats[0]))
+    // PAGE ▸ jumps to the FIRST preset of the NEXT category, not the neighbor.
+    store.stepPreset(1)
+    const second = store.getState().presetBrowse!.index
+    expect(SYNTH_PRESETS[second]!.category).toBe(cats[1])
+    expect(second).toBe(SYNTH_PRESETS.findIndex((p) => p.category === cats[1]))
+    // Back in Num sort the PAGE buttons step the bank order again.
+    store.setPresetSort('num')
+    store.stepPreset(1)
+    expect(store.getState().presetBrowse!.index).toBe(second + 1)
+  })
+})
+
+describe('programs.preset-library — user presets (manual p. 42-43, audit E6)', () => {
+  it('STORE from the Preset screen captures the section; the preset browses after the factory bank', () => {
+    const store = new InstrumentStore()
+    store.setSynthSectionOn(true)
+    store.selectSynthWaveform(waveIndex('Triangle'))
+    store.enterPresetBrowse('synth', false)
+    store.storePress() // "Store Preset To" — destination U1 (new)
+    expect(store.getState().presetStore).toMatchObject({ section: 'synth', destination: 0 })
+    expect(store.getState().presetBrowse).toBeNull()
+    store.storePress() // confirm
+    expect(store.getState().presetStore).toBeNull()
+    expect(store.getState().presetUser.synth).toHaveLength(1)
+    expect(store.getState().presetUser.synth[0]!.category).toBe('User')
+    expect(store.getState().lastEdit).toMatch(/Stored Synth Preset U1/)
+    // The stored preset loads back — it browses after the factory bank.
+    store.layerInitAll()
+    store.enterPresetBrowse('synth', false)
+    store.dialPreset(127) // the last list entry = the user preset
+    expect(store.getState().presetBrowse!.index).toBe(SYNTH_PRESETS.length)
+    expect(store.getState().synth.layers.A.waveform).toBe(waveIndex('Triangle'))
+    expect(store.getState().synth.sectionOn).toBe(true)
+    expect(store.getState().programs.dirty).toBe(true) // an ordinary edit, like factory loads
+  })
+
+  it('a STORE AS naming step names the preset; the library persists through storage', () => {
+    const storage = fakeStorageBoundary()
+    const store = new InstrumentStore(storage)
+    store.storeAsPress() // naming opens with the program name
+    store.beginPresetStore('piano') // the Preset Library button during naming (manual p. 43)
+    expect(store.getState().programs.naming).toBeNull()
+    store.storePress() // confirm into U1
+    expect(store.getState().presetUser.piano[0]!.name).toBe('Royal Grand')
+    const second = new InstrumentStore(storage)
+    expect(second.getState().presetUser.piano).toHaveLength(1)
+    expect(second.getState().presetUser.piano[0]!.name).toBe('Royal Grand')
+  })
+
+  it('a Preset Library press during a program Store re-targets it to Store Preset To', () => {
+    const store = new InstrumentStore()
+    store.setLayerLevel('A', 71) // the edit the capture must hold
+    store.storePress() // program store: destination step
+    store.selectProgram(9) // audition another slot (level 100)
+    store.beginPresetStore('piano') // the ORGAN/PIANO/SYNTH press re-targets
+    expect(store.getState().programs.storePending).toBeNull()
+    expect(store.getState().layers.A.level).toBe(71) // the origin sound is restored
+    store.storePress()
+    expect(store.getState().presetUser.piano[0]!.payload.layers!.A.level).toBe(71) // origin captured, not the audition
+  })
+
+  it('EXIT cancels the store step; overwrite picks a slot; Memory Protect refuses', () => {
+    const store = new InstrumentStore()
+    store.enterPresetBrowse('organ', false)
+    store.storePress()
+    expect(store.cancelStoreFlow()).toBe(true) // Shift/Exit
+    expect(store.getState().presetStore).toBeNull()
+    expect(store.getState().presetUser.organ).toHaveLength(0)
+    store.enterPresetBrowse('organ', false)
+    store.storePress()
+    store.storePress() // U1 written
+    expect(store.getState().presetUser.organ).toHaveLength(1)
+    store.enterPresetBrowse('organ', false)
+    store.storePress() // destination defaults to U2 (new)
+    store.dialPresetStore(0) // pick U1 instead: overwrite
+    expect(store.getState().lastEdit).toContain('U1')
+    store.storePress()
+    expect(store.getState().presetUser.organ).toHaveLength(1) // overwrote, did not grow
+    store.setMemoryProtect(true)
+    store.enterPresetBrowse('organ', false)
+    store.storePress()
+    expect(store.getState().presetStore).toBeNull()
+    expect(store.getState().lastEdit).toContain('Memory Protect')
+  })
+
+  it('a user preset loads Single Layer style too: its A layer into the focused layer', () => {
+    const store = new InstrumentStore()
+    store.setSynthSectionOn(true)
+    store.selectSynthWaveform(waveIndex('Triangle'))
+    store.enterPresetBrowse('synth', false)
+    store.storePress()
+    store.storePress() // U1 captured with layer A = Triangle
+    store.layerInitAll()
+    store.toggleSynthLayerEnabled('B') // enable + focus B
+    store.setSynthLayerLevel('B', 77)
+    store.enterPresetBrowse('synth', true) // SINGLE LAYER browse
+    store.dialPreset(127) // the user preset at the end of the list
+    const s = store.getState()
+    expect(s.synth.layers.B.waveform).toBe(waveIndex('Triangle'))
+    expect(s.synth.layers.B.level).toBe(77) // performance fields kept
+    expect(s.synth.layers.A.waveform).toBe(waveIndex('Saw')) // other layers intact
   })
 })

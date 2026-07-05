@@ -668,6 +668,28 @@ export interface ProgramSlot {
   category?: string
 }
 
+/** A user preset stored to the Preset Library (manual p. 42-43): the
+ *  section's program-snapshot keys captured verbatim, written back the same
+ *  way on load. Persisted to storage; independent of programs. */
+export interface UserPreset {
+  name: string
+  category: string
+  payload: Partial<ProgramSnapshot>
+}
+
+/** Preset Library sort modes (manual p. 42): Num = bank order, Cat = grouped
+ *  by category with PAGE jumping between categories. */
+export type PresetSort = 'num' | 'cat'
+
+/** The program-snapshot keys that make up one section's "configuration,
+ *  including all its Layers and Effects" (manual p. 43) — what a user preset
+ *  captures and what a whole-Section load writes back. */
+const SECTION_PRESET_KEYS: Record<SectionKey, readonly (keyof ProgramSnapshot)[]> = {
+  piano: ['piano', 'layers', 'chains'],
+  organ: ['organ', 'organChain'],
+  synth: ['synth', 'synthChains'],
+}
+
 /** Categories offered by the STORE AS Cat soft button (manual p. 41). */
 export const PROGRAM_CATEGORIES = [
   'None',
@@ -803,7 +825,17 @@ export interface InstrumentState {
     preDirty: boolean
     singleLayer: boolean
     loaded: boolean
+    /** Num / Cat sort soft buttons (manual p. 42). */
+    sort: PresetSort
   } | null
+  /** User presets stored to the Preset Library (manual p. 42-43), browsed
+   *  after the factory bank. Persisted to storage; not program state. */
+  presetUser: Record<SectionKey, UserPreset[]>
+  /** STORE PRESET TO step (manual p. 43): destination selection among the
+   *  user slots (index presetUser.length = a New slot — factory presets are
+   *  read-only, a declared adaptation of the hardware's preset banks).
+   *  STORE confirms, EXIT cancels. Not program state. */
+  presetStore: { section: SectionKey; destination: number; captured: UserPreset } | null
   /** Morph source being assigned (source button latched). Not program state. */
   morphArming: MorphSource | null
   /** MON/COPY / PASTE latch (manual p. 43) — pointer-first adaptation of the
@@ -993,6 +1025,8 @@ function baseInstrumentState(): InstrumentState {
     layerInitEdit: false,
     sectionEdit: false,
     presetBrowse: null,
+    presetUser: { piano: [], organ: [], synth: [] },
+    presetStore: null,
     morphArming: null,
     monCopy: null,
     clipboard: null,
@@ -1137,6 +1171,7 @@ type Listener = () => void
 
 const PROGRAMS_STORAGE_KEY = 'stagebench.programs.v1'
 const SETTINGS_STORAGE_KEY = 'stagebench.settings.v1'
+const PRESETS_STORAGE_KEY = 'stagebench.presets.v1'
 
 export class InstrumentStore {
   private state: InstrumentState = initialInstrumentState()
@@ -1153,6 +1188,8 @@ export class InstrumentStore {
     if (restored) this.state = restored
     const settings = this.restoreSettings()
     if (settings) this.state = { ...this.state, globalSettings: settings }
+    const presets = this.restoreUserPresets()
+    if (presets) this.state = { ...this.state, presetUser: presets }
   }
 
   getState = (): InstrumentState => this.state
@@ -1904,6 +1941,24 @@ export class InstrumentStore {
     }
   }
 
+  private persistUserPresets(presets: Record<SectionKey, UserPreset[]>): void {
+    this.storage?.save(PRESETS_STORAGE_KEY, JSON.stringify({ version: 1, presets }))
+  }
+
+  private restoreUserPresets(): Record<SectionKey, UserPreset[]> | null {
+    if (!this.storage) return null
+    const raw = this.storage.load(PRESETS_STORAGE_KEY)
+    if (!raw) return null
+    try {
+      const parsed = JSON.parse(raw) as { version: number; presets: Partial<Record<SectionKey, UserPreset[]>> }
+      if (parsed.version !== 1) return null
+      // Backfill missing sections so pre-existing payloads stay valid.
+      return { piano: [], organ: [], synth: [], ...parsed.presets }
+    } catch {
+      return null
+    }
+  }
+
   /** LAYER INIT — All (manual p. 43): "Initializes the entire Program so
    *  that only Piano A is active, with no effects turned on." Every
    *  program-stored key returns to its power-on default (Piano A Grand on,
@@ -2008,6 +2063,7 @@ export class InstrumentStore {
           preDirty: this.state.programs.dirty,
           singleLayer: single,
           loaded: false,
+          sort: 'num',
         },
         clockEdit: false,
         transposeEdit: false,
@@ -2017,7 +2073,7 @@ export class InstrumentStore {
         menu: null,
         organize: null,
       },
-      single ? `${name} Preset — Single Layer ${focused} · dial: load` : `${name} Preset — dial: load · PROG 1: Cancel`,
+      single ? `${name} Preset — Single Layer ${focused} · dial: load` : `${name} Preset — dial: load · PROG: Num/Cat/Cancel`,
     )
   }
 
@@ -2053,31 +2109,119 @@ export class InstrumentStore {
     }
   }
 
+  /** Num / Cat soft buttons (manual p. 42): Num browses in bank order; Cat
+   *  sorts the list by category — the display shows the current category
+   *  and the PAGE buttons jump between categories. */
+  setPresetSort(sort: PresetSort): void {
+    const browse = this.state.presetBrowse
+    if (!browse || browse.sort === sort) return
+    this.patch(
+      { presetBrowse: { ...browse, sort } },
+      sort === 'cat' ? 'Preset sort: Category — PAGE: next category' : 'Preset sort: Numeric',
+    )
+  }
+
   /** Program dial while browsing (manual p. 41: "Once the dial is operated,
-   *  the Preset sound is actually loaded"): 0..127 across the preset list. */
+   *  the Preset sound is actually loaded"): 0..127 across the preset list
+   *  in the active sort order. */
   dialPreset(value: number): void {
     const browse = this.state.presetBrowse
     if (!browse) return
-    const count = PRESET_BANKS[browse.section].length
-    this.loadPreset(Math.round((clamp(value) / 127) * (count - 1)))
+    const order = presetOrderOf(this.state, browse.section, browse.sort)
+    this.loadPreset(order[Math.round((clamp(value) / 127) * (order.length - 1))]!)
   }
 
-  /** PAGE ◂ ▸ while browsing (manual p. 41: the PAGE buttons navigate the
-   *  list): steps to — and loads — the neighboring preset. */
+  /** PAGE ◂ ▸ while browsing (manual p. 41-42): steps to — and loads — the
+   *  neighboring preset; in Cat sort the PAGE buttons jump to the first
+   *  preset of the neighboring category instead. */
   stepPreset(delta: -1 | 1): void {
     const browse = this.state.presetBrowse
     if (!browse) return
-    this.loadPreset(browse.index + delta)
+    const order = presetOrderOf(this.state, browse.section, browse.sort)
+    const pos = Math.max(0, order.indexOf(browse.index))
+    if (browse.sort === 'cat') {
+      const list = presetListOf(this.state, browse.section)
+      const starts: number[] = []
+      for (let i = 0; i < order.length; i++) {
+        if (i === 0 || list[order[i]!]!.category !== list[order[i - 1]!]!.category) starts.push(i)
+      }
+      const currentCat = starts.filter((s) => s <= pos).length - 1
+      const target = starts[Math.max(0, Math.min(starts.length - 1, currentCat + delta))]!
+      this.loadPreset(order[target]!)
+      return
+    }
+    this.loadPreset(order[Math.max(0, Math.min(order.length - 1, pos + delta))]!)
   }
 
   /** Loads the browsed section's preset at `index` into the current program
-   *  — one ordinary dirty (or Live auto-stored) edit. */
+   *  — one ordinary dirty (or Live auto-stored) edit. Indices past the
+   *  factory bank are the stored user presets. */
   loadPreset(index: number): void {
     const browse = this.state.presetBrowse
     if (!browse) return
-    if (browse.section === 'organ') this.loadOrganPreset(index)
+    if (index >= PRESET_BANKS[browse.section].length) this.loadUserPreset(index)
+    else if (browse.section === 'organ') this.loadOrganPreset(index)
     else if (browse.section === 'piano') this.loadPianoPreset(index)
     else this.loadSynthPreset(index)
+  }
+
+  /** Loads a stored user preset (manual p. 42-43): the captured section
+   *  configuration — all its Layers and effects — is written back verbatim.
+   *  Single Layer follows the factory convention: the payload's A layer
+   *  sound into the focused layer, performance fields kept. */
+  private loadUserPreset(index: number): void {
+    const browse = this.state.presetBrowse
+    if (!browse) return
+    const factory = PRESET_BANKS[browse.section].length
+    const user = this.state.presetUser[browse.section]
+    if (user.length === 0) return
+    const clamped = Math.max(factory, Math.min(factory + user.length - 1, Math.round(index)))
+    const preset = user[clamped - factory]!
+    const label = `${presetSectionName(browse.section)} Preset ${clamped + 1}/${factory + user.length}: ${preset.name}`
+    const payload = deepClone(preset.payload)
+    if (browse.singleLayer && browse.section === 'synth') {
+      const id = this.state.synth.focusedLayer
+      const current = this.state.synth.layers[id]
+      const source = payload.synth!.layers.A
+      const layer: SynthLayerState = { ...source, enabled: current.enabled, level: current.level, octave: current.octave, zone: current.zone }
+      this.patch(
+        {
+          synth: { ...this.state.synth, layers: { ...this.state.synth.layers, [id]: layer } },
+          synthChains: { ...this.state.synthChains, [id]: payload.synthChains!.A },
+          presetBrowse: { ...browse, index: clamped, loaded: true },
+        },
+        `${label} → Layer ${id}`,
+      )
+      return
+    }
+    if (browse.singleLayer && browse.section === 'piano') {
+      const id = this.state.focusedLayer
+      const current = this.state.layers[id]
+      const source = payload.layers!.A
+      const layer: PianoLayerState = { ...source, enabled: current.enabled, level: current.level, octave: current.octave, zone: current.zone }
+      this.patch(
+        {
+          layers: { ...this.state.layers, [id]: layer },
+          // Shared Piano params follow the preset (the factory single-layer
+          // convention); the section's on/off stays the player's.
+          piano: { ...payload.piano!, sectionOn: this.state.piano.sectionOn },
+          chains: { ...this.state.chains, [id]: payload.chains!.A },
+          pianoNotFound: null,
+          presetBrowse: { ...browse, index: clamped, loaded: true },
+        },
+        `${label} → Layer ${id}`,
+      )
+      return
+    }
+    this.patch(
+      {
+        ...payload,
+        ...(browse.section === 'piano' ? { pianoNotFound: null } : {}),
+        scenes: this.scenesWithSectionOff(browse.section),
+        presetBrowse: { ...browse, index: clamped, loaded: true },
+      },
+      label,
+    )
   }
 
   /** Layer Scenes and presets (manual p. 43): "When loading a Preset for an
@@ -2235,6 +2379,95 @@ export class InstrumentStore {
       },
       label,
     )
+  }
+
+  /* ------------------------------------------- store to the preset library -- */
+
+  /** Destination readout for the STORE PRESET TO step: an existing user
+   *  slot (U1…) to overwrite, or the New slot at the end of the list. */
+  private presetStoreLabel(section: SectionKey, destination: number): string {
+    const user = this.state.presetUser[section]
+    return destination >= user.length ? `U${user.length + 1} (new)` : `U${destination + 1} ${user[destination]!.name}`
+  }
+
+  /** STORE PRESET TO (manual p. 43): captures the section's configuration
+   *  — all its Layers and effects — and opens destination selection. Reached
+   *  from the Preset screen (Store while browsing), by a Preset Library
+   *  button during a program Store ("Store Preset To" instead), or after a
+   *  STORE AS naming step (which names and categorizes the preset). Factory
+   *  presets are read-only: destinations are the stored user slots plus one
+   *  New slot (declared adaptation of the hardware's preset banks). */
+  beginPresetStore(section: SectionKey): void {
+    if (this.state.globalSettings.memoryProtect && !this.state.programs.liveMode) {
+      this.setLastEdit('Memory Protect On — System menu (Shift + Prog 1) to disable')
+      return
+    }
+    const programs = this.state.programs
+    const pending = programs.storePending
+    // The capture: an ongoing program Store's snapshot already holds the
+    // origin sound; otherwise the current state is what you hear.
+    const snapshot = pending ? pending.captured.snapshot : snapshotOf(this.state)
+    const name = programs.naming
+      ? programs.naming.name.trim() || 'Unnamed'
+      : pending
+        ? pending.captured.name
+        : this.activeBank()[programs.current]!.name
+    const category = (programs.naming ? programs.naming.category : pending?.captured.category) ?? 'User'
+    const payload: Partial<ProgramSnapshot> = {}
+    for (const key of SECTION_PRESET_KEYS[section]) {
+      ;(payload as Record<string, unknown>)[key] = (snapshot as unknown as Record<string, unknown>)[key]
+    }
+    const captured: UserPreset = { name, category, payload: deepClone(payload) }
+    // Leaving an ongoing program Store restores its origin first (the
+    // destination audition may have loaded another slot's sound).
+    if (pending) this.cancelStoreFlow()
+    const destination = this.state.presetUser[section].length
+    this.patch(
+      {
+        presetStore: { section, destination, captured },
+        presetBrowse: null,
+        programs: { ...this.state.programs, naming: null },
+      },
+      `Store ${presetSectionName(section)} Preset "${name}" to ${this.presetStoreLabel(section, destination)}? STORE confirms`,
+    )
+  }
+
+  /** Program dial during a preset store: selects the destination slot. */
+  dialPresetStore(value: number): void {
+    const ps = this.state.presetStore
+    if (!ps) return
+    const destination = Math.round((clamp(value) / 127) * this.state.presetUser[ps.section].length)
+    if (destination === ps.destination) return
+    this.patch(
+      { presetStore: { ...ps, destination } },
+      `Store Preset "${ps.captured.name}" to ${this.presetStoreLabel(ps.section, destination)}? STORE confirms`,
+    )
+  }
+
+  /** PAGE ◂ ▸ during a preset store: steps the destination slot. */
+  stepPresetStore(delta: -1 | 1): void {
+    const ps = this.state.presetStore
+    if (!ps) return
+    const destination = Math.max(0, Math.min(this.state.presetUser[ps.section].length, ps.destination + delta))
+    if (destination === ps.destination) return
+    this.patch(
+      { presetStore: { ...ps, destination } },
+      `Store Preset "${ps.captured.name}" to ${this.presetStoreLabel(ps.section, destination)}? STORE confirms`,
+    )
+  }
+
+  /** Second STORE press: writes the user preset and persists the library. */
+  private confirmPresetStore(): void {
+    const ps = this.state.presetStore!
+    const list = [...this.state.presetUser[ps.section]]
+    const slot = Math.min(ps.destination, list.length)
+    list[slot] = deepClone(ps.captured)
+    const presetUser = { ...this.state.presetUser, [ps.section]: list }
+    this.patch(
+      { presetUser, presetStore: null },
+      `Stored ${presetSectionName(ps.section)} Preset U${slot + 1} ${ps.captured.name}`,
+    )
+    this.persistUserPresets(presetUser)
   }
 
   /** KB ZONE ◂ ▸ (Shift + Octave, manual p. 39): steps the focused layer
@@ -2461,6 +2694,7 @@ export class InstrumentStore {
       splitEdit: null,
       menu: null,
       organize: null,
+      presetStore: null,
       programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `${programLabel(clamped, programs.liveMode)} ${slot.name}`,
     })
@@ -2537,8 +2771,13 @@ export class InstrumentStore {
   }
 
   /** Program dial (0..127 panel value): browses slots; sets characters while
-   *  naming; steps and LOADS presets while the Preset Library is open. */
+   *  naming; steps and LOADS presets while the Preset Library is open;
+   *  selects the destination during a preset store. */
   dialProgram(value: number): void {
+    if (this.state.presetStore) {
+      this.dialPresetStore(value)
+      return
+    }
     if (this.state.presetBrowse) {
       this.dialPreset(value)
       return
@@ -2589,12 +2828,19 @@ export class InstrumentStore {
       this.setLastEdit('Memory Protect On — System menu (Shift + Prog 1) to disable')
       return
     }
-    // Declared limitation: storing back INTO the preset bank (manual p. 42
-    // "Storing Presets to the Preset Library") is out of scope — the bank is
-    // read-only factory content, so STORE always targets program slots. A
-    // Store started from the Preset screen first leaves it, keeping the
-    // loaded sound (which the capture below then stores like any edit).
-    if (this.state.presetBrowse) this.exitPresetBrowse(true)
+    // STORE while the destination step of a preset store is open confirms it.
+    if (this.state.presetStore) {
+      this.confirmPresetStore()
+      return
+    }
+    // "It is also possible to Store Presets by first pressing the
+    // corresponding Preset Library button and then Store" (manual p. 43):
+    // STORE from the Preset screen starts the preset-store step instead of
+    // a program store.
+    if (this.state.presetBrowse) {
+      this.beginPresetStore(this.state.presetBrowse.section)
+      return
+    }
     const programs = this.state.programs
     if (programs.storePending) {
       this.confirmStore()
@@ -2710,8 +2956,12 @@ export class InstrumentStore {
     this.persistPrograms(this.state)
   }
 
-  /** Shift/Exit aborts an ongoing Store or naming step (manual p. 13). */
+  /** Shift/Exit aborts an ongoing Store, preset store or naming step (manual p. 13/43). */
   cancelStoreFlow(): boolean {
+    if (this.state.presetStore) {
+      this.patch({ presetStore: null }, 'Preset store cancelled')
+      return true
+    }
     const programs = this.state.programs
     if (programs.naming) {
       this.patchPrograms({ naming: null }, 'Store As cancelled')
@@ -2770,6 +3020,7 @@ export class InstrumentStore {
       splitEdit: null,
       menu: null,
       organize: null,
+      presetStore: null,
       programs: {
         ...programs,
         liveMode,
@@ -2799,7 +3050,7 @@ export class InstrumentStore {
   undoProgramChange(): void {
     const programs = this.state.programs
     const undo = programs.undo
-    if (!undo || programs.storePending || programs.naming) {
+    if (!undo || programs.storePending || programs.naming || this.state.presetStore) {
       this.setLastEdit('Nothing to undo')
       return
     }
@@ -4164,6 +4415,22 @@ function synthLayerFromPreset(spec: SynthLayerPresetSpec, base: SynthLayerState)
 /** Display name for a Preset Library section (manual p. 41 headers). */
 export function presetSectionName(section: SectionKey): string {
   return section === 'organ' ? 'Organ' : section === 'piano' ? 'Piano' : 'Synth'
+}
+
+/** One section's browsable Preset Library: the factory bank followed by the
+ *  stored user presets (manual p. 42-43). */
+export function presetListOf(state: InstrumentState, section: SectionKey): readonly { name: string; category: string }[] {
+  return [...PRESET_BANKS[section], ...state.presetUser[section]]
+}
+
+/** Preset indices in browse order under a sort mode (manual p. 42): Num is
+ *  the bank order; Cat groups by category alphabetically, keeping the bank
+ *  order within each category. */
+export function presetOrderOf(state: InstrumentState, section: SectionKey, sort: PresetSort): number[] {
+  const list = presetListOf(state, section)
+  const order = list.map((_, i) => i)
+  if (sort === 'cat') order.sort((a, b) => list[a]!.category.localeCompare(list[b]!.category) || a - b)
+  return order
 }
 
 /** Builds one organ layer from a preset spec over the init B3 layer: model,

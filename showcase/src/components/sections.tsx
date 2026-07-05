@@ -8,6 +8,8 @@ import {
   MENU_PAGES,
   menuPageValueLabel,
   organModelLabel,
+  presetListOf,
+  presetOrderOf,
   programLabel,
   splitBoundaries,
   SPLIT_POINT_NAMES,
@@ -20,7 +22,6 @@ import {
   type InstrumentStore,
   type SectionKey,
 } from '../state/instrument'
-import { PRESET_BANKS } from '../model/presets'
 import { instrumentsOfType, SYNTH_SAMPLE_SETS } from '../audio/library'
 import type { EngineStatusInfo, PianoEngine } from '../audio/engine'
 import {
@@ -819,28 +820,35 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
       })()
     : null
   // PRESET LIBRARY browse (manual p. 41-42): the section name, the list rows
-  // around the focused preset, and the manual's "E" coupling on the focused
-  // row until the dial first loads it. PROGRAM 1 is the Cancel soft button
-  // (of the manual's Num/Cat/Cancel row, only Cancel is implemented). Organ
-  // presets never browse single-layer (manual p. 41 note).
+  // around the focused preset (in the active Num/Cat sort order), and the
+  // manual's "E" coupling on the focused row until the dial first loads it.
+  // PROG 1/2/3 are the Num · Cat · Cancel soft buttons; in Cat sort the
+  // current category is shown (manual p. 42). Organ presets never browse
+  // single-layer (manual p. 41 note).
   const browse = state.presetBrowse
   const presetRows = browse
     ? (() => {
-        const bank = PRESET_BANKS[browse.section]
-        const count = bank.length
-        const presetStart = Math.max(0, Math.min(browse.index - 1, count - 2))
+        const list = presetListOf(state, browse.section)
+        const order = presetOrderOf(state, browse.section, browse.sort)
+        const count = list.length
+        const pos = Math.max(0, order.indexOf(browse.index))
+        const rowStart = Math.max(0, Math.min(pos - 1, count - 2))
         const focusedPresetLayer = browse.section === 'piano' ? state.focusedLayer : state.synth.focusedLayer
+        const catLabel = browse.sort === 'cat' ? ` · CAT: ${list[browse.index]!.category}` : ''
         return [
           <span key="pb" className="oled-slot" data-testid="oled-preset-line">
-            ♪ {browse.section.toUpperCase()} PRESET{browse.singleLayer ? ` — LAYER ${focusedPresetLayer}` : ''} · PROG 1:
-            Cancel · SHIFT: keep
+            ♪ {browse.section.toUpperCase()} PRESET{browse.singleLayer ? ` — LAYER ${focusedPresetLayer}` : ''}
+            {catLabel} · 1 Num · 2 Cat · 3 Cancel
           </span>,
-          ...[presetStart, presetStart + 1].map((i) => (
-            <span key={i} className="oled-slot" data-testid={`oled-preset-list-${i}`}>
-              {i === browse.index ? '▸' : ' '} {i + 1}/{count} {bank[i]!.name}
-              {i === browse.index && !browse.loaded ? ' E' : ''}
-            </span>
-          )),
+          ...[rowStart, rowStart + 1].map((row) => {
+            const i = order[row]!
+            return (
+              <span key={row} className="oled-slot" data-testid={`oled-preset-list-${row}`}>
+                {i === browse.index ? '▸' : ' '} {i + 1}/{count} {list[i]!.name}
+                {i === browse.index && !browse.loaded ? ' E' : ''}
+              </span>
+            )
+          }),
         ]
       })()
     : null

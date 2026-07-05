@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from 'react'
 import { getControl, HARDWARE_CONTROLS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
-import { PRESET_BANKS } from '../model/presets'
 import { instrumentsOfType, SYNTH_SAMPLE_SETS, type InstrumentSpec } from '../audio/library'
 import type { InstrumentController } from '../input/controller'
 import {
@@ -8,6 +7,7 @@ import {
   mappings,
   MENU_PAGES,
   MORPH_DESTINATIONS,
+  presetOrderOf,
   presetSectionName,
   SPLIT_POSITIONS,
   SYNTH_WAVEFORMS,
@@ -131,9 +131,18 @@ export class PresentationStore {
             const count = state.programs.liveMode ? state.programs.live.length : state.programs.bank.length
             return Math.round((state.organize.cursor / (count - 1)) * 127)
           }
-          // Preset Library browse (manual p. 41): the dial spans the preset list.
-          if (state.presetBrowse)
-            return Math.round((state.presetBrowse.index / (PRESET_BANKS[state.presetBrowse.section].length - 1)) * 127)
+          // "Store Preset To" (manual p. 43): the dial spans the user slots.
+          if (state.presetStore) {
+            const count = state.presetUser[state.presetStore.section].length
+            return count === 0 ? 127 : Math.round((state.presetStore.destination / count) * 127)
+          }
+          // Preset Library browse (manual p. 41): the dial spans the preset
+          // list (factory bank + user presets) in the active sort order.
+          if (state.presetBrowse) {
+            const order = presetOrderOf(state, state.presetBrowse.section, state.presetBrowse.sort)
+            const pos = Math.max(0, order.indexOf(state.presetBrowse.index))
+            return Math.round((pos / (order.length - 1)) * 127)
+          }
           return wiring.instrument.programDialValue()
         }
         case 'rotary-drive':
@@ -995,18 +1004,27 @@ export class PresentationStore {
           // keeping the loaded sound; a different section's button switches
           // banks (the load already kept is an ordinary edit).
           const section = id === 'preset-organ' ? 'organ' : id === 'preset-piano' ? 'piano' : 'synth'
+          // During a program Store or a STORE AS naming step, the Preset
+          // Library buttons re-target the flow to "Store Preset To" for
+          // that section (manual p. 43).
+          if (store.getState().programs.storePending || store.getState().programs.naming) {
+            store.beginPresetStore(section)
+            return
+          }
           if (store.getState().presetBrowse?.section === section) store.exitPresetBrowse(true)
           else store.enterPresetBrowse(section, section === 'organ' ? false : shift)
           return
         }
         case 'page-left':
-          if (store.getState().presetBrowse) store.stepPreset(-1)
+          if (store.getState().presetStore) store.stepPresetStore(-1)
+          else if (store.getState().presetBrowse) store.stepPreset(-1)
           else if (store.getState().menu) store.stepMenuPage(-1)
           else if (store.getState().splitEdit) store.selectSplitPoint(-1)
           else store.shiftProgramPage(-1)
           return
         case 'page-right':
-          if (store.getState().presetBrowse) store.stepPreset(1)
+          if (store.getState().presetStore) store.stepPresetStore(1)
+          else if (store.getState().presetBrowse) store.stepPreset(1)
           else if (store.getState().menu) store.stepMenuPage(1)
           else if (store.getState().splitEdit) store.selectSplitPoint(1)
           else store.shiftProgramPage(1)
@@ -1106,6 +1124,7 @@ export class PresentationStore {
             store.getState().splitEdit !== null ||
             store.getState().layerInitEdit ||
             store.getState().presetBrowse !== null ||
+            store.getState().presetStore !== null ||
             store.getState().organize !== null ||
             store.getState().programs.numPad ||
             store.getState().programs.storePending !== null ||
@@ -1176,14 +1195,20 @@ export class PresentationStore {
             else store.setLastEdit('Layer Init — PROG 1: All · 2: Org AB · 3: Pno · 4: Syn')
             return
           }
+          if (store.getState().presetStore) {
+            // "Store Preset To" (manual p. 43): the dial / PAGE pick the
+            // destination user slot; STORE confirms, EXIT cancels.
+            store.setLastEdit('Store Preset — dial/PAGE: slot · STORE: confirm · EXIT: cancel')
+            return
+          }
           const browse = store.getState().presetBrowse
           if (browse) {
-            // Preset screen soft-button row (manual p. 42 prints Num · Cat ·
-            // Cancel): the Num/Cat sort modes are not implemented, so only
-            // Cancel is honest here — PROGRAM 1 = Cancel (restores the
-            // pre-browse sound); other buttons re-print the hint.
-            if (button === 0) store.exitPresetBrowse(false)
-            else store.setLastEdit(`${presetSectionName(browse.section)} Preset — PROG 1: Cancel · SHIFT/EXIT: keep`)
+            // Preset screen soft-button row (manual p. 42): Num · Cat sort
+            // the list, Cancel restores the pre-browse sound.
+            if (button === 0) store.setPresetSort('num')
+            else if (button === 1) store.setPresetSort('cat')
+            else if (button === 2) store.exitPresetBrowse(false)
+            else store.setLastEdit(`${presetSectionName(browse.section)} Preset — PROG 1: Num · 2: Cat · 3: Cancel · SHIFT/EXIT: keep`)
             return
           }
           store.selectProgramButton(button)
