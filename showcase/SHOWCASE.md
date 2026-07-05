@@ -2398,3 +2398,24 @@ User re-measure: the housings print at ~0.85 x 1.40cqw (ours were
   two-line B3 BASS print cancels its extra line height with negative
   block margins instead of stretching its row.
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12.
+
+### 67 — Full-size switches, Unison two-lamp print (2026-07-05)
+
+User re-measure: the standard switch housing is ~1.65 x 1.0cqw, not the
+1.2 x 0.66 we rendered (confirmed against the photo with a 0.25cqw ruler
+grid — SET KEY spans ~1.6 x 1.0).
+
+- ONE switch footprint grows to 1.65 x 1.0cqw everywhere (small/tiny/
+  program-tiny/tap aliases included); vertical/rocker variants become
+  1.0 x 1.65. The preset-bank "wide switch" override dissolves — the
+  global size covers it.
+- Fit fallout: the three morph switches share their box's inner width
+  (min-width floor lifted; box flex 2.3 -> 2.6), the Unison switch
+  spans its narrow box, and the amp/unison column tightens (framed-
+  button margins, paddings, 0.24 velocity lamps) so the VELOCITY 1/2
+  row stays visible above the Unison box.
+- Unison print corrected (close-up): TWO stacked lamps — 2 and 1 on the
+  left, the 3 numeral BETWEEN the rows on the right; level 3 lights
+  both lamps. Applied to the piano cell and the synth Unison box (which
+  wrongly had a third LED for "3").
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12.

@@ -618,12 +618,13 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
               </span>
               <span className="acoustics-cell">
                 <Legend className="group-label">UNISON</Legend>
-                <span className="tiny-led-row" aria-hidden="true">
+                {/* Hardware print (close-up): TWO stacked lamps, 2 and 1 on
+                    their left, the 3 numeral BETWEEN the rows on the right —
+                    level 3 lights both lamps. */}
+                <span className="unison-matrix" aria-hidden="true">
                   <Legend>2</Legend>
                   <Led color="red" on={state.piano.unison >= 2} />
-                  <Legend>3</Legend>
-                </span>
-                <span className="tiny-led-row" aria-hidden="true">
+                  <Legend className="unison-three">3</Legend>
                   <Legend>1</Legend>
                   <Led color="red" on={state.piano.unison === 1 || state.piano.unison === 3} />
                 </span>
@@ -1935,15 +1936,15 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   </span>
                 </GroupBox>
                 <GroupBox title="Unison" className="unison-box">
-                  <span className="tiny-led-row" aria-hidden="true">
+                  {/* TWO stacked lamps (reference close-up): 2 and 1 print
+                      on their left, the 3 numeral BETWEEN the rows on the
+                      right — level 3 lights BOTH. */}
+                  <span className="unison-matrix" aria-hidden="true">
                     <Legend>2</Legend>
-                    <Led color="red" on={focused.voice.unison === 2} />
-                    <Legend>3</Legend>
-                    <Led color="red" on={focused.voice.unison === 3} />
-                  </span>
-                  <span className="tiny-led-row" aria-hidden="true">
+                    <Led color="red" on={focused.voice.unison >= 2} />
+                    <Legend className="unison-three">3</Legend>
                     <Legend>1</Legend>
-                    <Led color="red" on={focused.voice.unison === 1} />
+                    <Led color="red" on={focused.voice.unison === 1 || focused.voice.unison === 3} />
                   </span>
                   <PanelButton store={store} id="synth-unison" className="dark tiny" />
                 </GroupBox>
