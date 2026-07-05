@@ -36,7 +36,7 @@ function categoryWaveIndices(category: SynthWaveformCategory): number[] {
  * Panel front door for every physical control.
  *
  * Two truthful classes of controls:
- * - DECORATIVE (spec-excluded remainder, e.g. Morph A.T.):
+ * - DECORATIVE (spec-excluded remainder, e.g. Synth Mode's Extern position):
  *   visual position/lit state lives here and connects to nothing else.
  * - FUNCTIONAL (Piano, Organ, Layer Effects, Rotary, Master Level, pitch
  *   stick, Panic, Shift): reads and writes are forwarded to the canonical
@@ -393,6 +393,8 @@ export class PresentationStore {
           return state.transpose.on
         case 'morph-wheel':
           return state.morphArming === 'wheel'
+        case 'morph-at':
+          return state.morphArming === 'at'
         case 'morph-ctrlped':
           return state.morphArming === 'pedal'
         case 'effects-on':
@@ -1106,8 +1108,9 @@ export class PresentationStore {
           store.toggleLayerScene()
           return
         case 'morph-wheel':
+        case 'morph-at':
         case 'morph-ctrlped': {
-          const source: MorphSource = id === 'morph-wheel' ? 'wheel' : 'pedal'
+          const source: MorphSource = id === 'morph-wheel' ? 'wheel' : id === 'morph-at' ? 'at' : 'pedal'
           // Shift + source clears its assignments (manual p. 39).
           if (shift) store.clearMorph(source)
           else store.toggleMorphArming(source)
@@ -1482,6 +1485,9 @@ export class PresentationStore {
         return true
       case 'morph-wheel':
         store.monCopyMorphPress('wheel')
+        return true
+      case 'morph-at':
+        store.monCopyMorphPress('at')
         return true
       case 'morph-ctrlped':
         store.monCopyMorphPress('pedal')

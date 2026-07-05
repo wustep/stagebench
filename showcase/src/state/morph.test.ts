@@ -1,14 +1,15 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { FakePort } from '../test/fakes'
+import { FakePort, fakeStorageBoundary } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
 import { InstrumentStore } from './instrument'
 
 /**
- * morph.assignments — Wheel and Control Pedal morph sources: assignment
- * capture (start→end), interpolation across every destination (including
- * opposite directions), single-assignment removal by zeroing, per-source
- * clearing, indicators, program roundtrip, and the CC11 input path.
+ * morph.assignments — Wheel, A.T. and Control Pedal morph sources:
+ * assignment capture (start→end), interpolation across every destination
+ * (including opposite directions), single-assignment removal by zeroing,
+ * per-source clearing, indicators, program roundtrip, and the CC11 /
+ * channel-pressure input paths.
  */
 
 describe('morph.assignments — capture and interpolation', () => {
@@ -210,6 +211,93 @@ describe('morph.assignments — panel and input paths', () => {
     await waitFor(() => {
       expect(Number(knob.getAttribute('aria-valuenow'))).toBe(127)
       expect(Number(pedal.value)).toBe(127) // the on-screen pedal follows
+    })
+  })
+})
+
+describe('morph.assignments — A.T. via MIDI channel pressure (audit E10)', () => {
+  it('A.T. captures assignments and interpolates like the other sources', () => {
+    const store = new InstrumentStore()
+    store.toggleMorphArming('at')
+    expect(store.getState().lastEdit).toMatch(/Morph A\.T\./)
+    store.recordMorphEdit('at', 'delay-mix', 'A', 64, 127)
+    store.toggleMorphArming('at')
+    expect(store.getState().morph.at).toEqual([{ control: 'delay-mix', layer: 'A', start: 64, end: 127 }])
+    store.setMorphSource('at', 127)
+    expect(store.getState().chains.A.delay.mix).toBe(127)
+    store.setMorphSource('at', 0)
+    expect(store.getState().chains.A.delay.mix).toBe(64)
+    expect(store.morphSourcesFor('delay-mix')).toEqual(['at'])
+  })
+
+  it('A.T. assignments are program state and round-trip through Store', () => {
+    const store = new InstrumentStore()
+    store.recordMorphEdit('at', 'reverb-mix', 'A', 64, 120)
+    store.storePress()
+    store.storePress()
+    store.selectProgram(4)
+    expect(store.getState().morph.at).toHaveLength(0)
+    store.selectProgram(0)
+    expect(store.getState().morph.at).toEqual([{ control: 'reverb-mix', layer: 'A', start: 64, end: 120 }])
+  })
+
+  it('programs persisted before A.T. existed (morph = { wheel, pedal }) backfill an empty list', () => {
+    const seed = new InstrumentStore()
+    const strip = (slot: { name: string; snapshot: unknown }) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as { morph: Record<string, unknown> }
+      delete snapshot.morph.at
+      return { name: slot.name, snapshot }
+    }
+    const rawBank = seed.getState().programs.bank.map(strip)
+    const rawLive = seed.getState().programs.live.map(strip)
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({ version: 1, bank: rawBank, live: rawLive, liveMode: false, current: 0 }),
+    })
+    expect(() => new InstrumentStore(storage)).not.toThrow()
+    const restored = new InstrumentStore(storage)
+    expect(restored.getState().morph.at).toEqual([])
+    // The parked-source re-application on load must not crash either.
+    restored.setMorphSource('at', 127)
+    expect(() => restored.selectProgram(3)).not.toThrow()
+  })
+
+  it('panel: the A.T. button arms/clears its assignments like Wheel and Ctrl Pedal', () => {
+    renderApp()
+    const atButton = screen.getByRole('button', { name: 'Morph Assign Aftertouch' })
+    fireEvent.click(atButton)
+    expect(atButton.getAttribute('aria-pressed')).toBe('true')
+    const knob = screen.getByRole('slider', { name: 'Delay Dry/Wet' })
+    fireEvent.keyDown(knob, { key: 'End' }) // 64 -> 127 while armed
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Morph A\.T\. → Delay Dry\/Wet 64→127/)
+    expect(knob.getAttribute('data-morphed')).toBe('at')
+    fireEvent.click(atButton) // done
+    // Shift + A.T. clears the assignments (manual p. 39).
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(atButton)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Morph A\.T\. cleared/)
+    expect(document.querySelectorAll('[data-morphed]')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' })) // unlatch
+  })
+
+  it('MIDI channel pressure drives an assigned A.T. destination end-to-end', async () => {
+    const rendered = renderApp()
+    const atButton = screen.getByRole('button', { name: 'Morph Assign Aftertouch' })
+    fireEvent.click(atButton)
+    const knob = screen.getByRole('slider', { name: 'Reverb Dry/Wet' })
+    fireEvent.keyDown(knob, { key: 'End' })
+    fireEvent.click(atButton)
+    const port = new FakePort('p1', 'AT Dev')
+    rendered.midiAccess.addPort(port)
+    await waitFor(() => {
+      expect(screen.getByTestId('midi-status').getAttribute('data-status')).toBe('connected')
+    })
+    port.emit([0xd0, 127]) // full channel pressure
+    await waitFor(() => {
+      expect(Number(knob.getAttribute('aria-valuenow'))).toBe(127)
+    })
+    port.emit([0xd0, 0]) // released
+    await waitFor(() => {
+      expect(Number(knob.getAttribute('aria-valuenow'))).toBe(64)
     })
   })
 })

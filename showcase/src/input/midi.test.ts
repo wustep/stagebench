@@ -133,6 +133,26 @@ describe('piano.basic-inputs — Web MIDI boundary', () => {
     expect(handlers.wheel).toHaveBeenLastCalledWith(0)
   })
 
+  it('maps channel pressure (0xD0) to a continuous 0..1 aftertouch value (audit E10)', async () => {
+    const access = new FakeMidiAccess()
+    const handlers = makeHandlers()
+    const aftertouch = vi.fn()
+    handlers.setAftertouch = aftertouch
+    const manager = new MidiInputManager(handlers)
+    await manager.start(fakeMidiBoundary(access))
+    const port = new FakePort('p1', 'Test Piano 73')
+    access.addPort(port)
+    port.emit([0xd0, 127])
+    expect(aftertouch).toHaveBeenLastCalledWith(1)
+    port.emit([0xd0, 64])
+    expect(aftertouch).toHaveBeenLastCalledWith(64 / 127)
+    port.emit([0xd0, 0])
+    expect(aftertouch).toHaveBeenLastCalledWith(0)
+    // Poly key pressure (0xA0) is deliberately NOT merged into the channel value.
+    port.emit([0xa0, 60, 127])
+    expect(aftertouch).toHaveBeenLastCalledWith(0)
+  })
+
   it('maps 14-bit pitch bend to -1..1 with an exact center and full-scale ends', async () => {
     const access = new FakeMidiAccess()
     const handlers = makeHandlers()

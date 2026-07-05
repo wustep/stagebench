@@ -111,11 +111,9 @@ describe('visual.control-inventory — normalized hardware model', () => {
     // are always whole-Section, p. 41 note) and Mon/Copy (manual p. 43:
     // click latches the read-only monitor/copy mode, Shift + click latches
     // Paste) are functional; the spec-excluded menus remain decorative.
-    for (const id of ['store', 'program-dial', 'page-left', 'page-right', 'live-mode', 'solo-undo', 'program-1', 'program-8', 'layer-scene', 'split-onset', 'mstclk-tap', 'transpose-onset', 'morph-wheel', 'morph-ctrlped', 'perf-mod-wheel', 'prog-view', 'section-edit', 'preset-organ', 'preset-piano', 'preset-synth', 'mon-copy']) {
+    for (const id of ['store', 'program-dial', 'page-left', 'page-right', 'live-mode', 'solo-undo', 'program-1', 'program-8', 'layer-scene', 'split-onset', 'mstclk-tap', 'transpose-onset', 'morph-wheel', 'morph-at', 'morph-ctrlped', 'perf-mod-wheel', 'prog-view', 'section-edit', 'preset-organ', 'preset-piano', 'preset-synth', 'mon-copy']) {
       expect(getControl(id).decorative, id).toBe(false)
     }
-    // morph-at stays decorative: aftertouch is spec-excluded (no browser aftertouch).
-    expect(getControl('morph-at').decorative).toBe(true)
     // The rail has no layer-init button of its own (the reference photo's
     // outlined box holds SOLO/UNDO, SECTION EDIT with the LAYER INIT ▽
     // shift-legend below it, and MON/COPY).

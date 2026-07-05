@@ -309,8 +309,9 @@ export type SynthVoicePriority = 'Off' | 'Low' | 'High'
 export const SYNTH_VOICE_PRIORITIES: readonly SynthVoicePriority[] = ['Off', 'Low', 'High']
 
 /** Off/On/Wheel are required; Delayed and Pedal are optional scope (spec
- *  voice.vibrato.optionalModes). Aftertouch is spec-excluded (no browser
- *  aftertouch input) and never appears in this cycle. */
+ *  voice.vibrato.optionalModes). The vibrato Aftertouch mode is
+ *  spec-excluded and never appears in this cycle (the A.T. MORPH source is
+ *  a separate, functional thing — audit E10). */
 export type SynthVibratoMode = 'Off' | 'On' | 'Wheel' | 'Delayed' | 'Pedal'
 export const SYNTH_VIBRATO_MODES: readonly SynthVibratoMode[] = ['Off', 'On', 'Wheel', 'Delayed', 'Pedal']
 
@@ -624,7 +625,11 @@ export interface TransposeState {
 
 /* --------------------------------------------------------------- morphs -- */
 
-export type MorphSource = 'wheel' | 'pedal'
+/** The three hardware morph sources (manual p. 38). A.T. has no on-screen
+ *  input of its own — it moves only from MIDI channel pressure (audit E10),
+ *  and its button/LED/assignments behave exactly like the other two. */
+export type MorphSource = 'wheel' | 'at' | 'pedal'
+export const MORPH_SOURCES: readonly MorphSource[] = ['wheel', 'at', 'pedal']
 
 /** One morph destination: the source interpolates the control from `start`
  *  (source at minimum) to `end` (source at maximum), manual p. 38-39. */
@@ -645,9 +650,10 @@ export interface MorphAssignment {
   end: number
 }
 
-/** Program-stored morph assignments per source (A.T. is spec-excluded). */
+/** Program-stored morph assignments per source. */
 export interface MorphState {
   wheel: MorphAssignment[]
+  at: MorphAssignment[]
   pedal: MorphAssignment[]
 }
 
@@ -963,7 +969,8 @@ export interface InstrumentState {
   /** Position cursor shared by the Pattern Edit/Accent/Pan pages (manual
    *  p. 36). Not program state. */
   synthArpPatternCursor: number
-  /** Live morph source positions (mod wheel, control pedal 0..127). Not program state. */
+  /** Live morph source positions (mod wheel, MIDI channel pressure, control
+   *  pedal — 0..127 each). Not program state. */
   morphValues: Record<MorphSource, number>
   /** The ONE physical set of nine drawbars on the hardware: their current
    *  pose, 0..8 each. Dragging a drawbar always moves this; an organ layer
@@ -1100,7 +1107,7 @@ function baseInstrumentState(): InstrumentState {
       active: 'I',
       stored: { pianoA: true, pianoB: false, organA: true, organB: false, synthA: true, synthB: false, synthC: false },
     },
-    morph: { wheel: [], pedal: [] },
+    morph: { wheel: [], at: [], pedal: [] },
     masterClock: { bpm: 120, kbs: 'Off', pedalTap: false },
     transpose: { on: false, semitones: 0 },
     splitEdit: null,
@@ -1126,7 +1133,7 @@ function baseInstrumentState(): InstrumentState {
     synthArpMenuEdit: false,
     synthArpMenuPage: 1,
     synthArpPatternCursor: 0,
-    morphValues: { wheel: 0, pedal: 0 },
+    morphValues: { wheel: 0, at: 0, pedal: 0 },
     // The physical pose boots matching the power-on focused layer's (A's)
     // registration so nothing jumps when a layer first goes Drawbar Live.
     organDrawbarPose: [...DRAWBAR_INITIAL],
@@ -2657,8 +2664,7 @@ export class InstrumentStore {
    *  interpolated values immediately — not on the source's next move.
    *  Never dirties (interpolation writes use a bare commit). */
   private reapplyMorphSources(): void {
-    this.applyMorphNow('wheel')
-    this.applyMorphNow('pedal')
+    for (const source of MORPH_SOURCES) this.applyMorphNow(source)
   }
 
   /** Interpolates every destination of a source at its current position. */
@@ -2712,9 +2718,10 @@ export class InstrumentStore {
   }
 
   /**
-   * A morph source moved (mod wheel, on-screen control pedal, MIDI CC11):
-   * interpolate every assigned destination. This is a performance input — it
-   * never marks the program edited and never auto-stores a Live slot.
+   * A morph source moved (mod wheel, on-screen control pedal, MIDI CC1/CC11
+   * or channel-pressure aftertouch): interpolate every assigned destination.
+   * This is a performance input — it never marks the program edited and
+   * never auto-stores a Live slot.
    */
   setMorphSource(source: MorphSource, value: number): void {
     const clamped = clamp(value)
@@ -2729,7 +2736,7 @@ export class InstrumentStore {
     // green dot and the LED range can never disagree about an assignment.
     const layer = this.morphLayerFor(control)
     const sources: MorphSource[] = []
-    for (const source of ['wheel', 'pedal'] as const) {
+    for (const source of MORPH_SOURCES) {
       if (this.state.morph[source].some((a) => a.control === control && a.layer === layer)) sources.push(source)
     }
     return sources
@@ -2768,7 +2775,7 @@ export class InstrumentStore {
    *  resolved layer — raw start/end panel values (0..127), not LED indices. */
   morphAssignmentFor(control: string): MorphAssignment | null {
     const layer = this.morphLayerFor(control)
-    for (const source of ['wheel', 'pedal'] as const) {
+    for (const source of MORPH_SOURCES) {
       const found = this.state.morph[source].find((a) => a.control === control && a.layer === layer)
       if (found) return found
     }
@@ -3464,9 +3471,9 @@ export class InstrumentStore {
   }
 
   /** A Morph Assign source button while a latch is on (manual p. 43 "To
-   *  copy a Morph, press the WHEEL, A.T. or CTRLPED buttons" — A.T. stays
-   *  spec-excluded): copy captures that source's assignments; paste writes
-   *  them onto the PRESSED source (the assignment lists share one schema). */
+   *  copy a Morph, press the WHEEL, A.T. or CTRLPED buttons"): copy captures
+   *  that source's assignments; paste writes them onto the PRESSED source
+   *  (the assignment lists share one schema). */
   monCopyMorphPress(source: MorphSource): void {
     if (this.state.monCopy === 'copy') {
       const clipboard: MonCopyClipboard = { kind: 'morph', label: `Morph ${morphSourceLabel(source)}`, payload: deepClone(this.state.morph[source]) }
@@ -4744,12 +4751,21 @@ function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
     kbs: partialClock.kbs ?? 'Off',
     pedalTap: partialClock.pedalTap ?? false,
   }
+  // Programs persisted before A.T. became a morph source (audit E10) store
+  // only { wheel, pedal }: backfill the missing source list.
+  const partialMorph = cloned.morph as Partial<MorphState>
+  const normalizedMorph: MorphState = {
+    wheel: partialMorph.wheel ?? [],
+    at: partialMorph.at ?? [],
+    pedal: partialMorph.pedal ?? [],
+  }
   return {
     ...cloned,
     ...(normalizedOrgan ? { organ: normalizedOrgan } : {}),
     ...(normalizedSynth ? { synth: normalizedSynth } : {}),
     synthChains: normalizedSynthChains,
     masterClock: normalizedClock,
+    morph: normalizedMorph,
     fxGroupSynth: cloned.fxGroupSynth ?? false,
     kbHold: cloned.kbHold ?? false,
   }
@@ -4843,7 +4859,7 @@ function chainFromPreset(spec: EffectChainPresetSpec | undefined): EffectChainSt
 }
 
 function morphSourceLabel(source: MorphSource): string {
-  return source === 'wheel' ? 'Wheel' : 'Ctrl Pedal'
+  return source === 'wheel' ? 'Wheel' : source === 'at' ? 'A.T.' : 'Ctrl Pedal'
 }
 
 /** Signed semitone display: leading '+' for >= 0 (e.g. '+2', '-3', '+0'). */

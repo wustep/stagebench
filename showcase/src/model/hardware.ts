@@ -14,8 +14,9 @@ import type { SectionId } from './variant'
  * small, truthfully DECORATIVE remainder moves or presses and exposes
  * accessible presentation state but has no audio effect, matching spec
  * exclusions: Synth Mode's Extern position (the button cycles only between
- * the two real modes and never lands there) and Morph A.T. (no browser
- * aftertouch). Mon/Copy is functional (manual p. 43): its click latches the
+ * the two real modes and never lands there). Morph A.T. is functional: its
+ * source value moves from MIDI channel pressure (audit E10).
+ * Mon/Copy is functional (manual p. 43): its click latches the
  * monitor/copy mode (knobs display without writing; Layer / effect ON /
  * Morph / PROGRAM buttons copy) and Shift + click latches Paste.
  * The Organ PRESET button is functional
@@ -154,6 +155,9 @@ export const FUNCTIONAL_CONTROL_IDS: ReadonlySet<string> = new Set([
   'mstclk-tap',
   'transpose-onset',
   'morph-wheel',
+  // Morph A.T. is functional (audit E10): the source moves from MIDI channel
+  // pressure; the button arms assignments exactly like Wheel/Ctrl Pedal.
+  'morph-at',
   'morph-ctrlped',
   'perf-mod-wheel',
   'program-1',
@@ -325,7 +329,7 @@ const pianoControls = section('piano', [
 
 const programControls = section('program', [
   toggle('morph-wheel', 'Morph Assign Wheel', 'Morph Assign'),
-  push('morph-at', 'Morph Assign Aftertouch', 'Morph Assign'),
+  toggle('morph-at', 'Morph Assign Aftertouch', 'Morph Assign'),
   toggle('morph-ctrlped', 'Morph Assign Control Pedal', 'Morph Assign'),
   toggle('split-onset', 'Split On/Set', 'Split'),
   push('mstclk-tap', 'Master Clock Tap/Set', 'Mst Clk'),

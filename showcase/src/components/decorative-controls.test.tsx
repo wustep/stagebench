@@ -157,10 +157,11 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     fireEvent.click(screen.getByRole('button', { name: 'Organ Section On' }))
     fireEvent.click(screen.getByRole('button', { name: 'Store' }))
     fireEvent.click(screen.getByRole('button', { name: 'Live Mode' }))
-    // Synth Mode Select and the three Preset Library buttons are FUNCTIONAL
-    // now (spec.scope.optional Samples mode; manual p. 41-42) — see the
-    // "functional panel controls" tests and preset-library.test.ts for their
-    // canonical effects.
+    // Synth Mode Select, the three Preset Library buttons and Morph A.T.
+    // are FUNCTIONAL now (spec.scope.optional Samples mode; manual
+    // p. 41-42; audit E10) — see the "functional panel controls" tests,
+    // preset-library.test.ts and morph.test.ts for their canonical effects.
+    // Even so, none of these state writes may start audio on their own.
     fireEvent.click(screen.getByRole('button', { name: 'Morph Assign Aftertouch' }))
     fireEvent.keyDown(screen.getByRole('slider', { name: 'Mod Wheel' }), { key: 'ArrowUp' })
 
@@ -226,17 +227,20 @@ describe('interaction.decorative-controls — truthful movement and side-effect 
     fireEvent.pointerUp(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })
   })
 
-  it('the OLED content does not react to decorative program controls', () => {
+  it('every Programs-cluster control is functional now — Morph A.T. included (audit E10)', () => {
     // Program buttons, Store, the dial, Prog View (display view modes,
     // manual p. 42), the three Preset Library buttons, Mon/Copy (manual
-    // p. 43) and Section Edit (plain press = the p. 43 sticky latch,
-    // Shift = Layer Init) belong to the functional Programs cluster now —
-    // the one still-decorative control here is Morph A.T.
+    // p. 43), Section Edit (plain press = the p. 43 sticky latch,
+    // Shift = Layer Init) and — since audit E10 wired MIDI channel
+    // pressure — Morph A.T. all belong to the functional Programs cluster:
+    // pressing A.T. latches its arming mode on the OLED like Wheel/Pedal.
     renderApp()
-    const oled = screen.getByTestId('oled-program')
-    const before = oled.textContent
-    fireEvent.click(screen.getByRole('button', { name: 'Morph Assign Aftertouch' }))
-    expect(oled.textContent).toBe(before)
+    const atButton = screen.getByRole('button', { name: 'Morph Assign Aftertouch' })
+    fireEvent.click(atButton)
+    expect(atButton.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Morph A\.T\./)
+    fireEvent.click(atButton)
+    expect(atButton.getAttribute('aria-pressed')).toBe('false')
   })
 })
 

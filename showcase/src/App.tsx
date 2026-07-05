@@ -143,6 +143,9 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       // CC1 drives the canonical Wheel morph value; the on-screen wheel reads
       // the same value, so it follows the hardware wheel's position.
       setModWheel: (value) => instrument.setMorphSource('wheel', value * 127),
+      // Channel pressure drives the A.T. morph source (audit E10) — the one
+      // morph source with no on-screen input of its own.
+      setAftertouch: (value) => instrument.setMorphSource('at', value * 127),
       // Pitch bend routes through the panel's own pitch-stick handler so the
       // on-screen stick mirrors the device (engine bend + local visual).
       setPitchBend: (value) => store.setValue('perf-pitch-stick', value * 100),
@@ -592,8 +595,9 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             <b>Coverage</b> Every section is functional — keybed and pedals, Piano (all six types), Organ (all six
             models, presets, percussion), Synth (Analog + Samples, every oscillator category and filter), per-layer
             Layer Effects, Rotary, and the full Programs cluster (scenes, splits, morphs, master clock, transpose,
-            preset library, Mon/Copy, Section Edit). Visual-only by spec exclusion: Synth Mode&apos;s Extern position
-            and Morph A.T. (no browser aftertouch). MIDI output (Extern section, manual ch. 9) is out of scope.
+            preset library, Mon/Copy, Section Edit). Morph A.T. assigns like the other sources and moves from MIDI
+            channel pressure (browsers have no other aftertouch input). Visual-only by spec exclusion: Synth
+            Mode&apos;s Extern position. MIDI output (Extern section, manual ch. 9) is out of scope.
           </span>
         </span>
       </footer>

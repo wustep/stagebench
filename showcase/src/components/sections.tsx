@@ -935,14 +935,15 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
           <GroupBox title="Morph Assign" className="morph-box">
             {/* Printed LED + label row above the blank caps (reference); each
                 LED lights truthfully from the same morph-arming latch its
-                button toggles (A.T. is spec-excluded, so its LED stays dark). */}
+                button toggles (A.T. included — its source value moves from
+                MIDI channel pressure, audit E10). */}
             <span className="morph-legend-row" aria-hidden="true">
               <span className="tiny-led-row">
                 <Led color="green" on={state.morphArming === 'wheel'} />
                 <Legend>WHEEL ⇟</Legend>
               </span>
               <span className="tiny-led-row">
-                <Led color="green" />
+                <Led color="green" on={state.morphArming === 'at'} />
                 <Legend>A.T. ⇟</Legend>
               </span>
               <span className="tiny-led-row">
@@ -1675,8 +1676,9 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     {/* Reference layout: WHL/DLY/ON LED column, A.T./PED LED
                         column, MENU legend + red-framed button at the right.
                         LEDs light truthfully from the layer's vibrato mode;
-                        A.T. stays unlit — aftertouch is spec-excluded (no
-                        browser aftertouch input). */}
+                        A.T. stays unlit — the vibrato aftertouch MODE is
+                        spec-excluded (the A.T. MORPH source is functional,
+                        audit E10). */}
                     <span className="vibrato-grid">
                       <span className="vibrato-led-col" aria-hidden="true">
                         <span className="tiny-led-row">

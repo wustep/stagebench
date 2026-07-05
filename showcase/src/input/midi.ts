@@ -25,6 +25,10 @@ export interface MidiHandlers {
   /** Pitch bend — normalized -1..1 (14-bit, center 8192 = 0); drives the
    *  pitch stick's ±2 semitone bend. */
   setPitchBend?(value: number): void
+  /** Channel pressure (0xD0) — continuous 0..1; drives the A.T. morph
+   *  source. Aftertouch has no browser input of its own, but Web MIDI
+   *  delivers a hardware controller's channel pressure fine (audit E10). */
+  setAftertouch?(value: number): void
   /** External MIDI clock lock (manual p. 40): a BPM estimated from real-time
    *  clock ticks (0xF8, 24 per quarter), or null when the device stops
    *  (0xFC) — the master clock reverts to its internal tempo. */
@@ -36,6 +40,7 @@ export interface MidiHandlers {
 const NOTE_ON = 0x90
 const NOTE_OFF = 0x80
 const CONTROL_CHANGE = 0xb0
+const CHANNEL_PRESSURE = 0xd0
 const PITCH_BEND = 0xe0
 const CLOCK_TICK = 0xf8
 const CLOCK_START = 0xfa
@@ -179,6 +184,11 @@ export class MidiInputManager {
       else if (data[1] === CC_SOFT) this.handlers.setSoft?.(data[2]! >= 64)
       else if (data[1] === CC_EXPRESSION) this.handlers.setControlPedal?.(data[2]! / 127)
       else if (data[1] === CC_MOD_WHEEL) this.handlers.setModWheel?.(data[2]! / 127)
+    } else if (statusByte === CHANNEL_PRESSURE) {
+      // Two-byte message: status + pressure. Poly key pressure (0xA0) is
+      // deliberately not folded in — the Stage 4's own keybed sends channel
+      // pressure, and a per-note merge would be a different (faked) signal.
+      this.handlers.setAftertouch?.(data[1]! / 127)
     } else if (statusByte === PITCH_BEND && data.length >= 3) {
       // 14-bit LSB/MSB, center 8192 -> 0. The positive half divides by 8191
       // so a full-up bend (16383) reaches exactly +1.
