@@ -26,8 +26,10 @@
      control legends and a square Eurostile/Microgramma-like tech face for
      the section + box titles; the displays use a dot-matrix face. All
      bundled via @fontsource (see main.tsx). */
-	--font-legend: "Roboto Condensed", "Helvetica Neue", Arial, system-ui, sans-serif;
-	--font-tech: "Days One", "Eurostile", "Bank Gothic", "Trebuchet MS", sans-serif;
+	--font-legend:
+		"Roboto Condensed", "Helvetica Neue", Arial, system-ui, sans-serif;
+	--font-tech:
+		"Days One", "Eurostile", "Bank Gothic", "Trebuchet MS", sans-serif;
 	--font-dot: "Doto", "VT323", monospace;
 	font-family: var(--font-legend);
 	color: #26221f;
@@ -136,12 +138,12 @@ body {
 	box-shadow:
 		/* outer wall falling away */
 		inset 0.14cqw 0 0.16cqw -0.04cqw rgba(20, 5, 8, 0.5),
-		/* top edge catching the light */
-		inset 0 0.08cqw 0.1cqw rgba(255, 215, 215, 0.22),
-		/* inner bevel highlight against the seam */
-		inset -0.16cqw 0 0.1cqw -0.06cqw rgba(255, 200, 200, 0.16),
-		/* elevation: cast shadow onto the deck */
-		0.16cqw 0 0.28cqw rgba(30, 8, 12, 0.38);
+		/* top edge catching the light */ inset 0 0.08cqw 0.1cqw
+			rgba(255, 215, 215, 0.22),
+		/* inner bevel highlight against the seam */ inset -0.16cqw 0
+			0.1cqw -0.06cqw rgba(255, 200, 200, 0.16),
+		/* elevation: cast shadow onto the deck */ 0.16cqw 0 0.28cqw
+			rgba(30, 8, 12, 0.38);
 }
 
 .side-rail.right {
@@ -993,7 +995,8 @@ body {
 
 .group-box {
 	position: relative;
-	border: 0.07cqw solid var(--panel-line);
+	/* Photo: the printed outlines are a touch heavier than a hairline. */
+	border: 0.1cqw solid var(--panel-line);
 	/* Photo: the printed outlines round at ~0.2cqw — noticeably tighter
      than the plate corners. */
 	border-radius: 0.2cqw;
@@ -1030,18 +1033,18 @@ body {
 }
 
 /* Reference print: box titles are small white text sitting in a break of
-   the border line — a snug stadium pill whose fill matches the plate, so
-   the patch never reads as a gray block over neighbouring colors.
-   Photo: the outline cuts through the vertical MIDDLE of the title text
-   (title block ≈0.35cqw tall → top ≈ -half). */
+   the border line — the text is TRANSPARENT on the panel (no chip), so the
+   patch behind it must exactly match the local plate color to read as a
+   paint gap. `--title-patch` is set per plate context below (the plates
+   are subtle vertical gradients, so one flat --panel reads as a slab).
+   Photo: the outline cuts through the vertical MIDDLE of the title text. */
 .group-box-title {
 	position: absolute;
-	top: -0.17cqw;
+	top: -0.15cqw;
 	left: 50%;
 	transform: translateX(-50%);
-	background: var(--panel);
-	padding: 0.01cqw 0.24cqw 0.03cqw;
-	border-radius: 0.7cqw;
+	background: var(--title-patch, var(--panel));
+	padding: 0.01cqw 0.16cqw 0.03cqw;
 	font-size: 0.23cqw;
 	line-height: 1.35;
 	/* Days One ships one (naturally heavy) weight — synthetic bolding
@@ -1055,6 +1058,46 @@ body {
 
 .exposed-red .group-box-title {
 	background: var(--chassis-mid);
+}
+
+/* --title-patch: the flat color of the local plate gradient at each box's
+   top line, so the title's masking patch disappears into the panel (the
+   plates run #414855 -> --panel (30%) -> --panel-dark). Values sampled
+   from the rendered gradient beside each title. */
+.organ-groups > .group-box {
+	--title-patch: #404753;
+}
+
+.piano-select {
+	--title-patch: #3b424e;
+}
+
+.arp-box {
+	--title-patch: #404754;
+}
+
+.voice-box,
+.vibrato-box {
+	--title-patch: #3d4450;
+}
+
+.synth-bottom .group-box {
+	--title-patch: #393f4b;
+}
+
+.effects-grid > .mod1-box,
+.effects-grid > .delay-box {
+	--title-patch: #414854;
+}
+
+.effects-grid > .mod2-box {
+	--title-patch: #3e4551;
+}
+
+.effects-grid > .amp-sim-box,
+.effects-grid > .comp-box,
+.effects-grid > .reverb-box {
+	--title-patch: #39404c;
 }
 
 /* LEDs */
@@ -2725,9 +2768,14 @@ body {
 	height: 3.8cqw;
 	margin-top: 0.35cqw;
 	display: flex;
-	gap: 0.3cqw;
+	/* Photo: the three boxes TILE — neighbours share one border line. */
+	gap: 0;
 	align-items: stretch;
 	min-width: 0;
+}
+
+.organ-groups > .group-box + .group-box {
+	margin-left: -0.09cqw;
 }
 
 /* Three separate outlined boxes; smaller titles so ORGAN MODEL / VIB/CHORUS
@@ -2758,7 +2806,7 @@ body {
 	text-align: center;
 	line-height: 1.15;
 	max-width: 2.2cqw;
-	top: -0.3cqw;
+	top: -0.26cqw;
 }
 
 /* Headroom for the MODEL line dipping into the box (photo: the FARF/PIPE1
@@ -3985,8 +4033,8 @@ body {
 .amp-box > .group-box-title,
 .unison-box > .group-box-title {
 	color: var(--legend);
-	background: var(--panel);
-	padding: 0.02cqw 0.3cqw 0.04cqw;
+	background: var(--title-patch, var(--panel));
+	padding: 0.02cqw 0.16cqw 0.04cqw;
 }
 
 /* Photo: the fader/AUX KB column only occupies the UPPER part of the plate
@@ -4186,7 +4234,13 @@ body {
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 0.08cqw;
+	/* Photo: ARPEGGIATOR/GATE's bottom border IS the VOICE/VIBRATO top
+     border — the three boxes tile with shared lines. */
+	gap: 0;
+}
+
+.arp-column > .voice-vibrato-row {
+	margin-top: -0.09cqw;
 }
 
 .arp-row {
@@ -4287,12 +4341,16 @@ body {
 
 .voice-vibrato-row {
 	display: flex;
-	gap: 0.1cqw;
+	gap: 0;
 	/* Fill the synth-top column's spare height instead of leaving a dead
      band between the display dials and the bottom boxes. */
 	flex: 1;
 	align-items: stretch;
 	min-height: 0;
+}
+
+.voice-vibrato-row > .group-box + .group-box {
+	margin-left: -0.09cqw;
 }
 
 /* Voice: mode cluster left, GLIDE knob right (reference proportions). The
@@ -4873,7 +4931,24 @@ body {
 		"mod1 delay delay"
 		"mod2 delay delay"
 		"ampsim comp reverb";
-	gap: 0.2cqw;
+	/* Photo: the six boxes TILE — every neighbour pair shares one border
+     line (negative margins overlap the doubled borders). */
+	gap: 0;
+}
+
+.effects-grid > .mod2-box,
+.effects-grid > .amp-sim-box {
+	margin-top: -0.09cqw;
+}
+
+.effects-grid > .delay-box {
+	margin-left: -0.09cqw;
+}
+
+.effects-grid > .comp-box,
+.effects-grid > .reverb-box {
+	margin-top: -0.09cqw;
+	margin-left: -0.09cqw;
 }
 
 .fx-box {

@@ -2307,3 +2307,24 @@ Chip/tag geometry pass from a photo close-up of the Mod 1 cluster.
   effect boxes; Piano Select type rows breathe at photo pitch
   (row gap 0.08 → 0.12cqw).
 - Gates: typecheck, lint, suite 614/614, verify:layout 12/12.
+
+### 62 — Tiled box borders + transparent title patches (2026-07-05)
+
+Box-outline pass from a Layer Effects render: neighbouring boxes share
+border lines, and the title text sits in a real paint gap.
+
+- Group-box outlines thicken 0.07 → 0.09cqw (photo weight).
+- Boxes TILE like the hardware print: the effects grid (Mod 1/Mod 2/Amp
+  Sim + Delay/Comp/Reverb), the organ trio (Organ Model / Vib/Chorus /
+  B3 Percussion) and the synth trio (Arp/Gate over Voice | Vibrato) drop
+  their gaps to zero, with -0.09cqw margins overlapping the doubled
+  borders into one shared line per junction.
+- Title "pills" dissolve: radius 0.7 → 0, side padding 0.24 → 0.16cqw,
+  and the masking background now matches the LOCAL plate color via a
+  per-context `--title-patch` (the plates are vertical gradients, so
+  flat --panel read as a gray slab). Values pixel-sampled from the
+  rendered gradient beside each title — every patch now sits within one
+  RGB unit of its surroundings.
+- Titles center on the line: base top -0.17 → -0.15cqw (border center
+  moved with the thicker line), two-line ORGAN MODEL -0.3 → -0.26cqw.
+- Gates: typecheck, lint, suite 614/614, verify:layout 12/12.
