@@ -66,6 +66,94 @@ const REAR_LEGENDS: [string, number][] = [
   ['POWER ON/OFF', 65.3],
 ]
 
+/** Chassis-screw left% offsets along the deck's bottom lip (reference photo);
+ *  rendered on the real deck and again in the magnifier lens clone. */
+const DECK_SCREWS = [13.6, 32.6, 40.7, 52.6, 76.4, 94.8]
+
+/** Reference-overlay compare tool. The photo is served by the dev server's
+ *  /reference bridge (vite.config.ts) from the repo-root reference/ dir —
+ *  gitignored and never bundled, so published builds truthfully report it
+ *  as unavailable instead of shipping Nord's product shot. */
+const REFERENCE_PHOTO_URL = '/reference/nord-stage-4-73.jpg'
+/** The chassis' bounding box inside that photo, as fractions of the full
+ *  frame (the product shot has white margins and a gray drop shadow).
+ *  Measured as the bbox of red-dominant pixels (r − max(g,b) > 30) on a
+ *  1450px-wide rasterization. The overlay stretches the photo so this box
+ *  lands exactly on the rendered chassis (photo crop aspect 3.17 vs chassis
+ *  3.0951 — alignment at the edges beats preserving the ~2% difference). */
+const REFERENCE_PHOTO_CROP = { x: 0.1117, y: 0.1222, w: 0.7766, h: 0.735 }
+
+/** The rendered chassis' center expressed in photo coordinates — the pivot
+ *  for the alignment-nudge scale, so scaling zooms about what you look at. */
+const REFERENCE_PHOTO_ORIGIN = `${(REFERENCE_PHOTO_CROP.x + REFERENCE_PHOTO_CROP.w / 2) * 100}% ${(REFERENCE_PHOTO_CROP.y + REFERENCE_PHOTO_CROP.h / 2) * 100}%`
+
+type OverlayMode = 'ghost' | 'diff' | 'wipe'
+/** Photo alignment nudge: dx/dy in % of the chassis box, scale about its
+ *  center. Compensates the photo-vs-render aspect residue (crop 3.17 vs
+ *  chassis 3.0951) so diff mode can be zeroed onto the region under study. */
+interface OverlayNudge {
+  dx: number
+  dy: number
+  scale: number
+}
+const NUDGE_IDENTITY: OverlayNudge = { dx: 0, dy: 0, scale: 1 }
+
+/** The photo ghosted over a chassis box. Rendered inside the real chassis
+ *  and again inside the magnifier's lens clone, so the loupe magnifies the
+ *  comparison too. Non-interactive; mode paints via data-mode (styles.css):
+ *  ghost = plain opacity, diff = mix-blend-mode difference (matches go
+ *  black), wipe = photo clipped to the left of the seam. */
+function ReferenceGhost({
+  mode,
+  opacity,
+  wipe,
+  nudge,
+  testId,
+  onError,
+}: {
+  mode: OverlayMode
+  opacity: number
+  wipe: number
+  nudge: OverlayNudge
+  testId?: string
+  onError?: () => void
+}) {
+  // translate() percentages resolve against the img's own box (1/crop.w of
+  // the chassis wide), so chassis-relative nudges scale down by the crop.
+  const dxImg = +(nudge.dx * REFERENCE_PHOTO_CROP.w).toFixed(4)
+  const dyImg = +(nudge.dy * REFERENCE_PHOTO_CROP.h).toFixed(4)
+  return (
+    <div
+      className="reference-overlay"
+      data-mode={mode}
+      data-testid={testId}
+      aria-hidden="true"
+      style={{
+        opacity,
+        clipPath: mode === 'wipe' ? `inset(0 ${100 - wipe}% 0 0)` : undefined,
+      }}
+    >
+      {/* The full product shot, offset/stretched so its measured chassis
+          bbox covers this element (= the chassis box); the chassis'
+          overflow:hidden clips the photo's margins. */}
+      <img
+        src={REFERENCE_PHOTO_URL}
+        alt=""
+        draggable={false}
+        style={{
+          left: `${(-REFERENCE_PHOTO_CROP.x / REFERENCE_PHOTO_CROP.w) * 100}%`,
+          top: `${(-REFERENCE_PHOTO_CROP.y / REFERENCE_PHOTO_CROP.h) * 100}%`,
+          width: `${100 / REFERENCE_PHOTO_CROP.w}%`,
+          height: `${100 / REFERENCE_PHOTO_CROP.h}%`,
+          transform: `translate(${dxImg}%, ${dyImg}%) scale(${nudge.scale})`,
+          transformOrigin: REFERENCE_PHOTO_ORIGIN,
+        }}
+        onError={onError}
+      />
+    </div>
+  )
+}
+
 export interface AppProps {
   audioBoundary?: AudioBoundary
   midiBoundary?: MidiBoundary
@@ -142,61 +230,204 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   const [zoomedSection, setZoomedSection] = useState<ZoomableSectionId | null>(null)
 
   // Magnifier loupe: while toggled on, a floating lens follows the pointer
-  // over the deck block (top-rail rear legends + control deck) showing a
-  // 2.6x view of the panel under the cursor. The lens content is a second,
-  // inert render of the deck (aria-hidden, pointer-events none) — purely
-  // visual, the real deck stays interactive.
+  // over the whole chassis — control deck AND keybed — showing a 2.6x view
+  // of the instrument under the cursor. The lens content is a second, inert
+  // render of the chassis (aria-hidden, pointer-events none) — purely
+  // visual, the real instrument stays interactive: notes played under the
+  // loupe light up inside it (the clone is live). Cloning the full chassis
+  // means the view past the edges shows what is really there — page
+  // background above/beside — instead of a flat red fill.
   const [magnify, setMagnify] = useState(false)
-  const realDeckRef = useRef<HTMLDivElement>(null)
+  const realChassisRef = useRef<HTMLDivElement>(null)
+
+  // Reference-photo overlay: opt-in ghost of the real Nord Stage 4 product
+  // shot stretched over the chassis at adjustable opacity, for eyeballing
+  // visual drift against reference/nord-stage-4-73.jpg. Always off by
+  // default and never persisted — it is a compare tool, not panel paint
+  // (the visual spec forbids rendering the reference as background).
+  const [overlay, setOverlay] = useState(false)
+  const [overlayOpacity, setOverlayOpacity] = useState(50)
+  const [overlayMissing, setOverlayMissing] = useState(false)
+  const [overlayMode, setOverlayMode] = useState<OverlayMode>('ghost')
+  // Wipe seam position, % of chassis width; photo shows left of the seam.
+  const [overlayWipe, setOverlayWipe] = useState(50)
+  const [overlayNudge, setOverlayNudge] = useState<OverlayNudge>(NUDGE_IDENTITY)
+  // Blink compare: while V is held the ghost snaps to the full photo
+  // (mode ghost, opacity 100), release returns to the configured view —
+  // position drift "jumps" between frames far more than in a static ghost.
+  const [overlayPeek, setOverlayPeek] = useState(false)
+  const overlayActive = overlay && !overlayMissing
+
+  // Compare-tool keys, live while the overlay shows (and no zoom dialog):
+  // V peeks, arrows nudge ±0.1% (Shift+vertical scales ±0.2%), 0 resets.
+  // Form controls and the wipe seam keep their own native arrow behavior.
+  useEffect(() => {
+    if (!overlayActive || zoomedSection) return
+    const isFormTarget = (event: KeyboardEvent) =>
+      event.target instanceof Element && event.target.closest('input, select, textarea, [role="slider"]') !== null
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isFormTarget(event)) return
+      if (event.code === 'KeyV') {
+        if (!event.repeat) setOverlayPeek(true)
+        return
+      }
+      if (event.code === 'Digit0') {
+        setOverlayNudge(NUDGE_IDENTITY)
+        return
+      }
+      if (!event.code.startsWith('Arrow')) return
+      event.preventDefault()
+      const round1 = (value: number) => Math.round(value * 10) / 10
+      setOverlayNudge((nudge) => {
+        if (event.shiftKey) {
+          const step = event.code === 'ArrowUp' || event.code === 'ArrowRight' ? 0.002 : -0.002
+          return { ...nudge, scale: Math.round((nudge.scale + step) * 1000) / 1000 }
+        }
+        if (event.code === 'ArrowLeft') return { ...nudge, dx: round1(nudge.dx - 0.1) }
+        if (event.code === 'ArrowRight') return { ...nudge, dx: round1(nudge.dx + 0.1) }
+        if (event.code === 'ArrowUp') return { ...nudge, dy: round1(nudge.dy - 0.1) }
+        return { ...nudge, dy: round1(nudge.dy + 0.1) }
+      })
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'KeyV') setOverlayPeek(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      setOverlayPeek(false)
+    }
+  }, [overlayActive, zoomedSection])
+
+  // Wipe seam drag: chassis-relative pointer x, clamped off the edges.
+  const onWipeDrag = (event: ReactPointerEvent) => {
+    const rect = realChassisRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0) return
+    setOverlayWipe(Math.min(98, Math.max(2, ((event.clientX - rect.left) / rect.width) * 100)))
+  }
   const lensRef = useRef<HTMLDivElement>(null)
   const lensCanvasRef = useRef<HTMLDivElement>(null)
   const lensCursorRef = useRef<HTMLSpanElement>(null)
   const LENS_W = 340
   const LENS_H = 230
   const LENS_K = 2.6
-  const onLensMove = (event: ReactPointerEvent) => {
-    const deck = realDeckRef.current
+  /** Lens motion time constant: the glide closes ~63% of the remaining gap
+   *  every 60ms. Tight enough that normal sweeps feel attached to the
+   *  pointer, soft enough that discontinuities — releasing a drag-frozen
+   *  lens, the above/below flip at the screen edge — become a quick glide
+   *  instead of a teleport. */
+  const LENS_TAU_MS = 60
+  // Where the lens WANTS to be (written per pointermove) vs where it IS
+  // (advanced toward the target each frame by the rAF loop below). left/top
+  // place the lens box; cx/cy are the magnified panel point, which drives
+  // both the canvas transform and the cursor clone. shown=false makes the
+  // next appearance snap instead of gliding in from a stale position.
+  const lensTargetRef = useRef({ left: 0, top: 0, cx: 0, cy: 0, shown: false })
+  const lensPosRef = useRef({ left: 0, top: 0, cx: 0, cy: 0 })
+
+  const applyLensPosition = () => {
     const lens = lensRef.current
     const canvas = lensCanvasRef.current
-    if (!deck || !lens || !canvas) return
+    const pos = lensPosRef.current
+    if (!lens || !canvas) return
+    lens.style.left = `${pos.left}px`
+    lens.style.top = `${pos.top}px`
+    canvas.style.transform = `translate(${LENS_W / 2 - pos.cx * LENS_K}px, ${LENS_H / 2 - pos.cy * LENS_K}px) scale(${LENS_K})`
+    const cursorEl = lensCursorRef.current
+    if (cursorEl) {
+      cursorEl.style.left = `${pos.cx}px`
+      cursorEl.style.top = `${pos.cy}px`
+    }
+  }
+
+  // The smoothing loop: frame-rate-independent exponential ease toward the
+  // target while the loupe is on. Idles (no style writes) when the lens is
+  // hidden or already settled on the target.
+  useEffect(() => {
+    if (!magnify) return
+    let raf = 0
+    let last = performance.now()
+    const tick = (now: number) => {
+      const target = lensTargetRef.current
+      const pos = lensPosRef.current
+      const dt = now - last
+      last = now
+      raf = requestAnimationFrame(tick)
+      if (!target.shown) return
+      const gap = Math.max(
+        Math.abs(target.left - pos.left),
+        Math.abs(target.top - pos.top),
+        Math.abs(target.cx - pos.cx),
+        Math.abs(target.cy - pos.cy),
+      )
+      if (gap < 0.05) return
+      const alpha = 1 - Math.exp(-dt / LENS_TAU_MS)
+      pos.left += (target.left - pos.left) * alpha
+      pos.top += (target.top - pos.top) * alpha
+      pos.cx += (target.cx - pos.cx) * alpha
+      pos.cy += (target.cy - pos.cy) * alpha
+      applyLensPosition()
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [magnify])
+
+  const onLensMove = (event: ReactPointerEvent) => {
+    const chassis = realChassisRef.current
+    const lens = lensRef.current
+    const canvas = lensCanvasRef.current
+    if (!chassis || !lens || !canvas) return
     const hoveredCursor = event.target instanceof Element ? getComputedStyle(event.target).cursor : ''
     // Drag freeze: value drags capture the pointer on the control
     // (controls.tsx onPointerDown), so while a button is held the event
     // target stays the dragged resize-cursor control. Skipping all updates
     // holds the lens (and its cursor clone) where the drag started, so the
     // gesture doesn't carry the loupe away — the clone is a live render, so
-    // the value change stays visible inside the frozen lens.
+    // the value change stays visible inside the frozen lens. On release the
+    // rAF glide catches the lens up to the pointer instead of teleporting.
+    // Key presses are exempt: holding a note while sweeping (glissando)
+    // should carry the loupe along, pressed keys lighting up inside it.
     if (event.buttons !== 0 && (hoveredCursor === 'ns-resize' || hoveredCursor === 'ew-resize')) return
-    const r = deck.getBoundingClientRect()
-    const x = event.clientX - r.left
-    const y = event.clientY - r.top
-    if (x < 0 || y < 0 || x > r.width || y > r.height) {
+    // The loupe covers the WHOLE chassis — control deck and keybed alike
+    // (the clone already renders both); it hides past the chassis edges.
+    const c = chassis.getBoundingClientRect()
+    const x = event.clientX - c.left
+    const y = event.clientY - c.top
+    const target = lensTargetRef.current
+    if (x < 0 || y < 0 || x > c.width || y > c.height) {
       lens.style.visibility = 'hidden'
+      target.shown = false
       return
     }
-    lens.style.visibility = 'visible'
     // Lens floats beside the cursor, flipping above/below to stay on screen.
-    const left = Math.min(event.clientX + 20, window.innerWidth - LENS_W - 8)
-    const top = event.clientY - LENS_H - 20 < 8 ? event.clientY + 22 : event.clientY - LENS_H - 20
-    lens.style.left = `${left}px`
-    lens.style.top = `${top}px`
-    // The clone renders at the real deck's width (same cqw scale), then the
-    // transform magnifies and centers the cursor point in the lens.
-    canvas.style.width = `${r.width}px`
-    canvas.style.height = `${r.height}px`
-    canvas.style.transform = `translate(${LENS_W / 2 - x * LENS_K}px, ${LENS_H / 2 - y * LENS_K}px) scale(${LENS_K})`
-    // Cursor clone: parked at the same panel point inside the canvas (so the
-    // scale transform magnifies it too), mirroring the hovered control's
-    // effective CSS cursor via the data-cursor attribute (see styles.css).
+    target.left = Math.min(event.clientX + 20, window.innerWidth - LENS_W - 8)
+    target.top = event.clientY - LENS_H - 20 < 8 ? event.clientY + 22 : event.clientY - LENS_H - 20
+    // The clone renders at the real chassis' width (same cqw scale), then
+    // the transform magnifies and centers the cursor point in the lens.
+    target.cx = x
+    target.cy = y
+    canvas.style.width = `${c.width}px`
+    canvas.style.height = `${c.height}px`
+    // Cursor clone glyph swaps instantly (easing a glyph swap means showing
+    // the wrong cursor); its position eases with everything else.
     const cursorEl = lensCursorRef.current
     if (cursorEl) {
-      cursorEl.style.left = `${x}px`
-      cursorEl.style.top = `${y}px`
       cursorEl.dataset.cursor = (LENS_CURSOR_KINDS as readonly string[]).includes(hoveredCursor) ? hoveredCursor : 'default'
+    }
+    if (!target.shown) {
+      // First appearance (or re-entry): materialize at the pointer, don't
+      // glide in from wherever the lens last was.
+      target.shown = true
+      lensPosRef.current = { left: target.left, top: target.top, cx: target.cx, cy: target.cy }
+      applyLensPosition()
+      lens.style.visibility = 'visible'
     }
   }
   const onLensLeave = () => {
     if (lensRef.current) lensRef.current.style.visibility = 'hidden'
+    lensTargetRef.current.shown = false
   }
 
   const [chrome, setChrome] = useState<'minimal' | 'full'>(() => {
@@ -384,8 +615,8 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         onPointerMove={magnify ? onLensMove : undefined}
         onPointerLeave={magnify ? onLensLeave : undefined}
       >
-        <div className="chassis" data-testid="chassis">
-          <div className="deck-block" data-testid="deck-block" style={{ height: '54%' }} ref={realDeckRef}>
+        <div className="chassis" data-testid="chassis" ref={realChassisRef}>
+          <div className="deck-block" data-testid="deck-block" style={{ height: '54%' }}>
             {/* Rear-connector legends printed on the top lip (reference
                 photo); purely decorative print — the jacks are on the back. */}
             <div className="top-rail" aria-hidden="true">
@@ -398,7 +629,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             <div className="control-deck" data-testid="control-deck">
               {/* Chassis screws along the deck's bottom lip (reference). */}
               <span className="deck-screws" aria-hidden="true">
-                {[13.6, 32.6, 40.7, 52.6, 76.4, 94.8].map((left) => (
+                {DECK_SCREWS.map((left) => (
                   <i key={left} style={{ left: `${left}%` }} />
                 ))}
               </span>
@@ -418,6 +649,45 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             <Keybed controller={controller} instrument={instrument} />
             <div className="bottom-rail" aria-hidden="true" />
           </div>
+          {overlayActive && (
+            <ReferenceGhost
+              mode={overlayPeek ? 'ghost' : overlayMode}
+              opacity={overlayPeek ? 1 : overlayOpacity / 100}
+              wipe={overlayWipe}
+              nudge={overlayNudge}
+              testId="reference-overlay"
+              onError={() => setOverlayMissing(true)}
+            />
+          )}
+          {overlayActive && overlayMode === 'wipe' && (
+            <div
+              className="overlay-wipe"
+              data-testid="overlay-wipe"
+              role="slider"
+              tabIndex={0}
+              aria-label="Overlay wipe position"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(overlayWipe)}
+              style={{ left: `${overlayWipe}%` }}
+              onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId)
+                onWipeDrag(event)
+              }}
+              onPointerMove={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) onWipeDrag(event)
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+                event.preventDefault()
+                event.stopPropagation()
+                const step = (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 5 : 1)
+                setOverlayWipe((wipe) => Math.min(98, Math.max(2, wipe + step)))
+              }}
+            >
+              <span className="overlay-wipe-grip" aria-hidden="true" />
+            </div>
+          )}
         </div>
       </div>
       {zoomedSection && (
@@ -430,29 +700,51 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
       )}
       {magnify && (
         <div className="magnify-lens" ref={lensRef} aria-hidden="true" data-testid="magnify-lens">
-          {/* Inert visual clone of the deck block (top-rail rear legends +
-              control deck) at the same cqw scale; the transform above
-              magnifies the area under the cursor. */}
+          {/* Inert visual clone of the whole chassis (deck block + keybed)
+              at the same cqw scale; the transform above magnifies the area
+              under the cursor. Cloning past the deck keeps the view honest
+              at the panel's edges: page background and keybed, not red. */}
           <div className="lens-canvas" ref={lensCanvasRef} inert>
-            <div className="deck-block lens-deck">
-              <div className="top-rail" aria-hidden="true">
-                {REAR_LEGENDS.map(([label, left]) => (
-                  <span key={label} className="rear-legend" style={{ left: `${left}%` }}>
-                    {label}
+            <div className="chassis lens-chassis">
+              <div className="deck-block" style={{ height: '54%' }}>
+                <div className="top-rail" aria-hidden="true">
+                  {REAR_LEGENDS.map(([label, left]) => (
+                    <span key={label} className="rear-legend" style={{ left: `${left}%` }}>
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="control-deck">
+                  <span className="deck-screws" aria-hidden="true">
+                    {DECK_SCREWS.map((left) => (
+                      <i key={left} style={{ left: `${left}%` }} />
+                    ))}
                   </span>
-                ))}
+                  <PerformanceSection store={store} instrument={instrument} />
+                  <OrganSection store={store} instrument={instrument} />
+                  <PianoSection store={store} instrument={instrument} engine={engine} />
+                  <ProgramSection store={store} instrument={instrument} engine={engine} />
+                  <SynthSection store={store} instrument={instrument} />
+                  <EffectsSection store={store} instrument={instrument} />
+                  <span className="made-in" aria-hidden="true">
+                    HANDMADE IN SWEDEN BY CLAVIA DMI AB&ensp;v2.0 Rev.B
+                  </span>
+                </div>
               </div>
-              <div className="control-deck">
-                <PerformanceSection store={store} instrument={instrument} />
-                <OrganSection store={store} instrument={instrument} />
-                <PianoSection store={store} instrument={instrument} engine={engine} />
-                <ProgramSection store={store} instrument={instrument} engine={engine} />
-                <SynthSection store={store} instrument={instrument} />
-                <EffectsSection store={store} instrument={instrument} />
-                <span className="made-in" aria-hidden="true">
-                  HANDMADE IN SWEDEN BY CLAVIA DMI AB&ensp;v2.0 Rev.B
-                </span>
+              <div className="keys-block" style={{ height: '46%' }}>
+                <Keybed controller={controller} instrument={instrument} />
+                <div className="bottom-rail" aria-hidden="true" />
               </div>
+              {/* The compare ghost travels into the loupe too, so the lens
+                  magnifies photo-vs-render at the same 2.6x. */}
+              {overlayActive && (
+                <ReferenceGhost
+                  mode={overlayPeek ? 'ghost' : overlayMode}
+                  opacity={overlayPeek ? 1 : overlayOpacity / 100}
+                  wipe={overlayWipe}
+                  nudge={overlayNudge}
+                />
+              )}
             </div>
             {/* OS-styled clone of the mouse cursor at the magnified point;
                 onLensMove positions it and picks the glyph via data-cursor. */}
@@ -534,6 +826,83 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             </svg>
             Magnify
           </button>
+          <button
+            type="button"
+            className="chrome-toggle"
+            data-testid="overlay-toggle"
+            aria-pressed={overlay}
+            aria-label="Toggle reference photo overlay"
+            onClick={() => {
+              setOverlay((o) => !o)
+              // Re-arm the load attempt: the photo may have been fetched
+              // (pnpm bench fetch) since the last failed try.
+              setOverlayMissing(false)
+            }}
+          >
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <rect x="1.2" y="1.2" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+              <rect x="4.6" y="4.6" width="6.2" height="6.2" rx="1" fill="currentColor" opacity="0.55" />
+            </svg>
+            Overlay
+          </button>
+          {overlayActive && (
+            <span className="overlay-modes" role="group" aria-label="Overlay compare mode">
+              {(
+                [
+                  ['ghost', 'Ghost', 'Photo at slider opacity'],
+                  ['diff', 'Diff', 'Difference blend — matches go black, mismatches glow'],
+                  ['wipe', 'Wipe', 'Photo left of a draggable seam'],
+                ] as const
+              ).map(([mode, label, title]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className="chrome-toggle overlay-mode"
+                  data-testid={`overlay-mode-${mode}`}
+                  aria-pressed={overlayMode === mode}
+                  title={title}
+                  onClick={() => {
+                    setOverlayMode(mode)
+                    // Diff and wipe read best at full strength; ghost keeps
+                    // whatever the slider says.
+                    if (mode !== 'ghost') setOverlayOpacity(100)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
+          )}
+          {overlayActive && (
+            <label className="ctrl-pedal overlay-opacity">
+              <span className="ctrl-pedal-label">Photo</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={overlayOpacity}
+                aria-label="Reference overlay opacity"
+                data-testid="overlay-opacity"
+                onChange={(event) => setOverlayOpacity(Number(event.target.value))}
+              />
+              <span className="ctrl-pedal-value" aria-hidden="true">
+                {overlayOpacity}%
+              </span>
+            </label>
+          )}
+          {overlayActive && (overlayNudge.dx !== 0 || overlayNudge.dy !== 0 || overlayNudge.scale !== 1) && (
+            <span className="overlay-nudge" data-testid="overlay-nudge">
+              Δ {overlayNudge.dx.toFixed(1)}, {overlayNudge.dy.toFixed(1)} · ×{overlayNudge.scale.toFixed(3)}
+              <button type="button" className="chrome-toggle overlay-mode" onClick={() => setOverlayNudge(NUDGE_IDENTITY)}>
+                Reset
+              </button>
+            </span>
+          )}
+          {overlay && overlayMissing && (
+            <span className="overlay-missing" data-testid="overlay-missing" role="status">
+              reference photo unavailable — dev server with reference/ fetched (pnpm bench fetch)
+            </span>
+          )}
         </span>
         {chrome === 'minimal' && engineDegraded && engineStatusLine}
         <span className="chrome-info">
@@ -552,12 +921,24 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             <b>Keys</b> A S D F G H J K L ; play C4–E5, W E T Y U O P the sharps between them (physical positions,
             layout-independent) · Space/Z/X are the sustain/soft/sostenuto pedals
           </span>
+          {overlayActive && (
+            <span data-testid="overlay-help">
+              <b>Overlay</b> hold V to blink the full photo · arrows nudge the photo 0.1% (Shift+↑↓ scales) · 0 resets
+              the nudge · in Diff, matches go black and mismatches glow
+            </span>
+          )}
           <span className="status-note">
             <b>Coverage</b> Every section is functional — keybed and pedals, Piano (all six types), Organ (all six
             models, presets, percussion), Synth (Analog + Samples, every oscillator category and filter), per-layer
             Layer Effects, Rotary, and the full Programs cluster (scenes, splits, morphs, master clock, transpose,
             preset library, Mon/Copy). Visual-only by spec exclusion: Synth Mode&apos;s Extern position, Section
             Edit&apos;s plain press, and Morph A.T. (no browser aftertouch).
+          </span>
+          <span className="status-note chrome-disclaimer" data-testid="chrome-disclaimer">
+            <b>Disclaimer</b> This is an unofficial fan project created for educational and non-commercial purposes. It
+            is not affiliated with, endorsed by, sponsored by, or associated with Clavia DMI AB or the Nord brand.
+            &ldquo;Nord&rdquo; and &ldquo;Nord Stage&rdquo; are trademarks of Clavia DMI AB and are used solely to
+            identify the product that inspired this project.
           </span>
         </span>
       </footer>

@@ -56,6 +56,11 @@ body {
 
 .chassis {
   aspect-ratio: 3.0951;
+  /* Positioned so the opt-in reference-photo overlay can pin to its box;
+     isolated so the overlay's diff blend mixes with the chassis only,
+     never reaching the page background behind it. */
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   border-radius: 0.55cqw 0.55cqw 0.75cqw 0.75cqw;
@@ -129,7 +134,10 @@ body {
 }
 
 /* Magnifier loupe: a fixed lens that follows the pointer over the deck,
-   showing an inert 2.6x clone of the panel under the cursor. */
+   showing an inert 2.6x clone of the panel under the cursor. The clone is
+   the WHOLE chassis, so past the panel's edges the lens shows the true
+   surroundings — this stage backdrop above/beside, the keybed below —
+   never a flat red bleed. The backdrop matches .stage-app's base tone. */
 .magnify-lens {
   position: fixed;
   width: 340px;
@@ -138,7 +146,7 @@ body {
   border: 3px solid #d7dae3;
   border-radius: 12px;
   overflow: hidden;
-  background: var(--chassis-mid, #6d1721);
+  background: #e9e6e1;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
   pointer-events: none;
   visibility: hidden;
@@ -154,24 +162,22 @@ body {
   transform-origin: 0 0;
 }
 
-.lens-deck {
+/* The cloned chassis fills the canvas (which onLensMove sizes to the real
+   chassis rect), overriding .chassis' aspect-ratio sizing; deck/keys keep
+   their real 54%/46% inline splits, so every edge — rounded corners, rail
+   gradient, keybed — lands exactly where the live panel draws it. */
+.lens-chassis {
   width: 100%;
   height: 100%;
-}
-
-/* Inside the lens the rail keeps its layout slot (so the legends land at
-   the true panel spot) but drops its own gradient/border paint — the lens
-   backdrop stays the flat chassis red it always showed. */
-.lens-deck .top-rail {
-  background: none;
-  border-bottom-color: transparent;
 }
 
 /* Cursor clone inside the lens canvas. The real cursor bitmap is not
    readable from JS, so this is OS-styled SVG artwork (macOS: black arrow
    with white outline; otherwise Windows-style white with black outline),
    swapped via data-cursor to mirror the hovered control's CSS cursor.
-   Sizes are native-cursor-scale px; the lens transform magnifies them. */
+   Sizes are HALF native-cursor px: the 2.6x lens transform magnifies
+   them, so half-size glyphs read ~1.3x native inside the lens — present
+   but not looming over the control being inspected. */
 .lens-cursor {
   position: absolute;
   z-index: 1;
@@ -212,30 +218,130 @@ body {
 /* Per-glyph sizing + hotspot alignment (arrow tip / fingertip / center). */
 .lens-cursor[data-cursor='default'] svg[data-for='default'] {
   display: block;
-  width: 15px;
-  height: 20px;
-  transform: translate(-1.2px, -1px);
+  width: 7.5px;
+  height: 10px;
+  transform: translate(-0.6px, -0.5px);
 }
 
 .lens-cursor[data-cursor='pointer'] svg[data-for='pointer'] {
   display: block;
-  width: 18px;
-  height: 23px;
-  transform: translate(-8.9px, -0.9px);
+  width: 9px;
+  height: 11.5px;
+  transform: translate(-4.45px, -0.45px);
 }
 
 .lens-cursor[data-cursor='ns-resize'] svg[data-for='ns-resize'] {
   display: block;
-  width: 12px;
-  height: 22px;
-  transform: translate(-6px, -11px);
+  width: 6px;
+  height: 11px;
+  transform: translate(-3px, -5.5px);
 }
 
 .lens-cursor[data-cursor='ew-resize'] svg[data-for='ew-resize'] {
   display: block;
-  width: 22px;
-  height: 12px;
-  transform: translate(-11px, -6px);
+  width: 11px;
+  height: 6px;
+  transform: translate(-5.5px, -3px);
+}
+
+/* Reference-photo overlay (compare tool): the real product shot ghosted
+   over the chassis at user-set opacity. Non-interactive — the instrument
+   underneath stays fully playable — and clipped by the chassis' rounded
+   overflow so only the photo's chassis crop shows. z-index clears every
+   in-chassis stack (max 5, .split-marker) but stays under the loupe (60). */
+.reference-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.reference-overlay img {
+  position: absolute;
+  max-width: none;
+}
+
+/* Diff compare: photo differenced against the render — matching pixels go
+   black, every mismatch glows. The chassis' isolation keeps the blend from
+   sampling the page background. */
+.reference-overlay[data-mode='diff'] {
+  mix-blend-mode: difference;
+}
+
+/* Wipe seam: the only interactive piece of the overlay — a draggable
+   vertical handle at the photo/render boundary (photo left, render right).
+   Sits above the ghost (30) and everything in the chassis. */
+.overlay-wipe {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  transform: translateX(-50%);
+  z-index: 31;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.overlay-wipe::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #f2efe9;
+  box-shadow: 0 0 0 1px rgba(20, 10, 10, 0.55);
+}
+
+.overlay-wipe-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 26px;
+  border-radius: 7px;
+  background: #f2efe9;
+  border: 1px solid rgba(20, 10, 10, 0.55);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.overlay-wipe:focus-visible {
+  outline: 2px solid #d8a03c;
+  outline-offset: 2px;
+}
+
+/* Opacity slider borrows the ctrl-pedal slider look, just narrower. */
+.overlay-opacity input[type='range'] {
+  width: 72px;
+}
+
+/* Compare-mode pills sit flush as one segment group. */
+.overlay-modes {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.overlay-mode {
+  padding: 4px 9px;
+}
+
+.overlay-nudge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: #b8bac1;
+}
+
+.overlay-missing {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #c9a25a;
 }
 
 /* "HANDMADE IN SWEDEN..." vertical print on the bare red right margin:
