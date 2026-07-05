@@ -2379,3 +2379,22 @@ Correction on iteration 64 (user close-up re-read).
   the bottom border. SINGLE LAYER reverts to the same in-flow treatment
   on the Preset Library panel (dark rules on the light fill).
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12.
+
+### 66 — Triangle housings at true size, even pitch (2026-07-05)
+
+User re-measure: the housings print at ~0.85 x 1.40cqw (ours were
+~0.67 x 1.03) and must be identical even when rotated.
+
+- Arrows grow to a SQUARE 0.23cqw box (identical in every rotation);
+  pair gap 0.08.
+- Every housing is now exactly 0.85 x 1.40cqw: fx segments overhang
+  0.155/0.135, the Organ Model / Piano Select strips widen to 0.85 with
+  matching row spans, and the Vib/Chorus band becomes the same rectangle
+  rotated (1.40 x 0.85, centered on the arrow rows, clear of the C/V
+  numerals).
+- ONE row pitch (0.449cqw, probe-verified across all six vertical
+  clusters): sel-grids get FIXED 0.42 tracks + 0.03 gaps, so the tall
+  A-WAH tag can no longer open extra space under Mod 1's first row; the
+  two-line B3 BASS print cancels its extra line height with negative
+  block margins instead of stretching its row.
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12.

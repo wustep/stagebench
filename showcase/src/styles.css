@@ -1243,17 +1243,16 @@ body {
 
 /* Triangular selector LEDs (reference: the Organ Model, Piano Select,
    Vib/Chorus and effect-type grids all use small arrow-shaped indicators).
-   Photo re-measure (2026-07-05): the arrows are TINY — ≈0.12-0.14cqw across
-   every cluster, half the earlier size. */
-/* ONE size everywhere (photo: the arrow pairs are identical across the
-   Organ Model, Piano Select, Vib/Chorus and every effect selector). */
+   ONE size everywhere, with a SQUARE bounding box so the arrows read
+   identical in every rotation (user measure 2026-07-05: the housings are
+   ~0.85 x 1.40cqw — the arrows scale with them). */
 .led.led-tri-left,
 .led.led-tri-right,
 .led.led-tri-up,
 .led.led-tri-down {
 	border-radius: 0;
-	width: 0.16cqw;
-	height: 0.15cqw;
+	width: 0.23cqw;
+	height: 0.23cqw;
 }
 
 .led.led-tri-left {
@@ -1281,7 +1280,11 @@ body {
 	display: grid;
 	grid-template-columns: 1fr auto 1fr;
 	column-gap: 0.14cqw;
-	row-gap: 0.09cqw;
+	/* FIXED row tracks: every row is one pitch step (0.45cqw with the row
+     gap) no matter its content — a tall boxed tag (A-WAH) must not open
+     extra space between its row and the next. */
+	grid-auto-rows: 0.42cqw;
+	row-gap: 0.03cqw;
 	align-items: center;
 	align-content: center;
 	align-self: stretch;
@@ -1319,30 +1322,24 @@ body {
 .sel-grid .sel-leds::before {
 	content: "";
 	position: absolute;
-	top: -0.1cqw;
-	bottom: -0.1cqw;
-	/* Pair (0.16 + 0.06 + 0.16 = 0.38) + 0.07 overhang per side = the
-     uniform 0.52cqw housing width shared with the Organ Model / Piano
-     Select strips. */
-	left: -0.07cqw;
-	right: -0.07cqw;
+	/* ONE housing size everywhere (user measure): pair 0.23+0.08+0.23 =
+     0.54 wide + 0.155 overhang per side = 0.85cqw; 3 rows at the 0.45
+     pitch + 0.135 beyond the end arrows = 1.40cqw tall. Sharp corners. */
+	top: -0.135cqw;
+	bottom: -0.135cqw;
+	left: -0.155cqw;
+	right: -0.155cqw;
 	background: #16181c;
 	box-shadow:
 		inset 0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55),
 		inset -0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55);
 }
 
-/* Photo: the housing is a SHARP rectangle — no corner rounding. */
 .sel-grid .sel-row:first-child .sel-leds::before {
-	top: -0.08cqw;
 	box-shadow:
 		inset 0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55),
 		inset -0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55),
 		inset 0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.7);
-}
-
-.sel-grid .sel-row:last-child .sel-leds::before {
-	bottom: -0.08cqw;
 }
 
 .sel-grid .sel-leds .led {
@@ -1355,13 +1352,12 @@ body {
 .type-led-grid::before {
 	content: "";
 	position: absolute;
-	top: -0.08cqw;
-	bottom: -0.08cqw;
+	top: -0.04cqw;
+	bottom: -0.04cqw;
 	left: 50%;
 	transform: translateX(-50%);
-	/* The uniform housing: 0.52cqw wide, sharp corners (photo — one
-     identical rectangle behind every 6-triangle cluster). */
-	width: 0.52cqw;
+	/* The uniform 0.85 x 1.40cqw housing (rows span 1.32 + 0.04 ends). */
+	width: 0.85cqw;
 	background: linear-gradient(180deg, #202227 0%, #101114 100%);
 	box-shadow:
 		inset 0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.7),
@@ -1390,7 +1386,7 @@ body {
 .sel-leds {
 	display: inline-flex;
 	/* One uniform pair gap across every selector cluster (photo). */
-	gap: 0.06cqw;
+	gap: 0.08cqw;
 	flex: none;
 }
 
@@ -1433,7 +1429,7 @@ body {
    Photo: clear air between the label columns and the housing strip — the
    words never touch the recessed black band. */
 .fx-box .sel-grid {
-	gap: 0.09cqw 0.3cqw;
+	gap: 0.03cqw 0.3cqw;
 }
 
 .fx-box .sel-row .legend {
@@ -1509,7 +1505,7 @@ body {
 .reverb-box .sel-grid {
 	/* Photo: same air between words and housing as the other selectors;
      row pitch matches the other triangle grids (uniform housings). */
-	gap: 0.08cqw 0.24cqw;
+	gap: 0.03cqw 0.24cqw;
 }
 
 .reverb-box .sel-row .legend {
@@ -1545,20 +1541,22 @@ body {
 .vib-matrix {
 	display: flex;
 	flex-direction: column;
-	gap: 0.06cqw;
+	gap: 0.08cqw;
 	position: relative;
 }
 
-/* Photo: the scanner-position triangles sit in a dark rounded housing band
-   between the two label rows (same recessed plate as the other selector
-   grids). The band covers the triangles only, never the C/V numerals. */
+/* Photo: the scanner-position triangles sit in a dark housing band between
+   the two numeral rows — the SAME 0.85 x 1.40cqw rectangle as the vertical
+   selectors, rotated (2 triangle rows x 3 columns). It covers the arrows
+   only, never the C/V numerals. */
 .vib-matrix::before {
 	content: "";
 	position: absolute;
-	left: -0.07cqw;
-	right: -0.07cqw;
-	top: 30%;
-	bottom: 30%;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	width: 1.4cqw;
+	height: 0.85cqw;
 	background: linear-gradient(180deg, #202227 0%, #101114 100%);
 	box-shadow:
 		inset 0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.7),
@@ -1575,7 +1573,8 @@ body {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 0.05cqw;
+	/* Clearance so the 0.85cqw-tall band ends between arrows and numerals. */
+	gap: 0.17cqw;
 	position: relative;
 }
 
@@ -2570,9 +2569,10 @@ body {
 	white-space: nowrap;
 }
 
-/* Reference: MASTER LEVEL wears a BOLD printed white arc around the cap —
-   open toward the lower left (the potentiometer sweep), well clear of the
-   label above. */
+/* Reference: MASTER LEVEL wears a BOLD printed white arc around the cap.
+   It traces ONLY the potentiometer's settable sweep — the Knob turns from
+   -135° to +135° (270°), so the ring spans that same 270° and leaves the
+   90° dead zone open at the bottom center, well clear of the label above. */
 .perf-master .knob.large::before {
 	content: "";
 	position: absolute;
@@ -2580,9 +2580,9 @@ body {
 	border-radius: 50%;
 	padding: 0.13cqw;
 	background: conic-gradient(
-		from 262deg,
-		rgba(240, 236, 228, 0.92) 0deg 305deg,
-		transparent 305deg 360deg
+		from 225deg,
+		rgba(240, 236, 228, 0.92) 0deg 270deg,
+		transparent 270deg 360deg
 	);
 	mask:
 		linear-gradient(#000 0 0) content-box,
@@ -2892,8 +2892,25 @@ body {
 .model-led-grid {
 	display: flex;
 	flex-direction: column;
-	gap: 0.1cqw;
+	gap: 0.03cqw;
 	position: relative;
+}
+
+/* Fixed 0.45cqw row pitch (matches the effect selectors): the two-line
+   B3 BASS label centers in its track instead of stretching the row
+   (min-height 0 beats the flex min-content floor). */
+.model-led-grid > span,
+.type-led-grid > span {
+	flex: none;
+	height: 0.42cqw;
+	min-height: 0;
+	align-content: center;
+}
+
+/* The two-line B3 BASS print must not push its arrows off the shared
+   0.45 pitch: negative block margins cancel its extra line height. */
+.model-led-grid .legend.two-line {
+	margin-block: -0.05cqw;
 }
 
 /* [legend | ◀ ▶ | legend] on FIXED columns so every row's arrow pair sits
@@ -3378,7 +3395,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	/* One row pitch shared with the Organ Model grid (uniform housings). */
-	gap: 0.1cqw;
+	gap: 0.03cqw;
 	position: relative;
 }
 
