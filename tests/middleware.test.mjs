@@ -101,4 +101,51 @@ test('a crypto failure is logged but stays indistinguishable from a bad signatur
   }
 })
 
+test('middleware fails closed on /reference when the deployment secret is missing', async () => {
+  delete process.env.STAGEBENCH_PASSWORD
+  const response = await middleware(request('/reference/nord-stage-4-73.jpg'))
+  assert.equal(response.status, 503)
+})
+
+test('middleware hides /reference photos without a valid extras cookie', async () => {
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
+  const response = await middleware(request('/reference/nord-stage-4-73.jpg'))
+  assert.equal(response.status, 404)
+})
+
+test('middleware proxies /reference photos for an unlocked extras cookie', async () => {
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
+  const body = new URLSearchParams({ password: 'test-password' })
+  const login = await handleRequest(request('/secret', { method: 'POST', body }), {
+    checkRateLimit: async () => ({ rateLimited: false }),
+  })
+  const cookie = login.headers.get('set-cookie')
+
+  const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+  const response = await handleRequest(
+    request('/reference/nord-stage-4-73.jpg', { headers: { cookie } }),
+    {
+      fetch: async (url) => {
+        assert.match(String(url), /NS4_HA73_TopDown/)
+        return new Response(bytes, { status: 200, headers: { 'Content-Type': 'image/jpeg' } })
+      },
+    },
+  )
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('content-type'), 'image/jpeg')
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes)
+})
+
+test('middleware rejects unknown /reference filenames', async () => {
+  process.env.STAGEBENCH_PASSWORD = 'test-password'
+  const body = new URLSearchParams({ password: 'test-password' })
+  const login = await handleRequest(request('/secret', { method: 'POST', body }), {
+    checkRateLimit: async () => ({ rateLimited: false }),
+  })
+  const cookie = login.headers.get('set-cookie')
+
+  const response = await middleware(request('/reference/not-a-photo.jpg', { headers: { cookie } }))
+  assert.equal(response.status, 404)
+})
+
 delete process.env.STAGEBENCH_PASSWORD

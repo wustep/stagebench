@@ -8,6 +8,15 @@ const EXTRAS_PATH = '/secret'
 const EXTRAS_COOKIE = 'stagebench_extras'
 const encoder = new TextEncoder()
 
+// Official Nord product shots — proxied for unlocked visitors only (same
+// URLs as bench/lib/fetch-reference.mjs; not bundled in the repo).
+const REFERENCE_PHOTOS = {
+  'nord-stage-4.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/lyDePXcG/NS4_HA88_TopDown-01_241008.jpg',
+  'nord-stage-4-73.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/2jnZVaTL/NS4_HA73_TopDown-01_241008.jpg',
+  'nord-stage-4-compact.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/NS4_Compact73_TopDown-01_231020.jpg',
+}
+const REFERENCE_PHOTO_NAME = /^nord-stage-4[\w.-]*\.jpg$/
+
 const securityHeaders = {
   'Cache-Control': 'no-store',
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
@@ -135,8 +144,61 @@ function htmlResponse(html, status = 401, headers = {}) {
   })
 }
 
+async function extrasUnlocked(request, password) {
+  const extrasSession = getCookie(request, EXTRAS_COOKIE)
+  return isValidSession(extrasSession, `${password}::extras`)
+}
+
+async function handleReferencePhoto(request, password, options = {}) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method not allowed', { status: 405, headers: securityHeaders })
+  }
+
+  const name = request.url.split('/').pop()?.split('?')[0] ?? ''
+  if (!REFERENCE_PHOTO_NAME.test(name)) {
+    return new Response('Not found', { status: 404, headers: securityHeaders })
+  }
+
+  const sourceUrl = REFERENCE_PHOTOS[name]
+  if (!sourceUrl) {
+    return new Response('Not found', { status: 404, headers: securityHeaders })
+  }
+
+  if (!(await extrasUnlocked(request, password))) {
+    return new Response('Not found', { status: 404, headers: securityHeaders })
+  }
+
+  const fetchImpl = options.fetch ?? fetch
+  const upstream = await fetchImpl(sourceUrl)
+  if (!upstream.ok) {
+    return new Response('Reference photo unavailable', { status: 502, headers: securityHeaders })
+  }
+
+  const headers = {
+    'Content-Type': 'image/jpeg',
+    'Cache-Control': 'private, max-age=3600',
+    'X-Content-Type-Options': 'nosniff',
+  }
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers })
+  }
+  return new Response(upstream.body, { status: 200, headers })
+}
+
 export async function handleRequest(request, options = {}) {
   const url = new URL(request.url)
+
+  if (url.pathname.startsWith('/reference/')) {
+    const password = process.env.STAGEBENCH_PASSWORD
+    if (!password) {
+      return new Response('Reference photos are not configured.', {
+        status: 503,
+        headers: securityHeaders,
+      })
+    }
+    return handleReferencePhoto(request, password, options)
+  }
+
   if (url.pathname !== EXTRAS_PATH) {
     return next({
       headers: {
@@ -204,6 +266,6 @@ export default function middleware(request) {
 }
 
 export const config = {
-  matcher: '/secret',
+  matcher: ['/secret', '/reference/:path*'],
   runtime: 'nodejs',
 }

@@ -4,10 +4,9 @@ import { createReadStream, existsSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 
 /** Dev-server bridge to the repo-root reference/ photos (gitignored,
- *  fetched via `pnpm bench fetch`, never redistributed). The reference
- *  overlay compare tool loads /reference/<photo>.jpg through this route
- *  while developing; published builds have no such route, so the tool
- *  reports the photo as unavailable instead of shipping it. */
+ *  fetched via `pnpm bench fetch`, never redistributed). On production the
+ *  same /reference/* path is served by middleware.js after /secret unlock
+ *  (proxied from Nord's CDN). */
 const referencePhotos = (): Plugin => ({
   name: 'stagebench-reference-photos',
   configureServer(server) {

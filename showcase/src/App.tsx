@@ -71,9 +71,10 @@ const REAR_LEGENDS: [string, number][] = [
 const DECK_SCREWS = [13.6, 32.6, 40.7, 52.6, 76.4, 94.8]
 
 /** Reference-overlay compare tool. The photo is served by the dev server's
- *  /reference bridge (vite.config.ts) from the repo-root reference/ dir —
- *  gitignored and never bundled, so published builds truthfully report it
- *  as unavailable instead of shipping Nord's product shot. */
+ *  /reference bridge (vite.config.ts) from the repo-root reference/ dir, or
+ *  on production by middleware.js (proxied from Nord's CDN after /secret
+ *  unlock). Gitignored locally and never bundled — unavailable without one
+ *  of those routes. */
 const REFERENCE_PHOTO_URL = '/reference/nord-stage-4-73.jpg'
 /** The chassis' bounding box inside that photo, as fractions of the full
  *  frame (the product shot has white margins and a gray drop shadow).
@@ -97,6 +98,18 @@ interface OverlayNudge {
   scale: number
 }
 const NUDGE_IDENTITY: OverlayNudge = { dx: 0, dy: 0, scale: 1 }
+
+// Same cookie gate as the main gallery (/secret in middleware.js): on
+// production this unlocks the reference-photo proxy and compare tools.
+const extraModelsUnlocked =
+  typeof document !== 'undefined' &&
+  document.cookie.split(';').some((entry) => entry.trim().startsWith('stagebench_extras='))
+const showDevTools = import.meta.env.DEV || extraModelsUnlocked
+const overlayMissingMessage = import.meta.env.DEV
+  ? 'reference photo unavailable — dev server with reference/ fetched (pnpm bench fetch)'
+  : extraModelsUnlocked
+    ? 'reference photo unavailable — upstream fetch failed; try again later'
+    : 'reference photo unavailable — unlock at /secret first'
 
 /** Dev-only measure tool: a drag-drawn bounding box over the chassis. The
  *  geometry (x/y/w/h) is stored as FRACTIONS of the chassis box — x and w of
@@ -367,12 +380,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     setOverlayWipe(Math.min(98, Math.max(2, ((event.clientX - rect.left) / rect.width) * 100)))
   }
 
-  // Dev-only measure mode: a crosshair layer over the chassis reporting the
-  // pointer position (readout pinned to the viewport's bottom-right) plus
-  // drag-drawn bounding boxes labeled with their width x height. Gated to
-  // import.meta.env.DEV — the toggle and layer never render in published
-  // builds. While on, the layer swallows panel input on purpose: measuring
-  // a knob must not twist it.
+  // Measure mode: a crosshair layer over the chassis reporting the pointer
+  // position (readout pinned to the viewport's bottom-right) plus drag-drawn
+  // bounding boxes labeled with their width x height. Available in dev and
+  // after /secret unlock on production. While on, the layer swallows panel
+  // input on purpose: measuring a knob must not twist it.
   const [measure, setMeasure] = useState(false)
   const [measureCursor, setMeasureCursor] = useState<MeasureCursor | null>(null)
   const [measureBoxes, setMeasureBoxes] = useState<MeasureBox[]>([])
@@ -844,7 +856,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               <span className="overlay-wipe-grip" aria-hidden="true" />
             </div>
           )}
-          {import.meta.env.DEV && measure && (
+          {showDevTools && measure && (
             <div
               className="measure-overlay"
               data-testid="measure-overlay"
@@ -950,7 +962,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           </div>
         </div>
       )}
-      {import.meta.env.DEV && measure && (
+      {showDevTools && measure && (
         <aside className="measure-readout" data-testid="measure-readout" aria-hidden="true">
           <span className="measure-title">measure · 1 cqw = 1% of chassis width</span>
           <span data-testid="measure-cursor">
@@ -1054,13 +1066,13 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             </svg>
             Overlay
           </button>
-          {import.meta.env.DEV && (
+          {showDevTools && (
             <button
               type="button"
               className="chrome-toggle"
               data-testid="measure-toggle"
               aria-pressed={measure}
-              aria-label="Toggle measure mode (dev only)"
+              aria-label="Toggle measure mode"
               onClick={toggleMeasure}
             >
               <svg viewBox="0 0 12 12" aria-hidden="true">
@@ -1127,7 +1139,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               )}
               {overlay && overlayMissing && (
                 <span className="overlay-missing" data-testid="overlay-missing" role="status">
-                  reference photo unavailable — dev server with reference/ fetched (pnpm bench fetch)
+                  {overlayMissingMessage}
                 </span>
               )}
             </span>
