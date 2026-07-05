@@ -2256,3 +2256,31 @@ Continued the pixel audit through the program strip and displays.
   led-word columns and fx ON prints → 0.2, AUX KB ON/OFF chip text
   0.17 → 0.19–0.2.
 - Gates: typecheck, lint, suite 614/614, verify:layout 12/12.
+
+### 60 — Titles on the outline, photo-size triangles, selector spacing (2026-07-05)
+
+Visual pass over the selector clusters and box-title registration.
+
+- Box titles center ON the outline (photo: the border line cuts through
+  the vertical middle of PIANO SELECT / VIB/CHORUS / REVERB / VOICE /
+  VIBRATO / ARP…): base title top -0.3 → -0.17cqw; the two-line ORGAN
+  MODEL block straddles at -0.3; the PRESET LIBRARY red tab keeps its
+  notched -0.3 (it sits on the plate edge, not the printed outline).
+- Triangle LEDs are TINY on the photo (≈0.12–0.14cqw, half our size):
+  0.32 × 0.3 → 0.17 × 0.16 globally, fx-grid override 0.26 → 0.17. The
+  Organ Model / Piano Select housing strip hugs the arrow pair
+  (0.95 → 0.52cqw) and the fx housings overhang 0.1cqw (was 0.13).
+- Selector spacing: fx sel-grids open up (column gap 0.08 → 0.24cqw, the
+  reverb grid 0.06 → 0.24) so ROOM/BOOTH/SPRING and RM/TREM/A-PAN no
+  longer touch the recessed strip; reverb rows print at 0.21 (was 0.19).
+- B3 Percussion bottom row: ● POLY ▿ hugs the box's left edge and the ON
+  lamp + switch its right (photo), replacing the crammed inline row.
+- Timbre cluster rebuilt as a three-column grid: BRIGHT/MID/SOFT
+  right-align against ONE straight LED column and DYNO1/DYNO2 stagger
+  half a row up between rows (photo); timbre + piano tiny-row lamps drop
+  to the small panel LED size (0.22–0.24, was the 0.34 default).
+- Arp/Gate mode rows left-align (POLY over ARP ● GATE, photo) with the
+  switch + PATTERN ▿ still centered beneath.
+- Print sizes: voice/vibrato/arp legends 0.17 → 0.2cqw, piano acoustics
+  rows 0.17–0.18 → 0.21 (photo caps ≈0.145).
+- Gates: typecheck, lint, suite 614/614, verify:layout 12/12.

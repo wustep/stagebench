@@ -488,12 +488,18 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                     <PanelButton store={store} id="organ-perc-harmonic" className="dark tiny" />
                   </span>
                 </div>
+                {/* Photo bottom row: ● POLY ▿ hugs the box's left edge, the
+                    ON lamp + switch its right edge. */}
                 <span className="perc-on">
-                  <Led color="yellow" on={organ.percussion.poly} />
-                  <Legend className="dim">POLY ▿</Legend>
-                  <Legend>ON</Legend>
-                  <Led color="red" on={organ.percussion.on} />
-                  <PanelButton store={store} id="organ-perc-on" className="pill small" />
+                  <span className="tiny-led-row">
+                    <Led color="yellow" on={organ.percussion.poly} />
+                    <Legend className="dim">POLY ▿</Legend>
+                  </span>
+                  <span className="tiny-led-row">
+                    <Legend>ON</Legend>
+                    <Led color="red" on={organ.percussion.on} />
+                    <PanelButton store={store} id="organ-perc-on" className="pill small" />
+                  </span>
                 </span>
               </GroupBox>
             </div>
