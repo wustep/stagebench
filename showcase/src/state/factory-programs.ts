@@ -42,7 +42,9 @@ export const PROGRAM_SNAPSHOT_KEYS: readonly (keyof ProgramSnapshot)[] = [
 export function snapshotOf(state: InstrumentState): ProgramSnapshot {
   const picked: Record<string, unknown> = {}
   for (const key of PROGRAM_SNAPSHOT_KEYS) picked[key] = state[key]
-  return JSON.parse(JSON.stringify(picked)) as ProgramSnapshot
+  // Plain JSON state; structuredClone is faster than the JSON round-trip and
+  // this runs 40× at factory-content construction plus once per program edit.
+  return structuredClone(picked) as ProgramSnapshot
 }
 
 function makeProgram(base: InstrumentState, name: string, mutate: (draft: ProgramSnapshot) => void): ProgramSlot {

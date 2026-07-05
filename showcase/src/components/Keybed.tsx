@@ -1,4 +1,4 @@
-import { memo, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { memo, useCallback, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { InstrumentController } from '../input/controller'
 import type { InstrumentStore, SplitState } from '../state/instrument'
 import { KEYS, WHITE_KEY_COUNT, type KeyDef } from '../model/keys'
@@ -84,60 +84,78 @@ export function Keybed({ controller, instrument }: KeybedProps) {
   const pointerNotes = useRef(new Map<number, number>())
   const split = useSplitState(instrument)
 
-  const onPointerDownKey = (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => {
-    event.preventDefault()
-    if (pointerNotes.current.has(event.pointerId)) return
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      /* jsdom or detached node */
-    }
-    pointerNotes.current.set(event.pointerId, midi)
-    const rect = event.currentTarget.getBoundingClientRect()
-    const relativeY = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.7
-    const velocity = Math.min(1, Math.max(0.25, 0.3 + 0.7 * relativeY))
-    controller.noteOn(midi, Number.isFinite(velocity) ? velocity : DEFAULT_POINTER_VELOCITY, 'pointer')
-  }
+  // Stable across renders so the 73 memo'd KeyViews don't all re-render when
+  // Keybed re-renders (it re-renders on every instrument-store tick via
+  // useSplitState). controller is stable, so [] deps would do — [controller]
+  // keeps it correct if a new controller is ever passed.
+  const onPointerDownKey = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => {
+      event.preventDefault()
+      if (pointerNotes.current.has(event.pointerId)) return
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        /* jsdom or detached node */
+      }
+      pointerNotes.current.set(event.pointerId, midi)
+      const rect = event.currentTarget.getBoundingClientRect()
+      const relativeY = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.7
+      const velocity = Math.min(1, Math.max(0.25, 0.3 + 0.7 * relativeY))
+      controller.noteOn(midi, Number.isFinite(velocity) ? velocity : DEFAULT_POINTER_VELOCITY, 'pointer')
+    },
+    [controller],
+  )
 
-  const onPointerUpKey = (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => {
-    const owned = pointerNotes.current.get(event.pointerId)
-    if (owned !== midi) return
-    pointerNotes.current.delete(event.pointerId)
-    controller.noteOff(midi, 'pointer')
-  }
+  const onPointerUpKey = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => {
+      const owned = pointerNotes.current.get(event.pointerId)
+      if (owned !== midi) return
+      pointerNotes.current.delete(event.pointerId)
+      controller.noteOff(midi, 'pointer')
+    },
+    [controller],
+  )
 
   return (
     <div className="keybed-row">
       <div className="end-cheek left" aria-hidden="true" />
-      <div
-        className="keybed"
-        role="group"
-        aria-label={`${VARIANT.keyboard.totalKeys}-key ${VARIANT.keyAction} keybed, E1 to E7`}
-        data-testid="keybed"
-      >
+      <div className="keybed-col">
+        {/* Recessed key-well slot behind the keys (reference photo: a dark
+            band between the deck's front edge and the key tops, flanked by
+            the red cheeks). Drawn at ~half its apparent photo height — the
+            askew product shot also shows the well's shadowed back wall,
+            which a top-down view would not. */}
+        <div className="key-slot" aria-hidden="true" />
+        <div
+          className="keybed"
+          role="group"
+          aria-label={`${VARIANT.keyboard.totalKeys}-key ${VARIANT.keyAction} keybed, E1 to E7`}
+          data-testid="keybed"
+        >
         {/* Chromatic DOM order (tab/focus order matches pitch order); black
             keys stack above via .black-key's z-index — they stay absolutely
             positioned by .key (never position:relative, see SHOWCASE.md
             iteration 17). */}
-        {KEYS.map((keyDef) => (
-          <KeyView key={keyDef.id} keyDef={keyDef} controller={controller} onPointerDownKey={onPointerDownKey} onPointerUpKey={onPointerUpKey} />
-        ))}
-        {split?.on &&
-          split.points
-            .filter((point) => point.active)
-            .map((point) => {
-              const key = KEYS.find((k) => k.midi === point.note)
-              if (!key) return null
-              return (
-                <span
-                  key={point.note}
-                  className="split-marker"
-                  data-split-note={point.note}
-                  style={{ left: `${key.x * (100 / WHITE_KEY_COUNT)}%` }}
-                  aria-hidden="true"
-                />
-              )
-            })}
+          {KEYS.map((keyDef) => (
+            <KeyView key={keyDef.id} keyDef={keyDef} controller={controller} onPointerDownKey={onPointerDownKey} onPointerUpKey={onPointerUpKey} />
+          ))}
+          {split?.on &&
+            split.points
+              .filter((point) => point.active)
+              .map((point) => {
+                const key = KEYS.find((k) => k.midi === point.note)
+                if (!key) return null
+                return (
+                  <span
+                    key={point.note}
+                    className="split-marker"
+                    data-split-note={point.note}
+                    style={{ left: `${key.x * (100 / WHITE_KEY_COUNT)}%` }}
+                    aria-hidden="true"
+                  />
+                )
+              })}
+        </div>
       </div>
       <div className="end-cheek right" aria-hidden="true" />
     </div>

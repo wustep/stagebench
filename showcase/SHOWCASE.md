@@ -1977,3 +1977,78 @@ chassis edges as before.
   chassis, still visible over the deck; screenshot of the loupe over a
   held E4. Gates: typecheck, lint, suite 505/505 (magnifier test now
   pins the 73-key clone), verify:layout 12/12.
+
+### 51 — Keybed positioning matched to the photo (2026-07-04)
+
+Pixel-measured the keybed's placement on nord-stage-4-73.jpg (spec
+instrument box, aspect 3.0951 — directly comparable to the chassis)
+and corrected three drifts, discounting what the photo's slightly
+above-front camera adds versus our orthographic top-down view:
+
+- **End cheeks 1.35cqw → 3cqw**: the photo's white keys span x
+  0.030–0.970 of the chassis, matching hardware (43 × 23.5mm keys
+  ≈ 1010mm of the 1078mm chassis = 94%); ours spanned 0.0135–0.9865.
+- **Recessed key-well slot**: key tops now start at y ≈ 0.5525 of the
+  chassis (photo-exact) instead of flush under the deck at 0.54 — a new
+  `.key-slot` strip (2.9% of the keybed row) inside a `.keybed-col`
+  wrapper, so the keybed rect itself starts where the keys do and the
+  verify:layout black-top/keybed-top gate stays exact. Drawn at ~half
+  the photo's apparent band: the askew shot also shows the well's
+  shadowed back wall, which a top-down view would not.
+- **Dark front lip**: below the key fronts the photo reads near-black
+  across the keybed span, red only wrapping under the end cheeks — the
+  bottom rail's ::before is now a full-height dark lip inset 3cqw on
+  each side, with the red rail gradient surviving at the ends.
+- Deliberately NOT copied from the photo: black-key length stays at the
+  spec 0.61 fraction (the photo's apparent 0.64 includes the
+  foreshortened front nose), and the deck's red front edge keeps its
+  height (photo inflates it — it is a rounded-over edge seen from the
+  front). Keys' white fronts already ended at the photo's y=0.970.
+- Gates: typecheck, lint, suite 613/613, verify:layout 12/12
+  (black-key fraction back to exactly 0.610 since the keybed rect now
+  excludes the slot).
+
+### 52 — Deck geometry, slider sizes and print scale matched to the photo (2026-07-04)
+
+Built a per-section photo-vs-render comparison harness (photo scaled to
+the render's pixel grid via the spec instrument box, cropped per
+`.deck-section` rect) and iterated the whole control deck against
+nord-stage-4-73.jpg:
+
+- **Plate box**: the plates actually span y 0.096–0.489 of the chassis —
+  a wide bare-red band above them and a red front edge below. The deck
+  was rendering plates at y 0.04–0.53 (≈24% too tall), which had been
+  stretching every flex row inside. `.control-deck` padding is now
+  2.14cqw top / 1.65cqw bottom, and the right margin grew 1.8 → 4.5cqw
+  (the photo's deck ends at x 0.955, HANDMADE print on the bare red).
+  Deck screws and the made-in print moved up to their photo positions.
+- **Section boundaries re-measured** (full-red column scan of the plate
+  band): organ starts at 0.136 — the Rotary Speaker strip belongs to
+  performance — then 0.325 / 0.408 / 0.530 / 0.768. New fractions
+  14/19.75/8.75/12.75/25/19.75 (was 14/20/8.5/12.5/25/20); hardware.test
+  and feature-matrix notes updated.
+- **Sliders are hardware-sized now** (user report: "many sliders are too
+  tall"). `.layer-fader-row` is a FIXED 4.3cqw block (photo: fader wells
+  y 0.130–0.264) instead of flex-stretched — organ/piano/synth faders
+  had been 6.4/7.3/5.6cqw tall. Fader caps grew to the photo's 1.1 ×
+  1.15cqw ribbed block; drawbar caps to 2cqw; drawbar slots run the full
+  well with the LED frame spanning the upper 61%; `.organ-groups` fixed
+  at 3.8cqw tall (photo y 0.135–0.253) with photo-ratio widths
+  (Model 1 : Vib 1.1 : Perc 1.33).
+- **One switch footprint, re-measured**: 1.5 × 0.72cqw (was 0.92 tall —
+  the photo's switches are 0.68–0.71); vertical variants rotate to
+  0.72cqw wide.
+- **Print scale unified**: base legend 0.4 → 0.34cqw, knob captions
+  0.28cqw, section titles 0.72 → 0.56cqw (photo cap-height ≈0.40cqw),
+  subtitle 0.26cqw, knob numeral arcs one notch finer everywhere (23 →
+  19px, fx 16px). Program OLED grew to the photo's 3.9cqw bezel;
+  synth OLED capped at 3cqw.
+- **Performance section**: Master Level cluster at the content top
+  (photo y≈0.10), Rotary Speaker strip narrowed to the photo's 2.6cqw
+  column (its prints one notch smaller, one line each), pitch stick /
+  mod wheel wells and the logotype moved to their photo x/y.
+- `levels-column` distributes rows with space-between (photo rhythm:
+  SUSTPED → PRESET → SYNC → OCTAVE SHIFT → KB ZONE spread to the plate
+  bottom).
+- Gates: typecheck, lint, suite 613/613 (hardware.test fractions
+  updated), verify:layout 12/12.

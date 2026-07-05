@@ -87,8 +87,13 @@ export class PresentationStore {
   }
 
   private emit(): void {
-    // New identity so useSyncExternalStore consumers re-read derived values.
-    this.state = { values: { ...this.state.values }, toggles: { ...this.state.toggles } }
+    // Just notify. Every consumer hook (usePresentationValue/Toggle/…) reads a
+    // per-id primitive snapshot (`() => store.getValue(id)`) that useSyncExternal-
+    // Store compares with Object.is — so a control only re-renders when its own
+    // value actually changes. The old whole-map shallow-clone here minted a new
+    // identity nothing consumed (functional reads go through the instrument
+    // store; local edits already re-create state in setLocalValue), so it was
+    // pure allocation churn at ~120 Hz during a drag.
     for (const listener of this.listeners) listener()
   }
 

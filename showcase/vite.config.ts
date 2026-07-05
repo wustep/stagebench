@@ -22,4 +22,18 @@ const referencePhotos = (): Plugin => ({
   },
 })
 
-export default defineConfig({ base: './', plugins: [react(), referencePhotos()] })
+export default defineConfig({
+  base: './',
+  plugins: [react(), referencePhotos()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Split React/ReactDOM (+ scheduler) into their own chunk so they cache
+        // across deploys — they never change, while the app chunk's hash busts
+        // on every edit. Keeps the ~140 KB vendor payload out of the app cache.
+        manualChunks: (id: string) =>
+          /\/node_modules\/(react|react-dom|scheduler)\//.test(id) ? 'react' : undefined,
+      },
+    },
+  },
+})

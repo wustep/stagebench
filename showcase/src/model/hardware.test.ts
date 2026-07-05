@@ -122,10 +122,11 @@ describe('visual.control-inventory — normalized hardware model', () => {
 
   it('orders the six sections with the measured width fractions', () => {
     expect(SECTIONS.map((s) => s.id)).toEqual(['performance', 'organ', 'piano', 'program', 'synth', 'effects'])
-    // Pixel-measured from reference/nord-stage-4-73.jpg (red-vs-slate column
-    // segmentation): the Piano section is genuinely narrow (~8.5%) and the
-    // Program strip wide (~12.5%) — the earlier 15%/9% split was mismeasured.
-    expect(SECTIONS.map((s) => s.fraction)).toEqual([0.14, 0.2, 0.085, 0.125, 0.25, 0.2])
+    // Pixel-measured from reference/nord-stage-4-73.jpg (full-red column
+    // scan across the plate band, 2026-07-04): boundaries land on the
+    // chassis at 0.136/0.325/0.408/0.530/0.768, plates ending 0.955 before
+    // the ~4.5% bare-red right margin.
+    expect(SECTIONS.map((s) => s.fraction)).toEqual([0.14, 0.1975, 0.0875, 0.1275, 0.25, 0.1975])
     expect(SECTIONS.reduce((sum, s) => sum + s.fraction, 0)).toBeCloseTo(1)
   })
 

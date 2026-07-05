@@ -455,8 +455,14 @@ export function controlsForSection(sectionId: SectionId): HardwareControl[] {
   return HARDWARE_CONTROLS.filter((c) => c.section === sectionId)
 }
 
+/** O(1) id → control lookup. `getControl` sits on the 120 Hz drag/emit path
+ *  (presentation.ts re-reads every mounted control on each store tick), so the
+ *  former `HARDWARE_CONTROLS.find` linear scan over ~100 entries is replaced by
+ *  a Map built once at module load. */
+const CONTROL_BY_ID: ReadonlyMap<string, HardwareControl> = new Map(HARDWARE_CONTROLS.map((c) => [c.id, c]))
+
 export function getControl(id: string): HardwareControl {
-  const control = HARDWARE_CONTROLS.find((c) => c.id === id)
+  const control = CONTROL_BY_ID.get(id)
   if (!control) throw new Error(`Unknown hardware control: ${id}`)
   return control
 }

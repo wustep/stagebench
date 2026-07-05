@@ -120,7 +120,9 @@ body {
 
 .deck-screws i {
 	position: absolute;
-	bottom: 0.07cqw;
+	/* Photo: the screws sit on the red front edge just below the plates
+     (y≈0.503 of the chassis), not at the deck's very bottom. */
+	bottom: 1.08cqw;
 	width: 0.24cqw;
 	height: 0.24cqw;
 	border-radius: 50%;
@@ -138,13 +140,12 @@ body {
 	flex: 1;
 	min-height: 0;
 	display: flex;
-	/* Asymmetric horizontal padding measured from the reference photo: the
-     sections start ~0.3% from the left edge but stop ~4.6% short of the
-     right edge (bare red chassis). SECTIONS fractions normalize to this
-     content width. */
-	/* 73 photo: the deck stops ~1.8% short of the right edge (the old 4.6%
-     was the 88's logo margin) — Layer Effects gets the reclaimed width. */
-	padding: 0.35cqw 1.8cqw 0.4cqw 0.3cqw;
+	/* Box photo-measured on the 73 (plate-edge pixel scan): sections start
+     ~0.3% from the left edge and stop ~4.5% short of the right edge (bare
+     red margin carrying the HANDMADE print). Vertically the plates span
+     y 0.096-0.489 of the chassis: 2.14cqw of bare red between the top rail
+     and the plate tops, 1.65cqw of red front edge below the plates. */
+	padding: 2.14cqw 4.5cqw 1.65cqw 0.3cqw;
 	gap: 0.25cqw;
 }
 
@@ -364,8 +365,9 @@ body {
    bottom-right like the hardware print. */
 .made-in {
 	position: absolute;
-	bottom: 0.45cqw;
-	right: 0.55cqw;
+	/* Photo: the print's foot aligns with the plate bottoms (y≈0.489). */
+	bottom: 1.65cqw;
+	right: 1.3cqw;
 	writing-mode: vertical-rl;
 	transform: rotate(180deg);
 	font-size: 0.3cqw;
@@ -395,14 +397,18 @@ body {
 	box-shadow: inset 0 0.15cqw 0.2cqw rgba(0, 0, 0, 0.5);
 }
 
+/* Dark front lip below the keys (reference photo: everything under the key
+   fronts reads near-black across the keybed span, while the red chassis
+   wraps around only under the end cheeks — which the rail's red gradient
+   still paints at the far left/right). */
 .bottom-rail::before {
 	content: "";
 	position: absolute;
 	top: 0;
-	left: 0;
-	right: 0;
-	height: 18%;
-	background: #0d0b0a;
+	bottom: 0;
+	left: 3cqw;
+	right: 3cqw;
+	background: linear-gradient(180deg, #0d0b0a 0%, #090707 40%, #1a1211 100%);
 	box-shadow: inset 0 0.05cqw 0 rgba(255, 255, 255, 0.06);
 	pointer-events: none;
 }
@@ -415,9 +421,12 @@ body {
 	display: flex;
 }
 
+/* End cheeks: 3cqw each, photo-measured (white keys span x 0.030–0.970 of
+   the chassis on nord-stage-4-73.jpg; matches hardware — 43 x 23.5mm keys
+   ≈ 1010mm of the 1078mm chassis). */
 .end-cheek {
 	flex: none;
-	width: 1.35cqw;
+	width: 3cqw;
 	background: linear-gradient(
 		90deg,
 		#85202c 0%,
@@ -437,9 +446,28 @@ body {
 	box-shadow: inset 0.15cqw 0 0.25cqw rgba(0, 0, 0, 0.35);
 }
 
+.keybed-col {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Recessed key-well slot between the deck's front edge and the key tops
+   (reference photo: keys emerge at y≈0.5525 of the chassis, not flush
+   against the deck). 2.9% of the keybed row ≈ 1.25% of the chassis —
+   about half the photo's apparent band, since the askew shot also shows
+   the well's shadowed back wall, invisible from straight above. */
+.key-slot {
+	flex: none;
+	height: 2.9%;
+	background: linear-gradient(180deg, #050404 0%, #0e0b0a 55%, #1d1614 100%);
+}
+
 .keybed {
 	position: relative;
 	flex: 1;
+	min-height: 0;
 	background: #1a1414;
 	box-shadow: inset 0 0.55cqw 0.55cqw rgba(0, 0, 0, 0.62);
 }
@@ -608,7 +636,11 @@ body {
 /* ------------------------------------------------------------ shared UI -- */
 
 .legend {
-	font-size: 0.4cqw;
+	/* Photo-measured panel print: legend cap-height ≈0.25cqw → ≈0.34cqw
+     font-size. ONE print size across the whole panel, like the hardware
+     silk-screen (sections only override downward where a plate is too
+     narrow to fit a row). */
+	font-size: 0.34cqw;
 	line-height: 1.05;
 	font-weight: 700;
 	letter-spacing: 0.02cqw;
@@ -777,7 +809,8 @@ body {
 }
 
 .plate-title {
-	font-size: 0.72cqw;
+	/* Photo: the section title caps are ≈0.40cqw tall → ≈0.56cqw font. */
+	font-size: 0.56cqw;
 	font-weight: 800;
 	letter-spacing: 0.06cqw;
 	color: #f2efe9;
@@ -787,7 +820,7 @@ body {
 }
 
 .plate-subtitle {
-	font-size: 0.34cqw;
+	font-size: 0.26cqw;
 	font-weight: 600;
 	letter-spacing: 0.1cqw;
 	color: var(--legend-dim);
@@ -1243,9 +1276,10 @@ body {
 
 /* Reference: every button is a rounded cap seated in a RECTANGULAR dark
    housing (the switch bezel), not a floating rounded pill.
-   ONE uniform footprint (measured ~1.55 x 0.95cqw on the photo): every
-   rectangular button on the panel is the same switch, only the cap color
-   differs; vertical variants are the same footprint rotated. */
+   ONE uniform footprint (re-measured 2026-07-04: ~1.5 x 0.72cqw on the
+   photo — the black switches are 1.54 x 0.68, the gray pills 0.70 tall):
+   every rectangular button on the panel is the same switch, only the cap
+   color differs; vertical variants are the same footprint rotated. */
 .panel-button {
 	position: relative;
 	display: inline-flex;
@@ -1266,7 +1300,7 @@ body {
 		0 0.1cqw 0.16cqw rgba(0, 0, 0, 0.45);
 	cursor: pointer;
 	min-width: 1.5cqw;
-	min-height: 0.92cqw;
+	min-height: 0.72cqw;
 	flex: none;
 }
 
@@ -1445,14 +1479,14 @@ body {
 .panel-button.small,
 .panel-button.tiny {
 	min-width: 1.5cqw;
-	min-height: 0.92cqw;
+	min-height: 0.72cqw;
 }
 
 /* The photo's vertical switches (Sound Init, Arp/Vibrato Menu, Amp
    Envelope, FX variation / focus buttons): the SAME switch rotated 90°,
    so the extra housing reveal moves to the top/bottom ends. */
 .panel-button.vertical {
-	min-width: 0.92cqw;
+	min-width: 0.72cqw;
 	min-height: 1.5cqw;
 	padding: 0.18cqw 0.12cqw;
 }
@@ -1464,7 +1498,7 @@ body {
 /* Rockers (Shift/Exit): the light cap rides a slightly darker warm-gray
    rectangular base, like the other caps-on-housings. */
 .panel-button.rocker {
-	min-width: 0.92cqw;
+	min-width: 0.72cqw;
 	min-height: 1.5cqw;
 	background: linear-gradient(180deg, #aca69c 0%, #837d73 100%);
 	box-shadow:
@@ -1640,7 +1674,7 @@ body {
 
 .knob-scale text {
 	fill: currentColor;
-	font-size: 23px;
+	font-size: 19px;
 	font-weight: 700;
 	text-anchor: middle;
 	dominant-baseline: central;
@@ -1667,8 +1701,8 @@ body {
 	flex: none;
 	cursor: ns-resize;
 	touch-action: none;
-	/* Flatter cap, like the photo's thin ribbed rubber caps. */
-	--fader-cap-h: 0.95cqw;
+	/* Photo cap: ≈1.15cqw tall ribbed rubber block. */
+	--fader-cap-h: 1.15cqw;
 }
 
 .fader-track {
@@ -1684,12 +1718,13 @@ body {
 }
 
 /* Reference: the level-fader caps are LIGHT GRAY ribbed rubber with a dark
-   center groove (not black). */
+   center groove (not black). Photo cap ≈1.1 x 1.15cqw — wider than the
+   0.8cqw hit column, so it overhangs like the drawbar caps do. */
 .fader-cap {
 	position: absolute;
 	left: 50%;
 	transform: translateX(-50%);
-	width: 100%;
+	width: 1.1cqw;
 	height: var(--fader-cap-h);
 	border-radius: 0.14cqw;
 	background:
@@ -1731,16 +1766,15 @@ body {
 	flex: none;
 	cursor: ns-resize;
 	touch-action: none;
-	--drawbar-cap-h: 1.7cqw;
+	--drawbar-cap-h: 2cqw;
 }
 
-/* Recessed slot behind the stem. Photo: the slot occupies only the LOWER
-   part of the well — its top edge sits beside the ladder's #4 numeral
-   (~24% down), and it runs to the well's bottom. */
+/* Recessed slot behind the stem. Photo: the slot runs the whole well,
+   starting at the ladder frame's top edge. */
 .drawbar::before {
 	content: "";
 	position: absolute;
-	top: 24%;
+	top: 4%;
 	bottom: 2%;
 	left: 50%;
 	width: 0.2cqw;
@@ -2117,17 +2151,17 @@ body {
 }
 
 /* Master Level sits at the TOP of the right column, above the rotary strip,
-   tight against the Organ section (reference photo). */
+   tight against the Organ section (reference photo). Photo: the Rotary
+   Speaker strip is a NARROW column at x 0.111-0.136 of the chassis. */
 .perf-right {
 	flex: none;
-	width: 4.1cqw;
+	width: 2.6cqw;
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	/* Clear air between MASTER LEVEL and the Rotary strip, with the whole
-     column starting a touch lower (reference proportions). */
+	/* Photo: the MASTER LEVEL cluster sits right at the deck-content top
+     (knob top y≈0.10 of the chassis), the Rotary strip below it. */
 	gap: 0.4cqw;
-	padding-top: 0.35cqw;
 	min-height: 0;
 }
 
@@ -2141,14 +2175,16 @@ body {
 	flex-direction: column;
 	align-items: center;
 	gap: 0.06cqw;
-	/* Side/bottom padding contains the large dial's printed scale arc, which
-     paints past the knob box (it would otherwise overflow this cell). */
-	padding: 0.02cqw 0.35cqw 0.35cqw;
+	/* Bottom padding contains the dial's printed scale arc; the narrow
+     column needs its full width for the one-line MASTER LEVEL print. */
+	padding: 0.02cqw 0 0.35cqw;
 }
 
 .perf-master .legend {
 	font-size: 0.28cqw;
 	text-align: center;
+	/* One line like the print; it may overhang the narrow column. */
+	white-space: nowrap;
 }
 
 /* Reference: MASTER LEVEL wears a BOLD printed white arc around the cap —
@@ -2176,17 +2212,16 @@ body {
 	gap: 0.34cqw;
 }
 
-/* Pitch stick upper-left, mod wheel below and to the right. Paddings and
-   offsets measured on the HP73 product photo: the stick well starts ~1.9cqw
-   in from the panel edge with clear red chassis above it, and the wheel
-   well tops out ~2.1cqw below the stick well's top edge. */
+/* Pitch stick upper-left, mod wheel below and to the right. Measured on
+   the 73 photo (chassis fractions): stick well x 0.028, y 0.155; wheel
+   well x 0.062, y 0.19. */
 .perf-wheels {
 	flex: 1;
 	display: flex;
 	align-items: flex-start;
 	justify-content: flex-start;
-	gap: 2cqw;
-	padding: 2.6cqw 0 0 1.3cqw;
+	gap: 1.4cqw;
+	padding: 1.9cqw 0 0 2cqw;
 }
 
 .perf-wheel-slot {
@@ -2196,7 +2231,7 @@ body {
 }
 
 .perf-wheel-slot.wheel-slot {
-	margin-top: 1.3cqw;
+	margin-top: 1.1cqw;
 }
 
 .branding {
@@ -2204,7 +2239,8 @@ body {
 	flex-direction: column;
 	gap: 0.18cqw;
 	line-height: 1;
-	padding: 0 0 0.3cqw 0.15cqw;
+	/* Photo: the logotype starts at x≈0.024 of the chassis (2.4cqw). */
+	padding: 0 0 0.3cqw 1.4cqw;
 }
 
 /* One-line rounded logotype approximation. Comfortaa (bundled, SIL OFL 1.1 —
@@ -2259,12 +2295,20 @@ body {
 	background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
 	border-radius: 0.26cqw 0.26cqw 0 0;
 	border-bottom: 1px solid rgba(0, 0, 0, 0.3);
-	font-size: 0.4cqw;
+	font-size: 0.34cqw;
 	font-weight: 800;
 	letter-spacing: 0.04cqw;
 	color: #232a38;
 	text-align: center;
 	line-height: 1.2;
+}
+
+/* The narrow strip's prints run one notch smaller on one line each (photo:
+   CLOSE MIC ▽, STOP MODE, SLOW ● FAST all fit the 2.5cqw column). */
+.rotary-strip .legend {
+	font-size: 0.26cqw;
+	letter-spacing: 0;
+	white-space: nowrap;
 }
 
 .rotary-on,
@@ -2299,13 +2343,16 @@ body {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 0.18cqw;
+	gap: 0.12cqw;
+	justify-content: space-between;
 	min-height: 0;
 }
 
 .layer-pair {
-	flex: 1;
-	min-height: 0;
+	/* Hugs the fixed-size fader block; the levels column spreads the rows
+     below it (photo: SUSTPED/PRESET/SYNC/OCTAVE/KB ZONE space out evenly
+     down to the plate bottom). */
+	flex: none;
 	display: flex;
 	gap: 0.35cqw;
 }
@@ -2340,8 +2387,12 @@ body {
 }
 
 .layer-fader-row {
-	flex: 1;
-	min-height: 0;
+	/* ONE hardware fader size everywhere (photo: the organ, piano and synth
+     level faders are identical): a FIXED block, never flex-stretched to
+     whatever the section's leftover height happens to be. 4.3cqw =
+     y 0.130-0.264 of the chassis, pixel-measured. */
+	flex: none;
+	height: 4.3cqw;
 	display: flex;
 	align-items: stretch;
 	gap: 0.12cqw;
@@ -2398,7 +2449,11 @@ body {
 }
 
 .organ-groups {
+	/* Photo: the Organ Model / Vib/Chorus / B3 Percussion boxes span
+     y 0.135-0.253 of the chassis (3.8cqw); the drawbar bank takes the
+     rest of the plate. */
 	flex: none;
+	height: 3.8cqw;
 	display: flex;
 	gap: 0.3cqw;
 	align-items: stretch;
@@ -2406,10 +2461,19 @@ body {
 }
 
 /* Three separate outlined boxes; smaller titles so ORGAN MODEL / VIB/CHORUS
-   / B3 PERCUSSION never run together across the gaps. */
+   / B3 PERCUSSION never run together across the gaps. Widths photo-measured:
+   Organ Model 4.0cqw, Vib/Chorus 4.4cqw, B3 Percussion 5.3cqw. */
 .organ-groups .group-box {
 	flex: 1;
 	min-width: 0;
+}
+
+.organ-groups .organ-vib {
+	flex: 1.1;
+}
+
+.organ-groups .organ-perc {
+	flex: 1.33;
 }
 
 .organ-groups .group-box-title {
@@ -2430,7 +2494,7 @@ body {
 	display: grid;
 	grid-template-columns: 1fr auto 1fr;
 	align-items: center;
-	column-gap: 0.14cqw;
+	column-gap: 0.1cqw;
 }
 
 .model-led-grid > span > .legend:first-child {
@@ -2444,7 +2508,9 @@ body {
 }
 
 .model-led-grid .legend {
-	font-size: 0.33cqw;
+	font-size: 0.3cqw;
+	letter-spacing: 0;
+	white-space: nowrap;
 }
 
 .perc-grid {
@@ -2499,7 +2565,7 @@ body {
 	min-height: 0;
 	display: flex;
 	justify-content: space-between;
-	padding: 0 0.2cqw;
+	padding: 0 0.05cqw;
 }
 
 .drawbar-column {
@@ -2539,13 +2605,13 @@ body {
 .drawbar-scale {
 	display: inline-flex;
 	align-items: stretch;
-	gap: 0.07cqw;
-	padding: 0.08cqw 0.07cqw;
+	gap: 0.05cqw;
+	padding: 0.08cqw 0.05cqw;
 	/* Photo: a SOLID light plate holding the digits and the red cells, and
-     it spans only the upper half of the drawbar well — the cap travels
-     alongside it. */
+     it spans the upper ~61% of the drawbar well (frames y 0.284-0.400 of
+     the chassis vs well 0.278-0.466) — the cap travels alongside it. */
 	align-self: flex-start;
-	height: 56%;
+	height: 61%;
 	border: none;
 	/* Photo: the ladder plate is a square-cornered rectangle. */
 	border-radius: 0;
@@ -2555,7 +2621,7 @@ body {
 
 /* Chunky red cells at a tight pitch (photo), recessed in the plate. */
 .drawbar-scale .led {
-	width: 0.3cqw;
+	width: 0.26cqw;
 	height: 0.19cqw;
 	border-radius: 0;
 }
@@ -2564,7 +2630,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	justify-content: space-between;
-	font-size: 0.24cqw;
+	font-size: 0.22cqw;
 	font-weight: 700;
 	line-height: 1;
 	color: #232a38;
@@ -2706,7 +2772,7 @@ body {
 }
 
 .deck-section[data-section="piano"] .onoff-tab .legend {
-	font-size: 0.2cqw;
+	font-size: 0.23cqw;
 }
 
 .deck-section[data-section="piano"] .onoff-tab .led {
@@ -2756,7 +2822,7 @@ body {
 }
 
 .panel-button.rocker.timbre-rocker {
-	min-width: 0.92cqw;
+	min-width: 0.72cqw;
 	min-height: 1.5cqw;
 	background: linear-gradient(180deg, #1c1e22 0%, #0c0d0f 100%);
 }
@@ -2888,19 +2954,20 @@ body {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 0.1cqw;
-	padding-top: 0.05cqw;
+	gap: 0.04cqw;
+	padding-top: 0.02cqw;
 }
 
 .program-rail .rail-cell {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 0.06cqw;
+	gap: 0.04cqw;
 }
 
 .program-rail .rail-cell .legend {
-	font-size: 0.26cqw;
+	font-size: 0.24cqw;
+	line-height: 1;
 	text-align: center;
 }
 
@@ -2985,7 +3052,7 @@ body {
 
 .deck-section[data-section="program"] .panel-button.tiny {
 	min-width: 1.5cqw;
-	min-height: 0.92cqw;
+	min-height: 0.72cqw;
 }
 
 .deck-section[data-section="program"] .panel-button .panel-button-cap {
@@ -2994,7 +3061,10 @@ body {
 
 .program-top-row .group-box {
 	flex-direction: column;
-	padding: 0.32cqw 0.2cqw 0.12cqw;
+	/* Photo: the top-row boxes are compact (y 0.104-0.146 of the chassis) —
+     the display and Program grid below own the strip's height. */
+	padding: 0.22cqw 0.2cqw 0.06cqw;
+	gap: 0.04cqw;
 }
 
 .morph-box {
@@ -3150,7 +3220,7 @@ body {
 
 /* Dense printed legends around the blank caps in the four top-row boxes. */
 .program-top-row .legend {
-	font-size: 0.24cqw;
+	font-size: 0.22cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -3285,7 +3355,8 @@ body {
 }
 
 .preset-box {
-	padding: 0.32cqw 0.15cqw 0.1cqw;
+	padding: 0.26cqw 0.15cqw 0.06cqw;
+	gap: 0.06cqw;
 }
 
 .mode-block {
@@ -3327,21 +3398,21 @@ body {
 }
 
 .deck-section[data-section="program"] .oled {
-	min-height: 2.5cqw;
-	/* Wide ~2:1 rectangle like the reference display (≈6cqw wide up here). */
+	min-height: 2.4cqw;
+	/* Photo: the display bezel spans y 0.198-0.325 of the chassis ≈4.1cqw. */
 	flex: 1;
-	max-height: 3.2cqw;
-	padding: 0.12cqw 0.3cqw;
-	font-size: 0.44cqw;
-	line-height: 1.12;
+	max-height: 3.9cqw;
+	padding: 0.1cqw 0.3cqw;
+	font-size: 0.4cqw;
+	line-height: 1.05;
 }
 
 .deck-section[data-section="program"] .oled .oled-name {
-	font-size: 0.66cqw;
+	font-size: 0.6cqw;
 }
 
 .deck-section[data-section="program"] .oled .oled-program {
-	font-size: 0.44cqw;
+	font-size: 0.4cqw;
 }
 
 .deck-section[data-section="program"] .oled .oled-slot {
@@ -3394,7 +3465,7 @@ body {
 
 .deck-section[data-section="program"] .panel-button.small {
 	min-width: 1.5cqw;
-	min-height: 0.92cqw;
+	min-height: 0.72cqw;
 }
 
 .program-dial-block {
@@ -3635,7 +3706,10 @@ body {
 }
 
 .deck-section[data-section="synth"] .oled {
+	/* Photo: the synth display bezel spans y 0.135-0.225 of the chassis
+     (≈2.9cqw) — cap it so the block never stretches taller. */
 	min-height: 2.6cqw;
+	max-height: 3cqw;
 }
 
 .deck-section[data-section="synth"] .oled .oled-name {
@@ -3803,7 +3877,9 @@ body {
 }
 
 .knob-cell .legend {
-	font-size: 0.34cqw;
+	/* Photo: knob captions (RATE/TIME, DRIVE, FREQ…) print one notch
+     smaller than the general panel legends. */
+	font-size: 0.28cqw;
 }
 
 .arp-mode-cell {
@@ -3969,7 +4045,7 @@ body {
 .synth-bottom .knob-scale text,
 .arp-box .knob-scale text,
 .voice-box .knob-scale text {
-	font-size: 17px;
+	font-size: 15px;
 }
 
 .osc-box .knob-pair,
@@ -4368,14 +4444,16 @@ body {
 	min-width: 0;
 	display: grid;
 	/* Reference: Delay spans the right half's top; COMP and REVERB sit
-     side by side below it (vertical halves, Comp the narrower). */
+     side by side below it (vertical halves, Comp the narrower). Row split
+     photo-measured: MOD1 0.135-0.235, MOD2 0.24-0.335, AMP 0.34-0.49 of
+     the chassis. */
 	grid-template-columns: 1.12fr 0.38fr 0.65fr;
-	grid-template-rows: 1fr 1fr 1.8fr;
+	grid-template-rows: 1fr 0.95fr 1.5fr;
 	grid-template-areas:
 		"mod1 delay delay"
 		"mod2 delay delay"
 		"ampsim comp reverb";
-	gap: 0.26cqw;
+	gap: 0.2cqw;
 }
 
 .fx-box {
@@ -4407,7 +4485,7 @@ body {
 .mod2-box .knob-cell,
 .delay-box .knob-cell,
 .comp-box .knob-cell {
-	gap: 0.12cqw;
+	gap: 0.08cqw;
 }
 
 .reverb-box .variation-cell .legend {
@@ -4422,7 +4500,8 @@ body {
 .reverb-box,
 .comp-box {
 	gap: 0.02cqw 0.1cqw;
-	padding-top: 0.2cqw;
+	/* Enough headroom that the BRIGHT/DARK cluster clears the title pill. */
+	padding-top: 0.34cqw;
 	padding-bottom: 0.04cqw;
 }
 
@@ -4532,7 +4611,7 @@ body {
 
 .tap-box .panel-button.tap-button {
 	min-width: 1.5cqw;
-	min-height: 0.92cqw;
+	min-height: 0.72cqw;
 }
 
 .tap-box .tiny-led-row .legend {
@@ -4592,7 +4671,7 @@ body {
 /* Knob numeral arcs are dense here: print one notch smaller and widen the
    inter-knob gaps so neighboring scales and legends never overlap. */
 .fx-box .knob-scale text {
-	font-size: 19px;
+	font-size: 16px;
 }
 
 /* Mod 1/2 keep the reference's single row: cells shrink instead of wrapping
@@ -4752,7 +4831,7 @@ body {
    rotated 90° (1.5 x 0.92), housing reveal back on the short sides. */
 .panel-button.rocker.fx-on-h {
 	min-width: 1.5cqw;
-	min-height: 0.92cqw;
+	min-height: 0.72cqw;
 	padding: 0.12cqw 0.18cqw;
 }
 
@@ -4771,6 +4850,21 @@ body {
 .reverb-box .variation-row .legend {
 	flex-basis: 100%;
 	text-align: center;
+}
+
+/* The mod selector clusters (RM/TREM/A-PAN + boxed A-WAH/WAH/PUMP tags) and
+   the VARIATION prints run one notch smaller (photo) so they fit the
+   photo-proportioned short tracks. */
+.mod1-box .sel-row .legend,
+.mod2-box .sel-row .legend {
+	font-size: 0.24cqw;
+	letter-spacing: 0;
+}
+
+.fx-box .variation-row .legend {
+	font-size: 0.26cqw;
+	letter-spacing: 0;
+	white-space: nowrap;
 }
 
 /* Mod 1/2 and Amp Sim ON: a vertical light rocker pinned at the box's right
