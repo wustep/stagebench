@@ -2284,3 +2284,26 @@ Visual pass over the selector clusters and box-title registration.
 - Print sizes: voice/vibrato/arp legends 0.17 → 0.2cqw, piano acoustics
   rows 0.17–0.18 → 0.21 (photo caps ≈0.145).
 - Gates: typecheck, lint, suite 614/614, verify:layout 12/12.
+
+### 61 — Square printed tags that hug their text (2026-07-05)
+
+Chip/tag geometry pass from a photo close-up of the Mod 1 cluster.
+
+- Every printed tag is a near-SQUARE box on the hardware, not a stadium
+  pill: tag-box / sel-tag / red-tag radius 0.1 → 0.04cqw, display
+  soft-dial chips 0.08 → 0.04, the LIST tags 0.12 → 0.05 with a thin
+  0.02cqw outline (was 1px).
+- A-WAH's outline is THIN on the print: 0.035 → 0.02cqw border.
+- Chip backgrounds hug their text: the selector grids' 1fr columns were
+  stretching every right-column tag to the track width (the "fixed
+  width" look) — sel-left/sel-right now justify end/start.
+- Selector spread: label columns sit further out from the housing strip
+  (fx sel-grid column gap 0.24 → 0.3cqw, housing overhang 0.1 → 0.08)
+  and the Mod 1/2 clusters shift right toward their ON switch
+  (margin-left 0.26 → 0.5cqw) per the reference composition.
+- fx arrow pairs tighten (0.17 → 0.15cqw, pair gap 0.09 → 0.06) toward
+  the photo's compact strip.
+- VARIATION ▽ prints at selector-word size (0.2 → 0.22cqw) in all the
+  effect boxes; Piano Select type rows breathe at photo pitch
+  (row gap 0.08 → 0.12cqw).
+- Gates: typecheck, lint, suite 614/614, verify:layout 12/12.
