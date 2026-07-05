@@ -2328,3 +2328,23 @@ border lines, and the title text sits in a real paint gap.
 - Titles center on the line: base top -0.17 → -0.15cqw (border center
   moved with the thicker line), two-line ORGAN MODEL -0.3 → -0.26cqw.
 - Gates: typecheck, lint, suite 614/614, verify:layout 12/12.
+
+### 63 — Slim effects gutters, low organ/piano clusters, uniform triangle housings (2026-07-05)
+
+Follow-up pass on the box-tiling feedback.
+
+- Layer Effects gutter halves to one UNIFORM 0.18cqw padding (was
+  0.32/0.42): MOD 1 and DELAY's top borders rise and every box grows.
+- Piano Select starts LOWER (piano-main gap 0.3 → 1cqw, bottom edge
+  still anchored to the plate) and the MODEL dial drops to the box
+  bottom (margin-top auto), matching the photo's empty mid-band.
+- Vib/Chorus + B3 Percussion clusters sit low and ALIGN: the vib select
+  row drops 0.7cqw so its button shares the percussion buttons' height
+  band (probe: 1.64 vs 1.67cqw), and both ON rows pin to one bottom
+  line (margin-top auto — probe: 3.22cqw both).
+- Triangle selectors unified: ONE arrow size (0.16 x 0.15cqw), ONE pair
+  gap (0.06), ONE housing width (0.52cqw) and SHARP corners (radius 0,
+  photo) across Organ Model, Piano Select, Vib/Chorus and all effect
+  grids; fx-specific size/gap overrides removed; row pitches converge
+  (type grid 0.12 → 0.1, reverb rows 0.05 → 0.08).
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12.

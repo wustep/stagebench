@@ -9,7 +9,7 @@
      cooler than the previous values). */
 	--panel: #3d4450;
 	--panel-dark: #333945;
-	--panel-line: #5c6371;
+	--panel-line: #bcc2cf;
 	/* The light header/tab band: nearly FLAT bluish gray in the photo
      (sampled ~rgb(190,198,211)) — the old values were lighter and too
      gradient-heavy. One material shared by every light tab on the panel. */
@@ -415,6 +415,87 @@ body {
 .overlay-wipe:focus-visible {
 	outline: 2px solid #d8a03c;
 	outline-offset: 2px;
+}
+
+/* ------------------------------------------- dev-only measure mode ------ */
+/* import.meta.env.DEV gates the whole tool — none of this UI ships in
+   published builds. Box geometry is chassis-relative percentages, so drawn
+   boxes stay pinned to the panel through window resizes. */
+.measure-overlay {
+	position: absolute;
+	inset: 0;
+	/* Over the compare ghost and wipe seam (30/31), under the loupe (60). */
+	z-index: 40;
+	cursor: crosshair;
+	touch-action: none;
+}
+
+.measure-box {
+	position: absolute;
+	border: 1px solid #ffd75e;
+	background: rgba(255, 215, 94, 0.1);
+	box-shadow: 0 0 0 1px rgba(20, 8, 8, 0.55);
+	pointer-events: none;
+}
+
+.measure-box-label {
+	position: absolute;
+	left: 0;
+	top: calc(100% + 3px);
+	font:
+		600 10px/1.4 ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		monospace;
+	white-space: nowrap;
+	color: #ffd75e;
+	background: rgba(16, 14, 12, 0.88);
+	border: 1px solid rgba(255, 215, 94, 0.4);
+	border-radius: 3px;
+	padding: 0 4px;
+}
+
+/* Boxes hugging the chassis' bottom edge print their label above instead,
+   so it never clips outside the panel. */
+.measure-box[data-label="above"] .measure-box-label {
+	top: auto;
+	bottom: calc(100% + 3px);
+}
+
+.measure-readout {
+	position: fixed;
+	right: 12px;
+	bottom: 12px;
+	z-index: 70;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font:
+		500 11px/1.5 ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		monospace;
+	color: #e7e9ee;
+	background: rgba(18, 19, 22, 0.94);
+	border: 1px solid #3a3d46;
+	border-radius: 8px;
+	padding: 8px 12px;
+	box-shadow: 0 6px 16px rgba(20, 15, 12, 0.35);
+	/* Read-only HUD: never steal the pointer from what is being measured. */
+	pointer-events: none;
+}
+
+.measure-title {
+	font-size: 9.5px;
+	font-weight: 700;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	color: #f3d9a0;
+}
+
+.measure-hint {
+	font-size: 9.5px;
+	color: #8f929b;
 }
 
 /* Opacity slider borrows the ctrl-pedal slider look, just narrower. */
@@ -1164,13 +1245,15 @@ body {
    Vib/Chorus and effect-type grids all use small arrow-shaped indicators).
    Photo re-measure (2026-07-05): the arrows are TINY — ≈0.12-0.14cqw across
    every cluster, half the earlier size. */
+/* ONE size everywhere (photo: the arrow pairs are identical across the
+   Organ Model, Piano Select, Vib/Chorus and every effect selector). */
 .led.led-tri-left,
 .led.led-tri-right,
 .led.led-tri-up,
 .led.led-tri-down {
 	border-radius: 0;
-	width: 0.17cqw;
-	height: 0.16cqw;
+	width: 0.16cqw;
+	height: 0.15cqw;
 }
 
 .led.led-tri-left {
@@ -1238,17 +1321,20 @@ body {
 	position: absolute;
 	top: -0.1cqw;
 	bottom: -0.1cqw;
-	left: -0.08cqw;
-	right: -0.08cqw;
+	/* Pair (0.16 + 0.06 + 0.16 = 0.38) + 0.07 overhang per side = the
+     uniform 0.52cqw housing width shared with the Organ Model / Piano
+     Select strips. */
+	left: -0.07cqw;
+	right: -0.07cqw;
 	background: #16181c;
 	box-shadow:
 		inset 0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55),
 		inset -0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55);
 }
 
+/* Photo: the housing is a SHARP rectangle — no corner rounding. */
 .sel-grid .sel-row:first-child .sel-leds::before {
 	top: -0.08cqw;
-	border-radius: 0.1cqw 0.1cqw 0 0;
 	box-shadow:
 		inset 0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55),
 		inset -0.04cqw 0 0.06cqw rgba(0, 0, 0, 0.55),
@@ -1257,7 +1343,6 @@ body {
 
 .sel-grid .sel-row:last-child .sel-leds::before {
 	bottom: -0.08cqw;
-	border-radius: 0 0 0.1cqw 0.1cqw;
 }
 
 .sel-grid .sel-leds .led {
@@ -1270,15 +1355,14 @@ body {
 .type-led-grid::before {
 	content: "";
 	position: absolute;
-	top: -0.06cqw;
-	bottom: -0.06cqw;
+	top: -0.08cqw;
+	bottom: -0.08cqw;
 	left: 50%;
 	transform: translateX(-50%);
-	/* Photo: the housing hugs the arrow pair (≈0.45-0.5cqw), it is not a
-     wide bar. */
+	/* The uniform housing: 0.52cqw wide, sharp corners (photo — one
+     identical rectangle behind every 6-triangle cluster). */
 	width: 0.52cqw;
 	background: linear-gradient(180deg, #202227 0%, #101114 100%);
-	border-radius: 0.1cqw;
 	box-shadow:
 		inset 0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.7),
 		0 0.02cqw 0.03cqw rgba(255, 255, 255, 0.05);
@@ -1305,7 +1389,8 @@ body {
 
 .sel-leds {
 	display: inline-flex;
-	gap: 0.09cqw;
+	/* One uniform pair gap across every selector cluster (photo). */
+	gap: 0.06cqw;
 	flex: none;
 }
 
@@ -1355,17 +1440,6 @@ body {
 	/* Photo: TREM caps ≈0.178cqw — the effect selector rows print at full
      legend size, not a reduced chip size. */
 	font-size: 0.23cqw;
-}
-
-.fx-box .sel-leds .led {
-	width: 0.15cqw;
-	height: 0.14cqw;
-}
-
-/* Photo: the arrow pair sits nearly touching in a housing that hugs it
-   (strip ≈0.4cqw wide on the print). */
-.fx-box .sel-leds {
-	gap: 0.06cqw;
 }
 
 /* The Reverb selector must hug its three rows: stretched to the tall
@@ -1433,8 +1507,9 @@ body {
 }
 
 .reverb-box .sel-grid {
-	/* Photo: same air between words and housing as the other selectors. */
-	gap: 0.05cqw 0.24cqw;
+	/* Photo: same air between words and housing as the other selectors;
+     row pitch matches the other triangle grids (uniform housings). */
+	gap: 0.08cqw 0.24cqw;
 }
 
 .reverb-box .sel-row .legend {
@@ -1485,7 +1560,6 @@ body {
 	top: 30%;
 	bottom: 30%;
 	background: linear-gradient(180deg, #202227 0%, #101114 100%);
-	border-radius: 0.1cqw;
 	box-shadow:
 		inset 0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.7),
 		0 0.02cqw 0.03cqw rgba(255, 255, 255, 0.05);
@@ -2560,9 +2634,9 @@ body {
 	font-family:
 		"Comfortaa", "Arial Rounded MT Bold", "Helvetica Rounded", ui-rounded,
 		"Trebuchet MS", "Helvetica Neue", sans-serif;
-	font-size: 1.18cqw;
+	font-size: 1.32cqw;
 	font-weight: 700;
-	letter-spacing: 0.015cqw;
+	letter-spacing: -0.07cqw;
 	color: #f3efe8;
 	white-space: nowrap;
 }
@@ -2570,9 +2644,8 @@ body {
 .brand-sub {
 	font-size: 0.34cqw;
 	/* Letter-spaced so the 73's right edge lines up with the logotype's
-     final 4 (measured: glyph run 3.7cqw + 15 visible gaps closing an
-     8.04cqw logo line). */
-	letter-spacing: 0.306cqw;
+     final 4 (tuned against Comfortaa at 1.32cqw / -0.07cqw tracking). */
+	letter-spacing: 0.318cqw;
 	white-space: nowrap;
 	color: #e8d3d5;
 	font-weight: 600;
@@ -2900,6 +2973,22 @@ body {
 	justify-content: space-between;
 	align-self: stretch;
 	padding: 0 0.14cqw;
+}
+
+/* Photo: the Vib/Chorus and B3 Percussion clusters sit LOW in their boxes —
+   the select buttons share one height band and both ON rows pin to one
+   shared bottom line. */
+.organ-vib > .perc-on,
+.organ-perc > .perc-on {
+	margin-top: auto;
+}
+
+.organ-vib .vib-select-row {
+	margin-top: 0.7cqw;
+}
+
+.organ-perc .perc-grid {
+	margin-top: 0.12cqw;
 }
 
 .organ-perc .perc-on .legend {
@@ -3252,7 +3341,9 @@ body {
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 0.3cqw;
+	/* Photo: a wide navy band above the PIANO SELECT box — its top line
+     starts low (≈45% of the plate) while its bottom stays anchored. */
+	gap: 1cqw;
 	min-height: 0;
 }
 
@@ -3285,8 +3376,8 @@ body {
 .type-led-grid {
 	display: flex;
 	flex-direction: column;
-	/* Photo: the ELECTRIC/UPRIGHT/GRAND rows breathe (~0.36cqw pitch). */
-	gap: 0.12cqw;
+	/* One row pitch shared with the Organ Model grid (uniform housings). */
+	gap: 0.1cqw;
 	position: relative;
 }
 
@@ -3323,7 +3414,10 @@ body {
 	flex-direction: column;
 	align-items: center;
 	gap: 0.1cqw;
-	margin-top: 0.1cqw;
+	/* Photo: the MODEL dial sits at the BOTTOM of the Piano Select box,
+     well clear of the INFO print above. */
+	margin-top: auto;
+	padding-bottom: 0.1cqw;
 }
 
 /* -------------------------------------------------------------- program -- */
@@ -4910,10 +5004,12 @@ body {
      through the corner notch. Top-right stays square under the strip. */
 	margin-left: -0.32cqw;
 	border-radius: 0.3cqw 0 0.35cqw 0.35cqw;
+	/* Photo: a slim, UNIFORM gutter between the plate edge and the tiled
+     boxes — the boxes claim most of the plate. */
+	padding: 0.18cqw;
 	box-shadow:
 		inset 0 0.1cqw 0.15cqw rgba(255, 255, 255, 0.12),
 		inset 0 -0.15cqw 0.25cqw rgba(0, 0, 0, 0.3);
-	padding: 0.32cqw 0.42cqw;
 }
 
 .effects-grid {
@@ -5531,6 +5627,7 @@ body {
    of gear rather than default browser widgets. */
 .status-strip {
 	width: min(94vw, 1400px);
+	max-width: 100%;
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px 18px;
@@ -5562,11 +5659,29 @@ body {
 
 /* Minimal chrome: the informational strip collapses; essentials stay. */
 .chrome-essentials {
-	display: inline-flex;
+	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 12px;
-	flex-basis: 100%;
+	gap: 8px 12px;
+	flex: 1 1 100%;
+	width: 100%;
+	min-width: 0;
 	justify-content: center;
+}
+
+/* Overlay compare controls break to their own row so the primary tray
+   (pedals + toggles) never forces a horizontal page scroll. */
+.chrome-overlay-tools {
+	flex: 1 1 100%;
+	width: 100%;
+	min-width: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 6px 10px;
+	padding-top: 2px;
+	border-top: 1px solid #33353b;
 }
 
 .chrome-divider {
