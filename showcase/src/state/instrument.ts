@@ -697,9 +697,9 @@ export const MORPH_DESTINATIONS: ReadonlySet<string> = new Set([
  *  truthful display name a paste refusal re-prints ("Cannot paste X here").
  *  Not program state. */
 export type MonCopyClipboard =
-  | { kind: 'piano-layer'; label: string; payload: { layer: PianoLayerState; chain: EffectChainState } }
-  | { kind: 'organ-layer'; label: string; payload: { layer: OrganLayerState; chain: EffectChainState } }
-  | { kind: 'synth-layer'; label: string; payload: { layer: SynthLayerState; chain: EffectChainState } }
+  | { kind: 'piano-layer'; label: string; source: LayerId; payload: { layer: PianoLayerState; chain: EffectChainState } }
+  | { kind: 'organ-layer'; label: string; source: LayerId; payload: { layer: OrganLayerState; chain: EffectChainState } }
+  | { kind: 'synth-layer'; label: string; source: SynthLayerId; payload: { layer: SynthLayerState; chain: EffectChainState } }
   | { kind: 'effect'; label: string; unit: keyof EffectChainState; payload: EffectChainState[keyof EffectChainState] }
   | { kind: 'morph'; label: string; payload: MorphAssignment[] }
   | { kind: 'program'; label: string; payload: ProgramSlot }
@@ -929,7 +929,7 @@ export interface InstrumentState {
    *  'paste' = PASTE (Shift + Mon/Copy) latched (the same buttons paste).
    *  Mutually exclusive with the Program-OLED edit modes and preset
    *  browsing. Not program state. */
-  monCopy: 'copy' | 'paste' | null
+  monCopy: 'copy' | 'paste' | 'swap' | null
   /** The copied object (deep-cloned, manual p. 43). Survives leaving the
    *  latch so a later Paste can use it. Not program state. */
   clipboard: MonCopyClipboard | null
@@ -1829,6 +1829,22 @@ export class InstrumentStore {
     const current = this.state.split.points[edit.point].xf
     const xf = current === 0 ? 6 : current === 6 ? 12 : 0
     this.patchSplitPoint({ xf }, `Split ${SPLIT_POINT_NAMES[edit.point]} XFade ${xf === 0 ? 'Off' : `±${xf}`}`)
+  }
+
+  /** SET KEY (Shift + Split, manual p. 39: "shifts the position of the
+   *  currently selected split point"): steps the selected point — the split
+   *  editor's point when it is open, MID otherwise (the point the editor
+   *  opens on) — to the next of the 11 documented positions, wrapping. */
+  nudgeSplitPoint(): void {
+    const point = this.state.splitEdit?.point ?? 1
+    const current = SPLIT_POSITIONS.indexOf(this.state.split.points[point].note)
+    const index = (Math.max(0, current) + 1) % SPLIT_POSITIONS.length
+    const points = [...this.state.split.points] as SplitState['points']
+    points[point] = { ...points[point], note: SPLIT_POSITIONS[index]! }
+    this.patch(
+      { split: { ...this.state.split, points } },
+      `Set Key — Split ${SPLIT_POINT_NAMES[point]}: ${SPLIT_POSITION_NAMES[index]}`,
+    )
   }
 
   /* ----------------------------------------------------------- layer init -- */
@@ -3278,7 +3294,7 @@ export class InstrumentStore {
    *  Layer / effect ON / Morph Assign / PROGRAM buttons to the copy/paste
    *  presses below. Mutually exclusive with the Program-OLED edit modes and
    *  preset browsing; opening the latch is panel-only state, not an edit. */
-  setMonCopyMode(mode: 'copy' | 'paste' | null): void {
+  setMonCopyMode(mode: 'copy' | 'paste' | 'swap' | null): void {
     if (mode === this.state.monCopy) return
     this.patch(
       {
@@ -3288,8 +3304,10 @@ export class InstrumentStore {
       mode === 'copy'
         ? 'Mon/Copy — turn a knob: monitor · Layer/FX On/Morph/Program: copy'
         : mode === 'paste'
-          ? 'Paste — press a Layer / FX On / Morph / Program target'
-          : 'Mon/Copy off',
+          ? 'Paste — press a target · Mon/Copy: Swap mode'
+          : mode === 'swap'
+            ? 'Swap — press the other Layer of the pair · Mon/Copy: Paste mode'
+            : 'Mon/Copy off',
     )
   }
 
@@ -3312,11 +3330,15 @@ export class InstrumentStore {
     if (this.state.monCopy === 'copy') {
       const clipboard: MonCopyClipboard =
         section === 'piano'
-          ? { kind: 'piano-layer', label, payload: deepClone({ layer: this.state.layers[layer as LayerId], chain: this.state.chains[layer as LayerId] }) }
+          ? { kind: 'piano-layer', label, source: layer as LayerId, payload: deepClone({ layer: this.state.layers[layer as LayerId], chain: this.state.chains[layer as LayerId] }) }
           : section === 'organ'
-            ? { kind: 'organ-layer', label, payload: deepClone({ layer: this.state.organ.layers[layer as LayerId], chain: this.state.organChain }) }
-            : { kind: 'synth-layer', label, payload: deepClone({ layer: this.state.synth.layers[layer as SynthLayerId], chain: this.state.synthChains[layer as SynthLayerId] }) }
+            ? { kind: 'organ-layer', label, source: layer as LayerId, payload: deepClone({ layer: this.state.organ.layers[layer as LayerId], chain: this.state.organChain }) }
+            : { kind: 'synth-layer', label, source: layer as SynthLayerId, payload: deepClone({ layer: this.state.synth.layers[layer as SynthLayerId], chain: this.state.synthChains[layer as SynthLayerId] }) }
       this.patch({ clipboard }, `Copied: ${label}`)
+      return
+    }
+    if (this.state.monCopy === 'swap') {
+      this.monCopySwapLayer(section, layer)
       return
     }
     const clip = this.state.clipboard
@@ -3356,6 +3378,65 @@ export class InstrumentStore {
     this.monCopyRefuse()
   }
 
+  /** SWAP (manual p. 43: "When pasting a Layer to another Layer in the same
+   *  Program it is possible to instead Swap the two Layers"): interchanges
+   *  the copied source layer's CURRENT state (and effect chain) with the
+   *  pressed layer's — same section only, like the paste it replaces. The
+   *  two Organ layers share one chain (manual p. 18), so an Organ swap
+   *  exchanges the layer states and leaves the shared chain in place. */
+  private monCopySwapLayer(section: SectionKey, layer: LayerId | SynthLayerId): void {
+    const clip = this.state.clipboard
+    const kind = section === 'piano' ? 'piano-layer' : section === 'organ' ? 'organ-layer' : 'synth-layer'
+    if (!clip || clip.kind !== kind) {
+      this.setLastEdit(clip ? `Cannot swap ${clip.label} with a ${presetSectionName(section)} Layer` : 'Swap — copy a Layer first')
+      return
+    }
+    const source = (clip as { source: LayerId | SynthLayerId }).source
+    const label = `${presetSectionName(section)} ${source} ⇄ ${layer}`
+    if (source === layer) {
+      this.setLastEdit(`Swap — ${presetSectionName(section)} ${layer} with itself is a no-op`)
+      return
+    }
+    if (section === 'piano') {
+      const layers = this.state.layers
+      const chains = this.state.chains
+      const a = source as LayerId
+      const b = layer as LayerId
+      this.patchWithUndo(
+        {
+          layers: { ...layers, [a]: layers[b], [b]: layers[a] },
+          chains: { ...chains, [a]: chains[b], [b]: chains[a] },
+        },
+        `Swapped ${label}`,
+        'Swap',
+      )
+      return
+    }
+    if (section === 'organ') {
+      const layers = this.state.organ.layers
+      const a = source as LayerId
+      const b = layer as LayerId
+      this.patchWithUndo(
+        { organ: { ...this.state.organ, layers: { ...layers, [a]: layers[b], [b]: layers[a] } } },
+        `Swapped ${label}`,
+        'Swap',
+      )
+      return
+    }
+    const layers = this.state.synth.layers
+    const chains = this.state.synthChains
+    const a = source as SynthLayerId
+    const b = layer as SynthLayerId
+    this.patchWithUndo(
+      {
+        synth: { ...this.state.synth, layers: { ...layers, [a]: layers[b], [b]: layers[a] } },
+        synthChains: { ...chains, [a]: chains[b], [b]: chains[a] },
+      },
+      `Swapped ${label}`,
+      'Swap',
+    )
+  }
+
   /** An effect unit's ON button while a latch is on (manual p. 43 "To copy
    *  an Effect, press any Effect ON button"): copy captures the focused
    *  chain's unit settings; paste writes them back through updateUnit — the
@@ -3365,6 +3446,10 @@ export class InstrumentStore {
     if (this.state.monCopy === 'copy') {
       const clipboard: MonCopyClipboard = { kind: 'effect', label: unitLabel(unit), unit, payload: deepClone(this.focusedChain()[unit]) }
       this.patch({ clipboard }, `Copied: ${unitLabel(unit)}`)
+      return
+    }
+    if (this.state.monCopy === 'swap') {
+      this.setLastEdit('Swap is Layer ⇄ Layer only (manual p. 43)')
       return
     }
     const clip = this.state.clipboard
@@ -3388,6 +3473,10 @@ export class InstrumentStore {
       this.patch({ clipboard }, `Copied: Morph ${morphSourceLabel(source)}`)
       return
     }
+    if (this.state.monCopy === 'swap') {
+      this.setLastEdit('Swap is Layer ⇄ Layer only (manual p. 43)')
+      return
+    }
     const clip = this.state.clipboard
     if (clip?.kind === 'morph') {
       this.patchWithUndo({ morph: { ...this.state.morph, [source]: deepClone(clip.payload) } }, `Pasted → Morph ${morphSourceLabel(source)}`, 'Paste')
@@ -3408,6 +3497,10 @@ export class InstrumentStore {
       const slot = this.activeBank()[index]!
       const clipboard: MonCopyClipboard = { kind: 'program', label: `Program ${slotLabel} ${slot.name}`, payload: deepClone(slot) }
       this.patch({ clipboard }, `Copied: ${slotLabel} ${slot.name}`)
+      return
+    }
+    if (this.state.monCopy === 'swap') {
+      this.setLastEdit('Swap is Layer ⇄ Layer only (manual p. 43) — Organize swaps Programs')
       return
     }
     const clip = this.state.clipboard

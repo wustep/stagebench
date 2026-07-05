@@ -193,8 +193,86 @@ describe('programs.mon-copy — panel', () => {
     renderApp()
     fireEvent.click(screen.getByRole('button', { name: 'Paste' }))
     expect(monCopyLed().dataset.on).toBe('true')
-    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Paste — press a Layer/)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Paste — press a target/)
     fireEvent.click(screen.getByRole('button', { name: 'Paste' }))
     expect(monCopyLed().dataset.on).toBe('false')
+  })
+})
+
+describe('programs.mon-copy — Paste ⇄ Swap (manual p. 43, audit E9)', () => {
+  it('Swap interchanges the two layers\' CURRENT states and chains, not the stale clipboard', () => {
+    const store = new InstrumentStore()
+    store.setLayerLevel('A', 70)
+    store.setLayerLevel('B', 40)
+    store.updateUnit('mod1', { rate: 111 } as never, 'test') // chains.A (piano focus)
+    store.setMonCopyMode('copy')
+    store.monCopyLayerPress('piano', 'A')
+    store.setLayerLevel('A', 77) // edit AFTER the copy: Swap must exchange 77, not 70
+    store.setMonCopyMode('swap')
+    store.monCopyLayerPress('piano', 'B')
+    const s = store.getState()
+    expect(s.layers.A.level).toBe(40)
+    expect(s.layers.B.level).toBe(77)
+    expect(s.chains.B.mod1.rate).toBe(111) // the chains swapped too
+    expect(s.lastEdit).toBe('Swapped Piano A ⇄ B')
+    expect(s.programs.dirty).toBe(true)
+    // UNDO covers a Swap like it covers a Paste.
+    store.setMonCopyMode(null)
+    store.undoProgramChange()
+    expect(store.getState().layers.A.level).toBe(77)
+    expect(store.getState().lastEdit).toContain('Undo Swap')
+  })
+
+  it('a synth-layer Swap exchanges the per-layer chains; Organ keeps its one shared chain', () => {
+    const store = new InstrumentStore()
+    store.setSynthFxFocus('A')
+    store.updateUnit('delay', { on: true } as never, 'test')
+    store.setMonCopyMode('copy')
+    store.monCopyLayerPress('synth', 'A')
+    store.setMonCopyMode('swap')
+    store.monCopyLayerPress('synth', 'C')
+    expect(store.getState().synthChains.C.delay.on).toBe(true)
+    expect(store.getState().synthChains.A.delay.on).toBe(false)
+    // Organ: swap the registrations, shared chain untouched.
+    store.setOrganDrawbar(1, 7) // focused layer A
+    const chainBefore = store.getState().organChain
+    store.setMonCopyMode('copy')
+    store.monCopyLayerPress('organ', 'A')
+    store.setMonCopyMode('swap')
+    store.monCopyLayerPress('organ', 'B')
+    expect(store.getState().organ.layers.B.drawbars[1]).toBe(7)
+    expect(store.getState().organChain).toBe(chainBefore)
+  })
+
+  it('Swap refuses cross-section pairs, self-swaps, and non-Layer targets truthfully', () => {
+    const store = new InstrumentStore()
+    store.setMonCopyMode('copy')
+    store.monCopyLayerPress('piano', 'A')
+    store.setMonCopyMode('swap')
+    const before = store.getState().synth
+    store.monCopyLayerPress('synth', 'B')
+    expect(store.getState().lastEdit).toBe('Cannot swap Piano A with a Synth Layer')
+    expect(store.getState().synth).toBe(before)
+    store.monCopyLayerPress('piano', 'A')
+    expect(store.getState().lastEdit).toContain('no-op')
+    store.monCopyEffectPress('mod1')
+    expect(store.getState().lastEdit).toContain('Swap is Layer ⇄ Layer only')
+    store.monCopyProgramPress(3)
+    expect(store.getState().lastEdit).toContain('Organize swaps Programs')
+    expect(store.getState().programs.dirty).toBe(false) // nothing wrote anything
+  })
+
+  it('panel: with the Paste latch on, a plain Mon/Copy press toggles Paste ⇄ Swap', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Monitor/Copy Paste' })) // Shift + Mon/Copy = Paste
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Paste — press a target/)
+    fireEvent.click(screen.getByRole('button', { name: 'Monitor/Copy Paste' })) // repeat presses toggle
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Swap — press the other Layer/)
+    fireEvent.click(screen.getByRole('button', { name: 'Monitor/Copy Paste' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Paste — press a target/)
+    // Shift/Exit drops the whole latch.
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Mon\/Copy off/)
   })
 })

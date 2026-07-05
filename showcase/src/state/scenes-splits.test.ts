@@ -220,14 +220,18 @@ describe('splits.zones — engine routing and panel editing', () => {
     expect(store.getState().synth.layers.B.enabled).toBe(true)
   })
 
-  it('the split editor drives points from the panel: position, active, crossfade', () => {
+  it('the split editor drives points from the panel: position, active, crossfade', async () => {
     renderApp()
-    fireEvent.click(screen.getByRole('button', { name: 'Split On/Set' }))
-    expect(screen.getByRole('button', { name: 'Split On/Set' }).getAttribute('aria-pressed')).toBe('true')
-    // Shift + Split opens the editor on the MID point.
+    const splitButton = screen.getByRole('button', { name: 'Split On/Set' })
+    fireEvent.click(splitButton)
+    expect(splitButton.getAttribute('aria-pressed')).toBe('true')
+    // Press-and-hold opens the editor on the MID point (the manual's own ⑥
+    // hold gesture, p. 39); the trailing click is suppressed by the hold.
     const shift = screen.getByRole('button', { name: 'Shift/Exit' })
-    fireEvent.click(shift)
-    fireEvent.click(screen.getByRole('button', { name: 'Split On/Set' }))
+    fireEvent.pointerDown(splitButton, { pointerId: 1 })
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    fireEvent.pointerUp(splitButton, { pointerId: 1 })
+    fireEvent.click(splitButton)
     expect(screen.getByTestId('oled-split-line').textContent).toMatch(/SPLIT ON — MID ● C4/)
     // Dial chooses among the 11 documented positions.
     const dial = screen.getByRole('slider', { name: 'Program Dial' })
@@ -246,6 +250,32 @@ describe('splits.zones — engine routing and panel editing', () => {
     const markers = document.querySelectorAll('.split-marker')
     expect(markers).toHaveLength(2) // LOW (C3 default) + MID (C7 now)
     expect(document.querySelector('[data-split-note="96"]')).toBeTruthy()
+  })
+
+  it('SET KEY (Shift + Split, manual p. 39) nudges the selected split point to the next position', () => {
+    renderApp()
+    const splitButton = screen.getByRole('button', { name: 'Split On/Set' })
+    fireEvent.click(splitButton) // split on (MID at C4)
+    const shift = screen.getByRole('button', { name: 'Shift/Exit' })
+    fireEvent.click(shift)
+    fireEvent.click(splitButton) // SET KEY: C4 -> F4
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Set Key — Split MID: F4/)
+    fireEvent.click(splitButton)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Set Key — Split MID: C5/)
+    // The split marker above the keybed follows the nudged point.
+    expect(document.querySelector('[data-split-note="72"]')).toBeTruthy() // C5 = midi 72
+  })
+
+  it('SET KEY moves the split editor\'s selected point while the editor is open', () => {
+    const store = new InstrumentStore()
+    store.toggleSplit()
+    store.setSplitEdit(true)
+    store.selectSplitPoint(-1) // LOW selected
+    const before = store.getState().split.points[0].note
+    store.nudgeSplitPoint()
+    expect(store.getState().split.points[0].note).not.toBe(before)
+    expect(store.getState().split.points[1].note).toBe(60) // MID untouched
+    expect(store.getState().lastEdit).toMatch(/Set Key — Split LOW/)
   })
 
   it('KB ZONE (Shift + Octave) steps the focused layer through zone ranges with LEDs', () => {

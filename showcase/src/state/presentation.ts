@@ -1091,9 +1091,15 @@ export class PresentationStore {
           // MON/COPY (manual p. 43) — pointer-first adaptation (declared;
           // the hardware HOLDS Mon/Copy or Paste): a click LATCHES the
           // monitor/copy mode, Shift + click latches PASTE (the ⇕ print
-          // under the cap); clicking again or Shift/Exit leaves.
+          // under the cap); clicking again or Shift/Exit leaves. While the
+          // Paste latch is on, pressing Mon/Copy again toggles Paste ⇄ Swap
+          // ("lift and press Mon/Copy repeatedly to toggle between Paste
+          // and Swap modes", manual p. 43) — Shift/Exit drops the latch.
           const current = store.getState().monCopy
-          store.setMonCopyMode(shift ? (current === 'paste' ? null : 'paste') : current === 'copy' ? null : 'copy')
+          if (current === 'paste') store.setMonCopyMode('swap')
+          else if (current === 'swap') store.setMonCopyMode('paste')
+          else if (shift) store.setMonCopyMode('paste')
+          else store.setMonCopyMode(current === 'copy' ? null : 'copy')
           return
         }
         case 'layer-scene':
@@ -1108,9 +1114,11 @@ export class PresentationStore {
           return
         }
         case 'split-onset':
-          // SPLIT ON/SET toggles the split; Shift opens the point editor (our
-          // panel adaptation of the manual's press-and-hold, p. 39).
-          if (shift) store.setSplitEdit(!store.getState().splitEdit)
+          // SPLIT ON/SET toggles the split; SET KEY = Shift + press (manual
+          // p. 39: "shifts the position of the currently selected split
+          // point"). The point editor lives on press-and-hold (the manual's
+          // own gesture), wired through the button's holdAction.
+          if (shift) store.nudgeSplitPoint()
           else store.toggleSplit()
           return
         case 'mstclk-tap': {

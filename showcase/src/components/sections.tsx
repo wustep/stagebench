@@ -967,7 +967,14 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               ))}
             </span>
             <Legend>ON/SET ▾</Legend>
-            <PanelButton store={store} id="split-onset" className="dark tiny" />
+            {/* Press = split on/off, press-and-hold = the point editor (the
+                manual's ⑥ hold gesture, p. 39), Shift + press = SET KEY. */}
+            <PanelButton
+              store={store}
+              id="split-onset"
+              className="dark tiny"
+              holdAction={() => instrument.setSplitEdit(!instrument.getState().splitEdit)}
+            />
             <Legend className="dim">SET KEY</Legend>
           </GroupBox>
           <GroupBox title="Mst Clk" className="clk-box">
