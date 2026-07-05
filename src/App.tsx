@@ -560,8 +560,9 @@ function App() {
 
         <div className="header-intro">
           <div>
+            <span className="header-eyebrow">Unofficial fan project</span>
             <h1>Nord Stage{'\u00A0'}4 benchmark</h1>
-            <p>Coding agents recreate the Nord Stage 4 as a playable browser instrument in three cumulative phases — panel and Piano, Piano library and effects, then the complete system.</p>
+            <p>Coding agents rebuild the Nord Stage{' '}4 as a playable browser instrument.</p>
           </div>
         </div>
 
@@ -705,8 +706,8 @@ function App() {
       <footer>
         <span>Stagebench</span>
         <p>
-          <span>This is an academic benchmark for UI and audio system reconstruction.</span>
-          <span>Nord® and Nord Stage® are trademarks of Clavia DMI AB. Independent project, not affiliated with or endorsed by Clavia.</span>
+          <span>This is an unofficial fan project created for educational and non-commercial purposes. It is not affiliated with, endorsed by, sponsored by, or associated with Clavia DMI AB or the Nord brand.</span>
+          <span>&ldquo;Nord&rdquo; and &ldquo;Nord Stage&rdquo; are trademarks of Clavia DMI AB and are used solely to identify the product that inspired this project.</span>
         </p>
       </footer>
 
