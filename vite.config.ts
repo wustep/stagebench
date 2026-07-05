@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { createReadStream, existsSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
+import { secretBridgePlugin } from './bench/lib/vite-secret-bridge.mjs'
 
 /** Dev-server bridge to the repo-root reference/ photos (gitignored, fetched
  *  via `pnpm bench fetch`, never redistributed). Lets the artifact study
@@ -24,5 +25,5 @@ const referencePhotos = (): Plugin => ({
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), referencePhotos()],
+  plugins: [react(), secretBridgePlugin(), referencePhotos()],
 })

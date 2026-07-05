@@ -1,7 +1,11 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { createReadStream, existsSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { basename, resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { secretBridgePlugin } from '../bench/lib/vite-secret-bridge.mjs'
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Dev-server bridge to the repo-root reference/ photos (gitignored,
  *  fetched via `pnpm bench fetch`, never redistributed). On production the
@@ -23,7 +27,7 @@ const referencePhotos = (): Plugin => ({
 
 export default defineConfig({
   base: './',
-  plugins: [react(), referencePhotos()],
+  plugins: [react(), secretBridgePlugin({ envDir: repoRoot }), referencePhotos()],
   build: {
     rollupOptions: {
       output: {
