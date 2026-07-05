@@ -831,3 +831,116 @@ describe('programs.broad-undo — UNDO covers the big operations (manual p. 42-4
     expect(screen.getByTestId('oled-edit-line').textContent).toContain('Undo Layer Init')
   })
 })
+
+describe('programs.banks — eight banks A-H behind BANK ◂ ▸ (Shift + PAGE, manual p. 44, audit E7)', () => {
+  it('switching banks keeps the slot position, loads Init content, and labels with the bank letter', () => {
+    const store = new InstrumentStore()
+    store.selectProgram(9) // A:22 Velvet EP or similar factory content
+    store.switchBank(1)
+    const state = store.getState()
+    expect(state.programs.bankIndex).toBe(1)
+    expect(state.programs.current).toBe(9) // slot position survives the switch
+    expect(state.programs.bank[9]!.name).toBe('Init')
+    expect(store.currentProgramLabel()).toBe('B:22')
+    expect(state.lastEdit).toContain('Bank B')
+  })
+
+  it('each bank keeps its own content: edits stored in B survive a round trip through A', () => {
+    const store = new InstrumentStore()
+    store.switchBank(1)
+    store.cycleUnison()
+    store.storePress()
+    store.storePress() // stored into B:11
+    store.switchBank(-1)
+    expect(store.getState().programs.bankIndex).toBe(0)
+    expect(store.getState().piano.unison).toBe(0) // bank A factory content is untouched
+    store.switchBank(1)
+    expect(store.getState().piano.unison).toBe(1)
+    expect(store.getState().programs.bank[0]!.snapshot.piano.unison).toBe(1)
+  })
+
+  it('clamps at bank A and bank H instead of wrapping', () => {
+    const store = new InstrumentStore()
+    store.switchBank(-1)
+    expect(store.getState().programs.bankIndex).toBe(0)
+    expect(store.getState().lastEdit).toContain('first bank')
+    for (let i = 0; i < 10; i++) store.switchBank(1)
+    expect(store.getState().programs.bankIndex).toBe(7)
+    expect(store.getState().lastEdit).toContain('last bank')
+    expect(store.currentProgramLabel()).toBe('H:11')
+  })
+
+  it('Live mode has no banks — the switch refuses with the manual reference', () => {
+    const store = new InstrumentStore()
+    store.toggleLiveMode()
+    store.switchBank(1)
+    expect(store.getState().programs.liveMode).toBe(true)
+    expect(store.getState().lastEdit).toContain('no banks')
+  })
+
+  it('a bank switch is a program change: unsaved edits survive one UNDO across banks', () => {
+    const store = new InstrumentStore()
+    store.setLayerLevel('A', 71) // unsaved edit in A:11
+    store.switchBank(1)
+    expect(store.getState().layers.A.level).toBe(100) // Init loaded
+    store.undoProgramChange()
+    const state = store.getState()
+    expect(state.programs.bankIndex).toBe(0) // pulled bank A back in
+    expect(state.layers.A.level).toBe(71)
+    expect(state.programs.dirty).toBe(true)
+  })
+
+  it('Store navigates its destination across banks; cancel returns to the origin bank', () => {
+    const store = new InstrumentStore()
+    store.cycleUnison()
+    store.storePress() // capture in bank A
+    store.switchBank(1)
+    expect(store.getState().lastEdit).toContain('Store')
+    expect(store.getState().lastEdit).toContain('B:11')
+    expect(store.getState().piano.unison).toBe(0) // the destination slot auditions (manual p. 13)
+    store.cancelStoreFlow()
+    expect(store.getState().programs.bankIndex).toBe(0) // back to the origin bank A
+    expect(store.getState().piano.unison).toBe(1) // the captured edit is back…
+    expect(store.getState().programs.dirty).toBe(true) // …still unsaved
+  })
+
+  it('Store confirms into another bank — this is how programs are copied between banks', () => {
+    const store = new InstrumentStore()
+    store.cycleUnison()
+    store.storePress()
+    store.switchBank(1)
+    store.selectProgram(4)
+    store.storePress() // confirm into B:15
+    const state = store.getState()
+    expect(state.programs.bankIndex).toBe(1)
+    expect(state.programs.current).toBe(4)
+    expect(state.programs.bank[4]!.snapshot.piano.unison).toBe(1)
+    expect(state.programs.bank[4]!.name).toBe('Royal Grand')
+  })
+
+  it('parked banks persist through the storage boundary and restore on boot', () => {
+    const storage = fakeStorageBoundary()
+    const store = new InstrumentStore(storage)
+    store.switchBank(1)
+    store.cycleUnison()
+    store.storePress()
+    store.storePress() // stored into B:11
+    store.switchBank(-1) // park B, active bank A again
+    const reloaded = new InstrumentStore(storage)
+    expect(reloaded.getState().programs.bankIndex).toBe(0)
+    reloaded.switchBank(1)
+    expect(reloaded.getState().piano.unison).toBe(1) // B:11 came back from storage
+  })
+
+  it('panel: Shift + PAGE ▸ lands on B:11 Init; PAGE without Shift keeps paging', () => {
+    renderApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Page/Cat Right' }))
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('B:11')
+    expect(screen.getByTestId('oled-name-line').textContent).toBe('Init')
+    // Shift released by the bank switch? No — drop it explicitly, then PAGE pages.
+    fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Page/Cat Right' }))
+    expect(screen.getByTestId('oled-program-line').textContent).toBe('B:21')
+  })
+})

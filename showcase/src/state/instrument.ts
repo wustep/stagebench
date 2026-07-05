@@ -713,8 +713,15 @@ export const PROGRAM_CATEGORIES = [
 ] as const
 
 export interface ProgramsState {
-  /** One bank of 32 programs: 4 pages × 8 program buttons. */
+  /** The ACTIVE program bank: 32 programs, 4 pages × 8 program buttons
+   *  (a declared adaptation of the hardware's 64-slot banks, manual p. 12). */
   bank: ProgramSlot[]
+  /** Which of the eight banks A-H is active (manual p. 11): 0..7. */
+  bankIndex: number
+  /** Parked contents of the OTHER banks, keyed by bank index. A bank never
+   *  visited has no entry and materializes as 32 Init programs on the first
+   *  switch (BANK ◂ ▸ = Shift + PAGE, manual p. 44). */
+  banks: Record<number, ProgramSlot[]>
   /** The 8 auto-storing Live slots (manual p. 13). */
   live: ProgramSlot[]
   liveMode: boolean
@@ -733,6 +740,9 @@ export interface ProgramsState {
     /** Bank mode at Store time — restored on cancel (Live Mode may have
      *  been toggled during destination selection, manual p. 13/44). */
     originLiveMode: boolean
+    /** Bank A-H at Store time — restored on cancel (BANK ◂ ▸ navigates the
+     *  destination across banks, manual p. 44). */
+    originBank: number
     destination: number
     captured: ProgramSlot
   } | null
@@ -743,8 +753,9 @@ export interface ProgramsState {
   /** One-level UNDO (Shift + Solo, manual p. 42-43): the state discarded by
    *  the last big operation — a program change, a Preset load, Layer Init,
    *  a Paste, a Morph clear or an FX Group/Global chain capture. `dirty` is
-   *  the flag to restore with it; `label` names the operation on the display. */
-  undo: { slot: number; liveMode: boolean; dirty: boolean; snapshot: ProgramSnapshot; label: string } | null
+   *  the flag to restore with it, `bank` the bank A-H it belonged to, and
+   *  `label` names the operation on the display. */
+  undo: { slot: number; liveMode: boolean; bank: number; dirty: boolean; snapshot: ProgramSnapshot; label: string } | null
   /** Numeric list view (Shift + Program dial, manual p. 41). */
   listView: boolean
   /** NUM PAD mode (Shift + Live Mode, manual p. 44): PROGRAM 1-8 enter
@@ -1081,6 +1092,8 @@ function baseInstrumentState(): InstrumentState {
     kbHold: false,
     programs: {
       bank: [],
+      bankIndex: 0,
+      banks: {},
       live: [],
       liveMode: false,
       current: 0,
@@ -1101,15 +1114,27 @@ function baseInstrumentState(): InstrumentState {
   }
 }
 
-/** Display label for a slot in the hardware's bank:page-slot format
- *  (manual p. 13/44: e.g. "A:11" … "A:48"). This build carries one bank, so
- *  the letter is always A; Live slots read L1 … L8. */
 function sectionShort(section: 'piano' | 'organ' | 'synth'): string {
   return section === 'piano' ? 'Pno' : section === 'organ' ? 'Org' : 'Syn'
 }
 
-export function programLabel(index: number, liveMode: boolean): string {
-  return liveMode ? `L${index + 1}` : `A:${Math.floor(index / 8) + 1}${(index % 8) + 1}`
+/** The eight program banks (manual p. 11). */
+export const BANK_LETTERS = 'ABCDEFGH'
+
+/** Display label for a slot in the hardware's bank:page-slot format
+ *  (manual p. 13/44: e.g. "A:11" … "A:48", banks A-H); Live slots read
+ *  L1 … L8. */
+export function programLabel(index: number, liveMode: boolean, bank = 0): string {
+  return liveMode ? `L${index + 1}` : `${BANK_LETTERS[bank] ?? 'A'}:${Math.floor(index / 8) + 1}${(index % 8) + 1}`
+}
+
+/** A freshly materialized bank: 32 Init programs (the power-on sound).
+ *  Banks B-H start here; the hardware ships factory content everywhere,
+ *  but this build only carries one factory bank — Init is the truthful
+ *  stand-in (a full factory set is a data problem, not a wiring one). */
+function initBank(): ProgramSlot[] {
+  const snapshot = snapshotOf(baseInstrumentState())
+  return Array.from({ length: 32 }, () => ({ name: 'Init', snapshot: JSON.parse(JSON.stringify(snapshot)) as ProgramSnapshot }))
 }
 
 /** Characters available to the STORE AS naming dial. */
@@ -1215,7 +1240,7 @@ export class InstrumentStore {
   /** Captures the current sound as a one-level UNDO point (manual p. 42-43). */
   private undoPoint(label: string): NonNullable<ProgramsState['undo']> {
     const programs = this.state.programs
-    return { slot: programs.current, liveMode: programs.liveMode, dirty: programs.dirty, snapshot: snapshotOf(this.state), label }
+    return { slot: programs.current, liveMode: programs.liveMode, bank: programs.bankIndex, dirty: programs.dirty, snapshot: snapshotOf(this.state), label }
   }
 
   /** patch() for the big destructive operations the manual's UNDO covers
@@ -1266,8 +1291,8 @@ export class InstrumentStore {
       clearTimeout(this.persistTimer)
       this.persistTimer = null
     }
-    const { bank, live, liveMode, current } = state.programs
-    this.storage.save(PROGRAMS_STORAGE_KEY, JSON.stringify({ version: 1, bank, live, liveMode, current }))
+    const { bank, bankIndex, banks, live, liveMode, current } = state.programs
+    this.storage.save(PROGRAMS_STORAGE_KEY, JSON.stringify({ version: 1, bank, bankIndex, banks, live, liveMode, current }))
   }
 
   private schedulePersist(): void {
@@ -1295,12 +1320,22 @@ export class InstrumentStore {
         live: ProgramSlot[]
         liveMode: boolean
         current: number
+        bankIndex?: number
+        banks?: Record<number, ProgramSlot[]>
       }
       if (parsed.version !== 1 || parsed.bank.length !== 32 || parsed.live.length !== 8) return null
       const liveMode = parsed.liveMode === true
       const count = liveMode ? 8 : 32
       const current = Math.max(0, Math.min(count - 1, Math.floor(parsed.current)))
       const slot = (liveMode ? parsed.live : parsed.bank)[current]!
+      // Bank fields arrived after v1 shipped: backfill bank A, no parked
+      // banks. Parked banks that fail the shape check are dropped.
+      const bankIndex = Math.max(0, Math.min(7, Math.floor(parsed.bankIndex ?? 0)))
+      const banks: Record<number, ProgramSlot[]> = {}
+      for (const [key, value] of Object.entries(parsed.banks ?? {})) {
+        const index = Math.floor(Number(key))
+        if (index >= 0 && index <= 7 && index !== bankIndex && Array.isArray(value) && value.length === 32) banks[index] = value
+      }
       const base = this.state
       const snapshot = cloneSnapshot(slot.snapshot)
       return {
@@ -1316,6 +1351,8 @@ export class InstrumentStore {
         programs: {
           ...base.programs,
           bank: parsed.bank,
+          bankIndex,
+          banks,
           live: parsed.live,
           liveMode,
           current,
@@ -1862,7 +1899,7 @@ export class InstrumentStore {
     const cursor = Math.max(0, Math.min(count - 1, Math.round((Math.max(0, Math.min(127, dial)) / 127) * (count - 1))))
     if (cursor === organize.cursor) return
     const liveMode = this.state.programs.liveMode
-    const label = `${programLabel(cursor, liveMode)} ${this.activeBank()[cursor]!.name}`
+    const label = `${programLabel(cursor, liveMode, this.state.programs.bankIndex)} ${this.activeBank()[cursor]!.name}`
     this.patch(
       { organize: { ...organize, cursor } },
       organize.pending ? `${organize.pending.op === 'swap' ? 'Swap' : 'Move'} → ${label}? PROG 2: Ok` : `Organize: ${label}`,
@@ -1876,7 +1913,7 @@ export class InstrumentStore {
     const liveMode = this.state.programs.liveMode
     this.patch(
       { organize: { ...organize, pending: { op, source: organize.cursor } } },
-      `${op === 'swap' ? 'Swap' : 'Move'} ${programLabel(organize.cursor, liveMode)} — dial: destination · PROG 1: Undo · 2: Ok`,
+      `${op === 'swap' ? 'Swap' : 'Move'} ${programLabel(organize.cursor, liveMode, this.state.programs.bankIndex)} — dial: destination · PROG 1: Undo · 2: Ok`,
     )
   }
 
@@ -1922,7 +1959,7 @@ export class InstrumentStore {
       ...this.state,
       organize: { cursor: destination, pending: null },
       programs: { ...programs, [bankKey]: bank, current },
-      lastEdit: `${op === 'swap' ? 'Swapped' : 'Moved'} ${programLabel(source, liveMode)} → ${programLabel(destination, liveMode)}`,
+      lastEdit: `${op === 'swap' ? 'Swapped' : 'Moved'} ${programLabel(source, liveMode, programs.bankIndex)} → ${programLabel(destination, liveMode, programs.bankIndex)}`,
     })
     this.persistPrograms(this.state)
   }
@@ -2091,7 +2128,7 @@ export class InstrumentStore {
       // p. 42 undo list). Leaving without loading changes nothing to undo.
       const programs = this.state.programs
       const undo = browse.loaded
-        ? { slot: programs.current, liveMode: programs.liveMode, dirty: browse.preDirty, snapshot: cloneSnapshot(browse.preBrowse), label: 'Preset load' }
+        ? { slot: programs.current, liveMode: programs.liveMode, bank: programs.bankIndex, dirty: browse.preDirty, snapshot: cloneSnapshot(browse.preBrowse), label: 'Preset load' }
         : programs.undo
       this.patch({ presetBrowse: null, programs: { ...programs, undo } }, 'Preset Library closed')
       return
@@ -2658,7 +2695,7 @@ export class InstrumentStore {
 
   currentProgramLabel(): string {
     const programs = this.state.programs
-    return programLabel(programs.current, programs.liveMode)
+    return programLabel(programs.current, programs.liveMode, programs.bankIndex)
   }
 
   /**
@@ -2696,7 +2733,7 @@ export class InstrumentStore {
       organize: null,
       presetStore: null,
       programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
-      lastEdit: `${programLabel(clamped, programs.liveMode)} ${slot.name}`,
+      lastEdit: `${programLabel(clamped, programs.liveMode, programs.bankIndex)} ${slot.name}`,
     })
     this.reapplyMorphSources()
     this.persistPrograms(this.state)
@@ -2857,11 +2894,12 @@ export class InstrumentStore {
           origin: programs.current,
           originDirty: programs.dirty,
           originLiveMode: programs.liveMode,
+          originBank: programs.bankIndex,
           destination: programs.current,
           captured,
         },
       },
-      `Store "${name}" to ${programLabel(programs.current, programs.liveMode)}? STORE confirms`,
+      `Store "${name}" to ${programLabel(programs.current, programs.liveMode, programs.bankIndex)}? STORE confirms`,
     )
   }
 
@@ -2924,7 +2962,7 @@ export class InstrumentStore {
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
       programs: { ...programs, liveMode, storePending: { ...pending, destination: clamped } },
-      lastEdit: `Store "${pending.captured.name}" to ${programLabel(clamped, liveMode)}? STORE confirms`,
+      lastEdit: `Store "${pending.captured.name}" to ${programLabel(clamped, liveMode, this.state.programs.bankIndex)}? STORE confirms`,
     })
     this.reapplyMorphSources()
   }
@@ -2950,7 +2988,7 @@ export class InstrumentStore {
         dirty: false,
         storePending: null,
       },
-      lastEdit: `Stored ${programLabel(pending.destination, programs.liveMode)} ${pending.captured.name}`,
+      lastEdit: `Stored ${programLabel(pending.destination, programs.liveMode, programs.bankIndex)} ${pending.captured.name}`,
     })
     this.reapplyMorphSources()
     this.persistPrograms(this.state)
@@ -2969,13 +3007,19 @@ export class InstrumentStore {
     }
     const pending = programs.storePending
     if (!pending) return false
-    // Restore the captured (edited) sound and the origin slot selection.
+    // Restore the captured (edited) sound and the origin slot selection —
+    // including the origin bank A-H if BANK ◂ ▸ moved during destination
+    // selection (manual p. 44).
+    const { bank, banks, bankIndex } = this.bankShelfFor(pending.originBank)
     this.commit({
       ...this.state,
       ...cloneSnapshot(pending.captured.snapshot),
       pianoNotFound: null,
       programs: {
         ...programs,
+        bank,
+        banks,
+        bankIndex,
         storePending: null,
         current: pending.origin,
         dirty: pending.originDirty,
@@ -2989,6 +3033,67 @@ export class InstrumentStore {
     })
     this.reapplyMorphSources()
     return true
+  }
+
+  /** Parks the active bank and pulls `target` (materializing Init slots on
+   *  a first visit) — the array shuffle behind every bank switch. Returns
+   *  the current fields unchanged when `target` is already active. */
+  private bankShelfFor(target: number): Pick<ProgramsState, 'bank' | 'banks' | 'bankIndex'> {
+    const programs = this.state.programs
+    if (target === programs.bankIndex) {
+      return { bank: programs.bank, banks: programs.banks, bankIndex: programs.bankIndex }
+    }
+    const banks = { ...programs.banks, [programs.bankIndex]: programs.bank }
+    const bank = banks[target] ?? initBank()
+    delete banks[target]
+    return { bank, banks, bankIndex: target }
+  }
+
+  /** BANK ◂ ▸ (Shift + PAGE, manual p. 44): switches between the eight
+   *  program banks A-H, keeping the page/slot position — the landing
+   *  program loads like a PAGE move (unsaved edits kept once for UNDO).
+   *  During a Store it navigates the destination across banks instead;
+   *  Live mode has a single row of slots and no banks. */
+  switchBank(delta: -1 | 1): void {
+    const programs = this.state.programs
+    if (programs.liveMode) {
+      this.setLastEdit('Live Mode — one row of 8 slots, no banks (manual p. 44)')
+      return
+    }
+    if (programs.naming) return
+    const target = Math.max(0, Math.min(7, programs.bankIndex + delta))
+    if (target === programs.bankIndex) {
+      this.setLastEdit(`Bank ${BANK_LETTERS[target]} — ${delta < 0 ? 'first' : 'last'} bank`)
+      return
+    }
+    const shelf = this.bankShelfFor(target)
+    if (programs.storePending) {
+      this.commit({ ...this.state, programs: { ...programs, ...shelf } })
+      this.auditionStoreDestination(programs.storePending.destination, false)
+      return
+    }
+    const undo = programs.dirty ? this.undoPoint('program change') : programs.undo
+    const slot = shelf.bank[programs.current]!
+    this.commit({
+      ...this.state,
+      ...cloneSnapshot(slot.snapshot),
+      pianoNotFound: null,
+      // A bank switch loads a program: the transient latches drop
+      // (see selectProgram).
+      presetBrowse: null,
+      morphArming: null,
+      layerInitEdit: false,
+      clockEdit: false,
+      transposeEdit: false,
+      splitEdit: null,
+      menu: null,
+      organize: null,
+      presetStore: null,
+      programs: { ...programs, ...shelf, dirty: false, undo, naming: null, presetName: false },
+      lastEdit: `Bank ${BANK_LETTERS[target]} — ${programLabel(programs.current, false, target)} ${slot.name}`,
+    })
+    this.reapplyMorphSources()
+    this.persistPrograms(this.state)
   }
 
   /** LIVE MODE: switches the eight Program buttons to the auto-storing Live slots. */
@@ -3034,7 +3139,7 @@ export class InstrumentStore {
         presetName: false,
         numPadPending: null,
       },
-      lastEdit: `${liveMode ? 'Live Mode' : 'Program Mode'} — ${programLabel(target, liveMode)} ${slot.name}`,
+      lastEdit: `${liveMode ? 'Live Mode' : 'Program Mode'} — ${programLabel(target, liveMode, programs.bankIndex)} ${slot.name}`,
     })
     this.reapplyMorphSources()
     this.persistPrograms(this.state)
@@ -3061,6 +3166,8 @@ export class InstrumentStore {
       const slot = live[undo.slot]
       if (slot) live[undo.slot] = { ...slot, snapshot: cloneSnapshot(undo.snapshot) }
     }
+    // The undo point may live in another bank A-H: pull its bank back in.
+    const shelf = this.bankShelfFor(undo.bank)
     const dirty = undo.liveMode ? false : undo.dirty
     this.commit({
       ...this.state,
@@ -3074,11 +3181,11 @@ export class InstrumentStore {
       splitEdit: null,
       menu: null,
       organize: null,
-      programs: { ...programs, live, liveMode: undo.liveMode, current: undo.slot, dirty, undo: null },
-      lastEdit: `Undo ${undo.label} — ${programLabel(undo.slot, undo.liveMode)}${dirty ? ' (edited)' : ''}`,
+      programs: { ...programs, ...shelf, live, liveMode: undo.liveMode, current: undo.slot, dirty, undo: null },
+      lastEdit: `Undo ${undo.label} — ${programLabel(undo.slot, undo.liveMode, undo.bank)}${dirty ? ' (edited)' : ''}`,
     })
     this.reapplyMorphSources()
-    if (undo.liveMode) this.persistPrograms(this.state)
+    if (undo.liveMode || shelf.bankIndex !== programs.bankIndex) this.persistPrograms(this.state)
   }
 
   /* ------------------------------------------------ monitor / copy / paste -- */
@@ -3216,7 +3323,7 @@ export class InstrumentStore {
   monCopyProgramPress(button: number): void {
     const programs = this.state.programs
     const index = programs.liveMode ? button : Math.floor(programs.current / 8) * 8 + button
-    const slotLabel = programLabel(index, programs.liveMode)
+    const slotLabel = programLabel(index, programs.liveMode, programs.bankIndex)
     if (this.state.monCopy === 'copy') {
       const slot = this.activeBank()[index]!
       const clipboard: MonCopyClipboard = { kind: 'program', label: `Program ${slotLabel} ${slot.name}`, payload: deepClone(slot) }

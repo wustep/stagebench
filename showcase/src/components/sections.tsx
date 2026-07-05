@@ -4,6 +4,7 @@ import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
 import { usePresentationMorphRange, usePresentationToggle, usePresentationValue } from '../state/presentation'
 import {
+  BANK_LETTERS,
   mappings,
   MENU_PAGES,
   menuPageValueLabel,
@@ -716,9 +717,9 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
   // and a dash until the slot digit arrives, e.g. "A:1–".
   const programReadout =
     programs.numPadPending !== null
-      ? `A:${programs.numPadPending}–`
-      : `${programLabel(programs.current, programs.liveMode)}${programs.dirty ? ' E' : ''}${
-          programs.storePending ? ` ▸ STORE ${programLabel(reference, programs.liveMode)}?` : ''
+      ? `${BANK_LETTERS[programs.bankIndex]}:${programs.numPadPending}–`
+      : `${programLabel(programs.current, programs.liveMode, programs.bankIndex)}${programs.dirty ? ' E' : ''}${
+          programs.storePending ? ` ▸ STORE ${programLabel(reference, programs.liveMode, programs.bankIndex)}?` : ''
         }`
   // PROG VIEW mode 1 (manual p. 42): large name/number only.
   const xl = programs.progView === 1 ? ' xl' : ''
@@ -752,7 +753,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
         const organize = state.organize
         const liveMode = programs.liveMode
         const bank = liveMode ? programs.live : programs.bank
-        const slotLine = (index: number) => `${programLabel(index, liveMode)} ${bank[index]!.name}`
+        const slotLine = (index: number) => `${programLabel(index, liveMode, programs.bankIndex)} ${bank[index]!.name}`
         return [
           <span key="og1" className="oled-slot" data-testid="oled-organize-line">
             ⇅ ORGANIZE —{' '}
@@ -867,7 +868,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
   const listStart = Math.max(0, Math.min(reference - 1, activeBank.length - 2))
   const listRows = [listStart, listStart + 1].map((i) => (
     <span key={i} className="oled-slot" data-testid={`oled-list-${i}`}>
-      {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode)} {activeBank[i]!.name}
+      {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode, programs.bankIndex)} {activeBank[i]!.name}
     </span>
   ))
   // Model list view (Shift + Piano Model dial, spec.scope.optional): shows
@@ -921,7 +922,7 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
     programs.progView === 3
       ? Array.from({ length: 8 }, (_, i) => pageStart + i).map((i) => (
           <span key={i} className="oled-slot" data-testid={`oled-page-list-${i}`}>
-            {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode)} {activeBank[i]!.name}
+            {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode, programs.bankIndex)} {activeBank[i]!.name}
           </span>
         ))
       : null

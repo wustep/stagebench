@@ -1016,19 +1016,19 @@ export class PresentationStore {
           return
         }
         case 'page-left':
-          if (store.getState().presetStore) store.stepPresetStore(-1)
-          else if (store.getState().presetBrowse) store.stepPreset(-1)
-          else if (store.getState().menu) store.stepMenuPage(-1)
-          else if (store.getState().splitEdit) store.selectSplitPoint(-1)
-          else store.shiftProgramPage(-1)
+        case 'page-right': {
+          const delta: -1 | 1 = id === 'page-left' ? -1 : 1
+          // Whatever screen owns the OLED owns the PAGE buttons; on the plain
+          // program screen (or a Store destination pick) Shift + PAGE is
+          // BANK ◂ ▸ (manual p. 44) while naming keeps the cursor (p. 41).
+          if (store.getState().presetStore) store.stepPresetStore(delta)
+          else if (store.getState().presetBrowse) store.stepPreset(delta)
+          else if (store.getState().menu) store.stepMenuPage(delta)
+          else if (store.getState().splitEdit) store.selectSplitPoint(delta)
+          else if (shift && !store.getState().programs.naming) store.switchBank(delta)
+          else store.shiftProgramPage(delta)
           return
-        case 'page-right':
-          if (store.getState().presetStore) store.stepPresetStore(1)
-          else if (store.getState().presetBrowse) store.stepPreset(1)
-          else if (store.getState().menu) store.stepMenuPage(1)
-          else if (store.getState().splitEdit) store.selectSplitPoint(1)
-          else store.shiftProgramPage(1)
-          return
+        }
         case 'live-mode':
           // NUM PAD = Shift + Live Mode (manual p. 44): two-digit page.slot
           // entry on the PROGRAM 1-8 buttons. Plain press toggles Live Mode.
