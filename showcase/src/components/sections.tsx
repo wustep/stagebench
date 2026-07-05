@@ -1782,27 +1782,41 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   </Legend>
                 </span>
                 <span className="lfo-dest-col lfo-q-br">
-                  {(
-                    [
-                      ['Osc Pitch', 'OSC PITCH'],
-                      ['Osc Ctrl', 'OSC CTRL'],
-                      ['Filter Freq', 'FILTER'],
-                    ] as const
-                  ).map(([dest, label], i) => (
+                  {/* Hardware print (close-up): TWO stacked lamps right of
+                      the OSC PITCH / OSC CTRL labels, FILTER printed on the
+                      right BETWEEN the rows — the Filter destination lights
+                      BOTH lamps. */}
+                  <span className="dest-matrix">
                     <button
-                      key={dest}
                       type="button"
-                      className="legend-button"
-                      aria-label={`LFO Destination ${label}`}
-                      aria-pressed={lfo.destination === dest}
-                      onClick={() => instrument.selectSynthLfoDestination(lfo.destination === dest ? 0 : i + 1)}
+                      className="legend-button dest-row"
+                      aria-label="LFO Destination OSC PITCH"
+                      aria-pressed={lfo.destination === 'Osc Pitch'}
+                      onClick={() => instrument.selectSynthLfoDestination(lfo.destination === 'Osc Pitch' ? 0 : 1)}
                     >
-                      <span className="tiny-led-row">
-                        <Led color="red" on={lfo.destination === dest} />
-                        <Legend>{label}</Legend>
-                      </span>
+                      <Legend>OSC PITCH</Legend>
+                      <Led color="red" on={lfo.destination === 'Osc Pitch' || lfo.destination === 'Filter Freq'} />
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      className="legend-button dest-row"
+                      aria-label="LFO Destination OSC CTRL"
+                      aria-pressed={lfo.destination === 'Osc Ctrl'}
+                      onClick={() => instrument.selectSynthLfoDestination(lfo.destination === 'Osc Ctrl' ? 0 : 2)}
+                    >
+                      <Legend>OSC CTRL</Legend>
+                      <Led color="red" on={lfo.destination === 'Osc Ctrl' || lfo.destination === 'Filter Freq'} />
+                    </button>
+                    <button
+                      type="button"
+                      className="legend-button dest-filter"
+                      aria-label="LFO Destination FILTER"
+                      aria-pressed={lfo.destination === 'Filter Freq'}
+                      onClick={() => instrument.selectSynthLfoDestination(lfo.destination === 'Filter Freq' ? 0 : 3)}
+                    >
+                      <Legend>FILTER</Legend>
+                    </button>
+                  </span>
                   {/* The hardware's destination button (manual p. 34 cycle). */}
                   <PanelButton store={store} id="lfo-destination" className="dark tiny" />
                 </span>

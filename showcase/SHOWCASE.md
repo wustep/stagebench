@@ -2419,3 +2419,16 @@ grid — SET KEY spans ~1.6 x 1.0).
   both lamps. Applied to the piano cell and the synth Unison box (which
   wrongly had a third LED for "3").
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12.
+
+### 68 — LFO destination: two-lamp print (2026-07-05)
+
+User close-up of the OSC PITCH / OSC CTRL / FILTER cluster.
+
+- The LFO destination print is TWO stacked lamps right of the OSC
+  PITCH / OSC CTRL labels (right-aligned against the lamp column), with
+  FILTER printed BETWEEN the rows on the right — not three LED rows.
+  The Filter destination lights BOTH lamps.
+- The three prints stay individually clickable (same destinations,
+  aria-pressed preserved).
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12 (after a
+  fresh build — a stale dist had flagged unrelated overflows).
