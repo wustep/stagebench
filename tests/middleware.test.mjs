@@ -4,36 +4,42 @@ import middleware, { handleRequest } from '../middleware.js'
 
 const request = (path = '/', options = {}) => new Request(`https://stagebench.example${path}`, options)
 
-test('middleware fails closed when the deployment secret is missing', async () => {
+test('middleware passes through the public gallery without a password', async () => {
   delete process.env.STAGEBENCH_PASSWORD
-  const response = await middleware(request())
+  const response = await middleware(request('/?run=example&phase=1'))
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('x-middleware-next'), '1')
+})
+
+test('middleware fails closed on /secret when the deployment secret is missing', async () => {
+  delete process.env.STAGEBENCH_PASSWORD
+  const response = await middleware(request('/secret'))
   assert.equal(response.status, 503)
 })
 
-test('middleware renders the private login without exposing the password', async () => {
+test('middleware renders the /secret unlock page without exposing the password', async () => {
   process.env.STAGEBENCH_PASSWORD = 'test-password'
-  const response = await middleware(request('/?run=example&phase=1'))
-  assert.equal(response.status, 401)
+  const response = await middleware(request('/secret'))
+  assert.equal(response.status, 200)
   const html = await response.text()
-  assert.match(html, /Enter access password/)
-  assert.match(html, /value="\/\?run=example&amp;phase=1"/)
+  assert.match(html, /Unlock extra models/)
   assert.doesNotMatch(html, /test-password/)
 })
 
-test('middleware rejects a wrong password', async () => {
+test('middleware rejects a wrong /secret password', async () => {
   process.env.STAGEBENCH_PASSWORD = 'test-password'
-  const body = new URLSearchParams({ password: 'wrong', returnTo: '/' })
-  const response = await handleRequest(request('/__stagebench/auth', { method: 'POST', body }), {
+  const body = new URLSearchParams({ password: 'wrong' })
+  const response = await handleRequest(request('/secret', { method: 'POST', body }), {
     checkRateLimit: async () => ({ rateLimited: false }),
   })
   assert.equal(response.status, 401)
   assert.equal(response.headers.get('set-cookie'), null)
 })
 
-test('middleware renders a readable rate-limit error', async () => {
+test('middleware renders a readable rate-limit error on /secret', async () => {
   process.env.STAGEBENCH_PASSWORD = 'test-password'
-  const body = new URLSearchParams({ password: 'wrong', returnTo: '/' })
-  const response = await handleRequest(request('/__stagebench/auth', { method: 'POST', body }), {
+  const body = new URLSearchParams({ password: 'wrong' })
+  const response = await handleRequest(request('/secret', { method: 'POST', body }), {
     checkRateLimit: async () => ({ rateLimited: true }),
   })
   assert.equal(response.status, 429)
@@ -41,51 +47,48 @@ test('middleware renders a readable rate-limit error', async () => {
   assert.match(await response.text(), /Too many attempts\. Try again in up to one hour\./)
 })
 
-test('middleware creates an HttpOnly session and accepts it on later requests', async () => {
+test('middleware creates an extras cookie and accepts it on later /secret requests', async () => {
   process.env.STAGEBENCH_PASSWORD = 'test-password'
-  const body = new URLSearchParams({ password: 'test-password', returnTo: '/?run=example&phase=2' })
-  const login = await handleRequest(request('/__stagebench/auth', { method: 'POST', body }), {
+  const body = new URLSearchParams({ password: 'test-password' })
+  const login = await handleRequest(request('/secret', { method: 'POST', body }), {
     checkRateLimit: async () => ({ rateLimited: false }),
   })
   assert.equal(login.status, 303)
-  assert.equal(login.headers.get('location'), '/?run=example&phase=2')
+  assert.equal(login.headers.get('location'), '/')
 
   const cookie = login.headers.get('set-cookie')
-  assert.match(cookie, /stagebench_session=/)
-  assert.match(cookie, /HttpOnly/)
+  assert.match(cookie, /stagebench_extras=/)
   assert.match(cookie, /Secure/)
   assert.doesNotMatch(cookie, /test-password/)
 
-  const response = await middleware(request('/', { headers: { cookie } }))
+  const response = await middleware(request('/secret', { headers: { cookie } }))
   assert.equal(response.status, 200)
-  assert.equal(response.headers.get('x-middleware-next'), '1')
+  assert.match(await response.text(), /Extra models are unlocked/)
 })
 
-test('middleware rejects a tampered session cookie', async () => {
+test('middleware rejects a tampered extras cookie on /secret', async () => {
   process.env.STAGEBENCH_PASSWORD = 'test-password'
-  const response = await middleware(request('/', {
-    headers: { cookie: 'stagebench_session=9999999999999.invalid' },
+  const response = await middleware(request('/secret', {
+    headers: { cookie: 'stagebench_extras=9999999999999.invalid' },
   }))
-  assert.equal(response.status, 401)
+  assert.equal(response.status, 200)
+  assert.match(await response.text(), /Unlock extra models/)
 })
 
 test('a crypto failure is logged but stays indistinguishable from a bad signature', async () => {
   process.env.STAGEBENCH_PASSWORD = 'test-password'
-  const cookie = 'stagebench_session=9999999999999.invalid'
+  const cookie = 'stagebench_extras=9999999999999.invalid'
 
-  // Baseline: an ordinary invalid signature (verify resolves false, no throw).
-  const invalid = await middleware(request('/', { headers: { cookie } }))
+  const invalid = await middleware(request('/secret', { headers: { cookie } }))
   const invalidBody = await invalid.text()
 
-  // Force a genuine crypto error and confirm it is logged separately but the
-  // response (status + body) is identical to the invalid-signature path.
   const originalVerify = crypto.subtle.verify
   const errors = []
   const originalConsoleError = console.error
   console.error = (...args) => errors.push(args)
   crypto.subtle.verify = () => { throw new Error('boom: simulated crypto/config failure') }
   try {
-    const failed = await middleware(request('/', { headers: { cookie } }))
+    const failed = await middleware(request('/secret', { headers: { cookie } }))
     assert.equal(failed.status, invalid.status)
     assert.equal(await failed.text(), invalidBody)
     assert.ok(
