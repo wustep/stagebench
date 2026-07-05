@@ -2227,3 +2227,32 @@ buttons/spacing/misalignment audit.
   the uniform 1.14cqw knob is right (an earlier shadow-inclusive profile
   suggesting 1.5–1.8 was a measurement artifact, not a delta).
 - Gates: typecheck, lint, suite 614/614, fresh build + verify:layout 12/12.
+
+### 59 — Wide bank switches, LCD synth display, program-strip print pass (2026-07-05)
+
+Continued the pixel audit through the program strip and displays.
+
+- Bank switches: the photo's PRESET LIBRARY trio and PROGRAM 1–8 grid use
+  a visibly WIDER switch (~1.4–1.5 × 0.7–0.78cqw housings, ink-profiled at
+  4.39cqw across the trio) than the standard utility switch — both get
+  dedicated min-sizes instead of the global 1.2 × 0.66.
+- Preset plate: the ● ORGAN / ● PIANO / ● SYNTH pairs center over their
+  buttons (three-column grid, was an edge-to-edge space-between spread)
+  and print at full legend size (0.24cqw, was 0.16).
+- Synth display is an LCD, not an OLED, in the photo: charcoal glass
+  (sampled #2d2d2d) with muted slate-blue pixels replaces the near-black
+  + ice-white scheme; the OSC WAVEFORM banner insets from the glass edges
+  (was full-bleed), a near-subliminal pixel-raster overlay sits on the
+  glass, and tighter leading + bottom padding stop the TYPE/CAT/WAVE chips
+  clipping against the 3cqw height cap. Program display name drops
+  0.6 → 0.52cqw ('Nord Stage 4' caps ≈0.36) and both displays lose the
+  stray pale outer glow for a recessed-bezel shadow.
+- MIDI / EXTERN print ABOVE their LEDs (photo column layout, was
+  LED-beside-label) at legend size 0.22 (was 0.17).
+- Program grid print: SYSTEM/SOUND/… cell legends 0.15 → 0.2 (the scoped
+  density rule was also silently beating iteration 57's tier table).
+- FX column sizes that stayed on old chip sizes: reverb/comp legends and
+  ROOM/STAGE/… selector rows 0.16–0.18 → 0.19–0.21, CHOR/VIBE/ENS
+  led-word columns and fx ON prints → 0.2, AUX KB ON/OFF chip text
+  0.17 → 0.19–0.2.
+- Gates: typecheck, lint, suite 614/614, verify:layout 12/12.

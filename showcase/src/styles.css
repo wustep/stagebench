@@ -1357,7 +1357,7 @@ body {
 }
 
 .reverb-tone .legend {
-	font-size: 0.18cqw;
+	font-size: 0.21cqw;
 }
 
 .reverb-box .sel-grid {
@@ -1365,7 +1365,7 @@ body {
 }
 
 .reverb-box .sel-row .legend {
-	font-size: 0.16cqw;
+	font-size: 0.19cqw;
 	letter-spacing: 0;
 }
 
@@ -1557,7 +1557,7 @@ body {
 
 .onoff-tab .legend {
 	color: #232a38;
-	font-size: 0.17cqw;
+	font-size: 0.2cqw;
 	letter-spacing: 0;
 }
 
@@ -2205,12 +2205,15 @@ body {
 /* OLED displays */
 
 .oled {
+	position: relative;
 	background: var(--oled-bg);
 	border: 0.14cqw solid #0e1218;
 	border-radius: 0.2cqw;
+	/* Photo: the glass sits recessed in the panel — dark vignette inside, a
+     thin lip highlight along the bottom edge outside (no pale halo). */
 	box-shadow:
 		inset 0 0 0.6cqw rgba(0, 0, 0, 0.9),
-		0 0 0.3cqw rgba(150, 200, 240, 0.1);
+		0 0.06cqw 0.04cqw rgba(255, 255, 255, 0.12);
 	color: var(--oled-ink);
 	padding: 0.25cqw 0.35cqw;
 	/* Photo: the displays draw text as a DOT-MATRIX bitmap face. Doto's
@@ -2241,7 +2244,7 @@ body {
 /* Photo: the display ink is a pale ICE BLUE, not pure white. */
 .oled .oled-name {
 	font-size: 0.78cqw;
-	color: #d6e8f7;
+	color: #bcd6ea;
 }
 
 .oled .oled-dim {
@@ -2276,22 +2279,73 @@ body {
 
 /* The Synth OLED is much narrower than the Program OLED; size its type to
    fit so OSC WAVEFORM / Super Saw never truncate (evaluation issue
-   legend-truncation-desktop). */
+   legend-truncation-desktop). Photo: it's an LCD, not an OLED — charcoal
+   glass (sampled #2d2d2d) with muted slate-blue pixels, visibly lighter
+   than the Program display's near-black. */
 .oled[data-oled-section="synth"] {
 	font-size: 0.42cqw;
+	background: #26292d;
+	color: #9dbbd6;
+	/* Softer vignette than the near-black Program OLED — the photo LCD glass
+     stays an even charcoal to its edges. Tighter leading + bottom padding so
+     the TYPE/CAT/WAVE chips clear the glass edge (photo) instead of
+     clipping against the 3cqw height cap. */
+	line-height: 1.18;
+	padding-bottom: 0.14cqw;
+	box-shadow:
+		inset 0 0 0.45cqw rgba(0, 0, 0, 0.45),
+		0 0.06cqw 0.04cqw rgba(255, 255, 255, 0.12);
 }
 
-/* Reference: the Synth display's top caption (OSC WAVEFORM) is a full-width
-   inverted band. */
+.oled[data-oled-section="synth"] .oled-name {
+	color: #b6d0e6;
+}
+
+.oled[data-oled-section="synth"] .oled-dim {
+	color: #647889;
+}
+
+.oled[data-oled-section="synth"] .oled-menu b {
+	background: #93aec6;
+	color: #23262a;
+}
+
+/* Faint LCD pixel raster over the glass (photo shows the dot grid). Kept
+   near-subliminal: at panel scale the sub-pixel pitch aliases, so a heavier
+   alpha reads as plaid instead of a raster. */
+.oled[data-oled-section="synth"]::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background:
+		repeating-linear-gradient(
+			0deg,
+			rgba(10, 13, 16, 0.1) 0,
+			rgba(10, 13, 16, 0.1) 0.02cqw,
+			transparent 0.02cqw,
+			transparent 0.06cqw
+		),
+		repeating-linear-gradient(
+			90deg,
+			rgba(10, 13, 16, 0.1) 0,
+			rgba(10, 13, 16, 0.1) 0.02cqw,
+			transparent 0.02cqw,
+			transparent 0.06cqw
+		);
+}
+
+/* Reference: the Synth display's top caption (OSC WAVEFORM) is an inverted
+   band, inset slightly from the glass edges (photo), in the muted LCD blue. */
 .oled[data-oled-section="synth"] .oled-line:first-child {
-	background: rgba(200, 223, 238, 0.88);
-	margin: -0.25cqw -0.35cqw 0.1cqw;
+	background: #93aec6;
+	margin: -0.12cqw -0.18cqw 0.1cqw;
 	padding: 0.02cqw 0.35cqw;
 	text-align: center;
 }
 
 .oled[data-oled-section="synth"] .oled-line:first-child .oled-dim {
-	color: #0a0f14;
+	color: #23262a;
 	font-weight: 700;
 }
 
@@ -2991,7 +3045,7 @@ body {
 }
 
 .deck-section[data-section="piano"] .onoff-tab .legend {
-	font-size: 0.17cqw;
+	font-size: 0.19cqw;
 }
 
 .deck-section[data-section="piano"] .onoff-tab .led {
@@ -3321,8 +3375,11 @@ body {
    caps (reference). */
 .morph-legend-row,
 .preset-legend-row {
-	display: flex;
-	justify-content: space-between;
+	/* Photo: each ● LABEL pair sits centered over its bank button — an even
+     three-column grid, not an edge-to-edge spread. */
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	justify-items: center;
 	align-self: stretch;
 	padding: 0 0.08cqw;
 	gap: 0.12cqw;
@@ -3340,6 +3397,15 @@ body {
 	font-size: 0.16cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
+}
+
+/* Photo: ORGAN / PIANO / SYNTH print at full legend size (caps ≈0.17cqw). */
+.preset-legend-row .legend {
+	font-size: 0.24cqw;
+}
+
+.preset-legend-row .tiny-led-row {
+	gap: 0.09cqw;
 }
 
 .morph-legend-row .led,
@@ -3520,13 +3586,22 @@ body {
 .store-side {
 	display: flex;
 	flex-direction: column;
-	gap: 0.08cqw;
+	gap: 0.14cqw;
 	flex: none;
 }
 
-/* Scoped past the program strip's blanket 0.3cqw legend rule. */
+/* Photo: MIDI / EXTERN print ABOVE their LEDs (label on top, lamp below),
+   not beside them. */
+.store-side .tiny-led-row {
+	flex-direction: column-reverse;
+	gap: 0.06cqw;
+	align-items: center;
+}
+
+/* Scoped past the program strip's blanket 0.3cqw legend rule. Photo: MIDI /
+   EXTERN print at ordinary legend size, not a reduced chip size. */
 .deck-section[data-section="program"] .store-side .legend {
-	font-size: 0.17cqw;
+	font-size: 0.22cqw;
 	letter-spacing: 0;
 }
 
@@ -3614,7 +3689,14 @@ body {
 
 .preset-buttons {
 	display: flex;
-	gap: 0.18cqw;
+	gap: 0.1cqw;
+}
+
+/* Photo: the three bank buttons are the WIDE switch (~1.45 x 0.75cqw
+   housings nearly filling the plate), not the standard utility switch. */
+.preset-buttons .panel-button {
+	min-width: 1.45cqw;
+	min-height: 0.74cqw;
 }
 
 .deck-section[data-section="program"] .oled {
@@ -3628,7 +3710,8 @@ body {
 }
 
 .deck-section[data-section="program"] .oled .oled-name {
-	font-size: 0.6cqw;
+	/* Photo: 'Nord Stage 4' caps ≈0.36cqw → ~0.52cqw font. */
+	font-size: 0.52cqw;
 }
 
 .deck-section[data-section="program"] .oled .oled-program {
@@ -3666,11 +3749,16 @@ body {
 
 .program-grid .panel-button.tiny {
 	justify-self: center;
+	/* Photo: the PROGRAM 1-8 bank switches are the WIDE flavor (like the
+     Preset Library trio), noticeably wider than the utility switches. */
+	min-width: 1.4cqw;
+	min-height: 0.7cqw;
 }
 
 .prog-num {
-	font-size: 0.18cqw;
-	gap: 0.05cqw;
+	/* Photo: the 1-8 numerals print at full legend size beside their LEDs. */
+	font-size: 0.22cqw;
+	gap: 0.07cqw;
 	letter-spacing: 0;
 }
 
@@ -3730,7 +3818,8 @@ body {
 
 .program-cell .legend {
 	letter-spacing: 0;
-	font-size: 0.17cqw;
+	/* Photo: SYSTEM / SOUND / ORGANIZE… print at near-full legend size. */
+	font-size: 0.21cqw;
 }
 
 .program-cell {
@@ -3749,9 +3838,10 @@ body {
 	color: var(--legend);
 }
 
-/* Beat the program-strip density rule's specificity (section attr + class). */
+/* Beat the program-strip density rule's specificity (section attr + class).
+   Photo: SYSTEM / SOUND / ORGANIZE… print at near-full legend size. */
 .deck-section[data-section="program"] .program-cell .legend {
-	font-size: 0.15cqw;
+	font-size: 0.2cqw;
 	letter-spacing: 0;
 }
 
@@ -4785,12 +4875,12 @@ body {
 
 .reverb-box .legend,
 .comp-box .legend {
-	font-size: 0.18cqw;
+	font-size: 0.21cqw;
 }
 
 .reverb-box .panel-button .panel-button-cap,
 .comp-box .panel-button .panel-button-cap {
-	font-size: 0.18cqw;
+	font-size: 0.19cqw;
 	padding: 0.05cqw 0.12cqw;
 }
 
@@ -4898,7 +4988,7 @@ body {
 }
 
 .led-word-col .tiny-led-row .legend {
-	font-size: 0.18cqw;
+	font-size: 0.2cqw;
 }
 
 .led-word-col .led {
@@ -5065,7 +5155,7 @@ body {
 }
 
 .fx-on-print .legend {
-	font-size: 0.18cqw;
+	font-size: 0.2cqw;
 }
 
 .fx-on-print .led {
