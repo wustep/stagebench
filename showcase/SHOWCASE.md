@@ -2348,3 +2348,22 @@ Follow-up pass on the box-tiling feedback.
   grids; fx-specific size/gap overrides removed; row pitches converge
   (type grid 0.12 → 0.1, reverb rows 0.05 → 0.08).
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12.
+
+### 64 — Morph Assign rebuilt to the close-up (2026-07-05)
+
+User photo of the hardware's Morph Assign box.
+
+- The title is a light band spanning the box's FULL inner width, flush
+  under the top border (was a floating centered lozenge like SPLIT /
+  MST CLK / TRANSP — those keep the lozenge, per the wide shot).
+- CLEAR MORPH prints IN a break of the box's BOTTOM border: the legend
+  straddles the line (same masking-patch trick as the box titles, local
+  red #7e262f) and the border itself runs to the corners on both sides.
+  SINGLE LAYER on the Preset Library box gets the same treatment with a
+  two-tone patch (light fill above the line, chassis red below).
+- WHEEL / A.T. / CTRLPED print near legend size (0.16 → 0.2cqw, LEDs
+  0.22 → 0.24) and the ⇟ placeholder becomes the hardware's stacked
+  double-triangle morph mark (a CSS glyph — no text glyph matches).
+- The three switches span the box's full inner width, nearly touching
+  (photo), instead of floating centered at the uniform footprint.
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12.

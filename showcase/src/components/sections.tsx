@@ -959,15 +959,17 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
             <span className="morph-legend-row" aria-hidden="true">
               <span className="tiny-led-row">
                 <Led color="green" on={state.morphArming === 'wheel'} />
-                <Legend>WHEEL ⇟</Legend>
+                {/* The hardware's morph-source mark is two STACKED solid
+                    down-triangles (no matching glyph renders reliably). */}
+                <Legend>WHEEL <b className="dest-glyph" /></Legend>
               </span>
               <span className="tiny-led-row">
                 <Led color="green" on={state.morphArming === 'at'} />
-                <Legend>A.T. ⇟</Legend>
+                <Legend>A.T. <b className="dest-glyph" /></Legend>
               </span>
               <span className="tiny-led-row">
                 <Led color="green" on={state.morphArming === 'pedal'} />
-                <Legend>CTRLPED ⇟</Legend>
+                <Legend>CTRLPED <b className="dest-glyph" /></Legend>
               </span>
             </span>
             <div className="morph-buttons">
