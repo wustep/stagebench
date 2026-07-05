@@ -420,7 +420,8 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                       <Led color="red" on={focused.model === 'B3'} className="led-tri-left" />
                       <Led color="red" on={focused.model === 'B3Bass'} className="led-tri-right" />
                     </span>
-                    <Legend>B3 BASS</Legend>
+                    {/* Photo: B3 BASS wraps onto two lines. */}
+                    <Legend className="two-line">B3<br />BASS</Legend>
                   </span>
                 </div>
                 <PanelButton store={store} id="organ-model" className="dark small" />
@@ -1508,9 +1509,12 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     three dials — the photo's elbow shape: the outer pair
                     kinks outward, the middle one drops straight. */}
                 <svg className="synth-dial-leads" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true">
-                  <polyline points="24,0 24,9 16,17 16,26" />
+                  {/* Outer leads start under the display's TYPE/WAVE captions
+                      and kink outward to land exactly on the dial centers
+                      (space-around thirds: 16.7 / 50 / 83.3). */}
+                  <polyline points="22,0 22,9 16.7,17 16.7,26" />
                   <polyline points="50,0 50,26" />
-                  <polyline points="76,0 76,9 84,17 84,26" />
+                  <polyline points="78,0 78,9 83.3,17 83.3,26" />
                 </svg>
                 <div className="synth-dials">
                   {/* Static panel print (reference: INFO / LIST / LIST); the

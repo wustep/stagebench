@@ -22,10 +22,10 @@ describe('visual.section-layout — deck geometry', () => {
     }
   })
 
-  it('splits the chassis 54% deck / 46% keybed', () => {
+  it('splits the chassis 52.5% deck / 47.5% keybed (spec 54/46 ± 2.5, keys-tall bias)', () => {
     renderApp()
-    expect(screen.getByTestId('deck-block').style.height).toBe('54%')
-    expect(screen.getByTestId('keys-block').style.height).toBe('46%')
+    expect(screen.getByTestId('deck-block').style.height).toBe('52.5%')
+    expect(screen.getByTestId('keys-block').style.height).toBe('47.5%')
   })
 
   it('keeps the deck, keybed and rails inside one continuous chassis element', () => {

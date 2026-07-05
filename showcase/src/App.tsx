@@ -647,7 +647,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         onPointerLeave={magnify ? onLensLeave : undefined}
       >
         <div className="chassis" data-testid="chassis" ref={realChassisRef}>
-          <div className="deck-block" data-testid="deck-block" style={{ height: '54%' }}>
+          <div className="deck-block" data-testid="deck-block" style={{ height: '52.5%' }}>
             {/* Rear-connector legends printed on the top lip (reference
                 photo); purely decorative print — the jacks are on the back. */}
             <div className="top-rail" aria-hidden="true">
@@ -676,10 +676,14 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               </span>
             </div>
           </div>
-          <div className="keys-block" data-testid="keys-block" style={{ height: '46%' }}>
+          <div className="keys-block" data-testid="keys-block" style={{ height: '47.5%' }}>
             <Keybed controller={controller} instrument={instrument} />
             <div className="bottom-rail" aria-hidden="true" />
           </div>
+          {/* Raised wooden side rails along both edges (reference photo):
+              a slightly deeper red than the deck, standing proud of it. */}
+          <div className="side-rail left" aria-hidden="true" />
+          <div className="side-rail right" aria-hidden="true" />
           {overlayActive && (
             <ReferenceGhost
               mode={overlayPeek ? 'ghost' : overlayMode}
@@ -737,7 +741,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               at the panel's edges: page background and keybed, not red. */}
           <div className="lens-canvas" ref={lensCanvasRef} inert>
             <div className="chassis lens-chassis">
-              <div className="deck-block" style={{ height: '54%' }}>
+              <div className="deck-block" style={{ height: '52.5%' }}>
                 <div className="top-rail" aria-hidden="true">
                   {REAR_LEGENDS.map(([label, left]) => (
                     <span key={label} className="rear-legend" style={{ left: `${left}%` }}>
@@ -762,10 +766,12 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
                   </span>
                 </div>
               </div>
-              <div className="keys-block" style={{ height: '46%' }}>
+              <div className="keys-block" style={{ height: '47.5%' }}>
                 <Keybed controller={controller} instrument={instrument} />
                 <div className="bottom-rail" aria-hidden="true" />
               </div>
+              <div className="side-rail left" aria-hidden="true" />
+              <div className="side-rail right" aria-hidden="true" />
               {/* The compare ghost travels into the loupe too, so the lens
                   magnifies photo-vs-render at the same 2.6x. */}
               {overlayActive && (

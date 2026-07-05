@@ -16,8 +16,10 @@ export const VARIANT = {
     blackKeyHeightFraction: 0.61,
   },
   vertical: {
-    controlDeck: 0.54,
-    keybed: 0.46,
+    // Within the visual spec's 0.54/0.46 ± 0.025 allocation, biased toward
+    // taller keys (user direction, 2026-07-04).
+    controlDeck: 0.525,
+    keybed: 0.475,
   },
 } as const
 

@@ -2052,3 +2052,92 @@ nord-stage-4-73.jpg:
   bottom).
 - Gates: typecheck, lint, suite 613/613 (hardware.test fractions
   updated), verify:layout 12/12.
+
+### 53 — Taller keys/plates, lower port prints, logo alignment (2026-07-04)
+
+User-directed micro-adjustments after iteration 52's photo pass:
+
+- **Chassis split 54/46 → 52.5/47.5** (taller keys, still inside the
+  visual spec's 0.54 ± 0.025 allocation); surface.test and
+  `VARIANT.vertical` updated.
+- **Slightly taller plates**: `.control-deck` padding 2.14/1.65 →
+  1.5/1.2cqw top/bottom, so the plates own more of the deck; deck screws
+  and the HANDMADE print follow the new plate-bottom line.
+- **Port prints lower, no divider**: the rear-connector legends
+  (MONITOR IN…) center at 85% of the top rail, and the rail's 1px black
+  border-bottom is gone — its gradient now runs into the chassis red.
+- **Branding**: the block's bottom padding went to zero so HAMMER
+  ACTION 73's foot sits exactly on the Rotary Speaker strip's bottom
+  border line (both measure y 0.4878 of the chassis), and its tracking
+  grew 0.26 → 0.306cqw so the 73's right edge lands on the logotype's
+  final 4 (browser-measured to within 0.004cqw).
+- Gates: typecheck, lint, suite 613/613, verify:layout 12/12.
+
+### 54 — Panel headers, box titles, triangle axes, dial leads (2026-07-05)
+
+User-directed panel detail pass, all photo-verified:
+
+- **Bands connect to their bodies**: the Piano header lost its inner
+  padding/red repaint — the light band now spans exactly the plate's
+  width and sits flush on the body (one silhouette, like the photo);
+  the wide plates' band margin tightened -0.42 → -0.35cqw so band and
+  body edges land on the same line. LAYER EFFECTS lost the 0.16cqw red
+  seam: the dark grid rises flush to the band/strip bottom (grid top
+  corners squared, FX FOCUS tab tucks at 0.02cqw).
+- **Corner details**: header tabs round 0.2cqw top-left with a 0.3cqw
+  step corner (photo radii); group-box outlines tightened 0.3 → 0.2cqw.
+- **Organ box titles**: the groups row starts 0.35cqw lower (photo
+  shows ~0.55cqw navy between band and box tops), titles center ON the
+  border line (top -0.22cqw), ORGAN MODEL prints on two centered lines
+  straddling the line (box gets 0.66cqw headroom), and B3 BASS wraps to
+  two lines like the print.
+- **Triangle axes**: `.sel-grid` is now a real 3-column grid with
+  `display: contents` rows — every row's ◀▶ pair sits on ONE shared
+  vertical axis (per-row flex let wide labels like TO ROTARY push their
+  row's arrows around); the dark housing is painted per-row around the
+  led pair so it always hugs the true axis. `.model-led-grid` tracks
+  hardened to minmax(0, 1fr).
+- **Synth dial leads**: the leader SVG spans the full display width and
+  the polylines land exactly on the space-around dial centers
+  (16.7/50/83.3%), kinking outward from the TYPE/WAVE captions like the
+  photo.
+- **HANDMADE IN SWEDEN** hugs the LAYER EFFECTS plate (right 1.3 →
+  3.75cqw ⇒ ~0.4cqw off the plate edge, as photographed).
+- Gates: typecheck, lint, suite 613/613, verify:layout 12/12.
+
+### 55 — Layer Effects body reaches the FX FOCUS tab (2026-07-05)
+
+Photo-measured correction to iteration 54's Layer Effects silhouette: the
+dark body is WIDER than the boxes grid suggested — its straight left edge
+lands at ~79.0cqw, immediately at the red gutter's end.
+
+- `.fx-strip` narrows to a 2.08cqw visible gutter (2.4cqw box, right
+  0.32cqw under the grid) and `.effects-body`'s gap went to zero; the
+  grid pulls left with `margin-left: -0.32cqw`.
+- The grid's top-LEFT corner rounds at 0.3cqw and cuts INTO the FX FOCUS
+  tab's light — the tab now stretches across the whole gutter and runs
+  under the corner, so the light fills the notch exactly like the photo.
+  Its bottom corners squared (photo shows no radii), print one notch
+  smaller (0.28cqw) so it clears the curve.
+- ALL FX OFF / GROUP ▿ captions pinned to 0.26cqw nowrap so the narrower
+  gutter keeps them on one line.
+- Gates: typecheck, lint, suite 613/613, verify:layout 12/12.
+
+### 56 — Raised wooden side rails (2026-07-05)
+
+The photo's chassis is capped left and right by red-stained WOOD end
+panels standing proud of the metal deck — the outer ~1.7cqw reads as a
+slightly deeper red running the instrument's full depth.
+
+- New decorative `.side-rail.left/.right` overlays (real chassis + lens
+  clone): 1.72cqw wide, full chassis height — over the rear lip, deck,
+  end cheeks and front lip alike.
+- Photo-derived paint: base red one step deeper than the chassis
+  (rgb ~105,24,31 vs the panel's 113,31,40), two beating low-alpha
+  stripe pitches as faint vertical wood grain, a 0.13cqw near-black seam
+  groove on the inner edge, an inner bevel + top-edge highlight, and a
+  soft cast shadow onto the deck for the elevation read.
+- Nothing sits under them: wheels start at ~2.3cqw, rear-port legends at
+  15%, screws at 13.6%, HANDMADE print at 96cqw; keys begin after the
+  3cqw cheeks (rails cover the cheeks' outer half).
+- Gates: typecheck, lint, suite 613/613, verify:layout 12/12.

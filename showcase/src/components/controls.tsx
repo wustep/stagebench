@@ -222,16 +222,16 @@ export const Fader = memo(function Fader({ store, id, className }: ContinuousPro
 export const Drawbar = memo(function Drawbar({ store, id, className }: ContinuousProps) {
   const { value, min, range, sliderProps } = useContinuous(store, id)
   // Drawbar pulled OUT (toward the player) = higher value = cap travels
-  // down. The travel lives entirely in the slot's span (photo): pushed IN
-  // the cap tops out at the slot's top edge (24%, beside the ladder's #4
-  // numeral), and a full pull parks it just below the LED strip's last
-  // cell (the strip spans the upper ~56% of the well).
+  // down. The travel lives in the full recessed slot (photo): pushed IN
+  // the cap tops out beside the ladder's #4 numeral (~24%), and a full
+  // pull parks the cap at the slot's bottom lip (~98%; the 1–8 LEDs only
+  // label the upper registration band, not the physical travel limit).
   const norm = (value - min) / range
-  const travel = norm * 32
+  const travel = norm * 74
   return (
     <div {...sliderProps} className={`drawbar ${className ?? ''}`}>
       <div className="drawbar-shaft" style={{ height: `${travel}%` }} />
-      <div className="drawbar-cap" style={{ top: `calc(24% + ${travel}% - ${norm * 0.35} * var(--drawbar-cap-h))` }}>
+      <div className="drawbar-cap" style={{ top: `calc(24% + ${travel}% - ${norm} * var(--drawbar-cap-h))` }}>
         <span className="drawbar-line" />
       </div>
     </div>
