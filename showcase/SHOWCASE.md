@@ -2367,3 +2367,15 @@ User photo of the hardware's Morph Assign box.
 - The three switches span the box's full inner width, nearly touching
   (photo), instead of floating centered at the uniform footprint.
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12.
+
+### 65 — Morph Assign: gray panel inset, CLEAR MORPH between rules (2026-07-05)
+
+Correction on iteration 64 (user close-up re-read).
+
+- The Morph Assign box interior is a GRAY panel inset on the red chassis
+  (plate-family gradient #444b58 -> #3d4450), not bare red.
+- CLEAR MORPH prints INSIDE the gray panel, centered between two long
+  flanking rules that stretch toward the box edges — not in a break of
+  the bottom border. SINGLE LAYER reverts to the same in-flow treatment
+  on the Preset Library panel (dark rules on the light fill).
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12.

@@ -418,9 +418,9 @@ body {
 }
 
 /* ------------------------------------------- dev-only measure mode ------ */
-/* import.meta.env.DEV gates the whole tool — none of this UI ships in
-   published builds. Box geometry is chassis-relative percentages, so drawn
-   boxes stay pinned to the panel through window resizes. */
+/* import.meta.env.DEV or /secret unlock gates the whole tool — none of this
+   UI ships in the public production build. Box geometry is chassis-relative
+   percentages, so drawn boxes stay pinned to the panel through window resizes. */
 .measure-overlay {
 	position: absolute;
 	inset: 0;
@@ -3580,8 +3580,10 @@ body {
 .morph-box.group-box {
 	padding-left: 0.05cqw;
 	padding-right: 0.05cqw;
-	/* Clearance for the CLEAR MORPH print straddling the bottom border. */
-	padding-bottom: 0.2cqw;
+	padding-bottom: 0.08cqw;
+	/* Photo close-up: the box interior is a GRAY panel inset on the red
+     chassis (plate-family gradient), not bare red. */
+	background: linear-gradient(180deg, #444b58 0%, #3d4450 100%);
 }
 
 .morph-buttons .panel-button .panel-button-cap {
@@ -3633,28 +3635,27 @@ body {
 	height: 0.24cqw;
 }
 
-/* CLEAR MORPH / SINGLE LAYER print IN a break of the box's BOTTOM border
-   (photo): the text straddles the line and the border itself shows on both
-   sides, running to the box corners. Same masking-patch trick as the
-   box titles. */
+/* CLEAR MORPH / SINGLE LAYER print centered between two long flanking
+   rules INSIDE the box, just above its bottom border (photo close-up) —
+   the lines stretch from the text out toward the box edges. */
 .legend.legend-rule {
-	position: absolute;
-	bottom: -0.17cqw;
-	left: 50%;
-	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	align-self: stretch;
+	gap: 0.12cqw;
 	white-space: nowrap;
-	padding: 0 0.14cqw;
+	padding: 0 0.08cqw;
 	font-size: 0.2cqw;
 	letter-spacing: 0.02cqw;
-	/* Local chassis red sampled beside the patch (the flat --chassis-mid
-     reads darker than the textured chassis here). */
-	background: #7e262f;
 }
 
-/* Preset Library is light-filled: above the border line the patch shows the
-   fill, below it the red chassis. */
-.preset-box .legend.legend-rule {
-	background: linear-gradient(180deg, #b7bcc8 50%, #7e262f 50%);
+.legend.legend-rule::before,
+.legend.legend-rule::after {
+	content: "";
+	flex: 1;
+	height: 0.05cqw;
+	background: currentColor;
+	opacity: 0.8;
 }
 
 /* The morph-source mark: two stacked solid down-triangles (hardware print;
