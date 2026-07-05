@@ -110,10 +110,20 @@ const computerKeyboardNotes: Record<string, { label: string; midi: number }> = {
   KeyY: { label: 'Y', midi: 69 },
   Digit7: { label: '7', midi: 70 },
   KeyU: { label: 'U', midi: 71 },
+  KeyI: { label: 'I', midi: 72 },
+  Digit9: { label: '9', midi: 73 },
+  KeyO: { label: 'O', midi: 74 },
+  Digit0: { label: '0', midi: 75 },
+  KeyP: { label: 'P', midi: 76 },
 }
 const computerKeyLabels = new Map(
   Object.values(computerKeyboardNotes).map(({ label, midi }) => [midi, label]),
 )
+// The QWERTY map covers 29 semitones of the 48-key rail; the octave shift
+// buttons (or -/= keys) slide it up so every note is reachable from the
+// computer keyboard: shift 0 starts at C3, +2 tops out at the rail's B6.
+const OCTAVE_SHIFT_MAX = 2
+const HEADER_MIDI_MAX = 95
 const headerNoteNames = Object.fromEntries(
   headerKeys.flatMap(({ white, black }) => black
     ? [[white.midi, white.name], [black.midi, black.name]]
@@ -320,10 +330,12 @@ function ModWheel({ mod, onMod }: { mod: number; onMod: (value: number) => void 
 
 function KeyboardRail({
   activeNotes,
+  octaveShift,
   onNoteOn,
   onNoteOff,
 }: {
   activeNotes: Set<number>
+  octaveShift: number
   onNoteOn: (midi: number, name: string) => void
   onNoteOff: (midi: number) => void
 }) {
@@ -353,8 +365,10 @@ function KeyboardRail({
   return (
     <div className="keyboard-rail" role="group" aria-label="Playable benchmark keyboard">
       {headerKeys.map(({ white, black }) => {
-        const whiteShortcut = computerKeyLabels.get(white.midi)
-        const blackShortcut = black ? computerKeyLabels.get(black.midi) : undefined
+        // Key-hint chips follow the octave shift so they always sit on the
+        // keys the computer keyboard currently plays.
+        const whiteShortcut = computerKeyLabels.get(white.midi - octaveShift * 12)
+        const blackShortcut = black ? computerKeyLabels.get(black.midi - octaveShift * 12) : undefined
 
         return (
           <span className="key-slot" key={white.midi}>
@@ -396,6 +410,7 @@ function App() {
   const [lastPlayed, setLastPlayed] = useState<string | null>(null)
   const [bend, setBend] = useState(0)
   const [mod, setMod] = useState(0)
+  const [octaveShift, setOctaveShift] = useState(0)
   const audioContextRef = useRef<AudioContext | null>(null)
   const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode; ended: boolean }>())
   // Shared modulation graph: pitch stick detunes every voice directly, the
@@ -404,7 +419,10 @@ function App() {
   const modDepthRef = useRef(0)
   const lfoRef = useRef<{ oscillator: OscillatorNode; gain: GainNode } | null>(null)
   const masterRef = useRef<GainNode | null>(null)
-  const pressedKeysRef = useRef(new Set<string>())
+  // Each held computer key remembers the actual MIDI note it started, so a
+  // mid-hold octave change still releases the right voice.
+  const pressedKeysRef = useRef(new Map<string, number>())
+  const octaveShiftRef = useRef(0)
   // The element that opened the current dialog, so focus can return to it on
   // close. Captured before the dialog mounts (the dialog steals focus).
   const dialogOpenerRef = useRef<HTMLElement | null>(null)
@@ -513,6 +531,14 @@ function App() {
     }
   }, [])
 
+  const shiftOctave = useCallback((delta: number) => {
+    setOctaveShift((current) => {
+      const next = clamp(current + delta, 0, OCTAVE_SHIFT_MAX)
+      octaveShiftRef.current = next
+      return next
+    })
+  }, [])
+
   const applyMod = useCallback((value: number) => {
     const next = clamp(value, 0, 1)
     setMod(next)
@@ -600,8 +626,8 @@ function App() {
   useEffect(() => {
     const pressedKeys = pressedKeysRef.current
     const releasePressedKeys = () => {
-      for (const code of pressedKeys) {
-        stopHeaderNote(computerKeyboardNotes[code].midi)
+      for (const midi of pressedKeys.values()) {
+        stopHeaderNote(midi)
       }
       pressedKeys.clear()
     }
@@ -612,26 +638,37 @@ function App() {
     }
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      const note = computerKeyboardNotes[event.code]
-      if (!note || event.repeat || pressedKeys.has(event.code) || event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
 
       const target = event.target
       if (target instanceof HTMLElement && (
         target.isContentEditable || target.matches('input, textarea, select')
       )) return
 
+      if (event.code === 'Minus' || event.code === 'Equal') {
+        event.preventDefault()
+        shiftOctave(event.code === 'Minus' ? -1 : 1)
+        return
+      }
+
+      const note = computerKeyboardNotes[event.code]
+      if (!note || pressedKeys.has(event.code)) return
+
+      const midi = note.midi + octaveShiftRef.current * 12
+      if (midi > HEADER_MIDI_MAX) return
+
       event.preventDefault()
-      pressedKeys.add(event.code)
-      startHeaderNote(note.midi, headerNoteNames[note.midi])
+      pressedKeys.set(event.code, midi)
+      startHeaderNote(midi, headerNoteNames[midi])
     }
 
     const handleKeyUp = (event: globalThis.KeyboardEvent) => {
-      const note = computerKeyboardNotes[event.code]
-      if (!note || !pressedKeys.has(event.code)) return
+      const midi = pressedKeys.get(event.code)
+      if (midi === undefined) return
 
       event.preventDefault()
       pressedKeys.delete(event.code)
-      stopHeaderNote(note.midi)
+      stopHeaderNote(midi)
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -644,7 +681,7 @@ function App() {
       window.removeEventListener('blur', releasePressedKeys)
       releasePressedKeys()
     }
-  }, [overlayOpen, startHeaderNote, stopHeaderNote])
+  }, [overlayOpen, shiftOctave, startHeaderNote, stopHeaderNote])
 
   useEffect(() => {
     if (!overlayOpen) return
@@ -731,6 +768,36 @@ function App() {
                   <ModWheel mod={mod} onMod={applyMod} />
                   <span aria-hidden="true" className="wheel-legend">MOD</span>
                 </div>
+                <div className="wheel-well octave-well">
+                  <div className="octave-buttons">
+                    <button
+                      aria-label="Keyboard octave down, shortcut minus key"
+                      disabled={octaveShift === 0}
+                      onClick={() => shiftOctave(-1)}
+                      type="button"
+                    >
+                      &minus;
+                    </button>
+                    <button
+                      aria-label="Keyboard octave up, shortcut equals key"
+                      disabled={octaveShift === OCTAVE_SHIFT_MAX}
+                      onClick={() => shiftOctave(1)}
+                      type="button"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span
+                    aria-label={`Keyboard octave shift ${octaveShift === 0 ? 'off' : `plus ${octaveShift}`}`}
+                    className="octave-leds"
+                    role="status"
+                  >
+                    {[0, 1, 2].map((step) => (
+                      <i className={step === octaveShift ? 'is-on' : undefined} key={step} />
+                    ))}
+                  </span>
+                  <span aria-hidden="true" className="wheel-legend">OCTAVE</span>
+                </div>
               </div>
               <div className="toy-branding" aria-hidden="true">
                 <span className="brand-line">stagebench</span>
@@ -783,7 +850,7 @@ function App() {
 
           <div className="toy-keys">
             <div className="end-cheek left" aria-hidden="true" />
-            <KeyboardRail activeNotes={activeNotes} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
+            <KeyboardRail activeNotes={activeNotes} octaveShift={octaveShift} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
             <div className="end-cheek right" aria-hidden="true" />
           </div>
           <div className="toy-bottom-rail" aria-hidden="true" />
