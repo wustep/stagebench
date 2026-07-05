@@ -138,134 +138,421 @@ a { color: inherit; }
   text-wrap: pretty;
 }
 
+/* ------------------------------------------------------------------------
+   The toy Nord Stage 4. A chibi take on the showcase instrument: same red
+   chassis, slate plates, ice-blue OLED, and keybed language, but chunkier
+   proportions, rounder corners, and rubber feet. Sized in cqw so the whole
+   toy scales as one rigid object (the shell is the size container). */
+
 .instrument-shell {
+  --shell-radius: 18px;
   position: relative;
   width: min(1180px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 12px 14px 14px;
-  border-radius: 12px 12px 5px 5px;
-  background: linear-gradient(90deg, var(--nord-red-dark), oklch(56% 0.2 29) 4% 96%, var(--nord-red-dark));
+  border-radius: var(--shell-radius) var(--shell-radius) calc(var(--shell-radius) * .7) calc(var(--shell-radius) * .7);
+  container-type: inline-size;
+  background: linear-gradient(180deg, #8a2b35 0%, #79232c 48%, #721f29 78%, #641b24 100%);
   box-shadow:
-    inset 0 2px color-mix(in oklch, var(--white) 28%, transparent),
-    inset 0 -3px oklch(31% 0.13 29),
+    inset 0 2px color-mix(in oklch, var(--white) 30%, transparent),
+    inset 0 -2px oklch(24% 0.1 29),
     0 26px 50px -20px oklch(16% 0.08 29 / .75),
     0 8px 18px -10px oklch(14% 0.05 29 / .5);
 }
 
-.instrument-shell::before {
-  content: '';
+/* Little rubber feet peeking out under the chassis. */
+.toy-foot {
   position: absolute;
-  inset: 5px 13px auto;
-  height: 3px;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--white) 25%, transparent);
+  z-index: -1;
+  bottom: -9px;
+  width: clamp(28px, 5cqw, 60px);
+  height: 18px;
+  border-radius: 0 0 9px 9px;
+  background: linear-gradient(180deg, #2a0d12, #14090b 70%);
+  box-shadow: 0 3px 5px oklch(12% 0.05 29 / .55);
 }
 
-.control-panel {
+.toy-foot.left { left: 5%; }
+.toy-foot.right { right: 5%; }
+
+/* Rear connector strip: a darker red band with tiny port legends. */
+.toy-top-rail {
+  display: flex;
+  justify-content: flex-end;
+  gap: clamp(12px, 2.6cqw, 34px);
+  padding: clamp(4px, .55cqw, 8px) clamp(14px, 2.4cqw, 30px) clamp(3px, .45cqw, 7px);
+  border-radius: var(--shell-radius) var(--shell-radius) 0 0;
+  background: linear-gradient(180deg, #4a141c 0%, #571820 55%, #6d1e28 100%);
+  box-shadow: inset 0 -2px 3px oklch(15% 0.06 29 / .5);
+}
+
+.toy-top-rail span {
+  color: oklch(88% 0.02 60 / .5);
+  font: 700 clamp(6px, .55cqw, 8px)/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .22em;
+}
+
+/* --------------------------------------------------------- control deck -- */
+
+.control-deck {
   display: grid;
-  grid-template-columns: 88px 88px minmax(210px, 1fr) minmax(500px, 1.6fr);
-  gap: 1px;
-  width: 100%;
-  margin: 0;
-  padding: 1px;
-  background: var(--black);
+  grid-template-areas: 'perf bench program phases';
+  grid-template-columns: minmax(140px, 1.05fr) minmax(116px, .82fr) minmax(190px, 1.5fr) minmax(224px, 1.85fr);
+  gap: clamp(8px, 1cqw, 14px);
+  align-items: stretch;
+  padding: clamp(10px, 1.2cqw, 18px) clamp(10px, 1.3cqw, 18px) clamp(11px, 1.4cqw, 20px);
 }
 
-.panel-readout,
-.oled-display,
-.stage-controls {
-  min-height: 96px;
-  background: var(--panel);
+/* Performance section: exposed red chassis with the wheels and the wordmark. */
+.deck-performance {
+  grid-area: perf;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: clamp(8px, 1cqw, 16px);
+  padding: clamp(2px, .3cqw, 5px) 0 0 clamp(2px, .3cqw, 6px);
+}
+
+.wheel-park {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(10px, 1.5cqw, 22px);
+}
+
+.wheel-well {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(3px, .45cqw, 7px);
+}
+
+.wheel-legend {
+  color: oklch(90% 0.02 60 / .62);
+  font: 700 clamp(6px, .55cqw, 8px)/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .2em;
+}
+
+/* Pitch stick: black pocket + maple lever, tilted like the hardware. */
+.toy-pitch-stick {
+  position: relative;
+  width: clamp(38px, 5.2cqw, 64px);
+  height: clamp(16px, 2.3cqw, 29px);
+  margin-top: clamp(3px, .5cqw, 8px);
+  border-radius: 3px;
+  transform: rotate(-9deg);
+  background: linear-gradient(135deg, #060404 0%, #0b0807 55%, #191110 100%);
+  box-shadow:
+    inset 0 2px 3px oklch(0% 0 0 / .9),
+    2px 2px 4px oklch(14% 0.06 29 / .5);
+  cursor: ew-resize;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.toy-pitch-lever {
+  position: absolute;
+  inset: 12% auto auto 11%;
+  width: 78%;
+  height: 72%;
+  border-radius: 5px 3px 3px 5px;
+  background:
+    linear-gradient(168deg, oklch(95% 0.09 85 / .6) 0%, transparent 45%, oklch(42% 0.09 65 / .5) 100%),
+    repeating-linear-gradient(115deg, oklch(78% 0.11 75 / .5) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #dda558 0%, #c68a40 55%, #a86f2e 100%);
+  box-shadow:
+    1px 2px 3px oklch(0% 0 0 / .7),
+    inset 0 1px 1px oklch(97% 0.05 85 / .6);
+  transition: transform .06s ease-out;
+}
+
+/* Mod wheel: stadium slot with a gray rubber crown and thumb dimple. */
+.toy-mod-wheel {
+  position: relative;
+  width: clamp(12px, 1.55cqw, 19px);
+  height: clamp(40px, 5.4cqw, 66px);
+  border-radius: 999px;
+  transform: rotate(-9deg);
+  background: #0c0909;
+  box-shadow:
+    inset 0 3px 4px oklch(0% 0 0 / .9),
+    inset 0 -2px 3px oklch(0% 0 0 / .85),
+    1px 2px 4px oklch(14% 0.06 29 / .45);
+  cursor: ns-resize;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.toy-wheel-face {
+  position: absolute;
+  inset: 4% 14% 5% 7%;
+  border-radius: 999px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, oklch(8% 0 0 / .8) 0%, oklch(100% 0 0 / .3) 24%, oklch(100% 0 0 / .12) 55%, oklch(8% 0 0 / .72) 100%),
+    linear-gradient(90deg, oklch(100% 0 0 / .5) 10%, oklch(70% 0.01 280 / .25) 52%, oklch(12% 0.03 20 / .65) 100%),
+    #5a5e66;
+  box-shadow: 0 1px 2px oklch(0% 0 0 / .75);
+}
+
+.toy-wheel-dimple {
+  position: absolute;
+  left: 8%;
+  right: 12%;
+  height: 9%;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: radial-gradient(60% 100% at 55% 42%, oklch(10% 0.01 300 / .65) 0%, transparent 78%);
+  box-shadow: 0 1px 1px oklch(88% 0.005 280 / .45);
+  transition: top .08s ease-out;
+  pointer-events: none;
+}
+
+.toy-pitch-stick:focus-visible,
+.toy-mod-wheel:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.toy-branding {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, .3cqw, 5px);
+  user-select: none;
+}
+
+.brand-line {
+  color: oklch(95% 0.015 60);
+  font-family: 'Comfortaa', ui-rounded, 'Trebuchet MS', sans-serif;
+  font-size: clamp(15px, 2cqw, 25px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+
+.brand-sub {
+  color: oklch(88% 0.03 20 / .8);
+  font: 700 clamp(6px, .55cqw, 8px)/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .42em;
+  white-space: nowrap;
+}
+
+/* Slate plates with the light header tab band, straight off the showcase. */
+.deck-plate {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: clamp(6px, .8cqw, 11px);
+  background: linear-gradient(180deg, #414855 0%, #3d4450 45%, #333945 100%);
+  box-shadow:
+    inset 0 1px oklch(100% 0 0 / .16),
+    inset 0 0 0 1px oklch(14% 0.01 270 / .6),
+    0 3px 7px oklch(16% 0.07 29 / .4);
+  overflow: hidden;
+}
+
+.plate-benchmark { grid-area: bench; }
+.plate-program { grid-area: program; }
+.plate-phases { grid-area: phases; }
+
+.plate-tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  padding: clamp(3px, .38cqw, 6px) clamp(7px, .9cqw, 12px);
+  background: linear-gradient(180deg, var(--band-hi, #c6cbd7), #bcc2cf);
+  color: #232a38;
+  font: 800 clamp(7px, .62cqw, 9px)/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .18em;
+}
+
+.plate-body {
+  flex: 1;
+  min-height: clamp(52px, 6.2cqw, 78px);
+  padding: clamp(7px, .9cqw, 13px);
+}
+
+/* Benchmark counters: little red LED windows, like the Nord program digits. */
+.readout-body {
+  display: flex;
+  gap: clamp(6px, .8cqw, 11px);
 }
 
 .panel-readout {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 14px;
+  gap: clamp(4px, .5cqw, 8px);
+  padding: clamp(5px, .6cqw, 9px) 2px;
+  border-radius: clamp(4px, .5cqw, 7px);
+  background: #150607;
+  box-shadow: inset 0 2px 5px oklch(0% 0 0 / .85), inset 0 0 0 1px oklch(10% 0.02 20);
 }
 
-.panel-readout small,
-.oled-display span {
-  color: oklch(66% 0.01 30);
-  font: 700 9px/1 'Barlow Condensed', sans-serif;
-  letter-spacing: .12em;
+.panel-readout small {
+  color: oklch(72% 0.05 25 / .75);
+  font: 700 clamp(6px, .58cqw, 8px)/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .18em;
 }
 
 .panel-readout strong {
-  margin-top: 8px;
-  font: 700 25px/1 ui-monospace, monospace;
+  color: #ff5340;
+  font: 700 clamp(16px, 2cqw, 26px)/1 ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px oklch(62% 0.24 27 / .65);
 }
 
+/* Program OLED: near-black glass with ice-blue ink. */
+.plate-program .plate-body { display: flex; }
+
 .oled-display {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 14px 18px;
-  background: oklch(16% 0.02 135);
+  gap: clamp(5px, .6cqw, 9px);
+  padding: clamp(7px, .9cqw, 13px) clamp(9px, 1.1cqw, 16px);
+  border-radius: clamp(4px, .5cqw, 7px);
+  background: #05080c;
+  box-shadow:
+    inset 0 0 12px oklch(0% 0 0 / .9),
+    inset 0 0 0 1px #0e1218,
+    0 0 6px oklch(78% 0.06 240 / .12);
 }
 
-.oled-display span { color: var(--green); }
+.oled-display span {
+  color: oklch(70% 0.05 240);
+  font: 700 clamp(6px, .6cqw, 9px)/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .18em;
+}
+
 .oled-display strong {
-  margin-top: 9px;
   overflow: hidden;
-  color: oklch(88% 0.08 135);
-  font: 400 15px/1 ui-monospace, monospace;
+  color: #dbeeff;
+  font: 400 clamp(11px, 1.25cqw, 16px)/1 ui-monospace, monospace;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 7px oklch(88% 0.05 240 / .4);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.toy-led {
+  width: clamp(5px, .55cqw, 8px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #57181a;
+  box-shadow: inset 0 1px 1px oklch(0% 0 0 / .5);
+  transition: background-color .12s, box-shadow .12s;
+}
+
+.toy-led.is-on {
+  background: #ff5340;
+  box-shadow: 0 0 7px oklch(65% 0.25 29 / .9);
+}
+
+/* Phase knobs. */
+.stage-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  list-style: none;
+}
+
+.stage-controls li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(3px, .35cqw, 5px);
+  min-width: 0;
+  padding: 0 clamp(3px, .4cqw, 6px);
+  text-align: center;
+}
+
+.stage-controls li + li { border-left: 1px solid oklch(100% 0 0 / .08); }
+
+.stage-controls span {
+  color: oklch(76% 0.01 270 / .8);
+  font: 700 clamp(6px, .58cqw, 8px)/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .14em;
+}
+
+.stage-controls strong {
+  overflow: hidden;
+  max-width: 100%;
+  color: oklch(92% 0.01 60);
+  font: 700 clamp(8px, .8cqw, 11px)/1.1 'Barlow Condensed', sans-serif;
+  letter-spacing: .06em;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
-.stage-controls {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.stage-controls li {
-  position: relative;
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  grid-template-rows: auto auto;
-  align-content: center;
-  gap: 3px 12px;
-  padding: 14px;
-  border-left: 1px solid oklch(35% 0.01 30);
-}
-
-.stage-controls span {
-  color: oklch(62% 0.01 30);
-  font: 700 9px/1 'Barlow Condensed', sans-serif;
-}
-
-.stage-controls strong {
-  font: 700 13px/1 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
-}
-
 .knob {
-  grid-row: 1 / 3;
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: clamp(26px, 3.1cqw, 40px);
+  aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle at 38% 34%, oklch(38% 0.01 30), var(--black) 62%);
-  box-shadow: 0 4px 6px oklch(5% 0 0 / .75);
+  background: radial-gradient(circle at 38% 30%, #4a505c, #16181d 68%);
+  box-shadow:
+    0 3px 6px oklch(4% 0 0 / .65),
+    inset 0 1px 1px oklch(100% 0 0 / .28);
 }
 
-.knob i { position: absolute; inset: 4px; border-radius: 50%; }
-.knob i::after { content: ''; position: absolute; top: 1px; left: 50%; width: 2px; height: 11px; background: var(--white); transform: translateX(-50%); }
+.knob i { position: absolute; inset: 9%; border-radius: 50%; }
+.knob i::after {
+  content: '';
+  position: absolute;
+  top: 2%;
+  left: 50%;
+  width: 2px;
+  height: 30%;
+  border-radius: 1px;
+  background: oklch(95% 0.015 60);
+  transform: translateX(-50%);
+}
+
+/* --------------------------------------------------------------- keybed -- */
+
+.toy-keys {
+  display: flex;
+  height: clamp(68px, 11.5cqw, 142px);
+}
+
+.end-cheek {
+  flex: none;
+  width: clamp(12px, 2cqw, 26px);
+  position: relative;
+  background: linear-gradient(90deg, #85202c 0%, #721f29 55%, #5d1922 100%);
+  box-shadow: inset -3px 0 4px oklch(0% 0 0 / .35);
+}
+
+.end-cheek.right {
+  background: linear-gradient(270deg, #85202c 0%, #721f29 55%, #5d1922 100%);
+  box-shadow: inset 3px 0 4px oklch(0% 0 0 / .35);
+}
+
+/* A tiny cross-head screw on each cheek. */
+.end-cheek::after {
+  content: '';
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  width: clamp(4px, .5cqw, 7px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #b8adaa, #4f4341 68%);
+  box-shadow: inset 0 1px 1px oklch(0% 0 0 / .7), 0 1px 1px oklch(100% 0 0 / .2);
+  transform: translateX(-50%);
+}
 
 .keyboard-rail {
-  height: 82px;
+  flex: 1;
+  min-width: 0;
   display: flex;
-  width: 100%;
-  margin: 0;
-  padding: 0 1px 1px;
-  border-top: 1px solid var(--black);
-  background: var(--black);
+  padding-top: clamp(3px, .4cqw, 6px);
+  background: #1a1414;
+  box-shadow: inset 0 6px 7px oklch(0% 0 0 / .6);
 }
 
 .key-slot {
@@ -281,12 +568,21 @@ a { color: inherit; }
   height: 100%;
   min-width: 0;
   padding: 0;
-  background: linear-gradient(90deg, oklch(89% 0 0), var(--white) 22%, oklch(91% 0 0) 94%);
   border: 0;
-  border-right: 1px solid oklch(70% 0 0);
-  border-radius: 0 0 3px 3px;
+  border-left: 1px solid oklch(24% 0.01 60 / .4);
+  border-radius: 0 0 clamp(2px, .35cqw, 5px) clamp(2px, .35cqw, 5px);
+  background: linear-gradient(180deg, #d8d8d5 0%, #f2f2ef 5%, #f6f6f3 55%, #f1f1ee 90%, #d9d8d4 96%, #b9b8b4 100%);
+  box-shadow: inset 0 -4px 4px oklch(0% 0 0 / .12);
   cursor: pointer;
   touch-action: none;
+}
+
+.key-slot:first-child .white-key { border-left: 0; }
+
+.white-key.is-active {
+  background: linear-gradient(180deg, #bcbcb9 0%, #d3d3d0 5%, #d6d6d3 55%, #d2d2cf 90%, #bdbcb9 96%, #a0a09c 100%);
+  box-shadow: inset 0 3px 5px oklch(0% 0 0 / .28);
+  transform: translateY(1.5%);
 }
 
 .black-key {
@@ -298,28 +594,89 @@ a { color: inherit; }
   height: 61%;
   padding: 0;
   border: 0;
-  border-radius: 0 0 2px 2px;
-  background: var(--black);
-  box-shadow: 1px 2px 2px oklch(5% 0 0 / .6);
+  border-radius: 0 0 clamp(2px, .3cqw, 4px) clamp(2px, .3cqw, 4px);
+  background: linear-gradient(180deg, #2b2b2b 0%, #111 25%, #0a0a0a 78%, #070707 100%);
+  box-shadow:
+    0 2px 3px oklch(0% 0 0 / .55),
+    inset 1px 0 1px oklch(100% 0 0 / .1),
+    inset -1px 0 1px oklch(100% 0 0 / .1);
   cursor: pointer;
   touch-action: none;
 }
 
-.white-key.is-active { background: linear-gradient(90deg, oklch(68% 0.04 29), oklch(82% 0.05 29)); transform: translateY(2px); }
-.black-key.is-active { background: oklch(30% 0.1 29); transform: translateY(2px); }
+/* Beveled glossy nose on the black key tip. */
+.black-key::after {
+  content: '';
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 0;
+  height: 12%;
+  border-radius: 0 0 22% 22% / 0 0 42% 42%;
+  background: linear-gradient(180deg, transparent 0%, #191919 35%, #303030 70%, #1c1c1c 100%);
+  pointer-events: none;
+}
+
+/* Pressed black keys darken in place: sliding the footprint down would
+   reveal the white keys hiding behind the cap. */
+.black-key.is-active {
+  background: linear-gradient(180deg, #0a0a0a 0%, #060606 4%, #262626 6%, #131313 9%, #0b0b0b 32%, #070707 78%, #050505 100%);
+  box-shadow:
+    0 1px 1px oklch(0% 0 0 / .45),
+    inset 1px 0 1px oklch(100% 0 0 / .05),
+    inset -1px 0 1px oklch(100% 0 0 / .05);
+}
+
+.black-key.is-active::after {
+  height: 8%;
+  background: linear-gradient(180deg, transparent 0%, #101010 40%, #1d1d1d 72%, #101010 100%);
+}
+
 .white-key:focus-visible, .black-key:focus-visible { z-index: 3; outline: 2px solid var(--amber); outline-offset: -3px; }
 
+/* QWERTY hint chips. */
 .key-label {
   position: absolute;
-  bottom: 5px;
+  bottom: 6%;
   left: 50%;
-  color: oklch(43% 0.02 29);
-  font: 700 8px/1 ui-monospace, monospace;
+  display: grid;
+  place-items: center;
+  width: clamp(12px, 1.35cqw, 17px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: oklch(88% 0.01 60 / .9);
+  box-shadow: inset 0 1px 1px oklch(0% 0 0 / .12);
+  color: oklch(45% 0.02 40);
+  font: 700 clamp(7px, .65cqw, 9px)/1 ui-monospace, monospace;
   transform: translateX(-50%);
   pointer-events: none;
 }
 
-.black-key .key-label { bottom: 4px; color: oklch(79% 0.03 29); }
+.black-key .key-label {
+  bottom: 16%;
+  background: oklch(100% 0 0 / .14);
+  box-shadow: none;
+  color: oklch(85% 0.01 60);
+}
+
+/* Front lip under the keys, closing off the chassis. */
+.toy-bottom-rail {
+  position: relative;
+  height: clamp(9px, 1.5cqw, 19px);
+  border-radius: 0 0 calc(var(--shell-radius) * .7) calc(var(--shell-radius) * .7);
+  background: linear-gradient(180deg, #4a141c 0%, #571820 45%, #6d1e28 100%);
+  box-shadow: inset 0 2px 3px oklch(0% 0 0 / .5);
+  overflow: hidden;
+}
+
+.toy-bottom-rail::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 26%;
+  background: #0d0b0a;
+  box-shadow: inset 0 1px oklch(100% 0 0 / .08);
+}
 
 /* A slice of the black control deck: the showcase reads as part of the
    instrument rather than a marketing card. */
@@ -608,8 +965,13 @@ footer p span { display: block; }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
 
 @media (max-width: 900px) {
-  .control-panel { grid-template-columns: 72px 72px 1fr; }
-  .stage-controls { grid-column: 1 / -1; }
+  .control-deck {
+    grid-template-areas:
+      'perf bench'
+      'program program'
+      'phases phases';
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+  }
   .run-row { grid-template-columns: 1fr; gap: 24px; }
   .stage-track { max-width: 620px; }
   .preview-pending, .run-actions { justify-self: start; }
@@ -626,14 +988,11 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .header-intro { min-height: 0; display: block; padding: 38px 0 28px; }
   .header-intro h1 { font-size: 50px; }
   .header-intro p { font-size: 12px; }
-  .control-panel { grid-template-columns: 64px 64px 1fr; }
-  .panel-readout { padding: 10px; }
-  .oled-display { padding: 12px; }
-  .oled-display strong { font-size: 11px; }
-  .stage-controls li { grid-template-columns: 34px 1fr; gap: 3px 8px; padding: 10px 8px; }
-  .knob { width: 32px; height: 32px; }
-  .knob i::after { height: 8px; }
-  .keyboard-rail { height: 58px; }
+  .instrument-shell { --shell-radius: 12px; }
+  .control-deck { gap: 8px; padding: 10px; }
+  .toy-top-rail span { display: none; }
+  .toy-top-rail { min-height: 9px; }
+  .toy-keys { height: 62px; }
   .key-label { display: none; }
   .run-index { padding: 46px 0 56px; }
   .run-index-heading h2 { font-size: 34px; }

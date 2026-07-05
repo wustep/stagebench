@@ -236,6 +236,88 @@ function PreviewFrame({
   )
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+// Miniature take on the Stage 4 pitch stick: drag sideways to bend held
+// notes, springs back to center on release (pointer, keyboard, or focus loss).
+function PitchStick({ bend, onBend }: { bend: number; onBend: (value: number) => void }) {
+  const dragOriginRef = useRef<number | null>(null)
+
+  return (
+    <div
+      aria-label="Pitch stick, bends held notes"
+      aria-orientation="horizontal"
+      aria-valuemax={1}
+      aria-valuemin={-1}
+      aria-valuenow={Math.round(bend * 100) / 100}
+      className="toy-pitch-stick"
+      role="slider"
+      tabIndex={0}
+      onBlur={() => onBend(0)}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') { event.preventDefault(); onBend(bend - 0.25) }
+        else if (event.key === 'ArrowRight') { event.preventDefault(); onBend(bend + 0.25) }
+        else if (event.key === 'Home') { event.preventDefault(); onBend(0) }
+      }}
+      onKeyUp={(event) => {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') onBend(0)
+      }}
+      onLostPointerCapture={() => { dragOriginRef.current = null; onBend(0) }}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        dragOriginRef.current = event.clientX
+      }}
+      onPointerMove={(event) => {
+        if (dragOriginRef.current === null) return
+        onBend((event.clientX - dragOriginRef.current) / 44)
+      }}
+    >
+      <span aria-hidden="true" className="toy-pitch-lever" style={{ transform: `translateX(${bend * 32}%)` }} />
+    </div>
+  )
+}
+
+// Miniature mod wheel: drag up for vibrato depth; the value latches like the
+// hardware wheel (no spring back).
+function ModWheel({ mod, onMod }: { mod: number; onMod: (value: number) => void }) {
+  const dragStateRef = useRef<{ originY: number; startValue: number } | null>(null)
+
+  return (
+    <div
+      aria-label="Mod wheel, adds vibrato"
+      aria-orientation="vertical"
+      aria-valuemax={1}
+      aria-valuemin={0}
+      aria-valuenow={Math.round(mod * 100) / 100}
+      className="toy-mod-wheel"
+      role="slider"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowUp' || event.key === 'ArrowRight') { event.preventDefault(); onMod(mod + 0.1) }
+        else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') { event.preventDefault(); onMod(mod - 0.1) }
+        else if (event.key === 'Home') { event.preventDefault(); onMod(0) }
+        else if (event.key === 'End') { event.preventDefault(); onMod(1) }
+      }}
+      onLostPointerCapture={() => { dragStateRef.current = null }}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        dragStateRef.current = { originY: event.clientY, startValue: mod }
+      }}
+      onPointerMove={(event) => {
+        const drag = dragStateRef.current
+        if (!drag) return
+        onMod(drag.startValue + (drag.originY - event.clientY) / 56)
+      }}
+    >
+      <span aria-hidden="true" className="toy-wheel-face">
+        <i className="toy-wheel-dimple" style={{ top: `${84 - mod * 68}%` }} />
+      </span>
+    </div>
+  )
+}
+
 function KeyboardRail({
   activeNotes,
   onNoteOn,
@@ -312,8 +394,16 @@ function App() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [activeNotes, setActiveNotes] = useState<Set<number>>(() => new Set())
   const [lastPlayed, setLastPlayed] = useState<string | null>(null)
+  const [bend, setBend] = useState(0)
+  const [mod, setMod] = useState(0)
   const audioContextRef = useRef<AudioContext | null>(null)
   const voicesRef = useRef(new Map<number, { oscillator: OscillatorNode; gain: GainNode; ended: boolean }>())
+  // Shared modulation graph: pitch stick detunes every voice directly, the
+  // mod wheel scales one vibrato LFO that feeds each oscillator's detune.
+  const bendCentsRef = useRef(0)
+  const modDepthRef = useRef(0)
+  const lfoRef = useRef<{ oscillator: OscillatorNode; gain: GainNode } | null>(null)
+  const masterRef = useRef<GainNode | null>(null)
   const pressedKeysRef = useRef(new Set<string>())
   // The element that opened the current dialog, so focus can return to it on
   // close. Captured before the dialog mounts (the dialog steals focus).
@@ -379,26 +469,81 @@ function App() {
     })
   }, [])
 
-  const startHeaderNote = useCallback((midi: number, name: string) => {
-    if (voicesRef.current.has(midi)) return
-
+  const ensureAudioContext = useCallback(() => {
     const context = audioContextRef.current ?? new AudioContext()
     audioContextRef.current = context
     if (context.state === 'suspended') void context.resume()
+
+    if (!masterRef.current) {
+      // Soft-knee limiter keeps big chords from clipping now that the toy
+      // encourages mashing many keys with vibrato on top.
+      const compressor = context.createDynamicsCompressor()
+      compressor.threshold.value = -14
+      compressor.knee.value = 20
+      compressor.ratio.value = 8
+      const master = context.createGain()
+      master.gain.value = 0.9
+      master.connect(compressor)
+      compressor.connect(context.destination)
+      masterRef.current = master
+    }
+
+    if (!lfoRef.current) {
+      const oscillator = context.createOscillator()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = 5.6
+      const gain = context.createGain()
+      gain.gain.value = modDepthRef.current * 32
+      oscillator.connect(gain)
+      oscillator.start()
+      lfoRef.current = { oscillator, gain }
+    }
+
+    return context
+  }, [])
+
+  const applyBend = useCallback((value: number) => {
+    const next = clamp(value, -1, 1)
+    setBend(next)
+    bendCentsRef.current = next * 200
+    const context = audioContextRef.current
+    if (!context) return
+    for (const voice of voicesRef.current.values()) {
+      voice.oscillator.detune.setTargetAtTime(bendCentsRef.current, context.currentTime, 0.012)
+    }
+  }, [])
+
+  const applyMod = useCallback((value: number) => {
+    const next = clamp(value, 0, 1)
+    setMod(next)
+    modDepthRef.current = next
+    const context = audioContextRef.current
+    if (context && lfoRef.current) {
+      lfoRef.current.gain.gain.setTargetAtTime(next * 32, context.currentTime, 0.05)
+    }
+  }, [])
+
+  const startHeaderNote = useCallback((midi: number, name: string) => {
+    if (voicesRef.current.has(midi)) return
+
+    const context = ensureAudioContext()
 
     const oscillator = context.createOscillator()
     const gain = context.createGain()
     const now = context.currentTime
     oscillator.type = 'triangle'
     oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12)
+    oscillator.detune.value = bendCentsRef.current
+    lfoRef.current?.gain.connect(oscillator.detune)
     gain.gain.setValueAtTime(0.0001, now)
     gain.gain.exponentialRampToValueAtTime(0.16, now + 0.018)
     gain.gain.exponentialRampToValueAtTime(0.075, now + 0.8)
     oscillator.connect(gain)
-    gain.connect(context.destination)
+    gain.connect(masterRef.current ?? context.destination)
     const voice = { oscillator, gain, ended: false }
     oscillator.onended = () => {
       voice.ended = true
+      lfoRef.current?.gain.disconnect(oscillator.detune)
       oscillator.disconnect()
       gain.disconnect()
     }
@@ -406,7 +551,7 @@ function App() {
     voicesRef.current.set(midi, voice)
     setLastPlayed(name)
     setActiveNotes((current) => new Set(current).add(midi))
-  }, [])
+  }, [ensureAudioContext])
 
   const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen)
 
@@ -567,32 +712,83 @@ function App() {
         </div>
 
         <div className="instrument-shell">
-          <div className="control-panel" aria-label="Benchmark status">
-            <div className="panel-readout">
-              <small>RUNS</small>
-              <strong>{String(visibleRuns.length).padStart(2, '0')}</strong>
-            </div>
-            <div className="panel-readout">
-              <small>ACTIVE</small>
-              <strong>{String(activeCount).padStart(2, '0')}</strong>
-            </div>
-            <div className="oled-display">
-              <span>{activeCount > 0 ? 'BENCHMARK RUNNING' : 'SYSTEM READY'}</span>
-              <strong aria-live="polite">{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runs.find((run) => run.status === 'in-progress')?.model : 'SELECT MODEL'}</strong>
-            </div>
-            <ol className="stage-controls" aria-label="Benchmark phases">
-              {phaseNames.map((name, index) => (
-                <li key={name}>
-                  <div className="knob" aria-hidden="true">
-                    <i style={{ transform: `rotate(${knobAngles[index]}deg)` }} />
-                  </div>
-                  <span>0{index + 1}</span>
-                  <strong>{name}</strong>
-                </li>
-              ))}
-            </ol>
+          <div className="toy-top-rail" aria-hidden="true">
+            <span>PEDALS</span>
+            <span>MIDI</span>
+            <span>USB</span>
+            <span>MONITOR</span>
+            <span>OUTPUT</span>
           </div>
-          <KeyboardRail activeNotes={activeNotes} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
+
+          <div className="control-deck" aria-label="Benchmark status">
+            <section className="deck-performance" aria-label="Performance controls">
+              <div className="wheel-park">
+                <div className="wheel-well">
+                  <PitchStick bend={bend} onBend={applyBend} />
+                  <span aria-hidden="true" className="wheel-legend">PITCH</span>
+                </div>
+                <div className="wheel-well">
+                  <ModWheel mod={mod} onMod={applyMod} />
+                  <span aria-hidden="true" className="wheel-legend">MOD</span>
+                </div>
+              </div>
+              <div className="toy-branding" aria-hidden="true">
+                <span className="brand-line">stagebench</span>
+                <span className="brand-sub">TOY ACTION 48</span>
+              </div>
+            </section>
+
+            <section className="deck-plate plate-benchmark" aria-label="Benchmark counters">
+              <header className="plate-tab" aria-hidden="true">BENCHMARK</header>
+              <div className="plate-body readout-body">
+                <div className="panel-readout">
+                  <small>RUNS</small>
+                  <strong>{String(visibleRuns.length).padStart(2, '0')}</strong>
+                </div>
+                <div className="panel-readout">
+                  <small>ACTIVE</small>
+                  <strong>{String(activeCount).padStart(2, '0')}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section className="deck-plate plate-program" aria-label="Program display">
+              <header className="plate-tab" aria-hidden="true">
+                PROGRAM
+                <span className={`toy-led${activeNotes.size > 0 ? ' is-on' : ''}`} />
+              </header>
+              <div className="plate-body">
+                <div className="oled-display">
+                  <span>{activeCount > 0 ? 'BENCHMARK RUNNING' : 'SYSTEM READY'}</span>
+                  <strong aria-live="polite">{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runs.find((run) => run.status === 'in-progress')?.model : 'SELECT MODEL'}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section className="deck-plate plate-phases" aria-label="Benchmark phases">
+              <header className="plate-tab" aria-hidden="true">PHASES</header>
+              <ol className="stage-controls plate-body">
+                {phaseNames.map((name, index) => (
+                  <li key={name}>
+                    <div className="knob" aria-hidden="true">
+                      <i style={{ transform: `rotate(${knobAngles[index]}deg)` }} />
+                    </div>
+                    <span>0{index + 1}</span>
+                    <strong>{name}</strong>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+
+          <div className="toy-keys">
+            <div className="end-cheek left" aria-hidden="true" />
+            <KeyboardRail activeNotes={activeNotes} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
+            <div className="end-cheek right" aria-hidden="true" />
+          </div>
+          <div className="toy-bottom-rail" aria-hidden="true" />
+          <span className="toy-foot left" aria-hidden="true" />
+          <span className="toy-foot right" aria-hidden="true" />
         </div>
       </header>
 
