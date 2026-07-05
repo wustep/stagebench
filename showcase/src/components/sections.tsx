@@ -314,11 +314,13 @@ function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; i
           registers, blank under STR4, a sine-span glyph under the last. */}
       <Legend className="dim drawbar-register">{DRAWBAR_REGISTERS[index] || ' '}</Legend>
       <div className="drawbar-row">
-        {/* Reference: each LED ladder sits in a light-outlined frame with the
-            1-8 amount numerals printed beside the segments. In Drawbar Live
-            mode "the drawbar LEDs are all unlit" (manual p. 19/21) — the
-            frame and numerals stay printed, every LED goes dark (morph range
-            included: morphs are not applicable in Drawbar Live, p. 39). */}
+        {/* Photo order: slider slot first, then the printed scale — the 1-8
+            numerals sit to the RIGHT of the slider, LED cells right of the
+            numerals. In Drawbar Live mode "the drawbar LEDs are all unlit"
+            (manual p. 19/21) — the frame and numerals stay printed, every
+            LED goes dark (morph range included: morphs are not applicable
+            in Drawbar Live, p. 39). */}
+        <Drawbar store={store} id={id} className={`cap-${color}`} />
         <span className="drawbar-scale" aria-hidden="true">
           <span className="drawbar-scale-nums">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
@@ -327,7 +329,6 @@ function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; i
           </span>
           <LedLadder count={8} lit={presetOn ? value : 0} color="red" fill="down" className="drawbar-ladder" rangeLit={(presetOn ? range : null) ?? undefined} />
         </span>
-        <Drawbar store={store} id={id} className={`cap-${color}`} />
       </div>
       <Legend className="drawbar-footage">{DRAWBAR_FOOTAGES[index]}</Legend>
     </div>

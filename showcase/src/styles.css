@@ -22,7 +22,14 @@
 	/* Reference displays: pale blue-white pixels on near-black. */
 	--oled-bg: #05080c;
 	--oled-ink: #c8dfee;
-	font-family: "Helvetica Neue", Arial, system-ui, sans-serif;
+	/* Two panel print faces (photo): a bold condensed grotesque for the
+     control legends and a square Eurostile/Microgramma-like tech face for
+     the section + box titles; the displays use a dot-matrix face. All
+     bundled via @fontsource (see main.tsx). */
+	--font-legend: "Roboto Condensed", "Helvetica Neue", Arial, system-ui, sans-serif;
+	--font-tech: "Michroma", "Eurostile", "Bank Gothic", "Trebuchet MS", sans-serif;
+	--font-dot: "Doto", "VT323", monospace;
+	font-family: var(--font-legend);
 	color: #26221f;
 	background: #e9e6e1;
 }
@@ -180,7 +187,7 @@ body {
 	position: absolute;
 	top: 85%;
 	transform: translate(-50%, -50%);
-	font-size: 0.24cqw;
+	font-size: 0.16cqw;
 	font-weight: 700;
 	letter-spacing: 0.02cqw;
 	line-height: 1.2;
@@ -451,7 +458,7 @@ body {
 	right: 3.75cqw;
 	writing-mode: vertical-rl;
 	transform: rotate(180deg);
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 	font-weight: 600;
 	letter-spacing: 0.06cqw;
 	color: rgba(240, 226, 226, 0.75);
@@ -600,8 +607,9 @@ body {
 
 .black-key {
 	/* Keys are absolutely positioned by the key model (.key) — the ::after
-     nose anchors to that same absolute box; never override the position. */
-	height: 61%;
+     nose anchors to that same absolute box; never override the position.
+     Height mirrors VARIANT.keyboard.blackKeyHeightFraction (0.64). */
+	height: 64%;
 	z-index: 2;
 	background: linear-gradient(
 		180deg,
@@ -733,7 +741,7 @@ body {
      font-size. ONE print size across the whole panel, like the hardware
      silk-screen (sections only override downward where a plate is too
      narrow to fit a row). */
-	font-size: 0.34cqw;
+	font-size: 0.26cqw;
 	line-height: 1.05;
 	font-weight: 700;
 	letter-spacing: 0.02cqw;
@@ -794,7 +802,7 @@ body {
 	border: 1px solid var(--legend-dim);
 	border-radius: 0.12cqw;
 	padding: 0 0.12cqw;
-	font-size: 0.38cqw;
+	font-size: 0.29cqw;
 }
 
 /* Light boxed shift tags (SENS / PED / ENV / GATE / MID…), printed as
@@ -834,7 +842,7 @@ body {
 	display: flex;
 	align-items: center;
 	gap: 0.42cqw;
-	padding: 0.08cqw 0.5cqw 0.1cqw 0.4cqw;
+	padding: 0.14cqw 0.5cqw 0.16cqw 0.4cqw;
 	/* The tall LIGHT tab (photo): title, FX FOCUS, ON and SOLO ▾ print dark
      on it; it steps down after SOLO. The top-left corner is a SMALL radius,
      the step corner (top-right) a visibly larger one. */
@@ -887,11 +895,11 @@ body {
 	color: #232a38;
 }
 
-/* Photo: SECTION prints in the same dark ink as the title, bold, with only
+/* Photo: SECTION prints in the same dark ink as the title, with only
    modest tracking — not a faded wide-spaced caption. */
 .plate-header .plate-subtitle {
 	color: #2a3140;
-	font-weight: 700;
+	font-weight: 400;
 	letter-spacing: 0.06cqw;
 }
 
@@ -904,10 +912,13 @@ body {
 }
 
 .plate-title {
-	/* Photo: the section title caps are ≈0.40cqw tall → ≈0.56cqw font. */
-	font-size: 0.56cqw;
-	font-weight: 800;
-	letter-spacing: 0.06cqw;
+	/* Photo re-measure (ink-profile): title caps ≈0.28cqw → 0.40cqw font.
+     The earlier 0.56 was derived from a band-height misread. Michroma is
+     inherently wide/tracked — no extra letter-spacing needed. */
+	font-family: var(--font-tech);
+	font-size: 0.4cqw;
+	font-weight: 400;
+	letter-spacing: 0.02cqw;
 	color: #f2efe9;
 	display: flex;
 	flex-direction: column;
@@ -915,9 +926,11 @@ body {
 }
 
 .plate-subtitle {
-	font-size: 0.26cqw;
-	font-weight: 600;
-	letter-spacing: 0.1cqw;
+	/* Photo: SECTION caps ≈0.155cqw → 0.22cqw font. */
+	font-family: var(--font-tech);
+	font-size: 0.22cqw;
+	font-weight: 400;
+	letter-spacing: 0.08cqw;
 	color: var(--legend-dim);
 }
 
@@ -986,6 +999,18 @@ body {
 	pointer-events: none;
 }
 
+/* Sub-section titles print in the square tech face (photo: MOD 1, DELAY,
+   VIB/CHORUS, ACOUSTICS, PRESET LIBRARY, FX FOCUS, ROTARY SPEAKER… share
+   the Eurostile-like letterforms of the big section titles). */
+.group-box-title,
+.fx-focus-tab,
+.rotary-title,
+.timbre-title,
+.acoustics-cell .group-label {
+	font-family: var(--font-tech);
+	font-weight: 400;
+}
+
 /* Reference print: box titles are small white text sitting in a break of
    the border line — a snug stadium pill whose fill matches the plate, so
    the patch never reads as a gray block over neighbouring colors. */
@@ -997,10 +1022,12 @@ body {
 	background: var(--panel);
 	padding: 0.01cqw 0.24cqw 0.03cqw;
 	border-radius: 0.7cqw;
-	font-size: 0.36cqw;
+	font-size: 0.23cqw;
 	line-height: 1.35;
-	font-weight: 800;
-	letter-spacing: 0.05cqw;
+	/* Michroma ships one (naturally heavy) weight — synthetic bolding
+     smears the square letterforms at this size. */
+	font-weight: 400;
+	letter-spacing: 0.03cqw;
 	color: var(--legend);
 	text-transform: uppercase;
 	white-space: nowrap;
@@ -1210,7 +1237,7 @@ body {
 }
 
 .sel-row .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 	white-space: nowrap;
 }
 
@@ -1250,7 +1277,7 @@ body {
 }
 
 .fx-box .sel-row .legend {
-	font-size: 0.23cqw;
+	font-size: 0.17cqw;
 }
 
 .fx-box .sel-leds .led {
@@ -1315,7 +1342,7 @@ body {
 }
 
 .reverb-tone .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 }
 
 .reverb-box .sel-grid {
@@ -1323,7 +1350,7 @@ body {
 }
 
 .reverb-box .sel-row .legend {
-	font-size: 0.21cqw;
+	font-size: 0.16cqw;
 	letter-spacing: 0;
 }
 
@@ -1397,7 +1424,7 @@ body {
 }
 
 .vib-cell .legend {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 /* Buttons */
@@ -1433,7 +1460,7 @@ body {
 }
 
 .panel-button .panel-button-cap {
-	font-size: 0.36cqw;
+	font-size: 0.27cqw;
 	font-weight: 700;
 	letter-spacing: 0.02cqw;
 	color: #d7dae0;
@@ -1512,7 +1539,7 @@ body {
 
 .onoff-tab .legend {
 	color: #232a38;
-	font-size: 0.23cqw;
+	font-size: 0.17cqw;
 	letter-spacing: 0;
 }
 
@@ -1587,14 +1614,14 @@ body {
 
 .button-cell-legends .legend {
 	white-space: nowrap;
-	font-size: 0.2cqw;
+	font-size: 0.15cqw;
 	letter-spacing: 0;
 }
 
 /* The shift-function row under the OSC buttons carries the longest print
    in the box (ENV TO PITCH ▿) — one notch smaller so both LED rows fit. */
 .osc-box .button-cell + .button-cell-legends .legend {
-	font-size: 0.17cqw;
+	font-size: 0.16cqw;
 }
 
 .osc-box .button-cell + .button-cell-legends .led {
@@ -1802,7 +1829,9 @@ body {
 
 .knob-scale text {
 	fill: currentColor;
-	font-size: 19px;
+	/* 1.14cqw knob box, viewBox 100: 18 units ≈ 0.205cqw font ≈ the photo's
+	   0.15cqw numeral caps. */
+	font-size: 18px;
 	font-weight: 700;
 	text-anchor: middle;
 	dominant-baseline: central;
@@ -2166,6 +2195,11 @@ body {
 		0 0 0.3cqw rgba(150, 200, 240, 0.1);
 	color: var(--oled-ink);
 	padding: 0.25cqw 0.35cqw;
+	/* Photo: the displays draw text as a DOT-MATRIX bitmap face. Doto's
+     glyphs run narrow — slightly larger size + 700 weight keep the dots
+     legible at panel scale. */
+	font-family: var(--font-dot);
+	font-weight: 700;
 	font-size: 0.5cqw;
 	line-height: 1.3;
 	overflow: hidden;
@@ -2311,7 +2345,7 @@ body {
 }
 
 .perf-master .legend {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 	text-align: center;
 	/* One line like the print; it may overhang the narrow column. */
 	white-space: nowrap;
@@ -2427,8 +2461,8 @@ body {
 	background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
 	border-radius: 0.26cqw 0.26cqw 0 0;
 	border-bottom: 1px solid rgba(0, 0, 0, 0.3);
-	font-size: 0.34cqw;
-	font-weight: 800;
+	font-size: 0.22cqw;
+	font-weight: 400;
 	letter-spacing: 0.04cqw;
 	color: #232a38;
 	text-align: center;
@@ -2438,7 +2472,7 @@ body {
 /* The narrow strip's prints run one notch smaller on one line each (photo:
    CLOSE MIC ▽, STOP MODE, SLOW ● FAST all fit the 2.5cqw column). */
 .rotary-strip .legend {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -2498,12 +2532,12 @@ body {
 }
 
 .layer-column .panel-button.pill.small .panel-button-cap {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	padding: 0.06cqw 0.15cqw;
 }
 
 .layer-letter {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 	white-space: nowrap;
 }
 
@@ -2532,7 +2566,7 @@ body {
 }
 
 .layer-letter {
-	font-size: 0.36cqw;
+	font-size: 0.27cqw;
 }
 
 .tiny-led-row {
@@ -2543,7 +2577,7 @@ body {
 }
 
 .tiny-led-row .legend {
-	font-size: 0.34cqw;
+	font-size: 0.26cqw;
 }
 
 .octave-row {
@@ -2611,8 +2645,8 @@ body {
 }
 
 .organ-groups .group-box-title {
-	font-size: 0.36cqw;
-	letter-spacing: 0.03cqw;
+	font-size: 0.23cqw;
+	letter-spacing: 0.01cqw;
 	/* Photo: the title's ink centers ON the border line (not floating
      above it). */
 	top: -0.22cqw;
@@ -2664,7 +2698,7 @@ body {
 }
 
 .model-led-grid .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -2717,7 +2751,7 @@ body {
 }
 
 .organ-perc .perc-on .legend {
-	font-size: 0.21cqw;
+	font-size: 0.19cqw;
 }
 
 .drawbar-bank {
@@ -2738,7 +2772,7 @@ body {
 }
 
 .drawbar-name {
-	font-size: 0.27cqw;
+	font-size: 0.21cqw;
 	letter-spacing: 0;
 	color: var(--legend-dim);
 }
@@ -2746,7 +2780,7 @@ body {
 /* Second printed register row under each drawbar name (reference photo);
    white-space preserves the blank STR4 cell's row height. */
 .drawbar-register {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 	line-height: 1;
 	white-space: pre;
 }
@@ -2790,7 +2824,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	justify-content: space-between;
-	font-size: 0.22cqw;
+	font-size: 0.3cqw;
 	font-weight: 700;
 	line-height: 1;
 	color: #232a38;
@@ -2806,7 +2840,7 @@ body {
 }
 
 .drawbar-footage {
-	font-size: 0.34cqw;
+	font-size: 0.26cqw;
 }
 
 /* ---------------------------------------------------------------- piano -- */
@@ -2837,7 +2871,7 @@ body {
 /* The narrow Piano header keeps its FX FOCUS / ON legends (reference photo
    prints them at this width too) — one size class smaller so they fit. */
 .deck-section[data-section="piano"] .plate-header .legend {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	white-space: nowrap;
 }
 
@@ -2863,16 +2897,16 @@ body {
 }
 
 .deck-section[data-section="piano"] .plate-header .plate-title {
-	font-size: 0.5cqw;
+	font-size: 0.4cqw;
 	letter-spacing: 0.04cqw;
 }
 
 .deck-section[data-section="piano"] .plate-header .plate-subtitle {
-	font-size: 0.24cqw;
+	font-size: 0.22cqw;
 }
 
 .deck-section[data-section="piano"] .plate-header .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	letter-spacing: 0;
 }
 
@@ -2893,21 +2927,21 @@ body {
 }
 
 .deck-section[data-section="piano"] .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 }
 
 .deck-section[data-section="piano"] .tiny-led-row .legend {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 .deck-section[data-section="piano"] .acoustics-cell .group-label {
-	font-size: 0.27cqw;
+	font-size: 0.21cqw;
 	letter-spacing: 0;
 }
 
 .deck-section[data-section="piano"] .type-led-grid .legend {
 	width: 1.25cqw;
-	font-size: 0.25cqw;
+	font-size: 0.19cqw;
 	letter-spacing: 0;
 }
 
@@ -2921,8 +2955,8 @@ body {
 }
 
 .deck-section[data-section="piano"] .group-box-title {
-	font-size: 0.36cqw;
-	letter-spacing: 0.03cqw;
+	font-size: 0.23cqw;
+	letter-spacing: 0.01cqw;
 }
 
 .deck-section[data-section="piano"] .layer-pair {
@@ -2935,7 +2969,7 @@ body {
 }
 
 .deck-section[data-section="piano"] .onoff-tab .legend {
-	font-size: 0.23cqw;
+	font-size: 0.17cqw;
 }
 
 .deck-section[data-section="piano"] .onoff-tab .led {
@@ -2949,7 +2983,7 @@ body {
 }
 
 .deck-section[data-section="piano"] .layer-letter {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 .deck-section[data-section="piano"] .tiny-led-row {
@@ -2957,7 +2991,7 @@ body {
 }
 
 .deck-section[data-section="piano"] .tiny-led-row .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 }
 
 .deck-section[data-section="piano"] .piano-groups {
@@ -2968,7 +3002,7 @@ body {
    nowrap plus one size notch down from the piano tiny-led-row's 0.24cqw. */
 .deck-section[data-section="piano"] .acoustics-cell .tiny-led-row .legend {
 	white-space: nowrap;
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	letter-spacing: 0;
 }
 
@@ -2999,7 +3033,7 @@ body {
 }
 
 .timbre-title {
-	font-size: 0.32cqw;
+	font-size: 0.23cqw;
 }
 
 .timbre-leds {
@@ -3015,7 +3049,7 @@ body {
 }
 
 .timbre-leds .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 }
 
 .piano-main {
@@ -3044,7 +3078,7 @@ body {
 }
 
 .acoustics-cell .group-label {
-	font-size: 0.38cqw;
+	font-size: 0.23cqw;
 }
 
 .piano-select {
@@ -3080,7 +3114,7 @@ body {
 }
 
 .type-led-grid .legend {
-	font-size: 0.33cqw;
+	font-size: 0.25cqw;
 	width: 2.2cqw;
 }
 
@@ -3129,7 +3163,7 @@ body {
 }
 
 .program-rail .rail-cell .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	line-height: 1;
 	text-align: center;
 }
@@ -3150,7 +3184,7 @@ body {
 /* The Program strip is only 9% wide and very dense on the reference:
    everything inside runs one size class smaller. */
 .deck-section[data-section="program"] .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 }
 
 .deck-section[data-section="program"] .group-box {
@@ -3162,7 +3196,7 @@ body {
 /* Reference: the program-strip box titles (MORPH ASSIGN, SPLIT, MST CLK,
    TRANSP) are dark text on small LIGHT tabs over the red chassis. */
 .deck-section[data-section="program"] .group-box-title {
-	font-size: 0.34cqw;
+	font-size: 0.23cqw;
 	color: #232a38;
 	background: linear-gradient(180deg, #d3d7e0 0%, #bec3cf 100%);
 	border-radius: 0.24cqw;
@@ -3219,7 +3253,7 @@ body {
 }
 
 .deck-section[data-section="program"] .panel-button .panel-button-cap {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 .program-top-row .group-box {
@@ -3256,7 +3290,7 @@ body {
 }
 
 .morph-buttons .panel-button .panel-button-cap {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	padding: 0.05cqw 0.06cqw;
 }
 
@@ -3280,7 +3314,7 @@ body {
 
 .program-top-row .morph-legend-row .legend,
 .preset-legend-row .legend {
-	font-size: 0.21cqw;
+	font-size: 0.16cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -3355,7 +3389,7 @@ body {
 	text-align: center;
 	border-radius: 0.6cqw;
 	padding: 0.04cqw 0.22cqw;
-	font-size: 0.34cqw;
+	font-size: 0.23cqw;
 	letter-spacing: 0.03cqw;
 	color: #232a38;
 	background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
@@ -3377,13 +3411,13 @@ body {
 }
 
 .program-top-row .panel-button .panel-button-cap {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	padding: 0.05cqw 0.08cqw;
 }
 
 /* Dense printed legends around the blank caps in the four top-row boxes. */
 .program-top-row .legend {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -3454,7 +3488,7 @@ body {
 }
 
 .deck-section[data-section="program"] .store-main .legend {
-	font-size: 0.23cqw;
+	font-size: 0.17cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -3469,7 +3503,7 @@ body {
 
 /* Scoped past the program strip's blanket 0.3cqw legend rule. */
 .deck-section[data-section="program"] .store-side .legend {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	letter-spacing: 0;
 }
 
@@ -3538,7 +3572,7 @@ body {
 }
 
 .mode-block .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	letter-spacing: 0;
 }
 
@@ -3612,7 +3646,7 @@ body {
 }
 
 .prog-num {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	gap: 0.05cqw;
 	letter-spacing: 0;
 }
@@ -3673,7 +3707,7 @@ body {
 
 .program-cell .legend {
 	letter-spacing: 0;
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 }
 
 .program-cell {
@@ -3687,14 +3721,14 @@ body {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.12cqw;
-	font-size: 0.34cqw;
+	font-size: 0.26cqw;
 	font-weight: 700;
 	color: var(--legend);
 }
 
 /* Beat the program-strip density rule's specificity (section attr + class). */
 .deck-section[data-section="program"] .program-cell .legend {
-	font-size: 0.2cqw;
+	font-size: 0.15cqw;
 	letter-spacing: 0;
 }
 
@@ -3794,7 +3828,7 @@ body {
 }
 
 .layer-pair.triple .layer-letter {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 }
 
 .hold-row {
@@ -3857,16 +3891,16 @@ body {
 
 .synth-body .levels-column .tiny-led-row .legend,
 .synth-body .hold-cell .legend {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 }
 
 .mode-box .legend {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 .vibrato-box .legend,
 .voice-box .legend {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	max-width: 100%;
 }
 
@@ -3896,7 +3930,7 @@ body {
 }
 
 .synth-dial .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 	letter-spacing: 0.01cqw;
 }
 
@@ -3924,7 +3958,7 @@ body {
 
 .waveform-cluster .legend {
 	text-align: center;
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 	letter-spacing: 0;
 }
 
@@ -3935,7 +3969,7 @@ body {
 /* '● KEEP EDITS ▿' stays one line (it may run past the slim column edges
    symmetrically, like panel ink). */
 .waveform-cluster .tiny-led-row .legend {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	white-space: nowrap;
 	max-width: none;
 }
@@ -4000,7 +4034,7 @@ body {
 }
 
 .arp-box .legend {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	letter-spacing: 0;
 	max-width: 100%;
 }
@@ -4014,7 +4048,7 @@ body {
 
 /* '◂ MST CLK' must fit its narrow knob cell at 1440. */
 .arp-box .knob-cell .legend.red-tag {
-	font-size: 0.19cqw;
+	font-size: 0.14cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -4028,7 +4062,7 @@ body {
 }
 
 .arp-box .panel-button .panel-button-cap {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 }
 
 /* Arp/Voice/Vibrato buttons keep the uniform switch footprint. */
@@ -4044,7 +4078,7 @@ body {
 .knob-cell .legend {
 	/* Photo: knob captions (RATE/TIME, DRIVE, FREQ…) print one notch
      smaller than the general panel legends. */
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 .arp-mode-cell {
@@ -4193,12 +4227,12 @@ body {
 }
 
 .synth-bottom .legend {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 	max-width: 3.4cqw;
 }
 
 .synth-bottom .panel-button .panel-button-cap {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 }
 
 /* Synth Lfo/Osc/Filter/Amp buttons: the SAME standard switch (user
@@ -4210,7 +4244,7 @@ body {
 .synth-bottom .knob-scale text,
 .arp-box .knob-scale text,
 .voice-box .knob-scale text {
-	font-size: 15px;
+	font-size: 16px;
 }
 
 .osc-box .knob-pair,
@@ -4301,7 +4335,7 @@ body {
 }
 
 .lfo-dest-col .legend {
-	font-size: 0.19cqw;
+	font-size: 0.14cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -4321,7 +4355,7 @@ body {
 }
 
 .lfo-box .knob-cell .legend {
-	font-size: 0.21cqw;
+	font-size: 0.16cqw;
 }
 
 .synth-bottom .lfo-box,
@@ -4361,11 +4395,11 @@ body {
 }
 
 .synth-bottom .group-box-title {
-	font-size: 0.34cqw;
+	font-size: 0.23cqw;
 }
 
 .synth-bottom .knob-cell .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	max-width: 1.9cqw;
 }
 
@@ -4472,7 +4506,7 @@ body {
 }
 
 .filter-on-print .legend {
-	font-size: 0.22cqw;
+	font-size: 0.17cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -4531,8 +4565,8 @@ body {
 	margin-right: -0.32cqw;
 	/* Compact print so it clears the body's overlapping corner (photo: the
      print ends well before the curve). */
-	font-size: 0.28cqw;
-	font-weight: 800;
+	font-size: 0.22cqw;
+	font-weight: 400;
 	letter-spacing: 0.02cqw;
 	color: #232a38;
 	background: linear-gradient(180deg, #c3c7d4 0%, #b4bac8 100%);
@@ -4550,7 +4584,7 @@ body {
 
 /* ALL FX OFF / GROUP ▿ captions stay one line inside the narrow gutter. */
 .focus-cell .legend.dim {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 	white-space: nowrap;
 }
 
@@ -4658,14 +4692,14 @@ body {
 /* Reference: the effect-box titles (MOD 1, DELAY, COMP…) are noticeably
    smaller print than the section titles and never spill past their box. */
 .fx-box > .group-box-title {
-	font-size: 0.3cqw;
-	letter-spacing: 0.04cqw;
+	font-size: 0.23cqw;
+	letter-spacing: 0.01cqw;
 }
 
 /* Mod 1/2 pack two knob cells + the selector on one row of a short track. */
 .mod1-box .knob-cell .legend,
 .mod2-box .knob-cell .legend {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 }
 
 /* Clearance between each knob's downward 0/10 numerals and its print
@@ -4728,12 +4762,12 @@ body {
 
 .reverb-box .legend,
 .comp-box .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 }
 
 .reverb-box .panel-button .panel-button-cap,
 .comp-box .panel-button .panel-button-cap {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	padding: 0.05cqw 0.12cqw;
 }
 
@@ -4804,7 +4838,7 @@ body {
 }
 
 .tap-box .tiny-led-row .legend {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 .tap-box .tiny-led-row .led {
@@ -4841,7 +4875,7 @@ body {
 }
 
 .led-word-col .tiny-led-row .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 }
 
 .led-word-col .led {
@@ -4850,17 +4884,17 @@ body {
 }
 
 .effects-grid .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 }
 
 .effects-grid .panel-button .panel-button-cap {
-	font-size: 0.28cqw;
+	font-size: 0.21cqw;
 }
 
 /* Knob numeral arcs are dense here: print one notch smaller and widen the
    inter-knob gaps so neighboring scales and legends never overlap. */
 .fx-box .knob-scale text {
-	font-size: 16px;
+	font-size: 15px;
 }
 
 /* Mod 1/2 keep the reference's single row: cells shrink instead of wrapping
@@ -4893,7 +4927,7 @@ body {
 
 .mod1-box .variation-row .legend,
 .mod2-box .variation-row .legend {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 }
 
 /* Amp Sim/EQ (reference layout): explicit two-row grid — DRIVE, FREQ and the
@@ -4940,7 +4974,7 @@ body {
 }
 
 .comp-box .knob-cell > .tiny-led-row .legend {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 }
 
 .delay-filter-cell .legend.dim {
@@ -4980,7 +5014,7 @@ body {
 }
 
 .variation-cell .legend {
-	font-size: 0.3cqw;
+	font-size: 0.23cqw;
 	max-width: 100%;
 }
 
@@ -5008,7 +5042,7 @@ body {
 }
 
 .fx-on-print .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 }
 
 .fx-on-print .led {
@@ -5046,12 +5080,12 @@ body {
    photo-proportioned short tracks. */
 .mod1-box .sel-row .legend,
 .mod2-box .sel-row .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 	letter-spacing: 0;
 }
 
 .fx-box .variation-row .legend {
-	font-size: 0.26cqw;
+	font-size: 0.2cqw;
 	letter-spacing: 0;
 	white-space: nowrap;
 }
@@ -5098,7 +5132,7 @@ body {
 }
 
 .amp-onled .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 }
 
 .amp-onled .led {
@@ -5107,7 +5141,7 @@ body {
 }
 
 .fx-box .fx-on-cell .tiny-led-row .legend {
-	font-size: 0.24cqw;
+	font-size: 0.18cqw;
 }
 
 .fx-box .fx-on-cell .tiny-led-row .led {

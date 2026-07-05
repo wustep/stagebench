@@ -13,7 +13,9 @@ export const VARIANT = {
     blackKeys: 30,
     firstMidi: 28, // E1
     lastMidi: 100, // E7
-    blackKeyHeightFraction: 0.61,
+    // Photo-apparent 0.64 (user direction, 2026-07-05): slightly longer
+    // than the 0.61 spec nominal, still inside the audit's 0.57–0.65 band.
+    blackKeyHeightFraction: 0.64,
   },
   vertical: {
     // Within the visual spec's 0.54/0.46 ± 0.025 allocation, biased toward

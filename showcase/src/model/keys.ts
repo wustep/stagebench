@@ -22,13 +22,15 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 const BLACK_PITCH_CLASSES = new Set([1, 3, 6, 8, 10])
 
 export const BLACK_KEY_WIDTH = 0.57
-/** Per-pitch-class offset (in white-key widths) of the black key's centre from the white-key boundary to its right. */
+/** Black keys sit CENTERED on the boundary between their two white
+ *  neighbours (product-photo geometry; the acoustic-piano per-pitch-class
+ *  offsets read visibly skewed at this render scale). */
 const BLACK_OFFSETS: Record<number, number> = {
-  1: -0.13, // C#
-  3: 0.13, // D#
-  6: -0.15, // F#
+  1: 0, // C#
+  3: 0, // D#
+  6: 0, // F#
   8: 0, // G#
-  10: 0.15, // A#
+  10: 0, // A#
 }
 
 export function midiToName(midi: number): string {

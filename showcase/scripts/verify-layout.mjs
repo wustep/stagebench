@@ -135,8 +135,8 @@ try {
   })
   record('black-key-placement', misplaced.length === 0, misplaced.length ? `misplaced midis: ${misplaced.map((b) => b.midi).join(',')}` : 'every black key straddles its white neighbours')
   const fractions = blacks.map((b) => b.height / keys.keybed.height)
-  const fractionOk = fractions.every((f) => f > 0.57 && f < 0.65)
-  record('black-key-height-fraction', fractionOk, `range ${Math.min(...fractions).toFixed(3)}..${Math.max(...fractions).toFixed(3)} (spec 0.61)`)
+  const fractionOk = fractions.every((f) => f > 0.6 && f < 0.68)
+  record('black-key-height-fraction', fractionOk, `range ${Math.min(...fractions).toFixed(3)}..${Math.max(...fractions).toFixed(3)} (spec 0.64)`)
 
   /* 2+3+4 — per-section overflow, collisions and effects tracks. */
   const audit = await page.evaluate(() => {

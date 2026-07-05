@@ -2141,3 +2141,48 @@ slightly deeper red running the instrument's full depth.
   15%, screws at 13.6%, HANDMADE print at 96cqw; keys begin after the
   3cqw cheeks (rails cover the cheeks' outer half).
 - Gates: typecheck, lint, suite 613/613, verify:layout 12/12.
+
+### 57 — Typography system: two print faces, dot-matrix OLEDs, photo-tier sizes (2026-07-05)
+
+Pixel audit of the panel print against the product photo (ink-row profiling
+of the reference at ~90px/cqw), plus keybed and drawbar geometry from user
+direction.
+
+- Photo cap-height measurements (cqw): section titles ≈0.28 (LAYER
+  EFFECTS, PIANO, SYNTH — the old 0.56cqw font was derived from a
+  band-height misread), box/sub titles ≈0.166 (FX FOCUS, MOD 1,
+  VIB/CHORUS, B3 PERCUSSION, ACOUSTICS, MORPH ASSIGN), legends
+  ≈0.155–0.19 (RATE, VOLUME, 16'), knob numerals ≈0.144–0.166, rear-port
+  legends ≈0.11 — the four print tiers the hardware actually uses.
+- Two panel faces (user observation confirmed by letterform comparison):
+  a square Eurostile/Microgramma-like face for section + box titles and a
+  bold condensed grotesque for everything else. Bundled Michroma and
+  Roboto Condensed (both SIL OFL, @fontsource, offline like Comfortaa) as
+  `--font-tech`/`--font-legend`; `--font-dot` is Doto for the OLEDs'
+  dot-matrix bitmap text (500/700 weights).
+- Sizes normalized to the tiers: `.plate-title` 0.56→0.40 (piano override
+  unified), `.plate-subtitle` 0.26→0.22, every `.group-box-title` variant
+  →0.23, `.fx-focus-tab` →0.22, `.legend` base 0.34→0.26, and all ~86
+  remaining legend-ish declarations rescaled ×0.76 (floor 0.13); B3
+  Percussion legends re-raised to 0.22 (photo prints them at full legend
+  size), osc mini-stack to 0.16. Knob-scale SVG numerals 19/15/16px →
+  18/16/15px per-density; drawbar 1-8 digits UP 0.22→0.30 (photo ≈0.22
+  caps — they print large). Michroma gets real-weight 400 (synthetic 800
+  smeared the square letterforms) and reduced tracking; header tab
+  vertical padding +0.06/+0.06 keeps the band height after the title
+  shrink.
+- Black keys: BLACK_OFFSETS zeroed — every black cap now centers exactly
+  on its white-key boundary (user direction; the acoustic-piano
+  per-pitch-class skews read wrong at this scale) — and
+  blackKeyHeightFraction 0.61→0.64 (slightly longer, still inside the
+  audit band, which now reads 0.60–0.68 around spec 0.64). New model test
+  asserts the centering.
+- Drawbars: DOM order in `.drawbar-row` flipped to slider→scale — the 1-8
+  numerals + LED cells sit to the RIGHT of the slider slot (photo order:
+  slot | digits | LEDs).
+- IMPLEMENTATION_DETAILS notes the three new bundled faces;
+  feature-matrix notes updated (0.64 fraction, boundary-centered blacks,
+  52.5/47.5 split).
+- Gates: typecheck, lint, suite 614/614, fresh build + verify:layout
+  12/12 (the audit serves dist/ — earlier CSS-only iterations had audited
+  a stale build; re-verified here after `pnpm build`).

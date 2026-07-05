@@ -62,8 +62,14 @@ describe('visual.key-count — stage-4-73 keybed model', () => {
     }
   })
 
-  it('declares the 0.61 black key height fraction for rendering', () => {
-    expect(VARIANT.keyboard.blackKeyHeightFraction).toBeCloseTo(0.61)
+  it('declares the 0.64 black key height fraction for rendering', () => {
+    expect(VARIANT.keyboard.blackKeyHeightFraction).toBeCloseTo(0.64)
+  })
+
+  it('centers every black key on its white-key boundary', () => {
+    for (const black of KEYS.filter((k) => k.isBlack)) {
+      expect(black.x + black.w / 2).toBeCloseTo(black.whiteIndex + 1)
+    }
   })
 
   it('is deterministic', () => {
