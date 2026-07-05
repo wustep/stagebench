@@ -27,7 +27,7 @@
      the section + box titles; the displays use a dot-matrix face. All
      bundled via @fontsource (see main.tsx). */
 	--font-legend: "Roboto Condensed", "Helvetica Neue", Arial, system-ui, sans-serif;
-	--font-tech: "Michroma", "Eurostile", "Bank Gothic", "Trebuchet MS", sans-serif;
+	--font-tech: "Days One", "Eurostile", "Bank Gothic", "Trebuchet MS", sans-serif;
 	--font-dot: "Doto", "VT323", monospace;
 	font-family: var(--font-legend);
 	color: #26221f;
@@ -895,11 +895,11 @@ body {
 	color: #232a38;
 }
 
-/* Photo: SECTION prints in the same dark ink as the title, with only
+/* Photo: SECTION prints in the same dark ink as the title, bold, with only
    modest tracking — not a faded wide-spaced caption. */
 .plate-header .plate-subtitle {
 	color: #2a3140;
-	font-weight: 400;
+	font-weight: 700;
 	letter-spacing: 0.06cqw;
 }
 
@@ -913,8 +913,8 @@ body {
 
 .plate-title {
 	/* Photo re-measure (ink-profile): title caps ≈0.28cqw → 0.40cqw font.
-     The earlier 0.56 was derived from a band-height misread. Michroma is
-     inherently wide/tracked — no extra letter-spacing needed. */
+     The earlier 0.56 was derived from a band-height misread. Days One is
+     inherently wide — no extra letter-spacing needed. */
 	font-family: var(--font-tech);
 	font-size: 0.4cqw;
 	font-weight: 400;
@@ -926,10 +926,12 @@ body {
 }
 
 .plate-subtitle {
-	/* Photo: SECTION caps ≈0.155cqw → 0.22cqw font. */
-	font-family: var(--font-tech);
+	/* Photo: SECTION caps ≈0.155cqw → 0.22cqw font, in the LEGEND face
+     (only the big title uses the square tech face — explicit here because
+     the subtitle nests inside .plate-title and would inherit it). */
+	font-family: var(--font-legend);
 	font-size: 0.22cqw;
-	font-weight: 400;
+	font-weight: 700;
 	letter-spacing: 0.08cqw;
 	color: var(--legend-dim);
 }
@@ -947,6 +949,12 @@ body {
 	margin: 0;
 	cursor: pointer;
 	text-align: left;
+}
+
+/* Buttons don't inherit fonts by default. The legend-button takes its
+   parent's legend face; the plate-title button must NOT reset font-family
+   here — .plate-title already sets the tech face on the same element. */
+.legend-button {
 	font-family: inherit;
 }
 
@@ -1001,14 +1009,19 @@ body {
 
 /* Sub-section titles print in the square tech face (photo: MOD 1, DELAY,
    VIB/CHORUS, ACOUSTICS, PRESET LIBRARY, FX FOCUS, ROTARY SPEAKER… share
-   the Eurostile-like letterforms of the big section titles). */
+   the Eurostile-like letterforms of the big section titles). TIMBRE and
+   PIANO SELECT print in the ordinary legend face on the hardware. */
 .group-box-title,
 .fx-focus-tab,
 .rotary-title,
-.timbre-title,
 .acoustics-cell .group-label {
 	font-family: var(--font-tech);
 	font-weight: 400;
+}
+
+.piano-select > .group-box-title {
+	font-family: var(--font-legend);
+	font-weight: 700;
 }
 
 /* Reference print: box titles are small white text sitting in a break of
@@ -1024,7 +1037,7 @@ body {
 	border-radius: 0.7cqw;
 	font-size: 0.23cqw;
 	line-height: 1.35;
-	/* Michroma ships one (naturally heavy) weight — synthetic bolding
+	/* Days One ships one (naturally heavy) weight — synthetic bolding
      smears the square letterforms at this size. */
 	font-weight: 400;
 	letter-spacing: 0.03cqw;
@@ -1277,7 +1290,9 @@ body {
 }
 
 .fx-box .sel-row .legend {
-	font-size: 0.17cqw;
+	/* Photo: TREM caps ≈0.178cqw — the effect selector rows print at full
+     legend size, not a reduced chip size. */
+	font-size: 0.23cqw;
 }
 
 .fx-box .sel-leds .led {
@@ -1454,8 +1469,11 @@ body {
 		inset 0 0.04cqw 0.05cqw rgba(255, 255, 255, 0.08),
 		0 0.1cqw 0.16cqw rgba(0, 0, 0, 0.45);
 	cursor: pointer;
-	min-width: 1.5cqw;
-	min-height: 0.72cqw;
+	/* Photo: the standard button housing measures ≈1.05-1.2 x 0.65cqw
+     (≈11 x 7mm on the 1051mm chassis) — the previous 1.5cqw plates read
+     visibly too wide. */
+	min-width: 1.2cqw;
+	min-height: 0.66cqw;
 	flex: none;
 }
 
@@ -1633,16 +1651,16 @@ body {
    everywhere (user direction + photo), so they no longer shrink. */
 .panel-button.small,
 .panel-button.tiny {
-	min-width: 1.5cqw;
-	min-height: 0.72cqw;
+	min-width: 1.2cqw;
+	min-height: 0.66cqw;
 }
 
 /* The photo's vertical switches (Sound Init, Arp/Vibrato Menu, Amp
    Envelope, FX variation / focus buttons): the SAME switch rotated 90°,
    so the extra housing reveal moves to the top/bottom ends. */
 .panel-button.vertical {
-	min-width: 0.72cqw;
-	min-height: 1.5cqw;
+	min-width: 0.66cqw;
+	min-height: 1.2cqw;
 	padding: 0.18cqw 0.12cqw;
 }
 
@@ -1653,8 +1671,8 @@ body {
 /* Rockers (Shift/Exit): the light cap rides a slightly darker warm-gray
    rectangular base, like the other caps-on-housings. */
 .panel-button.rocker {
-	min-width: 0.72cqw;
-	min-height: 1.5cqw;
+	min-width: 0.66cqw;
+	min-height: 1.2cqw;
 	background: linear-gradient(180deg, #aca69c 0%, #837d73 100%);
 	box-shadow:
 		inset 0 0.04cqw 0.06cqw rgba(255, 255, 255, 0.3),
@@ -2841,6 +2859,10 @@ body {
 
 .drawbar-footage {
 	font-size: 0.26cqw;
+	/* Photo: the footage row prints ≈0.3cqw lower — centered fy 0.484 of
+     the chassis, just above the plate's bottom edge. */
+	margin-top: 0.22cqw;
+	margin-bottom: -0.22cqw;
 }
 
 /* ---------------------------------------------------------------- piano -- */
@@ -3019,8 +3041,8 @@ body {
 }
 
 .panel-button.rocker.timbre-rocker {
-	min-width: 0.72cqw;
-	min-height: 1.5cqw;
+	min-width: 0.66cqw;
+	min-height: 1.2cqw;
 	background: linear-gradient(180deg, #1c1e22 0%, #0c0d0f 100%);
 }
 
@@ -3219,12 +3241,13 @@ body {
 	color: #4d5464;
 }
 
-/* Reference closeup: the PRESET LIBRARY title is a LIGHT pill with DARK
-   MAROON text poking above the light box (the earlier maroon-tab note had
-   the colors inverted). */
+/* Photo closeup (2026-07-05 re-read): the PRESET LIBRARY title is WHITE
+   text on a RED rounded tab notched into the light plate's top edge — the
+   red is the chassis showing through, so the chip paints the chassis red
+   with rounded corners over the plate. */
 .deck-section[data-section="program"] .preset-box .group-box-title {
-	color: #7e1d24;
-	background: linear-gradient(180deg, #d3d7e0 0%, #c0c5d1 100%);
+	color: #f3efe8;
+	background: var(--chassis-mid);
 	border-radius: 0.26cqw;
 	padding: 0.04cqw 0.4cqw 0.06cqw;
 }
@@ -3248,8 +3271,8 @@ body {
 }
 
 .deck-section[data-section="program"] .panel-button.tiny {
-	min-width: 1.5cqw;
-	min-height: 0.72cqw;
+	min-width: 1.2cqw;
+	min-height: 0.66cqw;
 }
 
 .deck-section[data-section="program"] .panel-button .panel-button-cap {
@@ -3661,8 +3684,8 @@ body {
 }
 
 .deck-section[data-section="program"] .panel-button.small {
-	min-width: 1.5cqw;
-	min-height: 0.72cqw;
+	min-width: 1.2cqw;
+	min-height: 0.66cqw;
 }
 
 .program-dial-block {
@@ -4833,8 +4856,8 @@ body {
 }
 
 .tap-box .panel-button.tap-button {
-	min-width: 1.5cqw;
-	min-height: 0.72cqw;
+	min-width: 1.2cqw;
+	min-height: 0.66cqw;
 }
 
 .tap-box .tiny-led-row .legend {
@@ -5051,10 +5074,10 @@ body {
 }
 
 /* The horizontal flavor of the light rocker: the SAME uniform switch
-   rotated 90° (1.5 x 0.92), housing reveal back on the short sides. */
+   rotated 90°, housing reveal back on the short sides. */
 .panel-button.rocker.fx-on-h {
-	min-width: 1.5cqw;
-	min-height: 0.72cqw;
+	min-width: 1.2cqw;
+	min-height: 0.66cqw;
 	padding: 0.12cqw 0.18cqw;
 }
 
@@ -5075,12 +5098,11 @@ body {
 	text-align: center;
 }
 
-/* The mod selector clusters (RM/TREM/A-PAN + boxed A-WAH/WAH/PUMP tags) and
-   the VARIATION prints run one notch smaller (photo) so they fit the
-   photo-proportioned short tracks. */
+/* The mod selector clusters (RM/TREM/A-PAN + boxed A-WAH/WAH/PUMP tags):
+   photo caps ≈0.178cqw — full legend size, only the tracking drops. */
 .mod1-box .sel-row .legend,
 .mod2-box .sel-row .legend {
-	font-size: 0.18cqw;
+	font-size: 0.23cqw;
 	letter-spacing: 0;
 }
 

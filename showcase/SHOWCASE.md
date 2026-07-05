@@ -2186,3 +2186,44 @@ direction.
 - Gates: typecheck, lint, suite 614/614, fresh build + verify:layout
   12/12 (the audit serves dist/ — earlier CSS-only iterations had audited
   a stale build; re-verified here after `pnpm build`).
+
+### 58 — Tech face take two (Days One), inverted PRESET LIBRARY, photo-size buttons (2026-07-05)
+
+User feedback on 57: Michroma read wrong (it's Microgramma EXTENDED — far
+too wide and too light), SECTION / TEMPO / PIANO SELECT / TIMBRE must not
+wear the tech face, and PRESET LIBRARY prints inverted. Then a
+buttons/spacing/misalignment audit.
+
+- Tech face: rendered LAYER EFFECTS / B3 PERCUSSION specimens in Chakra
+  Petch 700, Days One, Aldrich (400 + synthetic 700), Rajdhani 700, Exo 2
+  700 against the photo crops — **Days One** wins decisively (heavy single
+  weight, superellipse Eurostile-Bold-like curves, square-bottomed U,
+  straight-legged R). Swapped `--font-tech` to Days One and dropped the
+  Michroma package.
+- Found and fixed the reason 57's tech face never actually showed on the
+  five section titles: `.plate-title-button { font-family: inherit }`
+  (same specificity, later in the sheet) was resetting the zoom-button
+  variant back to the inherited legend face. The reset now applies only to
+  `.legend-button`.
+- `.plate-subtitle` (SECTION) → legend face 700 (explicit — it nests
+  inside the tech-faced title button); TIMBRE dropped from the tech list;
+  `.piano-select > .group-box-title` overridden to legend 700 (PIANO
+  SELECT prints in the ordinary legend face on the hardware); TEMPO was
+  already a plain legend.
+- PRESET LIBRARY chip inverted per the photo closeup: white (#f3efe8)
+  text on a `--chassis-mid` red rounded tab notched into the plate's top
+  edge (the previous light-pill/dark-maroon-text note had it backwards).
+- Buttons: photo ink-profile puts the standard switch housing at
+  ≈1.05–1.2 × 0.63–0.68cqw (≈11×7mm on the 1051mm chassis) — the render's
+  1.5 × 0.72 plates were ~30% too wide. All uniform-switch minimums
+  (base, .small/.tiny aliases, program overrides, tap-button, fx-on-h,
+  and the vertical/rocker rotations) drop 1.5×0.72 → 1.2×0.66.
+- Mod 1/2 selector legends (RM/TREM/A-PAN + A-WAH/WAH/PUMP tags): photo
+  caps ≈0.178cqw — full legend size, not the 0.18cqw chip size they wore;
+  now 0.23 (as are the other fx selector rows; reverb stays 0.16 per its
+  0.154 measure). Drawbar footage row shifts ~0.22cqw down (photo centers
+  it at fy 0.484, just above the plate edge).
+- Knobs re-measured on crisp light-panel crops: photo ⌀ ≈1.16–1.23cqw —
+  the uniform 1.14cqw knob is right (an earlier shadow-inclusive profile
+  suggesting 1.5–1.8 was a measurement artifact, not a delta).
+- Gates: typecheck, lint, suite 614/614, fresh build + verify:layout 12/12.
