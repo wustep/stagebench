@@ -2432,3 +2432,20 @@ User close-up of the OSC PITCH / OSC CTRL / FILTER cluster.
   aria-pressed preserved).
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12 (after a
   fresh build — a stale dist had flagged unrelated overflows).
+
+### 69 — Canonical switch footprint: exactly 1.5 x 0.85cqw (2026-07-05)
+
+User overlay re-measure: the photo's switches are 1.49 x 0.83cqw; ours
+rendered 1.69 x 1.05 (the 1.65 x 1.0 minimums plus content).
+
+- ONE exact footprint: .panel-button is width/height 1.5 x 0.85cqw (not
+  minimums), vertical/rocker variants 0.85 x 1.5. Probe: all 97 panel
+  buttons measure exactly 1.5x0.85 or 0.85x1.5, none overflow their box.
+- Style cleanup — every scattered size override dissolves into the base
+  rule: the small/tiny floors, the program-section tiny floor, the
+  PROGRAM 1-8 'wide flavor', the tap button, the fx-on-h rocker (now
+  the exact rotated size), the timbre-rocker duplicate, the morph flex
+  sizing (canonical switches spread edge to edge instead) and the
+  Unison stretch exception.
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12 (fresh
+  build).
