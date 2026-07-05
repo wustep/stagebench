@@ -119,10 +119,11 @@ function SectionHeader({
   onSoloHold?: () => void
 }) {
   // Reference: the section ON state is a RED LED below the ON print, left
-  // of the switch; FX FOCUS prints above its dot the same way. The tall
-  // band tab ends right after the switch and SOLO ▾ prints on the thin
-  // BOTTOM-aligned strip that continues to the plate's right edge (red
-  // above it). The narrow Piano plate is one full-width band instead.
+  // of the switch; FX FOCUS prints above its dot the same way. SOLO ▾
+  // prints on the TALL band right of the switch; only after it does the
+  // band step down (rounded corner) to the thin BOTTOM-aligned strip that
+  // continues to the plate's right edge (red above it). The narrow Piano
+  // plate is one full-width band with no step.
   const lit = usePresentationToggle(store, onId)
   return (
     <div className={`plate-header${fullBand ? ' plate-header-full' : ''}`}>
@@ -139,13 +140,9 @@ function SectionHeader({
           </span>
           <PanelButton store={store} id={onId} className="pill" holdAction={onSoloHold} />
         </span>
-        {fullBand && <Legend className="dim solo-print">SOLO ▾</Legend>}
+        <Legend className="dim solo-print">SOLO ▾</Legend>
       </div>
-      {!fullBand && (
-        <div className="plate-header-strip">
-          <Legend className="dim solo-print">SOLO ▾</Legend>
-        </div>
-      )}
+      {!fullBand && <div className="plate-header-strip" aria-hidden="true" />}
     </div>
   )
 }
@@ -186,7 +183,8 @@ function LayerFaderColumn({
   onHoldOff?: () => void
 }) {
   const level = usePresentationValue(store, faderId)
-  const range = usePresentationMorphRange(store, faderId, 9)
+  // Photo closeup: each level meter is a 14-cell ladder of square segments.
+  const range = usePresentationMorphRange(store, faderId, 14)
   const enabled = usePresentationToggle(store, buttonId)
   return (
     <div className="layer-column" data-focused={focused ? 'true' : undefined}>
@@ -194,7 +192,7 @@ function LayerFaderColumn({
           carries a small LED at its right. */}
       <div className="layer-fader-row">
         <Fader store={store} id={faderId} />
-        <LedLadder count={9} lit={Math.round((level / 127) * 9)} rangeLit={range ?? undefined} />
+        <LedLadder count={14} lit={Math.round((level / 127) * 14)} rangeLit={range ?? undefined} />
       </div>
       <span className="layer-letter-row" aria-hidden="true">
         <Legend className="layer-letter">
@@ -402,20 +400,26 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
                 <div className="model-led-grid" aria-hidden="true">
                   <span>
                     <Legend>FARF</Legend>
-                    <Led color="red" on={focused.model === 'Farf'} />
-                    <Led color="red" on={focused.model === 'Pipe1'} />
+                    <span className="sel-leds">
+                      <Led color="red" on={focused.model === 'Farf'} className="led-tri-left" />
+                      <Led color="red" on={focused.model === 'Pipe1'} className="led-tri-right" />
+                    </span>
                     <Legend>PIPE1</Legend>
                   </span>
                   <span>
                     <Legend>VOX</Legend>
-                    <Led color="red" on={focused.model === 'Vox'} />
-                    <Led color="red" on={focused.model === 'Pipe2'} />
+                    <span className="sel-leds">
+                      <Led color="red" on={focused.model === 'Vox'} className="led-tri-left" />
+                      <Led color="red" on={focused.model === 'Pipe2'} className="led-tri-right" />
+                    </span>
                     <Legend>PIPE2</Legend>
                   </span>
                   <span>
                     <Legend>B3</Legend>
-                    <Led color="red" on={focused.model === 'B3'} />
-                    <Led color="red" on={focused.model === 'B3Bass'} />
+                    <span className="sel-leds">
+                      <Led color="red" on={focused.model === 'B3'} className="led-tri-left" />
+                      <Led color="red" on={focused.model === 'B3Bass'} className="led-tri-right" />
+                    </span>
                     <Legend>B3 BASS</Legend>
                   </span>
                 </div>
@@ -648,20 +652,26 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
               <div className="type-led-grid" aria-hidden="true">
                 <span>
                   <Legend>ELECTRIC</Legend>
-                  <Led color="red" on={focused.type === 'Electric'} className={flashType === 'Electric' ? 'flash' : ''} />
-                  <Led color="red" on={focused.type === 'Clav'} className={flashType === 'Clav' ? 'flash' : ''} />
+                  <span className="sel-leds">
+                    <Led color="red" on={focused.type === 'Electric'} className={`led-tri-left ${flashType === 'Electric' ? 'flash' : ''}`} />
+                    <Led color="red" on={focused.type === 'Clav'} className={`led-tri-right ${flashType === 'Clav' ? 'flash' : ''}`} />
+                  </span>
                   <Legend>CLAV</Legend>
                 </span>
                 <span>
                   <Legend>UPRIGHT</Legend>
-                  <Led color="red" on={focused.type === 'Upright'} className={flashType === 'Upright' ? 'flash' : ''} />
-                  <Led color="red" on={focused.type === 'Digital'} className={flashType === 'Digital' ? 'flash' : ''} />
+                  <span className="sel-leds">
+                    <Led color="red" on={focused.type === 'Upright'} className={`led-tri-left ${flashType === 'Upright' ? 'flash' : ''}`} />
+                    <Led color="red" on={focused.type === 'Digital'} className={`led-tri-right ${flashType === 'Digital' ? 'flash' : ''}`} />
+                  </span>
                   <Legend>DIGITAL</Legend>
                 </span>
                 <span>
                   <Legend>GRAND</Legend>
-                  <Led color="red" on={focused.type === 'Grand'} className={flashType === 'Grand' ? 'flash' : ''} />
-                  <Led color="red" on={focused.type === 'Misc'} className={flashType === 'Misc' ? 'flash' : ''} />
+                  <span className="sel-leds">
+                    <Led color="red" on={focused.type === 'Grand'} className={`led-tri-left ${flashType === 'Grand' ? 'flash' : ''}`} />
+                    <Led color="red" on={focused.type === 'Misc'} className={`led-tri-right ${flashType === 'Misc' ? 'flash' : ''}`} />
+                  </span>
                   <Legend>MISC</Legend>
                 </span>
               </div>
@@ -1365,34 +1375,6 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               <Legend>PSTICK/RNG ▾</Legend>
               <Legend className="dim">PAN ▾</Legend>
             </span>
-            <span className="hold-row">
-              <span className="hold-cell">
-                <span className="tiny-led-row" aria-hidden="true">
-                  <Led color="red" on={state.kbHold} />
-                  {/* Boxed red label, as printed on the reference panel. */}
-                  <Legend className="red-tag">KB HOLD</Legend>
-                </span>
-                <PanelButton store={store} id="kb-hold" className="dark tiny" />
-                {/* Wired: Shift + KB Hold excludes the focused layer (manual p. 36). */}
-                <Legend className={`dim ${focused.kbHoldExclude ? 'lit' : ''}`}>EXCLUDE ▿</Legend>
-              </span>
-              <span className="hold-cell">
-                <span className="tiny-led-row" aria-hidden="true">
-                  <Legend>ARP RUN</Legend>
-                </span>
-                {/* User direction: ARP RUN wears a RED cap (like STORE). */}
-                <PanelButton store={store} id="arp-run" className="red tiny" />
-                <Legend className={`dim ${synth.arp.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
-              </span>
-            </span>
-            <span className="octave-row">
-              <Legend>◂ OCTAVE SHIFT ▸</Legend>
-              <span className="octave-buttons">
-                <PanelButton store={store} id="synth-octave-down" className="dark tiny" />
-                <PanelButton store={store} id="synth-octave-up" className="dark tiny" />
-              </span>
-            </span>
-            <ZoneLeds state={state} section="synth" />
           </div>
           <div className="synth-main">
             <div className="synth-top">
@@ -1588,7 +1570,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   <div className="arp-row">
                     <span className="knob-cell">
                       <Knob store={store} id="arp-rate" className="small" />
-                      <Legend>RATE/<wbr />TIME</Legend>
+                      <Legend><Led color="green" className="knob-dot" /> RATE/<wbr />TIME</Legend>
                       <Legend className={`dim red-tag ${synth.arp.mstClk ? 'lit' : ''}`}>
                         <Led color="red" on={synth.arp.mstClk} className="tag-led" /> MST CLK
                       </Legend>
@@ -1721,6 +1703,39 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               </div>
             </div>
             <div className="synth-bottom">
+              {/* Photo: KB HOLD/ARP RUN, OCTAVE SHIFT and KB ZONE form a
+                  narrow column LEFT of the LFO box, below the AUX KB
+                  cluster — not part of the fader column. */}
+              <div className="kb-cluster">
+                <span className="hold-row">
+                  <span className="hold-cell">
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Led color="red" on={state.kbHold} />
+                      {/* Boxed red label, as printed on the reference panel. */}
+                      <Legend className="red-tag">KB HOLD</Legend>
+                    </span>
+                    <PanelButton store={store} id="kb-hold" className="dark tiny" />
+                    {/* Wired: Shift + KB Hold excludes the focused layer (manual p. 36). */}
+                    <Legend className={`dim ${focused.kbHoldExclude ? 'lit' : ''}`}>EXCLUDE ▿</Legend>
+                  </span>
+                  <span className="hold-cell">
+                    <span className="tiny-led-row" aria-hidden="true">
+                      <Legend>ARP RUN</Legend>
+                    </span>
+                    {/* User direction: ARP RUN wears a RED cap (like STORE). */}
+                    <PanelButton store={store} id="arp-run" className="red tiny" />
+                    <Legend className={`dim ${synth.arp.mstClk ? 'lit' : ''}`}>◂ MST CLK</Legend>
+                  </span>
+                </span>
+                <span className="octave-row">
+                  <Legend>◂ OCTAVE SHIFT ▸</Legend>
+                  <span className="octave-buttons">
+                    <PanelButton store={store} id="synth-octave-down" className="dark tiny" />
+                    <PanelButton store={store} id="synth-octave-up" className="dark tiny" />
+                  </span>
+                </span>
+                <ZoneLeds state={state} section="synth" />
+              </div>
               <GroupBox title="LFO" className="lfo-box">
                 {/* Photo layout, four quadrants: WAVEFORM cluster top-left,
                     MOD AMT knob top-right, RATE/TIME knob bottom-left, the
@@ -1743,11 +1758,11 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 </span>
                 <span className="knob-cell lfo-q-tr">
                   <Knob store={store} id="lfo-mod-amt" className="small" />
-                  <Legend>MOD AMT</Legend>
+                  <Legend><Led color="green" className="knob-dot" /> MOD AMT</Legend>
                 </span>
                 <span className="knob-cell lfo-q-bl">
                   <Knob store={store} id="lfo-rate" className="small" />
-                  <Legend>RATE/<wbr />TIME</Legend>
+                  <Legend><Led color="green" className="knob-dot" /> RATE/<wbr />TIME</Legend>
                   <Legend className={`dim red-tag ${lfo.mstClk ? 'lit' : ''}`}>
                     <Led color="red" on={lfo.mstClk} className="tag-led" /> MST CLK
                   </Legend>
@@ -1814,11 +1829,11 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                     {/* The live value reads out on the display's OSC CTRL
                         line; the panel print stays static (reference). */}
                     <Knob store={store} id="osc-ctrl" />
-                    <Legend>OSC CTRL</Legend>
+                    <Legend><Led color="green" className="knob-dot" /> OSC CTRL</Legend>
                   </span>
                   <span className="knob-cell">
                     <Knob store={store} id="osc-env-amt" className="small" scale={['-10', null, '-5', '0', '5', null, '10']} />
-                    <Legend>ENV AMT</Legend>
+                    <Legend><Led color="green" className="knob-dot" /> ENV AMT</Legend>
                   </span>
                 </span>
               </GroupBox>
@@ -1859,17 +1874,17 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                   </span>
                   <span className="knob-cell filter-envamt-cell">
                     <Knob store={store} id="filter-env-amt" className="small" />
-                    <Legend>ENV AMT</Legend>
+                    <Legend><Led color="green" className="knob-dot" /> ENV AMT</Legend>
                   </span>
                 </span>
                 <span className="filter-bottom">
                   <span className="knob-cell">
                     <Knob store={store} id="filter-freq" />
-                    <Legend>FREQ</Legend>
+                    <Legend><Led color="green" className="knob-dot" /> FREQ</Legend>
                   </span>
                   <span className="knob-cell">
                     <Knob store={store} id="filter-res" className="small" />
-                    <Legend>RES/FREQ HP</Legend>
+                    <Legend><Led color="green" className="knob-dot" /> RES/FREQ HP</Legend>
                   </span>
                   {/* Photo: the FILTER ON switch is DARK, vertical, at the
                       box's bottom-right — FILTER printed above ON, the red
@@ -1982,7 +1997,7 @@ interface SelectorRow {
   left?: string
   right?: string
   on?: 'left' | 'right' | null
-  rightTag?: 'gray' | 'red'
+  rightTag?: 'gray' | 'red' | 'outline'
 }
 
 function SelectorLedGrid({ rows }: { rows: SelectorRow[] }) {
@@ -2082,20 +2097,22 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             <GroupBox title="Mod 1" className="fx-box mod1-box">
               <span className="knob-cell">
                 <Knob store={store} id="mod1-rate" className="small" />
-                <Legend>RATE <b className="tag-box">SENS</b></Legend>
+                <Legend><Led color="green" className="knob-dot" /> RATE <b className="tag-box">SENS</b></Legend>
                 <Legend className={`dim red-tag ${chain.mod1.mstClk ? 'lit' : ''}`}>
                   <Led color="red" on={chain.mod1.mstClk} className="tag-led" /> MST CLK
                 </Legend>
               </span>
               <span className="knob-cell">
                 <Knob store={store} id="mod1-amount" className="small" />
-                <Legend>AMOUNT</Legend>
+                <Legend><Led color="green" className="knob-dot" /> AMOUNT</Legend>
               </span>
               <span className="variation-cell">
                 <SelectorLedGrid
                   rows={selectorRows(
                     [
-                      ['RM', 'A-WAH', 'gray'],
+                      // Photo: A-WAH prints as an OUTLINED box (light border,
+                      // panel-dark fill); WAH and PUMP are light-filled chips.
+                      ['RM', 'A-WAH', 'outline'],
                       ['TREM', 'WAH', 'gray'],
                       ['A-PAN', 'PUMP', 'gray'],
                     ],
@@ -2130,7 +2147,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             <GroupBox title="Delay" className="fx-box delay-box">
               <span className="knob-cell delay-tempo-cell">
                 <Knob store={store} id="delay-tempo" className="small" />
-                <Legend>TEMPO</Legend>
+                <Legend><Led color="green" className="knob-dot" /> TEMPO</Legend>
                 <Legend className={`dim red-tag ${chain.delay.mstClk ? 'lit' : ''}`}>
                   <Led color="red" on={chain.delay.mstClk} className="tag-led" /> MST CLK
                 </Legend>
@@ -2175,7 +2192,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="knob-cell delay-feedback-cell">
                 <Knob store={store} id="delay-feedback" className="small" />
-                <Legend>FEEDBACK</Legend>
+                <Legend><Led color="green" className="knob-dot" /> FEEDBACK</Legend>
               </span>
               <span className="variation-cell tap-box delay-tap-cell">
                 <span className="tiny-led-row">
@@ -2194,7 +2211,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="knob-cell delay-mix-cell">
                 <Knob store={store} id="delay-mix" className="small" />
-                <Legend>DRY WET</Legend>
+                <Legend><Led color="green" className="knob-dot" /> DRY WET</Legend>
               </span>
               <span className="variation-cell delay-filter-cell">
                 <Legend className="dim">FILTER</Legend>
@@ -2238,11 +2255,11 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
             <GroupBox title="Mod 2" className="fx-box mod2-box">
               <span className="knob-cell">
                 <Knob store={store} id="mod2-rate" className="small" />
-                <Legend>RATE</Legend>
+                <Legend><Led color="green" className="knob-dot" /> RATE</Legend>
               </span>
               <span className="knob-cell">
                 <Knob store={store} id="mod2-amount" className="small" />
-                <Legend>AMOUNT</Legend>
+                <Legend><Led color="green" className="knob-dot" /> AMOUNT</Legend>
               </span>
               <span className="variation-cell">
                 <SelectorLedGrid
@@ -2328,11 +2345,11 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="knob-cell amp-cell-drive">
                 <Knob store={store} id="amp-drive" className="small" />
-                <Legend>DRIVE</Legend>
+                <Legend><Led color="green" className="knob-dot" /> DRIVE</Legend>
               </span>
               <span className="knob-cell amp-cell-freq">
                 <Knob store={store} id="amp-freq" className="small" scale={['200', '250', '400', '600', '1K', '2K', '4K', '6K', '8K']} />
-                <Legend>FREQ <b className="tag-box">FREQ</b></Legend>
+                <Legend><Led color="green" className="knob-dot" /> FREQ <b className="tag-box">FREQ</b></Legend>
               </span>
               <span className="variation-cell amp-cell-sel">
                 <SelectorLedGrid
@@ -2410,7 +2427,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
               </span>
               <span className="knob-cell">
                 <Knob store={store} id="reverb-mix" className="small" />
-                <Legend>DRY WET</Legend>
+                <Legend><Led color="green" className="knob-dot" /> DRY WET</Legend>
               </span>
               <span className="fx-on-cell">
                 {/* Photo: Delay/Reverb ON are light HORIZONTAL rockers with
@@ -2477,7 +2494,7 @@ const REVERB_POS: SelectorPos = {
 }
 
 function selectorRows(
-  labels: [string | undefined, string | undefined, ('gray' | 'red')?][],
+  labels: [string | undefined, string | undefined, ('gray' | 'red' | 'outline')?][],
   positions: SelectorPos,
   active: string,
 ): SelectorRow[] {

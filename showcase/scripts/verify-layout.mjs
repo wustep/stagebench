@@ -44,11 +44,12 @@ function findChromium() {
     join(homedir(), 'Library', 'Caches', 'ms-playwright'), // macOS
     join(homedir(), '.cache', 'ms-playwright'), // Linux
   ]
-  const bundles = [
-    join('chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
-    join('chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
-    join('chrome-linux64', 'chrome'),
-    join('chrome-linux', 'chrome'),
+  const executables = [
+    ['chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'],
+    ['chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'],
+    ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
+    ['chrome-linux64', 'chrome'],
+    ['chrome-linux', 'chrome'],
   ]
   for (const cache of caches) {
     if (!existsSync(cache)) continue
@@ -57,8 +58,8 @@ function findChromium() {
       .sort()
       .reverse()
     for (const dir of dirs) {
-      for (const bundle of bundles) {
-        const path = join(cache, dir, bundle)
+      for (const executable of executables) {
+        const path = join(cache, dir, ...executable)
         if (existsSync(path)) return path
       }
     }

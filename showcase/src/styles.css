@@ -10,6 +10,11 @@
   --panel: #3d4450;
   --panel-dark: #333945;
   --panel-line: #5c6371;
+  /* The light header/tab band: nearly FLAT bluish gray in the photo
+     (sampled ~rgb(190,198,211)) — the old values were lighter and too
+     gradient-heavy. One material shared by every light tab on the panel. */
+  --band-hi: #c6cbd7;
+  --band-lo: #bcc2cf;
   --key-black: #0b0b0b;
   --key-white: #dcdcdc;
   --legend: #e6e2da;
@@ -51,6 +56,11 @@ body {
 
 .chassis {
   aspect-ratio: 3.0951;
+  /* Positioned so the opt-in reference-photo overlay can pin to its box;
+     isolated so the overlay's diff blend mixes with the chassis only,
+     never reaching the page background behind it. */
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   border-radius: 0.55cqw 0.55cqw 0.75cqw 0.75cqw;
@@ -124,7 +134,10 @@ body {
 }
 
 /* Magnifier loupe: a fixed lens that follows the pointer over the deck,
-   showing an inert 2.6x clone of the panel under the cursor. */
+   showing an inert 2.6x clone of the panel under the cursor. The clone is
+   the WHOLE chassis, so past the panel's edges the lens shows the true
+   surroundings — this stage backdrop above/beside, the keybed below —
+   never a flat red bleed. The backdrop matches .stage-app's base tone. */
 .magnify-lens {
   position: fixed;
   width: 340px;
@@ -133,7 +146,7 @@ body {
   border: 3px solid #d7dae3;
   border-radius: 12px;
   overflow: hidden;
-  background: var(--chassis-mid, #6d1721);
+  background: #e9e6e1;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
   pointer-events: none;
   visibility: hidden;
@@ -149,24 +162,22 @@ body {
   transform-origin: 0 0;
 }
 
-.lens-deck {
+/* The cloned chassis fills the canvas (which onLensMove sizes to the real
+   chassis rect), overriding .chassis' aspect-ratio sizing; deck/keys keep
+   their real 54%/46% inline splits, so every edge — rounded corners, rail
+   gradient, keybed — lands exactly where the live panel draws it. */
+.lens-chassis {
   width: 100%;
   height: 100%;
-}
-
-/* Inside the lens the rail keeps its layout slot (so the legends land at
-   the true panel spot) but drops its own gradient/border paint — the lens
-   backdrop stays the flat chassis red it always showed. */
-.lens-deck .top-rail {
-  background: none;
-  border-bottom-color: transparent;
 }
 
 /* Cursor clone inside the lens canvas. The real cursor bitmap is not
    readable from JS, so this is OS-styled SVG artwork (macOS: black arrow
    with white outline; otherwise Windows-style white with black outline),
    swapped via data-cursor to mirror the hovered control's CSS cursor.
-   Sizes are native-cursor-scale px; the lens transform magnifies them. */
+   Sizes are HALF native-cursor px: the 2.6x lens transform magnifies
+   them, so half-size glyphs read ~1.3x native inside the lens — present
+   but not looming over the control being inspected. */
 .lens-cursor {
   position: absolute;
   z-index: 1;
@@ -207,30 +218,130 @@ body {
 /* Per-glyph sizing + hotspot alignment (arrow tip / fingertip / center). */
 .lens-cursor[data-cursor='default'] svg[data-for='default'] {
   display: block;
-  width: 15px;
-  height: 20px;
-  transform: translate(-1.2px, -1px);
+  width: 7.5px;
+  height: 10px;
+  transform: translate(-0.6px, -0.5px);
 }
 
 .lens-cursor[data-cursor='pointer'] svg[data-for='pointer'] {
   display: block;
-  width: 18px;
-  height: 23px;
-  transform: translate(-8.9px, -0.9px);
+  width: 9px;
+  height: 11.5px;
+  transform: translate(-4.45px, -0.45px);
 }
 
 .lens-cursor[data-cursor='ns-resize'] svg[data-for='ns-resize'] {
   display: block;
-  width: 12px;
-  height: 22px;
-  transform: translate(-6px, -11px);
+  width: 6px;
+  height: 11px;
+  transform: translate(-3px, -5.5px);
 }
 
 .lens-cursor[data-cursor='ew-resize'] svg[data-for='ew-resize'] {
   display: block;
-  width: 22px;
-  height: 12px;
-  transform: translate(-11px, -6px);
+  width: 11px;
+  height: 6px;
+  transform: translate(-5.5px, -3px);
+}
+
+/* Reference-photo overlay (compare tool): the real product shot ghosted
+   over the chassis at user-set opacity. Non-interactive — the instrument
+   underneath stays fully playable — and clipped by the chassis' rounded
+   overflow so only the photo's chassis crop shows. z-index clears every
+   in-chassis stack (max 5, .split-marker) but stays under the loupe (60). */
+.reference-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.reference-overlay img {
+  position: absolute;
+  max-width: none;
+}
+
+/* Diff compare: photo differenced against the render — matching pixels go
+   black, every mismatch glows. The chassis' isolation keeps the blend from
+   sampling the page background. */
+.reference-overlay[data-mode='diff'] {
+  mix-blend-mode: difference;
+}
+
+/* Wipe seam: the only interactive piece of the overlay — a draggable
+   vertical handle at the photo/render boundary (photo left, render right).
+   Sits above the ghost (30) and everything in the chassis. */
+.overlay-wipe {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  transform: translateX(-50%);
+  z-index: 31;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.overlay-wipe::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #f2efe9;
+  box-shadow: 0 0 0 1px rgba(20, 10, 10, 0.55);
+}
+
+.overlay-wipe-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 26px;
+  border-radius: 7px;
+  background: #f2efe9;
+  border: 1px solid rgba(20, 10, 10, 0.55);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.overlay-wipe:focus-visible {
+  outline: 2px solid #d8a03c;
+  outline-offset: 2px;
+}
+
+/* Opacity slider borrows the ctrl-pedal slider look, just narrower. */
+.overlay-opacity input[type='range'] {
+  width: 72px;
+}
+
+/* Compare-mode pills sit flush as one segment group. */
+.overlay-modes {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.overlay-mode {
+  padding: 4px 9px;
+}
+
+.overlay-nudge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: #b8bac1;
+}
+
+.overlay-missing {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #c9a25a;
 }
 
 /* "HANDMADE IN SWEDEN..." vertical print on the bare red right margin:
@@ -475,6 +586,17 @@ body {
   margin-right: 0.04cqw;
 }
 
+/* Photo: morphable knobs print a small round morph LED left of their label
+   (RATE, AMOUNT, TEMPO, DRY WET…). The functional morph indicator is the
+   green data-morphed dot on the knob itself, so these stay unlit prints. */
+.legend .led.knob-dot {
+  display: inline-block;
+  width: 0.22cqw;
+  height: 0.22cqw;
+  vertical-align: 4%;
+  margin-right: 0.05cqw;
+}
+
 .legend .list-tag {
   border: 1px solid var(--legend-dim);
   border-radius: 0.12cqw;
@@ -497,34 +619,40 @@ body {
 /* The reference's section header is a full-width LIGHT band with dark navy
    text (title, SECTION, FX FOCUS, ON, SOLO all sit on it). */
 /* Photo: each plate's light band is a TALL tab (title, FX FOCUS, ON,
-   SOLO ▾) that steps down after the switch to a THIN strip running to the
-   plate's right edge. */
+   SOLO ▾) that steps down AFTER the SOLO print to a THIN strip running to
+   the plate's right edge. */
 .plate-header {
   flex: none;
   display: flex;
   /* Photo: the thin strip aligns to the BAND'S BOTTOM edge — red chassis
      shows above it, right of the tall tab. */
   align-items: flex-end;
-  margin: -0.2cqw -0.35cqw 0.18cqw;
+  /* Pull over the plate's padding AND its 0.07cqw border so the band region
+     meets chassis red on all three sides, and re-paint that red here: the
+     area above the strip is RED in the photo, never plate navy. The two
+     stops re-derive the chassis gradient at this deck height (~7–11% of
+     chassis height) so the patch blends into the surrounding red. */
+  margin: -0.27cqw -0.42cqw 0.18cqw;
+  background: linear-gradient(180deg, #852833 0%, #822731 100%);
 }
 
 .plate-header-tab {
   display: flex;
   align-items: center;
   gap: 0.42cqw;
-  padding: 0.08cqw 0.4cqw 0.1cqw;
-  /* The tall LIGHT tab (photo): title, FX FOCUS and ON print dark on it;
-     it ends right after the switch, both top corners rounded against the
-     red above. */
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
-  border-radius: 0.3cqw 0.3cqw 0 0;
+  padding: 0.08cqw 0.5cqw 0.1cqw 0.4cqw;
+  /* The tall LIGHT tab (photo): title, FX FOCUS, ON and SOLO ▾ print dark
+     on it; it steps down after SOLO. The top-left corner is a SMALL radius,
+     the step corner (top-right) a visibly larger one. */
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
+  border-radius: 0.14cqw 0.22cqw 0 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.35);
 }
 
 /* Full-width band variant (Piano — the plate is too narrow for a step). */
 .plate-header-full .plate-header-tab {
   flex: 1;
-  border-radius: 0.3cqw 0.3cqw 0 0;
+  border-radius: 0.14cqw 0.14cqw 0 0;
 }
 
 /* FX FOCUS and ON print ABOVE their LEDs (photo). */
@@ -540,35 +668,36 @@ body {
   white-space: nowrap;
 }
 
-/* Photo: the section ON switch rides LOW on the band, its housing edge
-   poking just below the band line. */
-.plate-header-tab .on-cluster .panel-button.pill {
-  margin-bottom: -0.14cqw;
-  margin-top: -0.02cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
-  border-radius: 0.3cqw 0 0.24cqw 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
-}
+/* Photo: the black switch housing sits directly ON the light band, fully
+   contained within the band's height (no light frame of its own). */
 
 .plate-header-strip {
   flex: 1;
-  height: 0.5cqw;
-  display: flex;
-  align-items: center;
-  padding-left: 0.22cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c9cdd6 100%);
-  /* Bottom-aligned continuation (photo): red sits above it, its outer end
-     rounds up at the plate corner. */
-  border-radius: 0.14cqw 0.3cqw 0 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  /* Photo: the strip is about HALF the band's height, bottom-aligned. */
+  height: 0.64cqw;
+  /* Tuck under the tab so no seam opens at the step, and start the
+     gradient at the tab's mid-height tone (the tab's gradient has already
+     run half its course by the strip's top edge) so the two light parts
+     read as ONE surface. */
+  margin-left: -0.14cqw;
+  background: linear-gradient(180deg, #c1c7d3 0%, var(--band-lo) 100%);
+  /* Bottom-aligned continuation (photo): red sits above it; the inside
+     corner under the step is crisp, the outer end rounds at the plate
+     corner. */
+  border-radius: 0 0.14cqw 0 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
 }
 
 .plate-header .plate-title {
   color: #232a38;
 }
 
+/* Photo: SECTION prints in the same dark ink as the title, bold, with only
+   modest tracking — not a faded wide-spaced caption. */
 .plate-header .plate-subtitle {
-  color: #4d5464;
+  color: #2a3140;
+  font-weight: 700;
+  letter-spacing: 0.06cqw;
 }
 
 .plate-header .legend {
@@ -717,12 +846,18 @@ body {
   gap: 0.05cqw;
 }
 
-/* Reference: ladder LEDs are thin sliver segments at a tight pitch (the
-   photo's meters read as fine yellow-green lines, not chunky pills). */
+/* Reference closeup: ladder LEDs are chunky near-SQUARE cells at a tight
+   pitch — the unlit ones stay visible as dark gray-green ridges, like the
+   photo's meters (not thin floating slivers). */
 .led-ladder .led {
-  width: 0.36cqw;
-  height: 0.085cqw;
-  border-radius: 0.025cqw;
+  width: 0.3cqw;
+  height: 0.19cqw;
+  border-radius: 0.045cqw;
+}
+
+.led-ladder .led.led-green:not([data-on='true']) {
+  background: #3c403a;
+  box-shadow: inset 0 0.03cqw 0.05cqw rgba(0, 0, 0, 0.55);
 }
 
 /* Lit meter segments lean yellow-green on the photo, not pure green. */
@@ -764,19 +899,6 @@ body {
   clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
 
-/* The Organ Model / Piano Select grids' central LED pairs are the same
-   arrows: first points at the left label, second at the right. */
-.model-led-grid .led,
-.type-led-grid .led {
-  border-radius: 0;
-  clip-path: polygon(100% 0, 100% 100%, 0 50%);
-}
-
-.model-led-grid .led + .led,
-.type-led-grid .led + .led {
-  clip-path: polygon(0 0, 0 100%, 100% 50%);
-}
-
 /* Reference-style effect type selector: two label columns around a central
    pair of triangular LEDs per row. */
 .sel-grid {
@@ -784,6 +906,50 @@ body {
   flex-direction: column;
   gap: 0.09cqw;
   align-self: stretch;
+  /* Anchors the dark selector housing strip (photo: the ◀▶ pairs sit in a
+     recessed near-black rounded housing spanning all rows). */
+  position: relative;
+}
+
+/* The dark selector housing: one continuous near-black strip behind the
+   whole column of arrow pairs (photo: Organ Model, Piano Select, Mod 1/2,
+   Amp Sim and Reverb all seat their triangles in it). Painted as a centered
+   pseudo-element so the row pitch never changes; the LED pairs are
+   position:relative so they render on top. */
+.sel-grid::before,
+.model-led-grid::before,
+.type-led-grid::before {
+  content: '';
+  position: absolute;
+  top: -0.06cqw;
+  bottom: -0.06cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0.95cqw;
+  background: linear-gradient(180deg, #202227 0%, #101114 100%);
+  border-radius: 0.1cqw;
+  box-shadow:
+    inset 0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.7),
+    0 0.02cqw 0.03cqw rgba(255, 255, 255, 0.05);
+}
+
+.sel-leds {
+  position: relative;
+}
+
+/* The flanking legends paint ABOVE the housing strip (its rounded ends can
+   reach under a long label's edge). */
+.sel-row .legend,
+.model-led-grid .legend,
+.type-led-grid .legend {
+  position: relative;
+}
+
+/* Unlit selector arrows read as medium-gray metal inside the black housing
+   (photo) — the plate-dark unlit LED color would vanish against it. */
+.sel-leds .led:not([data-on='true']) {
+  background: #5b6067;
+  box-shadow: none;
 }
 
 .sel-row {
@@ -853,6 +1019,19 @@ body {
   height: 0.24cqw;
 }
 
+/* Narrower arrows here — the housing strip slims to match. */
+.fx-box .sel-grid::before {
+  width: 0.7cqw;
+  border-radius: 0.08cqw;
+}
+
+/* The Reverb selector must hug its three rows: stretched to the tall
+   BRIGHT/DARK column, its housing strip would run the cluster's full
+   height. */
+.reverb-box .sel-grid {
+  align-self: center;
+}
+
 /* Boxed right-column labels, as printed (A-WAH / TO ROTARY / LP FILTER). */
 .sel-tag {
   border-radius: 0.1cqw;
@@ -867,6 +1046,14 @@ body {
 .sel-tag-red {
   background: #8f1f27;
   color: #f2d8da;
+}
+
+/* Photo (Mod 1): A-WAH is an OUTLINED box — light border, white text on
+   the plate — unlike the light-filled WAH/PUMP chips beneath it. */
+.sel-tag-outline {
+  border: 0.035cqw solid #b9bfcc;
+  color: var(--legend);
+  background: none;
 }
 
 /* BRIGHT/DARK cluster and the type grid share one row (reference layout). */
@@ -919,6 +1106,15 @@ body {
   max-width: none;
 }
 
+/* Photo: the VAR|CHORALE button sits at the RIGHT, under the type grid,
+   level with the tone button beside it — not centered on its own row. */
+.reverb-box .variation-cell > .variation-row {
+  align-self: flex-end;
+  justify-content: flex-end;
+  margin-top: -0.2cqw;
+  margin-right: 0.16cqw;
+}
+
 /* Vib/Chorus: selector button left of the 2x3 scanner-position LED matrix. */
 .vib-select-row {
   display: flex;
@@ -931,6 +1127,24 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.06cqw;
+  position: relative;
+}
+
+/* Photo: the scanner-position triangles sit in a dark rounded housing band
+   between the two label rows (same recessed plate as the other selector
+   grids). The band covers the triangles only, never the C/V numerals. */
+.vib-matrix::before {
+  content: '';
+  position: absolute;
+  left: -0.07cqw;
+  right: -0.07cqw;
+  top: 34%;
+  bottom: 34%;
+  background: linear-gradient(180deg, #202227 0%, #101114 100%);
+  border-radius: 0.1cqw;
+  box-shadow:
+    inset 0 0.04cqw 0.06cqw rgba(0, 0, 0, 0.7),
+    0 0.02cqw 0.03cqw rgba(255, 255, 255, 0.05);
 }
 
 .vib-matrix-row {
@@ -944,6 +1158,13 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.05cqw;
+  position: relative;
+}
+
+/* Unlit scanner arrows: medium gray against the housing (photo). */
+.vib-cell .led:not([data-on='true']) {
+  background: #5b6067;
+  box-shadow: none;
 }
 
 .vib-cell .legend {
@@ -1039,11 +1260,15 @@ body {
 .plate-header .panel-button.pill {
   background: linear-gradient(180deg, #17181b 0%, #060708 100%);
   border: 0.05cqw solid #000;
-  border-radius: 0.08cqw;
+  border-radius: 0.05cqw;
+  /* Faint top-edge bevel on the housing (photo). */
+  box-shadow: inset 0 0.03cqw 0 rgba(255, 255, 255, 0.14);
 }
 
+/* Photo: the cap is a warm charcoal (slightly olive) dome, light at the
+   crown falling to near-black at the base. */
 .plate-header .panel-button.pill .panel-button-cap {
-  background: linear-gradient(180deg, #3d4148 0%, #17191d 100%);
+  background: linear-gradient(180deg, #45463f 0%, #34352f 45%, #1d1e1b 100%);
 }
 
 /* Light ON/OFF tab above each layer button: dark text, layer LED inside.
@@ -1052,7 +1277,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.07cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   border-radius: 0.12cqw;
   padding: 0.03cqw 0.09cqw;
 }
@@ -1076,8 +1301,10 @@ body {
   background: linear-gradient(180deg, #6b1b21 0%, #431014 100%);
 }
 
+/* Photo: the red rubber caps are a muted brick red (desaturated, a shade
+   lighter at the crown), not a bright crimson. */
 .panel-button.red .panel-button-cap {
-  background: linear-gradient(180deg, #d5474e 0%, #a3242c 55%, #7e161e 100%);
+  background: linear-gradient(180deg, #c05a5f 0%, #97383f 55%, #6f2329 100%);
   color: #f8e6e6;
   box-shadow:
     inset 0 0.05cqw 0.06cqw rgba(255, 220, 220, 0.3),
@@ -1096,13 +1323,14 @@ body {
 }
 
 /* The photo's red shift-frame is a FILLED red pad the black switch sits
-   on — a small solid background, not a hairline ring. */
+   on — a small solid background, not a hairline ring. The pad hugs the
+   switch housing (photo closeup: ~0.12cqw of red showing per side). */
 .panel-button.framed::before {
   content: '';
   position: absolute;
-  inset: -0.17cqw;
+  inset: -0.12cqw;
   background: linear-gradient(180deg, #96242e 0%, #7c1d26 100%);
-  border-radius: 0.16cqw;
+  border-radius: 0.14cqw;
   box-shadow: inset 0 0.04cqw 0.06cqw rgba(255, 255, 255, 0.12);
   z-index: -1;
 }
@@ -1199,10 +1427,12 @@ body {
     0 0.04cqw 0.08cqw rgba(0, 0, 0, 0.4);
 }
 
+/* Latched buttons stay pressed-in; the state light is the adjacent LED
+   (photo: hardware buttons never glow). */
 .panel-button[data-lit='true'] {
   box-shadow:
     inset 0 0.1cqw 0.14cqw rgba(0, 0, 0, 0.55),
-    0 0 0.35cqw rgba(120, 235, 130, 0.25);
+    0 0.04cqw 0.08cqw rgba(0, 0, 0, 0.4);
 }
 
 .btn-led {
@@ -1381,7 +1611,9 @@ body {
   border-radius: 0.14cqw;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0.22) 100%),
-    linear-gradient(180deg, #b4b7bd 0%, #989ca3 40%, #33363b 47%, #33363b 53%, #8f939a 60%, #74777e 100%);
+    /* Photo: near-uniform gray block with only a SUBTLE center seam, not a
+       hard black groove. */
+    linear-gradient(180deg, #b4b7bd 0%, #9a9ea5 40%, #71757b 47%, #71757b 53%, #8f939a 60%, #74777e 100%);
   box-shadow:
     0 0.14cqw 0.2cqw rgba(0, 0, 0, 0.55),
     inset 0 0.04cqw 0.05cqw rgba(255, 255, 255, 0.35),
@@ -1406,11 +1638,13 @@ body {
   --drawbar-cap-h: 1.7cqw;
 }
 
-/* Full-travel recessed slot behind the stem (like the fader tracks). */
+/* Recessed slot behind the stem. Photo: the slot occupies only the LOWER
+   part of the well — its top edge sits beside the ladder's #4 numeral
+   (~24% down), and it runs to the well's bottom. */
 .drawbar::before {
   content: '';
   position: absolute;
-  top: 0;
+  top: 24%;
   bottom: 2%;
   left: 50%;
   width: 0.2cqw;
@@ -1422,7 +1656,7 @@ body {
 
 .drawbar-shaft {
   position: absolute;
-  top: 0;
+  top: 24%;
   left: 50%;
   width: 0.3cqw;
   transform: translateX(-50%);
@@ -1688,9 +1922,10 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Photo: the display ink is a pale ICE BLUE, not pure white. */
 .oled .oled-name {
   font-size: 0.78cqw;
-  color: #eaf5fd;
+  color: #d6e8f7;
 }
 
 .oled .oled-dim {
@@ -1917,7 +2152,7 @@ body {
   width: calc(100% + 0.4cqw);
   margin: -0.25cqw -0.2cqw 0.02cqw;
   padding: 0.1cqw 0 0.12cqw;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   border-radius: 0.26cqw 0.26cqw 0 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.3);
   font-size: 0.4cqw;
@@ -2082,13 +2317,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.1cqw;
+  position: relative;
 }
 
 /* [legend | ◀ ▶ | legend] on FIXED columns so every row's arrow pair sits
    on one shared vertical axis regardless of legend width. */
 .model-led-grid > span {
   display: grid;
-  grid-template-columns: 1fr auto auto 1fr;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   column-gap: 0.14cqw;
 }
@@ -2259,7 +2495,7 @@ body {
 }
 
 .deck-section[data-section='piano'] .plate-header {
-  margin: -0.2cqw -0.25cqw 0.18cqw;
+  margin: -0.27cqw -0.32cqw 0.18cqw;
   gap: 0.3cqw;
   padding: 0.08cqw 0.3cqw 0.1cqw;
 }
@@ -2309,6 +2545,13 @@ body {
 .deck-section[data-section='piano'] .plate-header .led {
   width: 0.28cqw;
   height: 0.28cqw;
+}
+
+/* Photo: the piano band is the shortest, so its (uniform-size) ON switch
+   housing pokes slightly below the band line — unlike the wide plates,
+   where the housing sits fully inside the band. */
+.deck-section[data-section='piano'] .plate-header .panel-button.pill {
+  transform: translateY(0.06cqw);
 }
 
 .deck-section[data-section='piano'] .plate-header .on-cluster {
@@ -2480,13 +2723,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.08cqw;
+  position: relative;
 }
 
 /* Same fixed-column treatment as .model-led-grid: the arrow pairs share
    one vertical axis across rows. */
 .type-led-grid > span {
   display: grid;
-  grid-template-columns: 1fr auto auto 1fr;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   column-gap: 0.15cqw;
 }
@@ -2606,11 +2850,12 @@ body {
   color: #4d5464;
 }
 
-/* Reference: the PRESET LIBRARY title is a MAROON tab with white text
-   poking above the light box (photo-checked at 3x). */
+/* Reference closeup: the PRESET LIBRARY title is a LIGHT pill with DARK
+   MAROON text poking above the light box (the earlier maroon-tab note had
+   the colors inverted). */
 .deck-section[data-section='program'] .preset-box .group-box-title {
-  color: #f0e4e4;
-  background: #7e1d24;
+  color: #7e1d24;
+  background: linear-gradient(180deg, #d3d7e0 0%, #c0c5d1 100%);
   border-radius: 0.26cqw;
   padding: 0.04cqw 0.4cqw 0.06cqw;
 }
@@ -2630,7 +2875,7 @@ body {
   text-align: center;
   border-radius: 0.14cqw 0.14cqw 0 0;
   color: #232a38;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
 }
 
 .deck-section[data-section='program'] .panel-button.tiny {
@@ -2775,7 +3020,7 @@ body {
   font-size: 0.34cqw;
   letter-spacing: 0.03cqw;
   color: #232a38;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   white-space: nowrap;
   max-width: 100%;
 }
@@ -3184,11 +3429,22 @@ body {
   padding: 0.02cqw 0.3cqw 0.04cqw;
 }
 
+/* Photo: the fader/AUX KB column only occupies the UPPER part of the plate
+   (faders end at the AUX KB cluster, SUSTPED/PSTICK/PAN prints right below),
+   and the bottom LFO/OSC/FILTER/AMP row runs the plate's FULL width — only
+   the narrow KB HOLD/OCTAVE SHIFT cluster sits left of the LFO box. */
 .synth-body {
   flex: 1;
   min-height: 0;
-  display: flex;
-  gap: 0.35cqw;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  /* Same ~60/40 upper/lower split the old flex layout used. */
+  grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 0.2cqw 0.35cqw;
+}
+
+.synth-body .levels-column {
+  grid-area: 1 / 1;
 }
 
 .layer-pair.triple {
@@ -3215,19 +3471,15 @@ body {
   gap: 0.08cqw;
 }
 
+/* The wrapper dissolves: synth-top and synth-bottom place themselves on
+   .synth-body's grid directly. */
 .synth-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2cqw;
-  min-height: 0;
+  display: contents;
 }
 
 .synth-top {
-  /* Splits the plate height with .synth-bottom at roughly the reference's
-     60/40 so no dead band opens and neither half gets crushed. */
-  flex: 1.45;
+  grid-area: 1 / 2;
+  min-width: 0;
   min-height: 0;
   display: flex;
   gap: 0.15cqw;
@@ -3574,11 +3826,26 @@ body {
 
 
 .synth-bottom {
-  flex: 1;
+  /* Full plate width (photo): the boxes start under the PAN column, left
+     of them only the narrow KB HOLD/OCTAVE SHIFT cluster. */
+  grid-area: 2 / 1 / 3 / 3;
   min-height: 0;
+  min-width: 0;
   display: flex;
   gap: 0.15cqw;
   align-items: stretch;
+}
+
+/* KB HOLD/ARP RUN + OCTAVE SHIFT + KB ZONE column (photo), vertically
+   spread beside the LFO box. */
+.kb-cluster {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 0.1cqw;
+  padding: 0.1cqw 0.05cqw;
 }
 
 .synth-bottom .legend {
@@ -3758,6 +4025,13 @@ body {
   max-width: 1.9cqw;
 }
 
+/* 'RES/FREQ HP' prints on ONE line (photo) — the morph dot must not push
+   it into a wrap. */
+.filter-box .knob-cell .legend {
+  white-space: nowrap;
+  max-width: none;
+}
+
 .lfo-box {
   /* Wide enough for the WAVEFORM cluster + destination LED list row. */
   flex: 1.12;
@@ -3825,6 +4099,8 @@ body {
   justify-content: space-between;
 }
 
+/* Photo: paired shift-framed switches (Osc, Filter) sit well apart — each
+   red pad is its own island with clear plate showing between them. */
 .button-cell {
   display: flex;
   gap: 0.5cqw;
@@ -3835,10 +4111,6 @@ body {
   display: flex;
   gap: 0.12cqw;
   align-items: flex-end;
-}
-
-.button-cell {
-  gap: 0.12cqw;
 }
 
 /* FILTER ON: the dark vertical switch sits IN FLOW at the box's
@@ -3935,7 +4207,7 @@ body {
 /* Second Shift/Exit on its light tab (reference), pinned at the strip foot. */
 .fx-shift {
   margin-top: auto;
-  background: linear-gradient(180deg, #d7dae3 0%, #c3c7d4 100%);
+  background: linear-gradient(180deg, var(--band-hi) 0%, var(--band-lo) 100%);
   border-radius: 0.25cqw 0.25cqw 0 0;
   padding: 0.1cqw 0.25cqw 0.15cqw;
 }
@@ -4065,6 +4337,14 @@ body {
 
 .reverb-box > .knob-cell {
   grid-area: mix;
+}
+
+/* Photo: DRY and WET flank the knob's 0/10 ticks, not one tight caption. */
+.reverb-box > .knob-cell > .legend,
+.delay-mix-cell > .legend {
+  word-spacing: 0.2cqw;
+  white-space: nowrap;
+  max-width: none;
 }
 
 .reverb-box > .fx-on-cell {
@@ -4224,9 +4504,11 @@ body {
   max-width: none;
 }
 
+/* Wide enough that the RATE knob's right-side numerals and the AMOUNT
+   knob's left-side numerals never collide (photo: clear plate between). */
 .mod1-box > .knob-cell + .knob-cell,
 .mod2-box > .knob-cell + .knob-cell {
-  margin-left: 0.58cqw;
+  margin-left: 0.72cqw;
 }
 
 .mod1-box > .variation-cell,

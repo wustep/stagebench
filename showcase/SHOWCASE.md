@@ -1810,3 +1810,170 @@ User-directed round, each item photo-checked:
   excluded), and a proper focus ring.
 - Gates: typecheck, lint, build, verify:layout 12/12, full suite 499/499;
   bench publish checks green.
+
+### 45 — Selector housings, meters, pads, chip colors (2026-07-05)
+
+Photo-comparison sweep (color / buttons / spacing), each item checked
+against crops of nord-stage-4-73:
+
+- **Selector arrow housings**: every ◀▶ triangle grid (Organ Model, Piano
+  Select, Vib/Chorus scanner matrix, Mod 1/2, Amp Sim, Reverb) now seats
+  its arrows in the photo's recessed near-black rounded housing strip —
+  they floated bare on the plate; unlit arrows read as medium gray inside
+  it (the plate-dark unlit color vanished against black).
+- **Level meters**: fader LED ladders are the closeup's 14 chunky
+  near-square cells at a tight pitch, with unlit cells visible as dark
+  ridges (they were 9 thin floating slivers); the fader caps lose their
+  hard black center groove for the photo's subtle seam.
+- **Red shift pads**: pad inset tightened to the photo's ~0.12cqw reveal,
+  and the Osc/Filter button pairs sit 0.5cqw apart so their pads are
+  separate red islands again (they had merged into one blob).
+- **Colors**: STORE / ARP RUN caps muted to the photo's brick red (was
+  bright crimson); PRESET LIBRARY title corrected to a LIGHT pill with
+  dark maroon text (round-42's "maroon tab" note had the colors
+  inverted); display name ink tinted the photo's ice blue; the lit
+  latching-button green halo is gone (hardware buttons never glow — the
+  adjacent LED is the state light).
+- **Prints**: A-WAH is the photo's OUTLINED chip (WAH/PUMP stay filled);
+  morph LED dots print left of the morphable knob labels (LFO/Osc/Filter,
+  Arp Rate, and the Layer Effects RATE/AMOUNT/TEMPO/FEEDBACK/DRIVE/FREQ/
+  DRY WET set — unlit prints; the functional morph dot stays on the
+  knob); DRY WET flanks its knob; RES/FREQ HP no longer wraps.
+- **Reverb box**: VAR|CHORALE button moved to the photo's spot — right
+  side under the type grid, LED at its right, label beneath — instead of
+  centered on its own row; the Mod 1/2 knob pair gets clearance so the
+  RATE/AMOUNT numeral arcs stop colliding.
+- verify-layout's Chromium lookup now also finds Linux caches
+  (~/.cache/ms-playwright, chrome-linux64) alongside the macOS path.
+- Gates: typecheck, lint, build, verify:layout 12/12; suite 498/499 — the
+  one failure is the delay-feedback-filter render assertion, which fails
+  identically on the base commit in this environment (pre-existing, not a
+  regression).
+
+### 46 — Magnifier lens shows the true surroundings past the panel edges (2026-07-04)
+
+The loupe cloned only the deck block over a flat `--chassis-mid` fill, so
+near any panel edge the lens bled red where the real view shows something
+else (page background above/beside the chassis, keybed below the deck).
+
+- **Full-chassis clone**: the lens canvas now renders the whole chassis —
+  deck block plus keys block with a live inert `Keybed` clone and bottom
+  rail — anchored to the real chassis rect (onLensMove measures the
+  chassis, not the deck; visibility gating still uses the deck rect). Past
+  the edges the lens shows the rounded chassis corner, its drop shadow,
+  the keybed, and the pale stage backdrop, exactly like the live panel.
+- **Lens backdrop**: `.magnify-lens` background switched from chassis red
+  to the `.stage-app` base tone (#e9e6e1), which is what actually
+  surrounds the instrument.
+- The `.lens-deck .top-rail` paint-drop override is gone — the rail keeps
+  its own gradient/border inside the lens now that the backdrop is no
+  longer flat red; the clone also gains the deck screws it was missing
+  (offsets hoisted to a shared `DECK_SCREWS` const).
+- Gates: typecheck, lint, suite 499/499, verify:layout 12/12; verified in
+  the browser at the deck's top-left corner, bottom edge, and right edge.
+
+### 47 — Reference-photo overlay compare tool (2026-07-04)
+
+New OVERLAY toggle in the chrome tray (next to MAGNIFY): ghosts the real
+nord-stage-4-73.jpg product shot over the rendered chassis at a
+slider-set opacity (PHOTO, 0–100%, default 50%), for eyeballing visual
+drift edge-to-edge instead of flipping between windows.
+
+- **Photo mapping**: the shot has white margins and a drop shadow, so the
+  overlay stretches the frame so the chassis' measured bounding box —
+  fractions x 0.1117, y 0.1222, w 0.7766, h 0.735, from the bbox of
+  red-dominant pixels (r − max(g,b) > 30) — lands exactly on the rendered
+  chassis; its rounded overflow clips the margins. Photo crop aspect is
+  3.17 vs the chassis' 3.0951; edge alignment wins over the ~2%.
+- **Data source honesty**: the photo stays gitignored and unbundled — a
+  dev-only vite middleware (`/reference/*` in showcase/vite.config.ts)
+  serves it from the repo root. Where the route is absent (published
+  builds, unfetched reference/) the tool shows a "reference photo
+  unavailable" note instead of silently doing nothing; toggling re-arms
+  the load. The overlay is opt-in, never persisted, non-interactive
+  (pointer-events none, aria-hidden), and never the rendered background
+  (the visual spec's allowReferenceImageAsRenderedBackground: false is
+  about panel paint; this is a labeled compare tool).
+- `.chassis` gains `position: relative` to host the overlay (z-index 30 —
+  above the in-chassis max of 5, below the loupe's 60).
+- Gates: typecheck, lint, build, suite 501/501 (two new overlay tests),
+  verify:layout 12/12; alignment verified in the browser at 50% and 100%
+  opacity.
+
+### 48 — Overlay compare modes: diff, wipe, blink, nudge, in-loupe (2026-07-04)
+
+The round-47 ghost made drift findable; this round makes it jump out.
+The PHOTO control grows a GHOST / DIFF / WIPE mode switch, and the
+overlay gains compare keys (documented in a new Overlay line in the INFO
+block, live only while the tool is on):
+
+- **Diff mode**: `mix-blend-mode: difference` with opacity snapped to
+  100% on entry (a dimmed diff reads as false matches) — matching pixels
+  go black, every mismatch glows. The chassis gains `isolation: isolate`
+  so the blend samples only the chassis, never the page background.
+  First look confirmed the known keybed drift as doubled key silhouettes
+  and caught the logo sitting low.
+- **Wipe mode**: photo clipped left of a draggable seam (`clip-path`
+  inset), with a chassis-height handle — the overlay's only interactive
+  piece (role="slider", arrows ±1%, Shift ±5%, drag via pointer capture,
+  clamped 2–98%).
+- **Blink compare**: holding V snaps to the full photo (ghost @100%)
+  over any mode; release restores the configured view. Position drift
+  "jumps" between frames far better than in a static ghost.
+- **Alignment nudge**: arrows move the photo ±0.1% of the chassis
+  (Shift+↑↓ scales ±0.2% about the chassis center, 0 resets; a Δ readout
+  with Reset appears in the tray). Zeroes the photo-vs-render aspect
+  residue (crop 3.17 vs 3.0951) onto the region under study so diff
+  shows genuine render error, not mapping noise. Form controls and the
+  seam keep native arrow behavior; keys pause while the section-zoom
+  dialog is open.
+- **In-loupe compare**: the ReferenceGhost (now a shared component)
+  renders inside the magnifier's chassis clone too, so the lens shows
+  photo-vs-render at 2.6x; the seam handle stays out of the inert lens.
+- Gates: typecheck, lint, build, suite 505/505 (four new mode/blink/
+  nudge/loupe tests), verify:layout 12/12; every mode exercised in the
+  browser (diff and wipe screenshots, peek/nudge/reset state checks).
+
+### 49 — Loupe: half-size cursor clone, glide instead of teleport (2026-07-04)
+
+- **Cursor clone**: all four OS-styled glyphs halved (default 7.5x10,
+  pointer 9x11.5, resize 6x11 / 11x6, hotspot offsets halved to match) —
+  the 2.6x lens transform made full native-size artwork loom over the
+  control being inspected; half-size reads ~1.3x native in the lens.
+- **Motion smoothing**: onLensMove now only writes a target (lens box
+  left/top + magnified panel point cx/cy); a rAF loop advances the
+  applied position toward it with a frame-rate-independent exponential
+  ease (tau 60ms — closes ~63% of the gap per 60ms, settles when the
+  gap drops under 0.05px). Discontinuities that used to teleport the
+  loupe — releasing a drag-frozen lens onto the pointer's new spot, the
+  above/below flip near the screen edge — become a quick glide, while
+  slow sweeps still feel attached to the pointer. First appearance (and
+  re-entry over the deck) snaps to the pointer instead of gliding in
+  from a stale position; the cursor-clone GLYPH still swaps instantly
+  (easing a glyph swap would show the wrong cursor).
+- Verified via Playwright (the shared preview tab reports
+  visibilityState hidden, which pauses rAF entirely): lens materializes
+  at the pointer, sits strictly between origin and target mid-glide
+  after a far jump, and settles on the exact target (<1px). Gates:
+  typecheck, lint, suite 505/505, verify:layout 12/12.
+
+### 50 — Loupe covers the keybed too (2026-07-04)
+
+The magnifier gated its visibility on the deck-block rect, hiding over
+the keys even though its clone has rendered the full chassis since
+round 46. It now gates on the chassis rect: the loupe works across the
+whole instrument — control deck and keybed alike — and hides past the
+chassis edges as before.
+
+- Notes are first-class under the lens: pressed keys light up inside
+  the clone (live render through the shared controller), and the drag
+  freeze stays scoped to resize-cursor value drags, so holding a note
+  while sweeping carries the loupe along (glissando under
+  magnification).
+- The now-redundant deck ref is gone; the lens canvas anchors to the
+  one chassis rect for gating, transform, and cursor clone.
+- Verified via Playwright: lens visible over the keybed, key-60 press
+  mirrors data-pressed true→false in the clone, lens hidden below the
+  chassis, still visible over the deck; screenshot of the loupe over a
+  held E4. Gates: typecheck, lint, suite 505/505 (magnifier test now
+  pins the 73-key clone), verify:layout 12/12.
