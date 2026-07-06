@@ -2552,3 +2552,23 @@ Five close-up detail fixes from the reference photo:
   tabs 0.2/0.3→0.13/0.16, full-band + rotary + preset tabs → 0.13cqw,
   strip/program → 0.13cqw (was a spread of 0.14–0.3cqw).
 - Gates: typecheck, lint, suite 622/622, verify:layout 12/12 (fresh build).
+
+### 74 — Hideable control panel + dark mode for the chrome (2026-07-05)
+
+Two quality-of-life additions to the off-chassis web chrome, both persisted in
+`stagebench.ui.v1` alongside the existing minimal/full `chrome` pref (the
+record is now read/written whole so writing one key never wipes the others):
+
+- **Hide the bottom control panel.** A `Hide` button in the tray and the `B`
+  shortcut collapse the whole status strip; while hidden a small, quiet
+  `Controls` restore pill takes its place (and `B` brings it back) so the
+  keyboard shortcut is never a one-way trap.
+- **Dark mode.** A `Dark`/`Light` toggle in the tray and the `N` shortcut flip
+  `data-theme` on `.stage-app`, darkening the page backdrop and the bottom
+  control tray only. The instrument chassis is deliberately left untouched —
+  the piano renders identically in both themes (asserted in tests: the
+  `instrument` node carries no `data-theme`).
+- Both shortcuts skip typing targets, key-repeat, and modified presses, so
+  Cmd/Ctrl+N (new window) and friends keep their browser behavior; neither `B`
+  nor `N` is a mapped note key, so playing is unaffected.
+- Gates: typecheck, lint, suite 625/625, verify:layout (fresh build).

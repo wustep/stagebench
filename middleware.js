@@ -8,8 +8,10 @@ const EXTRAS_PATH = '/secret'
 const EXTRAS_COOKIE = 'stagebench_extras'
 const encoder = new TextEncoder()
 
-// Official Nord product shots — proxied for unlocked visitors only (same
-// URLs as bench/lib/fetch-reference.mjs; not bundled in the repo).
+// Official Nord product shots — proxied for any visitor (same URLs as
+// bench/lib/fetch-reference.mjs; publicly hotlinkable from Nord's CDN, just
+// not bundled in the repo). The reference-photo compare tool is available to
+// everyone, so this proxy is intentionally not gated behind /secret.
 const REFERENCE_PHOTOS = {
   'nord-stage-4.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/lyDePXcG/NS4_HA88_TopDown-01_241008.jpg',
   'nord-stage-4-73.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/2jnZVaTL/NS4_HA73_TopDown-01_241008.jpg',
@@ -144,12 +146,7 @@ function htmlResponse(html, status = 401, headers = {}) {
   })
 }
 
-async function extrasUnlocked(request, password) {
-  const extrasSession = getCookie(request, EXTRAS_COOKIE)
-  return isValidSession(extrasSession, `${password}::extras`)
-}
-
-async function handleReferencePhoto(request, password, options = {}) {
+async function handleReferencePhoto(request, options = {}) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method not allowed', { status: 405, headers: securityHeaders })
   }
@@ -164,10 +161,6 @@ async function handleReferencePhoto(request, password, options = {}) {
     return new Response('Not found', { status: 404, headers: securityHeaders })
   }
 
-  if (!(await extrasUnlocked(request, password))) {
-    return new Response('Not found', { status: 404, headers: securityHeaders })
-  }
-
   const fetchImpl = options.fetch ?? fetch
   const upstream = await fetchImpl(sourceUrl)
   if (!upstream.ok) {
@@ -176,7 +169,7 @@ async function handleReferencePhoto(request, password, options = {}) {
 
   const headers = {
     'Content-Type': 'image/jpeg',
-    'Cache-Control': 'private, max-age=3600',
+    'Cache-Control': 'public, max-age=3600',
     'X-Content-Type-Options': 'nosniff',
   }
   if (request.method === 'HEAD') {
@@ -189,14 +182,7 @@ export async function handleRequest(request, options = {}) {
   const url = new URL(request.url)
 
   if (url.pathname.startsWith('/reference/')) {
-    const password = process.env.STAGEBENCH_PASSWORD
-    if (!password) {
-      return new Response('Reference photos are not configured.', {
-        status: 503,
-        headers: securityHeaders,
-      })
-    }
-    return handleReferencePhoto(request, password, options)
+    return handleReferencePhoto(request, options)
   }
 
   if (url.pathname !== EXTRAS_PATH) {

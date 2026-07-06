@@ -47,6 +47,71 @@ describe('ui chrome — minimal by default with an INFO toggle', () => {
     expect(footer.className).not.toContain('chrome-minimal')
   })
 
+  it('hides the whole panel from a button or the B shortcut, with a restore affordance', () => {
+    renderApp()
+    expect(screen.getByTestId('status-strip')).toBeInTheDocument()
+    expect(screen.queryByTestId('panel-restore')).toBeNull()
+
+    // The Hide button collapses the entire strip to a small restore pill.
+    fireEvent.click(screen.getByTestId('panel-hide'))
+    expect(screen.queryByTestId('status-strip')).toBeNull()
+    const restore = screen.getByTestId('panel-restore')
+    expect(restore).toBeInTheDocument()
+
+    // The restore pill brings the panel back.
+    fireEvent.click(restore)
+    expect(screen.getByTestId('status-strip')).toBeInTheDocument()
+
+    // B toggles it from anywhere on the page.
+    fireEvent.keyDown(window, { code: 'KeyB' })
+    expect(screen.queryByTestId('status-strip')).toBeNull()
+    fireEvent.keyDown(window, { code: 'KeyB' })
+    expect(screen.getByTestId('status-strip')).toBeInTheDocument()
+
+    // Modified presses (Cmd/Ctrl+B) are left to the browser.
+    fireEvent.keyDown(window, { code: 'KeyB', metaKey: true })
+    expect(screen.getByTestId('status-strip')).toBeInTheDocument()
+  })
+
+  it('toggles dark mode from a button or the N shortcut, leaving the chassis untouched', () => {
+    renderApp()
+    const app = document.querySelector('.stage-app') as HTMLElement
+    expect(app.getAttribute('data-theme')).toBe('light')
+    // The instrument carries no theme attribute — dark mode never touches it.
+    expect(screen.getByTestId('instrument').hasAttribute('data-theme')).toBe(false)
+
+    const toggle = screen.getByTestId('theme-toggle')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+    expect(app.getAttribute('data-theme')).toBe('dark')
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('instrument').hasAttribute('data-theme')).toBe(false)
+
+    // N flips it back.
+    fireEvent.keyDown(window, { code: 'KeyN' })
+    expect(app.getAttribute('data-theme')).toBe('light')
+
+    // Modified presses (Cmd+N new window) are left to the browser.
+    fireEvent.keyDown(window, { code: 'KeyN', metaKey: true })
+    expect(app.getAttribute('data-theme')).toBe('light')
+  })
+
+  it('persists theme and hidden-panel prefs alongside chrome through storage', () => {
+    const storage = fakeStorageBoundary()
+    const first = renderApp(undefined, undefined, storage)
+    fireEvent.click(screen.getByTestId('theme-toggle'))
+    fireEvent.click(screen.getByTestId('chrome-toggle'))
+    const saved = storage.data.get('stagebench.ui.v1')!
+    // Writing one preference must not clobber the others.
+    expect(saved).toContain('"theme":"dark"')
+    expect(saved).toContain('"chrome":"full"')
+
+    first.view.unmount()
+    renderApp(undefined, undefined, storage)
+    expect((document.querySelector('.stage-app') as HTMLElement).getAttribute('data-theme')).toBe('dark')
+    expect(screen.getByTestId('status-strip').className).not.toContain('chrome-minimal')
+  })
+
   it('status reporting stays truthful and queryable while minimal', () => {
     renderApp()
     fireEvent.pointerDown(document.querySelector('[data-control-id="key-60"]')!, { pointerId: 1 })

@@ -83,9 +83,9 @@ const DECK_SCREWS = [13.6, 32.6, 40.7, 52.6, 76.4, 94.8]
 
 /** Reference-overlay compare tool. The photo is served by the dev server's
  *  /reference bridge (vite.config.ts) from the repo-root reference/ dir, or
- *  on production by middleware.js (proxied from Nord's CDN after /secret
- *  unlock). Gitignored locally and never bundled — unavailable without one
- *  of those routes. */
+ *  on production by middleware.js (proxied from Nord's CDN — public, no
+ *  /secret unlock required). Gitignored locally and never bundled —
+ *  unavailable without one of those routes. */
 const REFERENCE_PHOTO_URL = '/reference/nord-stage-4-73.jpg'
 /** The chassis' bounding box inside that photo, as fractions of the full
  *  frame (the product shot has white margins and a gray drop shadow).
@@ -111,16 +111,15 @@ interface OverlayNudge {
 const NUDGE_IDENTITY: OverlayNudge = { dx: 0, dy: 0, scale: 1 }
 
 // Same cookie gate as the main gallery (/secret in middleware.js): on
-// production this unlocks the reference-photo proxy and compare tools.
+// production this unlocks the extra dev tools (e.g. Measure). The
+// reference-photo proxy is public and needs no unlock.
 const extraModelsUnlocked =
   typeof document !== 'undefined' &&
   document.cookie.split(';').some((entry) => entry.trim().startsWith('stagebench_extras='))
 const showDevTools = import.meta.env.DEV || extraModelsUnlocked
 const overlayMissingMessage = import.meta.env.DEV
   ? 'reference photo unavailable — dev server with reference/ fetched (pnpm bench fetch)'
-  : extraModelsUnlocked
-    ? 'reference photo unavailable — upstream fetch failed; try again later'
-    : 'reference photo unavailable — unlock at /secret first'
+  : 'reference photo unavailable — upstream fetch failed; try again later'
 
 /** Dev-only measure tool: a drag-drawn bounding box over the chassis. The
  *  geometry (x/y/w/h) is stored as FRACTIONS of the chassis box — x and w of
@@ -295,6 +294,13 @@ function MidiTransport({
       </button>
     </div>
   )
+}
+
+/** Persisted UI chrome preferences (stagebench.ui.v1). */
+interface UiPrefs {
+  chrome: 'minimal' | 'full'
+  theme: 'light' | 'dark'
+  panelHidden: boolean
 }
 
 export interface AppProps {
@@ -776,25 +782,74 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     lensTargetRef.current.shown = false
   }
 
-  const [chrome, setChrome] = useState<'minimal' | 'full'>(() => {
+  // Persisted UI preferences (all in one record so writing one never wipes
+  // the others): the info strip's minimal/full chrome, the page theme, and
+  // whether the whole bottom control panel is hidden.
+  const [ui, setUi] = useState<UiPrefs>(() => {
+    const defaults: UiPrefs = { chrome: 'minimal', theme: 'light', panelHidden: false }
     try {
       const raw = system.storage.load('stagebench.ui.v1')
       if (raw) {
-        const parsed = JSON.parse(raw) as { chrome?: string }
-        if (parsed.chrome === 'full') return 'full'
+        const parsed = JSON.parse(raw) as Partial<UiPrefs>
+        return {
+          chrome: parsed.chrome === 'full' ? 'full' : 'minimal',
+          theme: parsed.theme === 'dark' ? 'dark' : 'light',
+          panelHidden: parsed.panelHidden === true,
+        }
       }
     } catch {
-      /* unreadable preference: fall through to the default */
+      /* unreadable preference: fall through to the defaults */
     }
-    return 'minimal'
+    return defaults
   })
-  const toggleChrome = () => {
-    setChrome((current) => {
-      const next = current === 'minimal' ? 'full' : 'minimal'
-      system.storage.save('stagebench.ui.v1', JSON.stringify({ chrome: next }))
-      return next
-    })
-  }
+  const { chrome, theme, panelHidden } = ui
+  // Toggles all funnel through functional updates so keyboard shortcuts and
+  // buttons stay correct regardless of render freshness, persisting the whole
+  // record each time.
+  const patchUi = useCallback(
+    (patch: (current: UiPrefs) => UiPrefs) => {
+      setUi((current) => {
+        const next = patch(current)
+        system.storage.save('stagebench.ui.v1', JSON.stringify(next))
+        return next
+      })
+    },
+    [system.storage],
+  )
+  const toggleChrome = useCallback(
+    () => patchUi((c) => ({ ...c, chrome: c.chrome === 'minimal' ? 'full' : 'minimal' })),
+    [patchUi],
+  )
+  const toggleTheme = useCallback(
+    () => patchUi((c) => ({ ...c, theme: c.theme === 'dark' ? 'light' : 'dark' })),
+    [patchUi],
+  )
+  const togglePanelHidden = useCallback(() => patchUi((c) => ({ ...c, panelHidden: !c.panelHidden })), [patchUi])
+
+  // Global UI shortcuts: B hides/shows the bottom control panel, N flips the
+  // theme. Both skip typing targets, key-repeat, and modified presses (so
+  // Cmd/Ctrl+N etc. keep their browser behavior); the note-key handler
+  // ignores B and N since neither is a mapped note.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      )
+        return
+      if (event.code === 'KeyB') {
+        event.preventDefault()
+        togglePanelHidden()
+      } else if (event.code === 'KeyN') {
+        event.preventDefault()
+        toggleTheme()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [togglePanelHidden, toggleTheme])
 
   // Below this width the chassis shrinks past legibility and its knobs,
   // faders, and keybed are too small to drive with a finger/mouse — surface a
@@ -960,6 +1015,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   return (
     <main
       className="stage-app"
+      data-theme={theme}
       onDragEnter={onMidiDragEnter}
       onDragOver={onMidiDragOver}
       onDragLeave={onMidiDragLeave}
@@ -1208,6 +1264,23 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           <span className="measure-hint">drag draws a box · Esc clears · panel input paused</span>
         </aside>
       )}
+      {panelHidden ? (
+        <div className="panel-restore-zone" data-testid="panel-restore-zone">
+          <button
+            type="button"
+            className="panel-restore"
+            data-testid="panel-restore"
+            aria-label="Show controls"
+            title="Show controls (B)"
+            onClick={togglePanelHidden}
+          >
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2.5 7.5 L6 4 L9.5 7.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Controls
+          </button>
+        </div>
+      ) : (
       <footer
         className={`status-strip ${chrome === 'minimal' ? 'chrome-minimal' : ''}`}
         data-testid="status-strip"
@@ -1266,6 +1339,32 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           <button
             type="button"
             className="chrome-toggle"
+            data-testid="theme-toggle"
+            aria-pressed={theme === 'dark'}
+            aria-label="Toggle dark mode"
+            title="Dark mode (N)"
+            onClick={toggleTheme}
+          >
+            {theme === 'dark' ? (
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <circle cx="6" cy="6" r="3" fill="currentColor" />
+                <path
+                  d="M6 0.6V2 M6 10V11.4 M0.6 6H2 M10 6H11.4 M2.2 2.2l1 1 M8.8 8.8l1 1 M9.8 2.2l-1 1 M3.2 8.8l-1 1"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  strokeLinecap="round"
+                />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M10 7.2A4.6 4.6 0 1 1 4.8 2 3.6 3.6 0 0 0 10 7.2Z" fill="currentColor" />
+              </svg>
+            )}
+            {theme === 'dark' ? 'Light' : 'Dark'}
+          </button>
+          <button
+            type="button"
+            className="chrome-toggle"
             data-testid="magnify-toggle"
             aria-pressed={magnify}
             aria-label="Toggle magnifier lens"
@@ -1312,6 +1411,20 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
               Measure
             </button>
           )}
+          <span className="chrome-divider" aria-hidden="true" />
+          <button
+            type="button"
+            className="chrome-toggle"
+            data-testid="panel-hide"
+            aria-label="Hide controls"
+            title="Hide controls (B)"
+            onClick={togglePanelHidden}
+          >
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2.5 4.5 L6 8 L9.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Hide
+          </button>
           {(overlayActive || (overlay && overlayMissing)) && (
             <span className="chrome-overlay-tools">
               {overlayActive && (
@@ -1390,7 +1503,8 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           </span>
           <span data-testid="keymap-help">
             <b>Keys</b> A S D F G H J K L ; play C4–E5, W E T Y U O P the sharps between them (physical positions,
-            layout-independent) · Space/Z/X are the sustain/soft/sostenuto pedals
+            layout-independent) · Space/Z/X are the sustain/soft/sostenuto pedals · B hides this panel, N toggles dark
+            mode
           </span>
           {overlayActive && (
             <span data-testid="overlay-help">
@@ -1414,6 +1528,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           </span>
         </span>
       </footer>
+      )}
     </main>
   )
 }
