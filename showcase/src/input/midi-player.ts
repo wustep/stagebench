@@ -23,6 +23,13 @@ const IDLE_STATE: MidiPlayerState = {
 /** Position emits are throttled to this cadence while playing (ms). */
 const POSITION_EMIT_MS = 100
 
+/** Catch-up guard: a note-on whose scheduled time is already this far in the
+ *  past when the loop sees it (main-thread stall, background tab pausing
+ *  rAF) is skipped instead of fired — otherwise resuming after a long gap
+ *  dispatches every missed note as one giant synchronous chord. Note-offs
+ *  and sustain events always dispatch so held/pedal state stays consistent. */
+const MAX_NOTE_LAG_SEC = 0.25
+
 /**
  * Drives a parsed MIDI file through the {@link InstrumentController} in real
  * time: a requestAnimationFrame loop dispatches note on/off (and sustain)
@@ -140,9 +147,18 @@ export class MidiFilePlayer {
     if (!this.file) return
     const nowSec = (this.now() - this.startClock) / 1000
     const { events, durationSec } = this.file
-    while (this.index < events.length && events[this.index].time <= nowSec) {
-      this.dispatch(events[this.index])
-      this.index += 1
+    if (this.index < events.length && events[this.index].time <= nowSec) {
+      const staleBefore = nowSec - MAX_NOTE_LAG_SEC
+      // One controller notification per frame, not one per event — a chord
+      // stack otherwise re-runs every key/pedal subscriber once per note.
+      this.controller.batch(() => {
+        while (this.index < events.length && events[this.index].time <= nowSec) {
+          const event = events[this.index]
+          this.index += 1
+          if (event.type === 'noteOn' && event.time < staleBefore) continue
+          this.dispatch(event)
+        }
+      })
     }
     this.positionSec = Math.min(nowSec, durationSec)
     if (this.index >= events.length && nowSec >= durationSec) {

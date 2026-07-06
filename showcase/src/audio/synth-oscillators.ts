@@ -47,15 +47,39 @@ import type { SynthWaveformCategory } from '../state/instrument'
 
 const HARMONICS = 24
 
+/** Per-context PeriodicWave cache (perf audit): every wave built here is a
+ *  pure function of its quantized inputs, so a dense MIDI passage on a
+ *  Sync/Pulse/Shape/Wave program was paying the Fourier-table + native wave
+ *  construction cost on EVERY note-on for identical waves. PeriodicWaves are
+ *  context-bound, hence the WeakMap keyed by context (test fakes create a
+ *  fresh context per test, so caching stays correct there too). */
+const waveCaches = new WeakMap<AudioContextLike, Map<string, PeriodicWaveLike>>()
+
+function cachedWave(context: AudioContextLike, key: string, build: () => PeriodicWaveLike): PeriodicWaveLike {
+  let cache = waveCaches.get(context)
+  if (!cache) {
+    cache = new Map()
+    waveCaches.set(context, cache)
+  }
+  let wave = cache.get(key)
+  if (!wave) {
+    wave = build()
+    cache.set(key, wave)
+  }
+  return wave
+}
+
 /** Fourier coefficients (bn) for a duty-cycle square wave, DC-free, used to
  *  build the Pulse 33/10 PeriodicWaves (duty 0..1, e.g. 0.33 or 0.10). */
 function pulseWave(context: AudioContextLike, duty: number): PeriodicWaveLike {
-  const real = new Float32Array(HARMONICS + 1)
-  const imag = new Float32Array(HARMONICS + 1)
-  for (let n = 1; n <= HARMONICS; n++) {
-    imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty)
-  }
-  return context.createPeriodicWave(real, imag)
+  return cachedWave(context, `pulse:${duty}`, () => {
+    const real = new Float32Array(HARMONICS + 1)
+    const imag = new Float32Array(HARMONICS + 1)
+    for (let n = 1; n <= HARMONICS; n++) {
+      imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty)
+    }
+    return context.createPeriodicWave(real, imag)
+  })
 }
 
 /** Base odd/all-harmonic spectra (before the sync gaussian bump) for the two
@@ -82,16 +106,18 @@ export function syncPeakHarmonic(oscCtrl: number): number {
  *  gaussian bump centered on the sync pitch harmonic — a resonant-peak
  *  approximation of hard-sync formant motion (declared approximation). */
 export function syncWave(context: AudioContextLike, square: boolean, oscCtrl: number): PeriodicWaveLike {
-  const base = baseSyncSpectrum(square)
   const peak = syncPeakHarmonic(oscCtrl)
-  const real = new Float32Array(HARMONICS + 1)
-  const imag = new Float32Array(HARMONICS + 1)
-  const width = 2.2
-  for (let n = 1; n <= HARMONICS; n++) {
-    const bump = Math.exp(-((n - peak) ** 2) / (2 * width * width))
-    imag[n] = base[n]! * (0.35 + 2.2 * bump)
-  }
-  return context.createPeriodicWave(real, imag)
+  return cachedWave(context, `sync:${square}:${peak}`, () => {
+    const base = baseSyncSpectrum(square)
+    const real = new Float32Array(HARMONICS + 1)
+    const imag = new Float32Array(HARMONICS + 1)
+    const width = 2.2
+    for (let n = 1; n <= HARMONICS; n++) {
+      const bump = Math.exp(-((n - peak) ** 2) / (2 * width * width))
+      imag[n] = base[n]! * (0.35 + 2.2 * bump)
+    }
+    return context.createPeriodicWave(real, imag)
+  })
 }
 
 export function pulse33Wave(context: AudioContextLike): PeriodicWaveLike {
@@ -166,13 +192,21 @@ function shapeFoldStep(oscCtrl: number): number {
 /** Builds a wavefolding WaveShaper curve for a quantized fold step k (0..1):
  *  f(x) = sin(x * (1 + k*3) * PI/2), folding the sine back on itself as k
  *  rises (spec-described "Shape Sine" fold recipe). */
+const foldCurveCache = new Map<number, Float32Array>()
+
 export function shapeFoldCurve(oscCtrl: number): Float32Array {
   const k = shapeFoldStep(oscCtrl)
+  // 17 quantized fold steps; the 2048-float curve is a pure function of the
+  // step and WaveShaper.curve assignment copies, so sharing is safe — and a
+  // Shape Sine passage stops allocating one big array per key press.
+  const cached = foldCurveCache.get(k)
+  if (cached) return cached
   const curve = new Float32Array(2048)
   for (let i = 0; i < curve.length; i++) {
     const x = (i / (curve.length - 1)) * 2 - 1
     curve[i] = Math.sin(x * (1 + k * 3) * (Math.PI / 2))
   }
+  foldCurveCache.set(k, curve)
   return curve
 }
 
@@ -191,26 +225,30 @@ const ORGAN_DRAWBAR_LEVELS = [1, 0.5, 0.7, 0.45, 0.3, 0.22]
  *  once — Osc Ctrl has no effect for the Wave category (declared, spec-
  *  consistent with Pure's "No effect" rule). */
 export function waveOrganWave(context: AudioContextLike): PeriodicWaveLike {
-  const real = new Float32Array(HARMONICS + 1)
-  const imag = new Float32Array(HARMONICS + 1)
-  for (let i = 0; i < ORGAN_DRAWBAR_HARMONICS.length; i++) {
-    const n = ORGAN_DRAWBAR_HARMONICS[i]!
-    if (n <= HARMONICS) imag[n] = ORGAN_DRAWBAR_LEVELS[i]!
-  }
-  return context.createPeriodicWave(real, imag)
+  return cachedWave(context, 'waveOrgan', () => {
+    const real = new Float32Array(HARMONICS + 1)
+    const imag = new Float32Array(HARMONICS + 1)
+    for (let i = 0; i < ORGAN_DRAWBAR_HARMONICS.length; i++) {
+      const n = ORGAN_DRAWBAR_HARMONICS[i]!
+      if (n <= HARMONICS) imag[n] = ORGAN_DRAWBAR_LEVELS[i]!
+    }
+    return context.createPeriodicWave(real, imag)
+  })
 }
 
 /** Wave Formant: a fixed digital PeriodicWave with a vowel-formant-like
  *  spectral bump (a broad mid-harmonic emphasis rather than a flat 1/n
  *  falloff), built once — Osc Ctrl has no effect (Wave category, like Pure). */
 export function waveFormantWave(context: AudioContextLike): PeriodicWaveLike {
-  const real = new Float32Array(HARMONICS + 1)
-  const imag = new Float32Array(HARMONICS + 1)
-  const center = 7
-  const width = 2.4
-  for (let n = 1; n <= HARMONICS; n++) {
-    const bump = Math.exp(-((n - center) ** 2) / (2 * width * width))
-    imag[n] = (1 / n) * (0.25 + 1.6 * bump)
-  }
-  return context.createPeriodicWave(real, imag)
+  return cachedWave(context, 'waveFormant', () => {
+    const real = new Float32Array(HARMONICS + 1)
+    const imag = new Float32Array(HARMONICS + 1)
+    const center = 7
+    const width = 2.4
+    for (let n = 1; n <= HARMONICS; n++) {
+      const bump = Math.exp(-((n - center) ** 2) / (2 * width * width))
+      imag[n] = (1 / n) * (0.25 + 1.6 * bump)
+    }
+    return context.createPeriodicWave(real, imag)
+  })
 }

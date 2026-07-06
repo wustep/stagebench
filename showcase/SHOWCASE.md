@@ -2572,3 +2572,48 @@ record is now read/written whole so writing one key never wipes the others):
   Cmd/Ctrl+N (new window) and friends keep their browser behavior; neither `B`
   nor `N` is a mapped note key, so playing is unaffected.
 - Gates: typecheck, lint, suite 625/625, verify:layout (fresh build).
+
+### 75 — Performance pass: MIDI-file bursts, program switching, hot-path caches (2026-07-06)
+
+A profiling-driven audit of the two reported jank scenarios — dense MIDI-file
+playback and swapping programs mid-performance — plus the hot paths feeding
+them. No audible behavior changes; every fix removes redundant work:
+
+- **MIDI player bursts are batched and self-limiting.** The rAF tick now
+  wraps each frame's due events in a new `controller.batch()` (one listener
+  notification per frame instead of one per note — each emit re-reads all 73
+  keybed snapshots plus the pedal hooks). Note-ons more than 250 ms stale by
+  the time the loop sees them (main-thread stall, background tab pausing rAF)
+  are skipped instead of fired as one giant synchronous catch-up chord;
+  note-offs and sustain always dispatch so held/pedal state stays consistent.
+  `releaseSource` sweeps batch the same way.
+- **Program switching stopped paying for storage and duplicate commits.**
+  `selectProgram` now debounces its bank serialization (`schedulePersist`,
+  like Live-mode edits — it was `JSON.stringify`ing every program bank
+  synchronously per switch); the morph reapply after a snapshot load
+  accumulates all three sources into ONE commit (was: up to three extra
+  commits, each a full engine `applyState` + panel re-render); and
+  `setMorphSource` merges the source move and its interpolated destinations
+  into a single commit, halving commits during wheel/pedal drags.
+  `cloneSnapshot`'s defaults backfill went lazy + cached: snapshots captured
+  by this build always carry every key, so program changes skip constructing
+  and cloning an entire power-on default state (legacy payloads clone just
+  their missing keys out of the cache).
+- **Per-note wave construction is cached.** Every synth PeriodicWave is a
+  pure function of quantized inputs, so Pulse 33/10, Sync (17 peaks × 2),
+  Shape Pulse (17 duties), and the two Wave spectra now come from a
+  per-context cache (WeakMap-keyed) instead of re-running the Fourier build
+  on every key press; Shape Sine's 2048-float fold curve is memoized per
+  quantized step (matching the existing LP M / drive-curve memoizations).
+- **Commit-frequency engine guards.** `updateOrganVoiceGains` skips its
+  full voice walk (and per-partial AudioParam ramps) unless the effective
+  drawbar values actually changed — it ran on EVERY store commit while the
+  organ section was up; `updateSynthVoiceLive` early-returns before the
+  voice walk when no layer's live/filter signature changed.
+- **React tree isolation.** `setStatus` keeps the status object's identity
+  when nothing changed (refreshStatus runs per commit, and the fresh object
+  was re-rendering the whole App per knob tick — listeners still fire for
+  `whenReady`); the MIDI transport subscribes to the player itself so the
+  100 ms position emits re-render only the transport strip, with the App
+  subscription narrowed to the transport's visibility status.
+- Gates: typecheck, lint, suite 648/648, build, verify:layout 12/12.

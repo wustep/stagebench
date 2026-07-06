@@ -567,6 +567,9 @@ export class PianoEngine {
    *  the values that actually shape them may. */
   private appliedSynthLiveSig: Record<SynthLayerId, string> = { A: '', B: '', C: '' }
   private appliedSynthFilterSig: Record<SynthLayerId, string> = { A: '', B: '', C: '' }
+  /** Effective drawbar values last retargeted onto sounding organ voices —
+   *  the same commit-frequency guard idea as appliedSynthLiveSig. */
+  private appliedOrganDrawbarSig = ''
   private seqCounter = 0
   private organClick: AudioBufferLike | null = null
   private organChiff: AudioBufferLike | null = null
@@ -638,7 +641,15 @@ export class PianoEngine {
   }
 
   private setStatus(status: EngineStatus, message: string): void {
-    this.statusInfo = { status, message }
+    // refreshStatus runs on every store commit; an unchanged status keeps
+    // its object identity so App's useSyncExternalStore snapshot doesn't
+    // re-render the whole tree per knob tick. Listeners are still notified
+    // unconditionally — whenReady() counts on a notification even when the
+    // visible status text is unchanged (e.g. the last-needed sample set
+    // finishing load under an already-"ready" piano line).
+    if (this.statusInfo.status !== status || this.statusInfo.message !== message) {
+      this.statusInfo = { status, message }
+    }
     for (const listener of this.listeners) listener(this.statusInfo)
   }
 
@@ -1425,6 +1436,13 @@ export class PianoEngine {
    *  means stored-registration edits/morphs, in Drawbar Live mode physical
    *  pose moves; both retune mid-note. */
   private updateOrganVoiceGains(now: number): void {
+    // Runs on every store commit while the organ section is up: skip the
+    // full voice walk (and its per-partial AudioParam ramps) unless the
+    // effective drawbar values actually changed — new voices read the
+    // current registration at start, so only changes need retargeting.
+    const sig = `${this.effectiveOrganDrawbars('A').join(',')}|${this.effectiveOrganDrawbars('B').join(',')}`
+    if (sig === this.appliedOrganDrawbarSig) return
+    this.appliedOrganDrawbarSig = sig
     const apply = (voice: Voice) => {
       const live = voice.organLive
       if (!live) return
@@ -1467,6 +1485,9 @@ export class PianoEngine {
       this.appliedSynthLiveSig[layer] = liveSig
       this.appliedSynthFilterSig[layer] = filterSig
     }
+    // Nothing changed on any layer (the overwhelmingly common commit):
+    // skip the voice walk entirely.
+    if (!SYNTH_LAYER_IDS.some((layer) => liveChanged[layer] || filterChanged[layer])) return
     const apply = (voice: Voice) => {
       if (voice.section !== 'synth') return
       const layerState = this.state.synth.layers[voice.layer as SynthLayerId]

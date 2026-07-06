@@ -206,18 +206,19 @@ function ReferenceGhost({
 }
 
 /** Minimal floating transport for dropped-MIDI playback: play/pause,
- *  restart, a thin progress bar, and close. Also surfaces a read error. */
+ *  restart, a thin progress bar, and close. Also surfaces a read error.
+ *  Subscribes to the player itself so the 100 ms position updates re-render
+ *  only this strip — not the whole App tree above it. */
 function MidiTransport({
   player,
-  state,
   error,
   onDismissError,
 }: {
   player: MidiFilePlayer
-  state: MidiPlayerState
   error: string | null
   onDismissError: () => void
 }) {
+  const state = useMidiPlayer(player)
   if (error && state.status === 'idle') {
     return (
       <div className="midi-transport is-error" role="alert" data-testid="midi-transport">
@@ -329,6 +330,13 @@ function useMidiPlayer(player: MidiFilePlayer): MidiPlayerState {
   return useSyncExternalStore(player.subscribe, player.getState)
 }
 
+/** App-level subscription narrowed to the transport's visibility: the
+ *  100 ms playback-position emits produce a fresh state object each time,
+ *  and the full-state snapshot re-rendered the entire App tree on every one. */
+function useMidiPlayerStatus(player: MidiFilePlayer): MidiPlayerState['status'] {
+  return useSyncExternalStore(player.subscribe, () => player.getState().status)
+}
+
 function formatClock(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds))
   const mins = Math.floor(total / 60)
@@ -433,7 +441,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   const midiStatus = useMidiStatus(midi)
   const pedals = usePedals(controller)
   const controlPedal = useControlPedal(instrument)
-  const midiPlayback = useMidiPlayer(midiPlayer)
+  const midiPlaybackStatus = useMidiPlayerStatus(midiPlayer)
 
   // Drag-and-drop MIDI file playback. A dragged file shows a minimal drop
   // scrim over the whole app; dropping a .mid/.midi parses and plays it
@@ -1053,8 +1061,8 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
           </div>
         </div>
       )}
-      {(midiPlayback.status !== 'idle' || midiError) && (
-        <MidiTransport player={midiPlayer} state={midiPlayback} error={midiError} onDismissError={() => setMidiError(null)} />
+      {(midiPlaybackStatus !== 'idle' || midiError) && (
+        <MidiTransport player={midiPlayer} error={midiError} onDismissError={() => setMidiError(null)} />
       )}
       <div
         className="instrument"

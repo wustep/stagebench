@@ -13,6 +13,8 @@ export class InstrumentController {
   readonly engine: PianoEngine
   private held = new Map<number, Set<NoteSource>>()
   private listeners = new Set<() => void>()
+  private batchDepth = 0
+  private pendingEmit = false
 
   constructor(engine: PianoEngine) {
     this.engine = engine
@@ -24,7 +26,28 @@ export class InstrumentController {
   }
 
   private emit(): void {
+    if (this.batchDepth > 0) {
+      this.pendingEmit = true
+      return
+    }
     for (const listener of this.listeners) listener()
+  }
+
+  /** Coalesces listener notifications across a burst of note events (MIDI
+   *  file chords, per-source release sweeps): every subscriber — 73 keybed
+   *  keys plus the pedal hooks — re-reads its snapshot on each emit, so a
+   *  ten-note chord emitting once instead of ten times is a real saving. */
+  batch(run: () => void): void {
+    this.batchDepth += 1
+    try {
+      run()
+    } finally {
+      this.batchDepth -= 1
+      if (this.batchDepth === 0 && this.pendingEmit) {
+        this.pendingEmit = false
+        for (const listener of this.listeners) listener()
+      }
+    }
   }
 
   isNoteHeld(midi: number): boolean {
@@ -96,9 +119,11 @@ export class InstrumentController {
 
   /** Releases every note owned by one source (e.g. keyboard blur). */
   releaseSource(source: NoteSource): void {
-    for (const [midi, sources] of [...this.held]) {
-      if (sources.has(source)) this.noteOff(midi, source)
-    }
+    this.batch(() => {
+      for (const [midi, sources] of [...this.held]) {
+        if (sources.has(source)) this.noteOff(midi, source)
+      }
+    })
   }
 
   /** Panic panel button: immediate all-notes-off through the same engine path. */

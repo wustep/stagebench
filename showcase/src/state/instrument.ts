@@ -2671,16 +2671,19 @@ export class InstrumentStore {
    *  snapshot load (program change / store / undo / bank switch): with the
    *  wheel left high, the loaded program must sound and display the
    *  interpolated values immediately — not on the source's next move.
-   *  Never dirties (interpolation writes use a bare commit). */
+   *  Never dirties (interpolation writes use a bare commit). All sources
+   *  accumulate into ONE commit — each commit re-runs the engine's full
+   *  applyState and re-renders every panel section, so a program change
+   *  must not pay that up to three extra times. */
   private reapplyMorphSources(): void {
-    for (const source of MORPH_SOURCES) this.applyMorphNow(source)
+    let next = this.state
+    for (const source of MORPH_SOURCES) next = withMorphApplied(next, source)
+    if (next !== this.state) this.commit(next)
   }
 
   /** Interpolates every destination of a source at its current position. */
   private applyMorphNow(source: MorphSource): void {
-    const t = this.state.morphValues[source] / 127
-    let next = this.state
-    for (const assignment of this.state.morph[source]) next = applyMorphWrite(next, assignment, t)
+    const next = withMorphApplied(this.state, source)
     if (next !== this.state) this.commit(next)
   }
 
@@ -2735,8 +2738,11 @@ export class InstrumentStore {
   setMorphSource(source: MorphSource, value: number): void {
     const clamped = clamp(value)
     if (this.state.morphValues[source] === clamped) return
-    this.commit({ ...this.state, morphValues: { ...this.state.morphValues, [source]: clamped } })
-    this.applyMorphNow(source)
+    // One commit for the source position AND its interpolated destinations:
+    // wheel/pedal/aftertouch moves arrive at pointer/MIDI rates, and each
+    // commit costs a full engine applyState + panel re-render.
+    const moved = { ...this.state, morphValues: { ...this.state.morphValues, [source]: clamped } }
+    this.commit(withMorphApplied(moved, source))
   }
 
   /** Sources with an assignment for a control (destination indicator data). */
@@ -2848,7 +2854,11 @@ export class InstrumentStore {
       lastEdit: `${programLabel(clamped, programs.liveMode, programs.bankIndex)} ${slot.name}`,
     })
     this.reapplyMorphSources()
-    this.persistPrograms(this.state)
+    // Debounced (like Live-mode edits): serializing all program banks
+    // synchronously on every program change is an audible main-thread spike
+    // when switching sounds mid-performance; only `current` changed here and
+    // the app flushes on pagehide/visibilitychange.
+    this.schedulePersist()
   }
 
   /** One of the eight Program buttons, within the current page (or Live slot). */
@@ -4736,6 +4746,13 @@ function normalizeSynthState(synth: Partial<SynthState> | null | undefined): Syn
   }
 }
 
+/** Cached power-on default snapshot values, keyed by snapshot key — only
+ *  consulted (and only built once) when a persisted payload misses a key. */
+let defaultSnapshotCache: Record<string, unknown> | null = null
+function defaultSnapshotValues(): Record<string, unknown> {
+  return (defaultSnapshotCache ??= snapshotOf(baseInstrumentState()) as unknown as Record<string, unknown>)
+}
+
 /** Deep-clones a program snapshot and backfills any synth layer sub-object
  *  (filter/oscEnvelope/lfo/voice, section-level arp) missing from a
  *  pre-existing-field persisted payload, plus the per-layer synthChains
@@ -4746,12 +4763,16 @@ function cloneSnapshot(snapshot: ProgramSnapshot): ProgramSnapshot {
   // EVERY top-level snapshot key missing from a persisted payload falls
   // back to its power-on default — never to the previous program's value,
   // which the `{ ...state, ...cloneSnapshot(...) }` spreads at the load
-  // sites would otherwise silently leak into the loaded program.
-  const defaults = snapshotOf(baseInstrumentState()) as unknown as Record<string, unknown>
-  const merged: Record<string, unknown> = { ...defaults }
+  // sites would otherwise silently leak into the loaded program. Defaults
+  // are built lazily and cached: snapshots captured by this build always
+  // carry every key (snapshotOf picks them all), so the common program
+  // change skips constructing + cloning an entire default state; missing
+  // keys (legacy payloads only) are cloned out of the cache so no live
+  // state ever aliases it.
+  const merged: Record<string, unknown> = {}
   for (const key of PROGRAM_SNAPSHOT_KEYS) {
     const value = (partial as Record<string, unknown>)[key]
-    if (value !== undefined) merged[key] = value
+    merged[key] = value !== undefined ? value : structuredClone(defaultSnapshotValues()[key])
   }
   const cloned = merged as unknown as ProgramSnapshot
   // Organ layers persisted before the PRESET / Drawbar Live field existed
@@ -4919,6 +4940,16 @@ const MORPH_EFFECT_FIELDS: Record<string, { unit: keyof EffectChainState; field:
   'amp-freq': { unit: 'ampEq', field: 'freq' },
   'amp-drive': { unit: 'ampEq', field: 'drive' },
   'reverb-mix': { unit: 'reverb', field: 'mix' },
+}
+
+/** Pure accumulation of every destination of `source` at its current
+ *  position — shared by the single-commit morph paths (setMorphSource,
+ *  applyMorphNow, reapplyMorphSources). */
+function withMorphApplied(state: InstrumentState, source: MorphSource): InstrumentState {
+  const t = state.morphValues[source] / 127
+  let next = state
+  for (const assignment of state.morph[source]) next = applyMorphWrite(next, assignment, t)
+  return next
 }
 
 /** Pure interpolation write for one morph assignment at source position t (0..1). */
