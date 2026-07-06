@@ -1134,6 +1134,10 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
               lines={[
                 <span key="p" className={`oled-program${xl}`} data-testid="oled-program-line">{programReadout}</span>,
                 <span key="n">{nameLine}</span>,
+                // Reference: a thin ice-blue rule under the name separates
+                // the header from the body rows (hidden in PROG VIEW 1's
+                // large name/number-only screen).
+                ...(programs.progView === 1 ? [] : [<span key="rule" className="oled-rule" aria-hidden="true" />]),
                 ...(namingRows ??
                   organizeRows ??
                   menuRows ??
@@ -1150,16 +1154,50 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
                       (programs.progView === 1
                         ? [] // PROG VIEW mode 1: large name/number only
                         : [
-                          <span key="piano" className="oled-slot" data-testid="oled-piano-line">
-                            ▤ {pianoLine}
-                          </span>,
-                          <span key="status" className="oled-slot" data-testid="oled-status-line">
-                            {statusLine || '〜 Piano · FX ready'}
-                          </span>,
+                          // Reference program screen: one row per ACTIVE
+                          // section (organ → piano → synth), each row led by
+                          // its section glyph.
+                          ...(state.organ.sectionOn
+                            ? [
+                                <span key="organ" className="oled-slot" data-testid="oled-organ-line">
+                                  <OledIcon type="organ" /> {state.organ.focusedLayer}:{' '}
+                                  {organModelLabel(state.organ.layers[state.organ.focusedLayer].model)}
+                                </span>,
+                              ]
+                            : []),
+                          ...(state.piano.sectionOn
+                            ? [
+                                <span key="piano" className="oled-slot" data-testid="oled-piano-line">
+                                  <OledIcon type="piano" /> {pianoLine}
+                                </span>,
+                              ]
+                            : []),
+                          ...(state.synth.sectionOn
+                            ? [
+                                <span key="synth" className="oled-slot" data-testid="oled-synth-line">
+                                  <OledIcon type="synth" /> {state.synth.focusedLayer}:{' '}
+                                  {synthLayerName(state.synth.focusedLayer)}
+                                </span>,
+                              ]
+                            : []),
+                          // Engine status only when there is something to
+                          // say (loading / fallback / error) — the reference
+                          // display has no filler status row.
+                          ...(statusLine
+                            ? [
+                                <span key="status" className="oled-slot" data-testid="oled-status-line">
+                                  {statusLine}
+                                </span>,
+                              ]
+                            : []),
                         ]))),
-                <span key="edit" className="oled-slot oled-edit" data-testid="oled-edit-line">
-                  {state.lastEdit || '◫ —'}
-                </span>,
+                ...(state.lastEdit
+                  ? [
+                      <span key="edit" className="oled-slot oled-edit" data-testid="oled-edit-line">
+                        {state.lastEdit}
+                      </span>,
+                    ]
+                  : []),
               ]}
             />
             {/* Display bezel tick marks under the OLED (reference). */}
@@ -1286,9 +1324,10 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
   // WAVE soft-caption (reference display: wave number within the category);
   // dial 3 pages this list, dial 2 pages categories.
   const categoryWaves = SYNTH_WAVEFORMS.filter((w) => w.category === wave.category)
+  // Reference display prints the position as "1 (5)", not "1/5".
   const waveCaption = isSamplesMode
-    ? `${Math.min(focused.waveform, SYNTH_SAMPLE_SETS.length - 1) + 1}/${SYNTH_SAMPLE_SETS.length}`
-    : `${categoryWaves.findIndex((w) => w.name === wave.name) + 1}/${categoryWaves.length}`
+    ? `${Math.min(focused.waveform, SYNTH_SAMPLE_SETS.length - 1) + 1} (${SYNTH_SAMPLE_SETS.length})`
+    : `${categoryWaves.findIndex((w) => w.name === wave.name) + 1} (${categoryWaves.length})`
   const envelope = focused.ampEnvelope
   const filter = focused.filter
   const oscEnvelope = focused.oscEnvelope
@@ -1999,6 +2038,41 @@ function waveGlyphKey(name: string, category: string): string {
   if (name.startsWith('Pulse') || name === 'Shape Pulse') return 'pulse'
   if (name.includes('Square')) return 'square'
   return 'saw'
+}
+
+/** Tiny per-section glyphs leading the Program display's section rows
+ *  (reference photo: drawbars for Organ, a grand-piano top view for Piano, a
+ *  wave squiggle for Synth). Drawn in the display ink via currentColor. */
+function OledIcon({ type }: { type: 'organ' | 'piano' | 'synth' }) {
+  return (
+    <svg className="oled-icon" viewBox="0 0 12 10" aria-hidden="true">
+      {type === 'organ' ? (
+        // Drawbar set: bars pulled out to different lengths over a base rail.
+        <g fill="currentColor">
+          <rect x="0.8" y="4.4" width="1.9" height="4" />
+          <rect x="3.6" y="2.2" width="1.9" height="6.2" />
+          <rect x="6.4" y="0.6" width="1.9" height="7.8" />
+          <rect x="9.2" y="3.2" width="1.9" height="5.2" />
+          <rect x="0.4" y="9" width="11.2" height="1" />
+        </g>
+      ) : type === 'piano' ? (
+        // Grand piano top view: curved body over the keyboard strip.
+        <g fill="currentColor">
+          <path d="M0.5 7 V0.8 h6.2 c3.2 0 4.8 1.6 4.8 3.4 V7 Z" />
+          <rect x="0.5" y="7.8" width="11" height="1.8" />
+        </g>
+      ) : (
+        // Synth: saw-wave squiggle.
+        <polyline
+          points="0.6,8.6 4,1.4 4,8.6 7.4,1.4 7.4,8.6 10.8,1.4 10.8,8.6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  )
 }
 
 function WaveGlyph({ name, category, samples }: { name: string; category: string; samples: boolean }) {

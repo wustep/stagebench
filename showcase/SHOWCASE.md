@@ -2449,3 +2449,29 @@ rendered 1.69 x 1.05 (the 1.65 x 1.0 minimums plus content).
   Unison stretch exception.
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12 (fresh
   build).
+
+### 70 — Display panels: solid dot-matrix ink + reference layouts (2026-07-05)
+
+Visual audit against reference/nord-stage-4-73.jpg with full-res crops of
+both displays.
+
+- OLED ink now reads as SOLID pixel strokes like the photo: Doto 900
+  (dots merge) replaces 700 across both displays, including the Synth
+  title band and the inverted soft-caption pills (radius eased to a
+  gentle 0.07cqw, ref pills are near-rectangular).
+- Synth display: the wave shape draws LARGE at the display's right edge
+  spanning the name/param rows (photo) instead of inline after the name;
+  the WAVE counter prints "3 (7)" (photo: "1 (5)"), not "3/7".
+- Program display: thin ice-blue rule under the program name (photo);
+  the lower rows are now one per ACTIVE section (organ → piano → synth),
+  each led by a tiny section glyph (drawbars / grand top view / saw
+  squiggle); the "〜 Piano · FX ready" filler status row and the "◫ —"
+  placeholder edit row are gone — engine status and last-edit lines only
+  appear when they have something truthful to say.
+- programs.test "Shift list view" now asserts the organ row for the
+  organ-only Full House B3 landing program (the piano row correctly no
+  longer renders for programs whose piano section is off).
+- Gates: lint, suite 615/615 (57/57 programs.test after the update),
+  verify:layout 12/12. The pre-existing typecheck failure (TS7016 on the
+  vite-secret-bridge import) is fixed alongside: hand-written
+  declarations at bench/lib/vite-secret-bridge.d.mts — typecheck green.

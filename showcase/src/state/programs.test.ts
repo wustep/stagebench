@@ -485,7 +485,11 @@ describe('programs.navigation — buttons, pages, dial, list view', () => {
     expect(screen.getByTestId('oled-list-2').textContent).toContain('Full House B3')
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
     expect(screen.queryByTestId('oled-list-2')).toBeNull()
-    expect(screen.getByTestId('oled-piano-line')).toBeInTheDocument()
+    // The dial browse landed on Full House B3 (organ-only program): the
+    // standard lower rows are back, one per ACTIVE section like the
+    // hardware — organ row present, no piano row.
+    expect(screen.getByTestId('oled-organ-line').textContent).toContain('A: B3')
+    expect(screen.queryByTestId('oled-piano-line')).toBeNull()
   })
 
   it('Live Mode lights its LED and renames the readout to L-slots', () => {
