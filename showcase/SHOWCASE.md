@@ -2505,3 +2505,23 @@ scale), so this pass fixed the two spots with solid absolute numbers:
   perspective magnification; the one-knob-size directive stands).
 - Gates: typecheck, lint, suite 615/615, verify:layout 12/12 (fresh
   build).
+
+### 72 — Program strip: three DIFFERENT widths, like the hardware (2026-07-05)
+
+User-spotted delta: the render stacked Preset Library, the display and the
+Program box at one shared width — the photo's center strip is a width
+hierarchy. Measured off reference/nord-stage-4-73.jpg (title-band /
+border-line / glass-edge pixel scans, confirmed with ruled overlays):
+
+- Preset Library plate: 44.6→49.5cqw (narrowest, w 4.9)
+- Display glass: 44.3→49.8cqw (w 5.5 — wider than the plate on both sides)
+- Program box: 43.7→50.8cqw (widest, w 7.1 — reaches left past the display
+  toward Layer Scene II and further right than everything)
+
+Implementation: .program-rail slims 22%→16% (photo: the SOLO..PASTE rail
+box starts at 50.9cqw) so .program-center's right edge lands at 50.8;
+the Program box keeps full column width plus a -0.62cqw left margin;
+the display block and Preset Library inset via margins. Probed result:
+44.59→49.50 / 44.32→49.81 / 43.70→50.81 — all within 0.01cqw of target.
+
+- Gates: lint, suite 615/615, verify:layout 12/12 (fresh build).
