@@ -2475,3 +2475,33 @@ both displays.
   verify:layout 12/12. The pre-existing typecheck failure (TS7016 on the
   vite-secret-bridge import) is fixed alongside: hand-written
   declarations at bench/lib/vite-secret-bridge.d.mts — typecheck green.
+
+### 71 — Branding block to measured photo ink; Unison matrix breathes (2026-07-05)
+
+Overlay-ghost pass (in-app compare tool driven headlessly) plus ink-pixel
+measurement of reference/nord-stage-4-73.jpg. The ghost blend is only
+trustworthy for RELATIVE geometry (the photo's perspective warps local
+scale), so this pass fixed the two spots with solid absolute numbers:
+
+- "nord stage 4" logotype rebuilt to the photo's measured ink: starts
+  x=2.73cqw, 7.72cqw wide, 1.19cqw tall ascender-to-descender (was
+  2.43cqw / 8.4+cqw / 1.5cqw — noticeably oversized and too far left).
+  Comfortaa at 1.21cqw em with -0.015cqw tracking lands all four numbers
+  within 0.03cqw.
+- HAMMER ACTION 73 keeps its exact 0.166cqw cap (photo-identical) but
+  re-tracks so the row spans the photo's 7.57cqw, right edge flush with
+  the logotype's 4 at 10.34cqw. The final 3 prints untracked
+  (.brand-sub b) — letter-spacing otherwise appends a phantom trailing
+  space that overflowed the branding column; .perf-layout's 0.3cqw gap
+  went to the branding run-up for the extra width the longer indent
+  needs (perf-right keeps its own edge).
+- Synth Unison 2/3/1 lamp matrix opens up to the close-up's rhythm:
+  column gap 0.12→0.18cqw, row gap 0.08→0.16cqw — the 3 prints clear of
+  the lamp column instead of huddling against it.
+- Checked and left alone (photo matches render within perspective
+  noise): knob-scale numeral caps at the Osc Ctrl knob (~0.14cqw both),
+  OSC CTRL legend caps, knob diameters (photo's Delay knob reads ~1.29cqw
+  vs the uniform 1.14cqw, but that zone sits in the strongest
+  perspective magnification; the one-knob-size directive stands).
+- Gates: typecheck, lint, suite 615/615, verify:layout 12/12 (fresh
+  build).

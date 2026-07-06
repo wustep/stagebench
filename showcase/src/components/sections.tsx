@@ -237,7 +237,7 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
           </div>
           <div className="branding" aria-hidden="true">
             <span className="brand-line">nord stage 4</span>
-            <span className="brand-sub">HAMMER ACTION 73</span>
+            <span className="brand-sub">HAMMER ACTION 7<b>3</b></span>
           </div>
         </div>
         <div className="perf-right">
