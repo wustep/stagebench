@@ -1,7 +1,7 @@
 import { PianoEngine, type AllNotesOffReason } from '../audio/engine'
 import { VARIANT } from '../model/variant'
 
-export type NoteSource = 'pointer' | 'keyboard' | 'midi'
+export type NoteSource = 'pointer' | 'keyboard' | 'midi' | 'file'
 
 /**
  * Unified note lifecycle front door. Pointer, touch, computer keyboard and

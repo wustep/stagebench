@@ -2525,3 +2525,30 @@ the display block and Preset Library inset via margins. Probed result:
 44.59→49.50 / 44.32→49.81 / 43.70→50.81 — all within 0.01cqw of target.
 
 - Gates: lint, suite 615/615, verify:layout 12/12 (fresh build).
+
+### 73 — Printed leader lines, KB HOLD tag, aligned piano lamps, calmer header radii (2026-07-05)
+
+Five close-up detail fixes from the reference photo:
+
+- KB HOLD is now one filled dark-red rounded rectangle enclosing BOTH the
+  lamp and the label (was: red box on the text only, bare lamp beside it).
+  `.kb-hold-tag` carries the fill + a 0.05cqw (very subtle) radius; the
+  lamp lives inside it.
+- Printed grey leader brackets (photo `--panel-line` grey) added where the
+  hardware routes a control's lamp to the shift/print it pairs with, drawn
+  as absolute SVG overlays whose 0..100 viewBox maps a child's measured
+  %-position (same trick as the synth dial leads):
+  · Rotary: STOP MODE lamp → down the switch's left → SLOW lamp.
+  · Voice: MONO/LEGATO lamps → down the switch's left → LO/HI shift lamp.
+  · Mod 1: variation lamp → └ → VARIATION PED print.
+- Synth INFO / LIST / LIST dial captions get a thin grey outline box
+  (`.list-box`, `--panel-line`); the MODEL/PROGRAM LIST tags re-key to the
+  same grey so every printed outline matches the leader lines.
+- Piano lamp groups line their dots into ONE vertical column per group:
+  ACOUSTICS left-aligns its LED-first rows; DYN COMP reuses the aligned
+  UNISON two-lamp matrix; KB TOUCH moves to a 3-column grid (MED/HEAVY
+  right-aligned into a label column, lamps stacked, LIGHT trailing).
+- Section header corner radii tightened and unified: the stepped plate
+  tabs 0.2/0.3→0.13/0.16, full-band + rotary + preset tabs → 0.13cqw,
+  strip/program → 0.13cqw (was a spread of 0.14–0.3cqw).
+- Gates: typecheck, lint, suite 622/622, verify:layout 12/12 (fresh build).

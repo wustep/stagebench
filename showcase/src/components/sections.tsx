@@ -246,6 +246,11 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
             <Knob store={store} id="perf-master-level" className="large" scale="none" />
           </div>
           <div className="rotary-strip">
+          {/* Photo: a printed leader bracket links the STOP MODE lamp down the
+              left of the switch to the SLOW lamp below. */}
+          <svg className="rotary-lead" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="21.8,58.1 7,58.1 7,79.2 12,79.2" />
+          </svg>
           <span className="rotary-title">
             ROTARY
             <br />
@@ -600,8 +605,10 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
           </div>
           <div className="piano-main">
             <div className="piano-groups">
-              <span className="acoustics-cell">
+              <span className="acoustics-cell acoustics-main">
                 <Legend className="group-label">ACOUSTICS</Legend>
+                {/* Photo: the SOFT REL / STRING RES / PED NOISE lamps stack in
+                    one left-aligned column (LED first, then label). */}
                 <span className="tiny-led-row">
                   <Led color="red" on={state.piano.softRelease} />
                   <Legend>SOFT REL</Legend>
@@ -632,12 +639,13 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
               </span>
               <span className="acoustics-cell">
                 <Legend className="group-label">KB TOUCH</Legend>
-                <span className="tiny-led-row" aria-hidden="true">
+                {/* Photo: MED/HEAVY labels right-aligned into a column, their
+                    lamps stacked in a single vertical column, LIGHT trailing
+                    the top row. */}
+                <span className="kbtouch-matrix" aria-hidden="true">
                   <Legend>MED</Legend>
                   <Led color="red" on={state.piano.kbTouch === 1 || state.piano.kbTouch === 2} />
                   <Legend>LIGHT</Legend>
-                </span>
-                <span className="tiny-led-row" aria-hidden="true">
                   <Legend>HEAVY</Legend>
                   <Led color="red" on={state.piano.kbTouch === 0 || state.piano.kbTouch === 2} />
                 </span>
@@ -645,12 +653,12 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
               </span>
               <span className="acoustics-cell">
                 <Legend className="group-label">DYN COMP</Legend>
-                <span className="tiny-led-row" aria-hidden="true">
+                {/* Same aligned two-lamp matrix as UNISON (photo: 2/1 lamps in
+                    a column, the 3 numeral between the rows). */}
+                <span className="unison-matrix" aria-hidden="true">
                   <Legend>2</Legend>
                   <Led color="red" on={state.piano.dynComp >= 2} />
-                  <Legend>3</Legend>
-                </span>
-                <span className="tiny-led-row" aria-hidden="true">
+                  <Legend className="unison-three">3</Legend>
                   <Legend>1</Legend>
                   <Led color="red" on={state.piano.dynComp === 1 || state.piano.dynComp === 3} />
                 </span>
@@ -1571,15 +1579,15 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                       soft rows above, like the hardware. */}
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-1" className="small" />
-                    <Legend className="dim">INFO</Legend>
+                    <Legend className="dim"><b className="list-box">INFO</b></Legend>
                   </span>
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-2" className="small" />
-                    <Legend className="dim">LIST</Legend>
+                    <Legend className="dim"><b className="list-box">LIST</b></Legend>
                   </span>
                   <span className="synth-dial">
                     <Encoder store={store} id="synth-dial-3" className="small" />
-                    <Legend className="dim">LIST</Legend>
+                    <Legend className="dim"><b className="list-box">LIST</b></Legend>
                   </span>
                 </div>
               </div>
@@ -1679,6 +1687,13 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                         RIGHT — a wide, short box, not a tall stack. */}
                     <span className="voice-cols">
                       <span className="voice-mode-col">
+                        {/* Photo: a leader bracket links the MONO/LEGATO lamps
+                            down the switch's left edge to the LO/HI shift lamp
+                            below it. */}
+                        <svg className="voice-lead" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                          <polyline points="14.2,8.5 2,8.5 2,94.8 7.6,94.8" />
+                          <polyline points="8.5,29.8 2,29.8" />
+                        </svg>
                         <span className="tiny-led-row" aria-hidden="true">
                           <Led color="red" on={focused.voice.mode === 'Mono'} />
                           <Legend>MONO</Legend>
@@ -1762,10 +1777,11 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
               <div className="kb-cluster">
                 <span className="hold-row">
                   <span className="hold-cell">
-                    <span className="tiny-led-row" aria-hidden="true">
+                    <span className="tiny-led-row kb-hold-tag" aria-hidden="true">
+                      {/* Photo: the red box encloses the LED AND the label as
+                          one rounded rectangle. */}
                       <Led color="red" on={state.kbHold} />
-                      {/* Boxed red label, as printed on the reference panel. */}
-                      <Legend className="red-tag">KB HOLD</Legend>
+                      <Legend>KB HOLD</Legend>
                     </span>
                     <PanelButton store={store} id="kb-hold" className="dark tiny" />
                     {/* Wired: Shift + KB Hold excludes the focused layer (manual p. 36). */}
@@ -2228,6 +2244,11 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
                       the control pedal drives the Wah sweep. */}
                   <Led color="red" on={chain.mod1.ped} className="variation-led" />
                   <PanelButton store={store} id="mod1-variation" className="dark tiny" />
+                  {/* Photo: an L-bracket links the lamp down to the VARIATION
+                      PED print. */}
+                  <svg className="ped-lead" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <polyline points="20,49 20,78 26,78" />
+                  </svg>
                   <Legend className={`dim ${chain.mod1.ped ? 'lit' : ''}`}>
                     VARIATION <b className="tag-box">PED</b> ▿
                   </Legend>

@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type DragEvent as ReactDragEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import {
   realAssetBoundary,
   realAudioBoundary,
@@ -13,6 +22,8 @@ import { PianoEngine, type EngineStatusInfo } from './audio/engine'
 import { InstrumentController } from './input/controller'
 import { KEY_CODE_TO_MIDI, KEYBOARD_VELOCITY, SOFT_KEY_CODE, SOSTENUTO_KEY_CODE, SUSTAIN_KEY_CODE } from './input/keymap'
 import { MidiInputManager, type MidiStatusInfo } from './input/midi'
+import { parseMidiFile } from './input/midi-file'
+import { MidiFilePlayer, type MidiPlayerState } from './input/midi-player'
 import { Keybed } from './components/Keybed'
 import {
   EffectsSection,
@@ -195,6 +206,97 @@ function ReferenceGhost({
   )
 }
 
+/** Minimal floating transport for dropped-MIDI playback: play/pause,
+ *  restart, a thin progress bar, and close. Also surfaces a read error. */
+function MidiTransport({
+  player,
+  state,
+  error,
+  onDismissError,
+}: {
+  player: MidiFilePlayer
+  state: MidiPlayerState
+  error: string | null
+  onDismissError: () => void
+}) {
+  if (error && state.status === 'idle') {
+    return (
+      <div className="midi-transport is-error" role="alert" data-testid="midi-transport">
+        <span className="midi-transport-name">{error}</span>
+        <button type="button" className="midi-transport-btn" aria-label="Dismiss" onClick={onDismissError}>
+          <svg viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2.5 2.5 L9.5 9.5 M9.5 2.5 L2.5 9.5" stroke="currentColor" strokeWidth="1.4" fill="none" />
+          </svg>
+        </button>
+      </div>
+    )
+  }
+  const playing = state.status === 'playing'
+  const progress = state.durationSec > 0 ? Math.min(1, state.positionSec / state.durationSec) : 0
+  return (
+    <div className="midi-transport" data-testid="midi-transport" data-status={state.status}>
+      <button
+        type="button"
+        className="midi-transport-btn"
+        aria-label={playing ? 'Pause' : 'Play'}
+        data-testid="midi-transport-play"
+        onClick={() => player.toggle()}
+      >
+        {playing ? (
+          <svg viewBox="0 0 12 12" aria-hidden="true">
+            <rect x="2.5" y="2" width="2.6" height="8" rx="0.5" fill="currentColor" />
+            <rect x="6.9" y="2" width="2.6" height="8" rx="0.5" fill="currentColor" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M3 2 L10 6 L3 10 Z" fill="currentColor" />
+          </svg>
+        )}
+      </button>
+      <button
+        type="button"
+        className="midi-transport-btn"
+        aria-label="Restart"
+        data-testid="midi-transport-restart"
+        onClick={() => player.restart()}
+      >
+        <svg viewBox="0 0 12 12" aria-hidden="true">
+          <path
+            d="M6 2.2 A3.8 3.8 0 1 1 2.4 7"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+          <path d="M6 0.6 L6 3.8 L3.4 2.2 Z" fill="currentColor" />
+        </svg>
+      </button>
+      <div className="midi-transport-body">
+        <span className="midi-transport-name" title={state.name ?? undefined}>
+          {state.name}
+        </span>
+        <span className="midi-transport-bar" aria-hidden="true">
+          <span className="midi-transport-fill" style={{ width: `${progress * 100}%` }} />
+        </span>
+      </div>
+      <span className="midi-transport-time" aria-hidden="true">
+        {formatClock(state.positionSec)} / {formatClock(state.durationSec)}
+      </span>
+      <button
+        type="button"
+        className="midi-transport-btn"
+        aria-label="Close"
+        data-testid="midi-transport-close"
+        onClick={() => player.close()}
+      >
+        <svg viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2.5 2.5 L9.5 9.5 M9.5 2.5 L2.5 9.5" stroke="currentColor" strokeWidth="1.4" fill="none" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 export interface AppProps {
   audioBoundary?: AudioBoundary
   midiBoundary?: MidiBoundary
@@ -217,6 +319,17 @@ function useMidiStatus(midi: MidiInputManager): MidiStatusInfo {
   )
 }
 
+function useMidiPlayer(player: MidiFilePlayer): MidiPlayerState {
+  return useSyncExternalStore(player.subscribe, player.getState)
+}
+
+function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const mins = Math.floor(total / 60)
+  const secs = total % 60
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
 function usePedals(controller: InstrumentController): { sustain: boolean; sostenuto: boolean; soft: boolean } {
   const sustain = useSyncExternalStore(controller.subscribe, () => controller.isSustainDown())
   const sostenuto = useSyncExternalStore(controller.subscribe, () => controller.isSostenutoDown())
@@ -226,6 +339,24 @@ function usePedals(controller: InstrumentController): { sustain: boolean; sosten
 
 function useControlPedal(instrument: InstrumentStore): number {
   return useSyncExternalStore(instrument.subscribe, () => instrument.getState().morphValues.pedal)
+}
+
+/** Tracks a CSS media query. jsdom (unit tests) and SSR have no matchMedia,
+ *  so the query is treated as not matching there — the small-screen notice
+ *  stays hidden by default and only a real narrow browser viewport shows it. */
+function useMediaQuery(query: string): boolean {
+  const matches = () =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(query).matches : false
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {}
+      const mql = window.matchMedia(query)
+      mql.addEventListener('change', listener)
+      return () => mql.removeEventListener('change', listener)
+    },
+    [query],
+  )
+  return useSyncExternalStore(subscribe, matches, () => false)
 }
 
 declare global {
@@ -285,16 +416,67 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
         instrument.setExternalClock(null)
       },
     })
-    return { engine, controller, midi, store, instrument, storage, sustainInput }
+    const midiPlayer = new MidiFilePlayer(controller)
+    return { engine, controller, midi, store, instrument, storage, sustainInput, midiPlayer }
     // The instrument system is created once per mounted app.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { engine, controller, midi, store, instrument, sustainInput } = system
+  const { engine, controller, midi, store, instrument, sustainInput, midiPlayer } = system
   const engineStatus = useEngineStatus(engine)
   const midiStatus = useMidiStatus(midi)
   const pedals = usePedals(controller)
   const controlPedal = useControlPedal(instrument)
+  const midiPlayback = useMidiPlayer(midiPlayer)
+
+  // Drag-and-drop MIDI file playback. A dragged file shows a minimal drop
+  // scrim over the whole app; dropping a .mid/.midi parses and plays it
+  // through the currently selected sound, with a compact transport for
+  // pause/restart. dragCounter tracks enter/leave so nested elements don't
+  // flicker the indicator off mid-drag.
+  const [midiDragging, setMidiDragging] = useState(false)
+  const [midiError, setMidiError] = useState<string | null>(null)
+  const dragCounter = useRef(0)
+
+  const hasMidiFiles = (event: ReactDragEvent) =>
+    Array.from(event.dataTransfer?.items ?? []).some((item) => item.kind === 'file')
+
+  const onMidiDragEnter = (event: ReactDragEvent) => {
+    if (!hasMidiFiles(event)) return
+    event.preventDefault()
+    dragCounter.current += 1
+    setMidiDragging(true)
+  }
+  const onMidiDragOver = (event: ReactDragEvent) => {
+    if (!hasMidiFiles(event)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+  const onMidiDragLeave = (event: ReactDragEvent) => {
+    if (dragCounter.current === 0) return
+    event.preventDefault()
+    dragCounter.current -= 1
+    if (dragCounter.current === 0) setMidiDragging(false)
+  }
+  const onMidiDrop = (event: ReactDragEvent) => {
+    event.preventDefault()
+    dragCounter.current = 0
+    setMidiDragging(false)
+    const file = event.dataTransfer.files[0]
+    if (!file) return
+    if (!/\.midi?$/i.test(file.name)) {
+      setMidiError('Not a MIDI file — drop a .mid or .midi')
+      return
+    }
+    setMidiError(null)
+    file
+      .arrayBuffer()
+      .then((buffer) => midiPlayer.loadAndPlay(parseMidiFile(buffer, file.name)))
+      .catch(() => setMidiError("Couldn't read that MIDI file"))
+  }
+
+  // Dispose the file player on unmount alongside the controller.
+  useEffect(() => () => midiPlayer.dispose(), [midiPlayer])
 
   // Section-inspect/zoom overlay (narrow-legend-legibility): additive and
   // opt-in — the default deck layout never changes, only this state gates
@@ -614,6 +796,13 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     })
   }
 
+  // Below this width the chassis shrinks past legibility and its knobs,
+  // faders, and keybed are too small to drive with a finger/mouse — surface a
+  // dismissible "best viewed on desktop" hint rather than fake usability.
+  const isSmallScreen = useMediaQuery('(max-width: 820px)')
+  const [screenNoticeDismissed, setScreenNoticeDismissed] = useState(false)
+  const showScreenNotice = isSmallScreen && !screenNoticeDismissed
+
   // (Re)attach canonical state on every mount: unmount cleanup disposes the
   // engine and detaches its store subscription, and StrictMode's simulated
   // unmount/remount would otherwise leave the engine frozen on initial state
@@ -769,7 +958,48 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   )
 
   return (
-    <main className="stage-app">
+    <main
+      className="stage-app"
+      onDragEnter={onMidiDragEnter}
+      onDragOver={onMidiDragOver}
+      onDragLeave={onMidiDragLeave}
+      onDrop={onMidiDrop}
+    >
+      {midiDragging && (
+        <div className="midi-drop" data-testid="midi-drop" aria-hidden="true">
+          <div className="midi-drop-frame">
+            <span className="midi-drop-label">Drop a MIDI file to play</span>
+          </div>
+        </div>
+      )}
+      {showScreenNotice && (
+        <div className="screen-notice" role="status" data-testid="screen-notice">
+          <div className="screen-notice-card">
+            <svg className="screen-notice-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="2.5" y="4" width="19" height="12.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M8.5 20.5h7M12 16.5v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+            <div className="screen-notice-text">
+              <strong>Best viewed on desktop</strong>
+              <span>
+                This Nord Stage 4 recreation needs a wider screen and a mouse or MIDI keyboard to reach its knobs,
+                faders, and keybed.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="screen-notice-dismiss"
+              data-testid="screen-notice-dismiss"
+              onClick={() => setScreenNoticeDismissed(true)}
+            >
+              Continue anyway
+            </button>
+          </div>
+        </div>
+      )}
+      {(midiPlayback.status !== 'idle' || midiError) && (
+        <MidiTransport player={midiPlayer} state={midiPlayback} error={midiError} onDismissError={() => setMidiError(null)} />
+      )}
       <div
         className="instrument"
         role="region"

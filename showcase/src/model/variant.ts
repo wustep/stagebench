@@ -57,8 +57,8 @@ export const SECTIONS: readonly SectionSpec[] = [
 export type SectionId = SectionSpec['id']
 
 export const COLORS = {
-  chassisMid: '#79232c',
-  chassisDark: '#721f29',
+  chassisMid: '#851a25',
+  chassisDark: '#5a0c13',
   panelBlueGray: '#3c424d',
   keyBlack: '#0b0b0b',
   keyWhite: '#dcdcdc',

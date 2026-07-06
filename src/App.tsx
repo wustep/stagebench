@@ -861,12 +861,12 @@ function App() {
 
       <section className="showcase-band" aria-labelledby="showcase-heading">
         <div className="showcase-copy">
-          <span className="showcase-flag">Showcase</span>
+          <span className="showcase-flag">Featured showcase</span>
           <h2 id="showcase-heading">The evolving Stage 4</h2>
           <p>Seeded from the top-scoring run, then iterated beyond the benchmark rules. Not scored against the gallery.</p>
         </div>
         <button type="button" className="open-preview showcase-play" onClick={() => { captureDialogOpener(); closePreview(); setSelectedReport(null); setShowcaseOpen(true) }}>
-          Play <PlayIcon />
+          <span>Play the showcase</span> <PlayIcon />
         </button>
       </section>
 
