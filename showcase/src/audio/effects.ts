@@ -622,13 +622,15 @@ export function createAmpEq(ctx: AudioContextLike): EffectUnit<AmpEqState> {
       const driveAmount = state.drive / 127
       const isFilter = state.type === 'LP24 Filter' || state.type === 'HP24 Filter'
       const ampColor = state.type === 'Twin' ? 1.5 : state.type === 'JC' ? 1.2 : state.type === 'Small' ? 0.8 : 1
+      const k = 0.5 + driveAmount * 14 * ampColor
+      const preGain = 1 + driveAmount * 1.5
+      const hasCurve = driveAmount >= 0.02 || state.type === 'Twin' || state.type === 'JC' || state.type === 'Small'
       const key = `${state.type}:${state.drive}`
       if (key !== currentDriveKey) {
         currentDriveKey = key
-        if (driveAmount < 0.02 && state.type !== 'Twin' && state.type !== 'JC' && state.type !== 'Small') {
+        if (!hasCurve) {
           shaper.curve = null
         } else {
-          const k = 0.5 + driveAmount * 14 * ampColor
           const curve = new Float32Array(2048)
           for (let i = 0; i < curve.length; i++) {
             const x = (i / (curve.length - 1)) * 2 - 1
@@ -637,8 +639,18 @@ export function createAmpEq(ctx: AudioContextLike): EffectUnit<AmpEqState> {
           shaper.curve = curve
         }
       }
-      setParam(pre.gain, 1 + driveAmount * 1.5, now)
-      setParam(post.gain, 1 / (1 + driveAmount * 1.2), now)
+      setParam(pre.gain, preGain, now)
+      // Gain staging: the normalized tanh curve's small-signal slope is
+      // k/tanh(k) ≈ k, which un-compensated boosted everything ~8x (+18 dB)
+      // at the default knob. Anchor unity gain (plus a gentle 1..1.25x knob
+      // rise) at a nominal program level instead — quieter material still
+      // comes up compressor-style, peaks cap at the curve ceiling, and the
+      // drive knob adds saturation rather than raw level.
+      const nominal = 0.25
+      const makeup = hasCurve
+        ? ((1 + driveAmount * 0.25) * nominal * Math.tanh(k)) / Math.tanh(k * nominal * preGain)
+        : 1
+      setParam(post.gain, makeup, now)
 
       if (isFilter) {
         const lp = state.type === 'LP24 Filter'
@@ -856,7 +868,10 @@ export function createScanner(ctx: AudioContextLike): EffectUnit<ScannerState> {
     update(state, on, now) {
       const level = Number(state.type[1]) // 1..3
       const chorus = state.type[0] === 'C'
-      setParam(lfo.depth.gain, 0.0005 + level * 0.0009, now)
+      // Delay-line modulation reads out as pitch: deviation ≈ depth × 2πf,
+      // so depth = cents/(2π·6.9·(2^(c/1200)−1)) ≈ c × 1.33e-5 s. Levels 1-3
+      // target ±7/±14/±21 cents — an audible scan, not a two-semitone warble.
+      setParam(lfo.depth.gain, level * 0.000095, now)
       if (chorus) shell.setActive(on, 1, 0.5 + level * 0.12, now)
       else shell.setActive(on, 0.0001, 1, now)
     },
@@ -948,16 +963,28 @@ export function createRotary(ctx: AudioContextLike): RotaryUnit {
         const amount = state.drive / 127
         if (amount < 0.02) {
           drive.curve = null
+          setParam(driveIn.gain, 1, now)
         } else {
+          // Gain staging: tanh normalized to ±1 has a small-signal slope of
+          // k/tanh(k) ≈ k — left uncompensated it amplified quiet material
+          // ~6x at the default knob and pinned full chords to the rails
+          // (audible as constant crackle on any rotary-routed program). Keep
+          // the curve's saturation ceiling instead (0.85 → 0.5 as the knob
+          // rises) and solve the input gain from the intended small-signal
+          // gain (1..1.8x), so the knob adds growl and squash — not 15 dB.
           const k = 1 + amount * 10
+          const ceiling = 0.85 - amount * 0.35
+          const smallSignalGain = 1 + amount * 0.8
           const curve = new Float32Array(2048)
           for (let i = 0; i < curve.length; i++) {
             const x = (i / (curve.length - 1)) * 2 - 1
-            curve[i] = Math.tanh(x * k) / Math.tanh(k)
+            curve[i] = (Math.tanh(x * k) / Math.tanh(k)) * ceiling
           }
           drive.curve = curve
+          // slope-at-0 of the curve is ceiling·k/tanh(k); pre-gain solves
+          // driveIn · slope = smallSignalGain.
+          setParam(driveIn.gain, (smallSignalGain * Math.tanh(k)) / (k * ceiling), now)
         }
-        setParam(driveIn.gain, 1 + amount * 0.8, now)
       }
       // Acceleration inertia: horn ~0.8 s, rotor ~1.9 s time constants.
       // The Sound menu's speed trims scale the rotation targets (not the

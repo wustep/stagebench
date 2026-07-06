@@ -2617,3 +2617,34 @@ them. No audible behavior changes; every fix removes redundant work:
   100 ms position emits re-render only the transport strip, with the App
   subscription narrowed to the transport's visibility status.
 - Gates: typecheck, lint, suite 648/648, build, verify:layout 12/12.
+
+### 76 — Audio audit: scanner depth and drive gain staging (2026-07-06)
+
+A rendered-audio audit of the factory bank (offline renders of every A-bank
+program, measured for level, clipping and spectral noise) after a report that
+A:13 "Full House B3" sounded "super noisy". Two DSP gain/depth bugs, both
+verified by measurement before and after:
+
+- **Vib/Chorus scanner was ~20× too deep.** The scanner's delay-line LFO
+  depth (`0.0005 + level·0.0009` s at 6.9 Hz) reads out as pitch deviation of
+  ±100 (V1) to ±225 (V3) cents — a two-semitone underwater warble on every
+  scanner position, reported as "crazy distortion no matter what it's on".
+  Depth is now `level·0.000095` s ≈ ±7/±14/±21 cents (deviation ≈
+  depth·2π·6.9). Measured on a pure 8' C4: 6.9 Hz FM sidebands grow
+  V1 0.087 → V3 0.269 relative to the carrier; the windowed-ZCR pitch spread
+  collapsed from ~250-400 cents to the dry baseline. The depth-ordering
+  assertion in render-organ.test moved from zero-lag waveform similarity
+  (which can't order ±7 vs ±21 cent scans — both decorrelate almost
+  completely) to measuring those sidebands directly.
+- **Rotary and Amp/EQ drive stages boosted instead of saturating.** Both
+  waveshapers used tanh(k·x)/tanh(k), whose small-signal slope is k/tanh(k)
+  ≈ k: at the default drive knob that's a hidden ~6× (rotary) / ~8× (Amp/EQ
+  models) level boost, which pinned any rotary-routed program to the rails —
+  A:13 rendered with 715 hard-clipped samples (peak 1.47). The rotary drive
+  now scales its curve to a drive-dependent ceiling and solves the input
+  gain from the intended 1..1.8× small-signal gain; the Amp/EQ post gain
+  anchors unity (plus a gentle 1..1.25× knob rise) at a nominal program
+  level, so drive adds compression and growl, not 15-18 dB. After: every
+  A-bank program renders clip-free (A:13 peak 0.78, rms 0.39 → 0.16; Twin
+  drive 92 peak 0.24 vs 0.34 before with identical saturation shape).
+- Gates: typecheck, lint, suite 625/625.

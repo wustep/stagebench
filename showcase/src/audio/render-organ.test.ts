@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { renderEngine, rms, similarity, zeroCrossingRate, highBandRatio } from '../test/offline'
+import { renderEngine, rms, similarity, zeroCrossingRate, highBandRatio, bandEnergy } from '../test/offline'
 import type { InstrumentStore } from '../state/instrument'
 
 /**
@@ -196,14 +196,21 @@ describe('organ — rendered behavior', () => {
     const v3 = await renderOrgan(configureVib(5))
     const c1 = await renderOrgan(configureVib(0))
     // Every scanner position changes the render; vibrato (wet-only) diverges
-    // further from dry than chorus (dry+wet), and V3 is deeper than V1.
+    // further from dry than chorus (dry+wet).
     const simV1 = Math.abs(similarity(dry.left, v1.left, 0.2, 1.0))
-    const simV3 = Math.abs(similarity(dry.left, v3.left, 0.2, 1.0))
     const simC1 = Math.abs(similarity(dry.left, c1.left, 0.2, 1.0))
     expect(simV1).toBeLessThan(0.99)
     expect(simC1).toBeLessThan(0.995)
-    expect(simV3).toBeLessThan(simV1)
     expect(Math.abs(similarity(v1.left, c1.left, 0.2, 1.0))).toBeLessThan(0.98) // V1 vs C1 distinct
+    // Depth grows 1→3: the 6.9 Hz scan's FM sidebands around the 8'
+    // fundamental (C4 ≈ 261.6 Hz) strengthen with the scanner level. (Zero-
+    // lag waveform similarity can't order ±7 vs ±21 cent scans — at these
+    // canonical depths both decorrelate almost completely — so measure the
+    // modulation itself.)
+    const sidebands = (data: Float32Array) =>
+      (bandEnergy(data, 261.6 - 6.9, 0.2, 1.0) + bandEnergy(data, 261.6 + 6.9, 0.2, 1.0)) /
+      Math.max(1e-12, 2 * bandEnergy(data, 261.6, 0.2, 1.0))
+    expect(sidebands(v3.left)).toBeGreaterThan(sidebands(v1.left) * 1.5)
   }, 240000)
 
   it('the ORGAN rotary route sends the organ through the rotary: fast modulates, stop nearly does not', async () => {
