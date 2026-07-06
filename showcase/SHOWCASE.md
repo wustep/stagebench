@@ -2648,3 +2648,42 @@ verified by measurement before and after:
   A-bank program renders clip-free (A:13 peak 0.78, rms 0.39 → 0.16; Twin
   drive 92 peak 0.24 vs 0.34 before with identical saturation shape).
 - Gates: typecheck, lint, suite 625/625.
+
+### 77 — Layer press-to-off, Mod 2 detune anchoring, programs A:25-A:28 (2026-07-06)
+
+Three user reports worked through together:
+
+- **"Section layer buttons can turn on but not off."** The Layer buttons
+  followed the hardware exactly (press = focus/enable, ½-second hold = off,
+  manual p. 12/18) — which left a plain click on the already-focused layer
+  doing literally nothing, and reads as broken with a pointer. That dead
+  press is now the off toggle: press enables (focus follows), press on an
+  active unfocused layer focuses, press on the focused+FX-focused layer
+  turns it off. The hold gesture and the last-active-layer guard are
+  unchanged, and a press that only restores FX focus still does that first
+  (organ-chain LED test unchanged). Verified in-browser: piano B and synth C
+  toggle on/off with plain clicks; A survives as the section's last layer.
+- **Mod 2 Chorus/Ensemble warbled like a drunk tape.** Same bug class as
+  iteration 76's scanner: a modulated delay's FIXED swing reads out as pitch
+  deviation ∝ 2π·rate·depth, so the Chorus detuned ±44 cents at default
+  knobs and ±2.5 semitones at max Rate/Amount (Ensemble's widest line ±3 st)
+  — and factory A:12 "Tine Stack" ships with Chorus on. Both units now solve
+  the delay swing from a target detune (Chorus ±10..±26 cents, Ensemble
+  ±11..±25 per line scaled by its spec share, both capped so slow rates stay
+  chorus-sized). Audited the rest of the knob→DSP surface (Mod 1 sweeps and
+  depths, delay feedback effects, comp staging, filter Q/FM index/LFO scales,
+  envelopes, unison/glide/vibrato) — the remainder checks out against the
+  manual's ranges and iteration 76's gain-staging rules.
+- **Programs A:25-A:28 filled in** (the last Init Grand slots on page 2),
+  each exercising territory the bank didn't cover: A:25 "Trem Tines" (EP
+  through sine tremolo into the Small amp — the manual's canonical EP
+  pairing, p. 49), A:26 "Farf Combo" (Farfisa registers, V2 scanner, spring
+  reverb), A:27 "Glide Lead Whl" (legato sync-saw lead with glide, unison
+  and wheel vibrato — the factory "Whl" label convention), A:28 "Grand &
+  Strings" (grand layered with the Samples-mode string section — first
+  factory program to use Samples mode). Existing bank polish: Clav Funk's
+  cyclic Wah became the envelope-followed A-Wah (touch-responsive funk
+  filter), Chapel Pipes gained the Cathedral it was missing, Super Saw Pad
+  runs through the fixed Ensemble. All four verified loading and sounding
+  in-browser by OLED name and played notes.
+- Gates: typecheck, lint, build, suite 626/626.

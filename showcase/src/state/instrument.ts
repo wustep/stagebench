@@ -1497,11 +1497,15 @@ export class InstrumentStore {
   }
 
   /** Canonical Layer-button press (manual p. 12/18): pressing an ACTIVE
-   *  layer's button focuses it for editing — it never mutes it; pressing an
-   *  inactive layer's button switches it on (focus follows). Turning a
-   *  layer OFF is the hold gesture (holdOffLayer). */
+   *  layer's button focuses it for editing; pressing an inactive layer's
+   *  button switches it on (focus follows). A press on the layer that is
+   *  ALREADY focused (section focus AND FX focus) toggles it off — on the
+   *  hardware that press does nothing (off is the hold gesture, which still
+   *  works here too), but a dead click reads as broken with a pointer, so
+   *  the no-op press became the off toggle. */
   pressLayer(layer: LayerId): void {
     if (!this.state.layers[layer].enabled) this.setLayerEnabled(layer, true)
+    else if (this.state.focusedLayer === layer && this.state.fxSection === 'piano') this.turnOffPianoLayer(layer, 'press')
     else this.setFocusedLayer(layer)
   }
 
@@ -1510,6 +1514,10 @@ export class InstrumentStore {
    *  active layer stays on, as on the hardware; focus moves to the layer
    *  that remains. */
   holdOffLayer(layer: LayerId): void {
+    this.turnOffPianoLayer(layer, 'hold')
+  }
+
+  private turnOffPianoLayer(layer: LayerId, gesture: 'press' | 'hold'): void {
     if (!this.state.layers[layer].enabled) return
     const other: LayerId = layer === 'A' ? 'B' : 'A'
     if (!this.state.layers[other].enabled) {
@@ -1519,7 +1527,7 @@ export class InstrumentStore {
     const layers = { ...this.state.layers, [layer]: { ...this.state.layers[layer], enabled: false } }
     this.patch(
       { layers, focusedLayer: this.state.focusedLayer === layer ? other : this.state.focusedLayer },
-      `Piano ${layer} Off (hold)`,
+      `Piano ${layer} Off${gesture === 'hold' ? ' (hold)' : ''}`,
     )
   }
 
@@ -3587,11 +3595,16 @@ export class InstrumentStore {
   /** Canonical Layer-button press for Organ (manual p. 12/18) — see pressLayer. */
   pressOrganLayer(layer: LayerId): void {
     if (!this.state.organ.layers[layer].enabled) this.toggleOrganLayerEnabled(layer)
+    else if (this.state.organ.focusedLayer === layer && this.state.fxSection === 'organ') this.turnOffOrganLayer(layer, 'press')
     else this.setOrganFocusedLayer(layer)
   }
 
   /** Hold an Organ Layer button (manual p. 18) — see holdOffLayer. */
   holdOffOrganLayer(layer: LayerId): void {
+    this.turnOffOrganLayer(layer, 'hold')
+  }
+
+  private turnOffOrganLayer(layer: LayerId, gesture: 'press' | 'hold'): void {
     if (!this.state.organ.layers[layer].enabled) return
     const other: LayerId = layer === 'A' ? 'B' : 'A'
     if (!this.state.organ.layers[other].enabled) {
@@ -3607,7 +3620,7 @@ export class InstrumentStore {
           focusedLayer: this.state.organ.focusedLayer === layer ? other : this.state.organ.focusedLayer,
         },
       },
-      `Organ ${layer} Off (hold)`,
+      `Organ ${layer} Off${gesture === 'hold' ? ' (hold)' : ''}`,
     )
   }
 
@@ -3810,11 +3823,16 @@ export class InstrumentStore {
   /** Canonical Layer-button press for Synth (manual p. 12/18) — see pressLayer. */
   pressSynthLayer(layer: SynthLayerId): void {
     if (!this.state.synth.layers[layer].enabled) this.toggleSynthLayerEnabled(layer)
+    else if (this.state.synth.focusedLayer === layer) this.turnOffSynthLayer(layer, 'press')
     else this.setSynthFocusedLayer(layer)
   }
 
   /** Hold a Synth Layer button (manual p. 18) — see holdOffLayer. */
   holdOffSynthLayer(layer: SynthLayerId): void {
+    this.turnOffSynthLayer(layer, 'hold')
+  }
+
+  private turnOffSynthLayer(layer: SynthLayerId, gesture: 'press' | 'hold'): void {
     if (!this.state.synth.layers[layer].enabled) return
     const others = SYNTH_LAYER_IDS.filter((id) => id !== layer && this.state.synth.layers[id].enabled)
     if (others.length === 0) {
@@ -3824,7 +3842,7 @@ export class InstrumentStore {
     const layers = { ...this.state.synth.layers, [layer]: { ...this.state.synth.layers[layer], enabled: false } }
     this.patchSynth(
       { layers, focusedLayer: this.state.synth.focusedLayer === layer ? others[0]! : this.state.synth.focusedLayer },
-      `Synth ${layer} Off (hold)`,
+      `Synth ${layer} Off${gesture === 'hold' ? ' (hold)' : ''}`,
     )
   }
 

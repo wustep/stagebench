@@ -83,10 +83,16 @@ export function buildFactoryContent(base: InstrumentState): { bank: ProgramSlot[
       draft.piano.sectionOn = false
       draft.organ.sectionOn = true
       draft.organ.layers.A = { ...draft.organ.layers.A, model: 'Pipe1', drawbars: [8, 0, 8, 8, 0, 6, 0, 0, 4] }
+      // Pipes want a building around them — the dry principal chorus sounded
+      // like a toy next to the reference.
+      draft.organChain.reverb = { ...draft.organChain.reverb, on: true, type: 'Cathedral', mix: 58 }
     }),
     makeProgram(base, 'Clav Funk', (draft) => {
       draft.layers.A = { ...draft.layers.A, type: 'Clav' }
-      draft.chains.A.mod1 = { ...draft.chains.A.mod1, on: true, type: 'Wah', amount: 88 }
+      // A-Wah (envelope follower) instead of the cyclic LFO Wah: the filter
+      // opens with playing dynamics — the classic funk-clav touch response —
+      // rather than sweeping on its own clock under the comping.
+      draft.chains.A.mod1 = { ...draft.chains.A.mod1, on: true, type: 'A-Wah', rate: 76, amount: 88 }
       draft.chains.A.comp = { ...draft.chains.A.comp, on: true, amount: 84 }
     }),
     makeProgram(base, 'FM Ballad', (draft) => {
@@ -131,7 +137,12 @@ export function buildFactoryContent(base: InstrumentState): { bank: ProgramSlot[
         ampEnvelope: { ...a.ampEnvelope, attack: 70, decay: 110, release: 70 },
         voice: { ...a.voice, unison: 2, vibrato: 'On', vibratoAmount: 30 },
       }
-      draft.synthChains.A = { ...draft.synthChains.A, reverb: { ...draft.synthChains.A.reverb, on: true, type: 'Cathedral', mix: 88 } }
+      draft.synthChains.A = {
+        ...draft.synthChains.A,
+        // Ensemble adds the three cross-modulated lines on top of the stack.
+        mod2: { ...draft.synthChains.A.mod2, on: true, type: 'Ensemble', rate: 52, amount: 64 },
+        reverb: { ...draft.synthChains.A.reverb, on: true, type: 'Cathedral', mix: 88 },
+      }
     }),
     makeProgram(base, 'FM Keys', (draft) => {
       // 2.3 — FM 2-op through a synced delay (spec oscillator FM-H; Osc Ctrl
@@ -160,6 +171,59 @@ export function buildFactoryContent(base: InstrumentState): { bank: ProgramSlot[
       }
       draft.synth.arp = { ...draft.synth.arp, run: true, mode: 'Gate', rate: 64, mstClk: true, range: 3, direction: 'Up', hold: true }
       draft.kbHold = true
+    }),
+    makeProgram(base, 'Trem Tines', (draft) => {
+      // A:25 — Wurli-style EP: sine tremolo into the small amp model (the
+      // manual's Tremolo blurb calls it "a very common effect to use with
+      // electric pianos", p. 49).
+      draft.layers.A = { ...draft.layers.A, type: 'Electric' }
+      draft.chains.A.mod1 = { ...draft.chains.A.mod1, on: true, type: 'Tremolo', rate: 80, amount: 92 }
+      draft.chains.A.ampEq = { ...draft.chains.A.ampEq, on: true, type: 'Small', drive: 40 }
+      draft.chains.A.reverb = { ...draft.chains.A.reverb, on: true, type: 'Room', mix: 32 }
+    }),
+    makeProgram(base, 'Farf Combo', (draft) => {
+      // A:26 — 60s combo organ: Farfisa registers (BASS16 + FLUTE8 + TRMP8 +
+      // FLUTE4), fast scanner vibrato, spring reverb.
+      draft.piano.sectionOn = false
+      draft.organ.sectionOn = true
+      draft.organ.layers.A = { ...draft.organ.layers.A, model: 'Farf', drawbars: [8, 0, 8, 0, 8, 0, 8, 0, 0], vibrato: true }
+      draft.organ.vibratoType = 'V2'
+      draft.organChain.reverb = { ...draft.organChain.reverb, on: true, type: 'Spring', mix: 42 }
+    }),
+    makeProgram(base, 'Glide Lead Whl', (draft) => {
+      // A:27 — mono sync-saw lead: legato + glide, wheel vibrato (the
+      // factory-bank "Whl" label convention, manual p. 14), synced-feel delay.
+      draft.piano.sectionOn = false
+      draft.synth.sectionOn = true
+      const a = draft.synth.layers.A
+      draft.synth.layers.A = {
+        ...a,
+        waveform: synthWaveformIndex('Sync Saw'),
+        oscCtrl: 58,
+        ampEnvelope: { ...a.ampEnvelope, attack: 4, decay: 127, release: 30 },
+        filter: { ...a.filter, freq: 104, res: 34 },
+        voice: { ...a.voice, mode: 'Legato', glide: 48, unison: 1, vibrato: 'Wheel', vibratoAmount: 96 },
+      }
+      draft.synthChains.A = {
+        ...draft.synthChains.A,
+        delay: { ...draft.synthChains.A.delay, on: true, tempo: 72, feedback: 52, mix: 34 },
+        reverb: { ...draft.synthChains.A.reverb, on: true, type: 'Stage', mix: 30 },
+      }
+    }),
+    makeProgram(base, 'Grand & Strings', (draft) => {
+      // A:28 — the classic stage layer: grand piano with a sampled string
+      // section swelling underneath (Synth Samples mode, Strings set).
+      draft.synth.sectionOn = true
+      const a = draft.synth.layers.A
+      draft.synth.layers.A = {
+        ...a,
+        mode: 'Samples',
+        waveform: 0, // SYNTH_SAMPLE_SETS[0] = Strings
+        level: 84,
+        ampEnvelope: { ...a.ampEnvelope, attack: 52, decay: 127, release: 88 },
+      }
+      draft.synthChains.A = { ...draft.synthChains.A, reverb: { ...draft.synthChains.A.reverb, on: true, type: 'Hall', mix: 52 } }
+      draft.chains.A.reverb = { ...draft.chains.A.reverb, on: true, type: 'Hall', mix: 36 }
     }),
   ]
   while (bank.length < 32) bank.push(makeProgram(base, 'Init Grand', () => undefined))

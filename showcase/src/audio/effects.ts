@@ -381,8 +381,16 @@ export function createMod2(ctx: AudioContextLike): EffectUnit<Mod2State> {
           type,
           nodes: bank.nodes,
           apply(state, now) {
-            setParam(bank.oscs[0]!.frequency, mappings.lfoRateHz(state.rate) * 0.35, now)
-            setParam(bank.depths[0]!.depth.gain, 0.007 * (0.25 + (state.amount / 127) * 0.75), now)
+            const hz = mappings.lfoRateHz(state.rate) * 0.35
+            setParam(bank.oscs[0]!.frequency, hz, now)
+            // Delay-line modulation reads out as pitch (deviation ≈ 2πf·depth),
+            // so a FIXED delay swing detunes more the faster the LFO runs — the
+            // old constant swing warbled ±44 cents at default knobs and ±2.5
+            // semitones at max (the scanner-vibrato bug class, here in Mod 2).
+            // Solve the swing from a target detune instead: ±10..±26 cents
+            // across the Amount range, capped so slow rates stay chorus-sized.
+            const ratio = 0.006 + (state.amount / 127) * 0.009
+            setParam(bank.depths[0]!.depth.gain, Math.min(0.008, ratio / (2 * Math.PI * hz)), now)
           },
         }
         break
@@ -397,8 +405,17 @@ export function createMod2(ctx: AudioContextLike): EffectUnit<Mod2State> {
           type,
           nodes: bank.nodes,
           apply(state, now) {
-            bank.oscs.forEach((osc, i) => setParam(osc.frequency, mappings.lfoRateHz(state.rate) * 0.4 * bank.specs[i]!.rateScale, now))
-            for (const { depth, mod } of bank.depths) setParam(depth.gain, mod * (0.3 + (state.amount / 127) * 0.7), now)
+            // Same pitch-anchored depth as Chorus, per line: each of the three
+            // cross-connected lines holds ±(11..25)-cent detune scaled by its
+            // spec.mod share, instead of a fixed swing that reached ±3
+            // semitones on the widest line at max Rate/Amount.
+            bank.oscs.forEach((osc, i) => {
+              const spec = bank.specs[i]!
+              const hz = mappings.lfoRateHz(state.rate) * 0.4 * spec.rateScale
+              setParam(osc.frequency, hz, now)
+              const ratio = (0.004 + (state.amount / 127) * 0.008) * (spec.mod / 0.005)
+              setParam(bank.depths[i]!.depth.gain, Math.min(0.006, ratio / (2 * Math.PI * hz)), now)
+            })
           },
         }
         break

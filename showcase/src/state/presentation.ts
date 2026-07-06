@@ -794,7 +794,7 @@ export class PresentationStore {
         case 'piano-layer-a':
           // SUSTPED = Shift + Layer A (manual p. 23): routes the sustain pedal to this section.
           if (shift) store.togglePianoSustped()
-          else store.pressLayer('A') // click = focus/enable; hold = off (manual p. 12/18)
+          else store.pressLayer('A') // click = focus/enable, focused click = off; hold = off (manual p. 12/18)
           return
         case 'piano-layer-b':
           // PSTICK = Shift + Layer B (manual p. 23): pitch stick bends this section ±2 semitones.
