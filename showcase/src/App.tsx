@@ -496,6 +496,13 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   // opt-in — the default deck layout never changes, only this state gates
   // an extra portaled overlay rendering the same section again, larger.
   const [zoomedSection, setZoomedSection] = useState<ZoomableSectionId | null>(null)
+  // Stable per-section zoom openers: the section components are memo'd (they
+  // subscribe to their own state slices), so their props must keep identity
+  // across App re-renders — an inline arrow here would defeat the memo.
+  const zoomOrgan = useCallback(() => setZoomedSection('organ'), [])
+  const zoomPiano = useCallback(() => setZoomedSection('piano'), [])
+  const zoomSynth = useCallback(() => setZoomedSection('synth'), [])
+  const zoomEffects = useCallback(() => setZoomedSection('effects'), [])
 
   // Magnifier loupe: while toggled on, a floating lens follows the pointer
   // over the whole chassis — control deck AND keybed — showing a 2.6x view
@@ -1092,11 +1099,11 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
                 ))}
               </span>
               <PerformanceSection store={store} instrument={instrument} />
-              <OrganSection store={store} instrument={instrument} onZoom={() => setZoomedSection('organ')} />
-              <PianoSection store={store} instrument={instrument} engine={engine} onZoom={() => setZoomedSection('piano')} />
+              <OrganSection store={store} instrument={instrument} onZoom={zoomOrgan} />
+              <PianoSection store={store} instrument={instrument} engine={engine} onZoom={zoomPiano} />
               <ProgramSection store={store} instrument={instrument} engine={engine} />
-              <SynthSection store={store} instrument={instrument} onZoom={() => setZoomedSection('synth')} />
-              <EffectsSection store={store} instrument={instrument} onZoom={() => setZoomedSection('effects')} />
+              <SynthSection store={store} instrument={instrument} onZoom={zoomSynth} />
+              <EffectsSection store={store} instrument={instrument} onZoom={zoomEffects} />
               {/* Vertical print on the bare red right margin (reference photo). */}
               <span className="made-in" aria-hidden="true">
                 HANDMADE IN SWEDEN BY CLAVIA DMI AB&ensp;v2.0 Rev.B

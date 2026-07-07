@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import { INSTRUMENTS, instrumentsOfType, PIANO_TYPES, SYNTH_SAMPLE_SETS, type PianoType } from '../audio/library'
 import { DRAWBAR_INITIAL, getControl } from '../model/hardware'
 import {
@@ -5136,6 +5136,35 @@ function unitLabel(unit: keyof EffectChainState): string {
 
 export function useInstrumentState(store: InstrumentStore): InstrumentState {
   return useSyncExternalStore(store.subscribe, store.getState)
+}
+
+/**
+ * useInstrumentState narrowed to a set of top-level state keys: the hook
+ * returns the latest state only when one of the WATCHED slices changed
+ * reference, and otherwise keeps returning the previous snapshot so
+ * useSyncExternalStore bails out of the re-render.
+ *
+ * State patches are immutable (an edit re-creates every object up its own
+ * path, untouched slices keep identity), so reference checks are exact.
+ * Every panel section subscribed to the WHOLE state before this hook, and a
+ * knob drag or morph-wheel/CC stream — ~120 commits a second — re-rendered
+ * all six section trees per commit; each section's watch list covers
+ * exactly the slices its render (and its state-prop children) reads.
+ *
+ * CORRECTNESS CONTRACT: a caller must list every top-level key it reads —
+ * an unlisted key renders stale until a listed one changes.
+ */
+export function useInstrumentSlices(store: InstrumentStore, watch: readonly (keyof InstrumentState)[]): InstrumentState {
+  const cache = useRef<InstrumentState | null>(null)
+  return useSyncExternalStore(store.subscribe, () => {
+    const next = store.getState()
+    const previous = cache.current
+    if (previous !== null && previous !== next && watch.every((key) => Object.is(previous[key], next[key]))) {
+      return previous
+    }
+    cache.current = next
+    return next
+  })
 }
 
 /** Master-clock subdivisions (manual p. 17/35/49/51): while MST CLK is lit

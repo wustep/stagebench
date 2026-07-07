@@ -111,10 +111,13 @@ export class InstrumentController {
     return this.engine.isSoftDown()
   }
 
-  /** Pitch stick input: ±2 semitone bend on sounding piano voices. */
+  /** Pitch stick input: ±2 semitone bend on sounding piano voices. No
+   *  listener emit: no controller subscriber reads bend state (the stick's
+   *  visual position lives in the presentation store), and bend streams
+   *  arrive at pointer/MIDI rates — waking all 73 keybed subscribers plus
+   *  the pedal hooks per tick was pure snapshot-read churn. */
   setPitchBend(semitones: number): void {
     this.engine.setPitchBend(semitones)
-    this.emit()
   }
 
   /** Releases every note owned by one source (e.g. keyboard blur). */
