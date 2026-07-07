@@ -2828,3 +2828,95 @@ renders (~58 kbps, ~3 s) — the "cheap MIDI" sound no engine shaping fixes.
   Provenance updated in `IMPLEMENTATION_DETAILS.json` (npm-only wording
   replaced with the dual npm/pinned-fetch chain), `SOURCES.md`, manifest,
   and the library/provenance tests. Bundle: 19 MB → 32 MB.
+
+### 82 — Deep-audit perf pass: no-op write guards, per-unit dep guards, shared IRs (2026-07-07)
+
+A four-subsystem audit (audio engine, state store, React tree, input path)
+hunting for latency/cost centers iterations 75/80 left behind. No audible or
+visual behavior changes; every fix removes redundant work:
+
+- **Same-value writes no longer commit.** The drag-rate setters (`updateUnit`
+  in all four branches, `patchPianoLayer`/`patchOrganLayer`/
+  `patchSynthLayers`, `setOrganDrawbar`, `setMasterVolume`, `setRotaryDrive`)
+  early-out when the write leaves every field value-identical (`sameValues`,
+  compared one nested level deep — setter partials rebuild nested objects
+  even when the written field is unchanged). This mattered doubly: a pinned
+  knob's drag ticks (~120/sec; ~40% of mid-drag ticks round to the same
+  integer) re-rendered every subscriber AND minted fresh chain/layer
+  identities that silently defeated the engine's iteration-80 reference dep
+  guards. The OLED stays truthful — the first no-op tick still surfaces its
+  label once via a lastEdit-only commit (`skipNoOpEdit`) — and a
+  value-identical drag no longer raises the dirty flag: no value changed, so
+  nothing was edited. Measured live: 100 same-value writes = 1 commit
+  (was 100).
+- **Live mode stopped deep-cloning per tick.** `withEditApplied`'s auto-store
+  (and the pending-Store refresh) captured snapshots via `structuredClone`
+  of all 20 program keys per commit; both now use a `shallowSnapshotOf` pick
+  — safe because state sub-objects are immutable and every snapshot consumer
+  clones on read (`cloneSnapshot`/`deepClone`/JSON persistence).
+- **Per-unit effect-chain dep guards.** applyState's per-section chain
+  blocks keyed on the whole chain object, so one delay-tempo tick re-ramped
+  all six units (~70 setParams instead of ~16); the new `updateChainUnits`
+  guards each unit on its own state slice. Engine-external inputs join a
+  unit's tuple only while that unit reads them: the master beat while its
+  MST CLK is lit, the control pedal while Mod 1's PED mode is on, and the
+  wheel/pedal in the per-layer synth vibrato sub-block only while Vibrato is
+  in Wheel/Pedal mode — so a pedal/wheel/CC stream now skips every chain
+  that isn't listening (previously it re-ramped ALL chains of every section
+  per tick). The damper-following resonance send got its own block (a
+  sustain crossing ramps one gain instead of re-running both piano layer
+  blocks), the routing gates and organ/synth level blocks are guarded the
+  same way, and the organ-drawbar / synth live-retarget signatures moved
+  from per-commit string building onto the same tuple mechanism.
+- **Seven reverbs, one impulse per type.** Every `createReverb` kept a
+  private IR cache, so the default type's ~345k-sample-per-channel generated
+  impulse was built and retained once per unit (2 piano + organ + 3 synth +
+  global); a per-context WeakMap cache (the synth-oscillators pattern)
+  shares one buffer across all seven convolvers. The piano string-resonance
+  impulse is likewise built once, not per layer channel, and the delay
+  unit's per-update `effectDepth` record allocation hoisted to a module
+  constant.
+- **Sample-load fast copy.** `truncateBuffer` multiplied every sample by
+  gain 1 in a JS loop across the full kept window per long sample; now a
+  bulk `set(subarray)` plus a fade loop over only the final second —
+  bit-identical output, much less main-thread stall during the (now 32 MB)
+  library load. Piano sample sources also start at the voice's single `now`
+  timestamp instead of re-reading `context.currentTime` per zone source.
+- **First-gesture context resume.** The warmed context resumed only when a
+  note/pedal/MIDI gesture reached the engine — a user whose first click was
+  a panel control still paid the resume latency on their first key press. A
+  one-shot capture-phase pointerdown/keydown listener resumes on ANY first
+  gesture (injected test boundaries keep the lazy path).
+- **Input dedupe + render isolation.** `engine.setSustain` reports whether
+  the level changed and the controller skips its emit for repeated CC64
+  values (was: every message woke all 73 keybed subscribers). The ctrl-pedal
+  slider/status line are self-subscribing memo components, so a CC11 stream
+  re-renders two spans instead of the whole App shell; `Keybed` is memo'd;
+  `useInstrumentSlices` accepts selector entries, narrowing the Effects
+  panel's `synth` watch to `focusedLayer` (a synth sound-knob drag no longer
+  re-renders the whole effects panel) and the Performance strip's
+  organ/chains watches to the rotary routing it actually reads. Inline
+  scale arrays and hold-gesture closures that defeated `Knob`/`PanelButton`
+  memos are hoisted (module consts / `useCallback`); ProgramSection's
+  numeric list rows build only while the list view is open, and
+  `instrumentsOfType` is cached per type at the component layer. Same-slot
+  program/preset dial-drag ticks skip the reload (a dirty program still
+  reloads — re-selecting means "discard edits" again); `morphSourcesFor`
+  fast-paths the no-assignments state; menu dial edits debounce their
+  settings persistence like the program bank (flushed on pagehide).
+- **Dead weight removed:** `sustainPedalLevel()` (no callers), the
+  `fxGroupSynth` getter indirection, `syncArpScheduler`'s unused parameter;
+  the three per-section channel `units` types unified as `EffectChainUnits`.
+- Deliberately NOT done, documented for a future pass: organ voices still
+  build all 9 partial oscillators regardless of registration (lazy creation
+  is a real win for organ chords, but the graph shape is test-pinned —
+  `organ.test.ts` asserts ≥9 oscillators and captures note-on gain sets);
+  MIDI-file events still quantize to rAF frames (lookahead scheduling needs
+  a `noteOn(when)` API change); the keybed's per-press
+  `getBoundingClientRect` stays (a rect cache can go stale when layout
+  shifts without a resize/scroll, e.g. the panel-hide toggle).
+- Verified live (dev server, headless): engine ready, notes sound and light
+  keys, 100 same-value knob writes → 1 commit, repeated CC64 → 1 emit,
+  300 dense 4-event playback bursts = 38 ms total main-thread time
+  (0.13 ms/burst), zero console errors.
+- Gates: typecheck, lint, suite 636/636, build, verify:layout 12/12.

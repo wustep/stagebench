@@ -469,6 +469,16 @@ export function createMod2(ctx: AudioContextLike): EffectUnit<Mod2State> {
 
 /* -------------------------------------------------------------- Delay -- */
 
+/** Feedback-path effect: modulation depth/character per selected effect. */
+const DELAY_EFFECT_DEPTH: Record<DelayState['effect'], [number, number]> = {
+  Off: [0.00005, 0.1],
+  Chorus: [0.004, 0.4],
+  Vibe: [0.006, 0.9],
+  Ensemble: [0.005, 0.25],
+  Flam: [0.03, 0.05],
+  Space: [0.012, 0.18],
+}
+
 export function createDelay(ctx: AudioContextLike): EffectUnit<DelayState> {
   const shell = makeShell(ctx)
   const delay = ctx.createDelay(2)
@@ -577,16 +587,7 @@ export function createDelay(ctx: AudioContextLike): EffectUnit<DelayState> {
           setParam(fbFilter.frequency, 1000, now)
           break
       }
-      // Feedback-path effect: modulation depth/character per selected effect.
-      const effectDepth: Record<DelayState['effect'], [number, number]> = {
-        Off: [0.00005, 0.1],
-        Chorus: [0.004, 0.4],
-        Vibe: [0.006, 0.9],
-        Ensemble: [0.005, 0.25],
-        Flam: [0.03, 0.05],
-        Space: [0.012, 0.18],
-      }
-      const [depth, rate] = effectDepth[state.effect]
+      const [depth, rate] = DELAY_EFFECT_DEPTH[state.effect]
       setParam(fbEffectDelay.delayTime, state.effect === 'Flam' ? 0.03 : 0.0001, now)
       setParam(fbLfo.depth.gain, state.effect === 'Flam' ? 0 : depth, now)
       setParam(fbLfo.osc.frequency, rate, now)
@@ -799,6 +800,29 @@ const REVERB_PROFILES: Record<ReverbState['type'], { seconds: number; decay: num
   Cathedral: { seconds: 3.6, decay: 1.4, predelay: 0.03, springy: false },
 }
 
+/** Per-context impulse cache shared by every reverb unit: seven units exist
+ *  (2 piano + organ + 3 synth + global) and the generated IRs are pure
+ *  functions of (context, type) — ConvolverNodes can share one buffer, so
+ *  each type is generated once per context instead of once per unit (a
+ *  Cathedral IR is ~345k samples/channel of per-sample JS). Same WeakMap
+ *  pattern as synth-oscillators' waveCaches. */
+const reverbImpulseCaches = new WeakMap<AudioContextLike, Map<ReverbState['type'], AudioBufferLike>>()
+
+function reverbImpulse(ctx: AudioContextLike, type: ReverbState['type']): AudioBufferLike {
+  let cache = reverbImpulseCaches.get(ctx)
+  if (!cache) {
+    cache = new Map()
+    reverbImpulseCaches.set(ctx, cache)
+  }
+  let impulse = cache.get(type)
+  if (!impulse) {
+    const profile = REVERB_PROFILES[type]
+    impulse = makeImpulse(ctx, profile.seconds, profile.decay, profile.predelay, profile.springy)
+    cache.set(type, impulse)
+  }
+  return impulse
+}
+
 export function createReverb(ctx: AudioContextLike): EffectUnit<ReverbState> {
   const shell = makeShell(ctx)
   const convolver = ctx.createConvolver()
@@ -808,7 +832,6 @@ export function createReverb(ctx: AudioContextLike): EffectUnit<ReverbState> {
   shell.wetIn.connect(convolver)
   convolver.connect(tone)
   tone.connect(shell.wetOut)
-  const impulses = new Map<ReverbState['type'], AudioBufferLike>()
   let currentType: ReverbState['type'] | null = null
 
   return {
@@ -817,13 +840,7 @@ export function createReverb(ctx: AudioContextLike): EffectUnit<ReverbState> {
     update(state, on, now) {
       if (currentType !== state.type) {
         currentType = state.type
-        let impulse = impulses.get(state.type)
-        if (!impulse) {
-          const profile = REVERB_PROFILES[state.type]
-          impulse = makeImpulse(ctx, profile.seconds, profile.decay, profile.predelay, profile.springy)
-          impulses.set(state.type, impulse)
-        }
-        convolver.buffer = impulse
+        convolver.buffer = reverbImpulse(ctx, state.type)
       }
       setParam(tone.gain, state.bright ? 0 : -9, now)
       const wet = state.mix / 127

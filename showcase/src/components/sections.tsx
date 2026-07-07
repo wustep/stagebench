@@ -1,4 +1,4 @@
-import { memo, useSyncExternalStore, type ReactNode } from 'react'
+import { memo, useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import { DRAWBAR_FOOTAGES, DRAWBAR_LEGENDS, DRAWBAR_REGISTERS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
 import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
@@ -23,11 +23,12 @@ import {
   timbreListFor,
   useInstrumentState,
   useInstrumentSlices,
+  type InstrumentSliceWatch,
   type InstrumentState,
   type InstrumentStore,
   type SectionKey,
 } from '../state/instrument'
-import { instrumentsOfType, SYNTH_SAMPLE_SETS } from '../audio/library'
+import { instrumentsOfType, SYNTH_SAMPLE_SETS, type InstrumentSpec, type PianoType } from '../audio/library'
 import type { EngineStatusInfo, PianoEngine } from '../audio/engine'
 import {
   Drawbar,
@@ -54,7 +55,16 @@ interface SectionProps {
  * must not be read in that section, or its display goes stale (the hook's
  * correctness contract). ProgramSection deliberately keeps the full
  * subscription — the OLED renders nearly every kind of edit. */
-const PERFORMANCE_WATCH = ['allFxOff', 'chains', 'organ', 'rotary'] as const
+const PERFORMANCE_WATCH: readonly InstrumentSliceWatch[] = [
+  'allFxOff',
+  'rotary',
+  // The strip reads only the rotary routing out of these two slices, which
+  // otherwise change on every drawbar/effects drag tick.
+  (s) => s.chains.A.ampEq,
+  (s) => s.chains.B.ampEq,
+  (s) => s.organ.toRotary,
+  (s) => s.organ.sectionOn,
+]
 const ORGAN_WATCH = ['organ', 'fxSection', 'split'] as const
 const PIANO_WATCH = ['layers', 'piano', 'focusedLayer', 'fxSection', 'fxGroupPiano', 'pianoNotFound', 'split'] as const
 const SYNTH_WATCH = [
@@ -69,7 +79,7 @@ const SYNTH_WATCH = [
   'synthPstickRangeEdit',
   'synthVibratoEdit',
 ] as const
-const EFFECTS_WATCH = [
+const EFFECTS_WATCH: readonly InstrumentSliceWatch[] = [
   'allFxOff',
   'chains',
   'focusedLayer',
@@ -78,15 +88,38 @@ const EFFECTS_WATCH = [
   'fxGroupSynth',
   'fxSection',
   'organChain',
-  'synth',
   'synthChains',
-] as const
+  // Only the FX FOCUS SYNTH LEDs read the synth slice — a synth sound-knob
+  // drag (which replaces `synth` per tick) must not re-render the panel.
+  (s) => s.synth.focusedLayer,
+]
 
 interface BoundSectionProps extends SectionProps {
   instrument: InstrumentStore
   /** Opens the section-zoom overlay for this section (narrow-legend-legibility). */
   onZoom?: () => void
 }
+
+/** instrumentsOfType allocates a fresh filtered array per call, and the
+ *  Piano/Program sections call it per render (per commit for the fully
+ *  subscribed Program OLED). INSTRUMENTS is module-constant, so cache per
+ *  type here. */
+const INSTRUMENTS_OF_TYPE = new Map<PianoType, InstrumentSpec[]>()
+function cachedInstrumentsOfType(type: PianoType): InstrumentSpec[] {
+  let list = INSTRUMENTS_OF_TYPE.get(type)
+  if (!list) {
+    list = instrumentsOfType(type)
+    INSTRUMENTS_OF_TYPE.set(type, list)
+  }
+  return list
+}
+
+/* Inline scale arrays would re-mint per render and defeat the Knob memo
+ * (scale is compared by reference): module constants. */
+const ARP_RANGE_SCALE = ['1', '2', '3', '4']
+const BIPOLAR_TEN_SCALE = ['-10', null, '-5', '0', '5', null, '10']
+const AMP_FREQ_SCALE = ['200', '250', '400', '600', '1K', '2K', '4K', '6K', '8K']
+const EQ_DB_SCALE = ['-15', null, '-5', '0', '5', null, '15']
 
 function useEngineInfo(engine: PianoEngine): EngineStatusInfo {
   return useSyncExternalStore(
@@ -385,6 +418,11 @@ export const OrganSection = memo(function OrganSection({ store, instrument, onZo
   const state = useInstrumentSlices(instrument, ORGAN_WATCH)
   const organ = state.organ
   const focused = organ.layers[organ.focusedLayer]
+  // Stable hold-gesture callbacks: inline closures would re-mint per render
+  // and defeat the PanelButton memo inside the header/fader columns.
+  const soloOrgan = useCallback(() => instrument.soloSection('organ'), [instrument])
+  const holdOffOrganA = useCallback(() => instrument.holdOffOrganLayer('A'), [instrument])
+  const holdOffOrganB = useCallback(() => instrument.holdOffOrganLayer('B'), [instrument])
   return (
     <SectionShell id="organ">
       <div className="plate">
@@ -394,7 +432,7 @@ export const OrganSection = memo(function OrganSection({ store, instrument, onZo
           onId="organ-on"
           fxFocusLit={state.fxSection === 'organ'}
           onZoom={onZoom}
-          onSoloHold={() => instrument.soloSection('organ')}
+          onSoloHold={soloOrgan}
         />
         <div className="organ-body">
           <div className="levels-column">
@@ -403,7 +441,7 @@ export const OrganSection = memo(function OrganSection({ store, instrument, onZo
                 store={store}
                 faderId="organ-level-a"
                 buttonId="organ-layer-a"
-                onHoldOff={() => instrument.holdOffOrganLayer('A')}
+                onHoldOff={holdOffOrganA}
                 letter="A"
                 focused={organ.focusedLayer === 'A'}
               />
@@ -411,7 +449,7 @@ export const OrganSection = memo(function OrganSection({ store, instrument, onZo
                 store={store}
                 faderId="organ-level-b"
                 buttonId="organ-layer-b"
-                onHoldOff={() => instrument.holdOffOrganLayer('B')}
+                onHoldOff={holdOffOrganB}
                 letter="B"
                 focused={organ.focusedLayer === 'B'}
               />
@@ -571,9 +609,13 @@ export const PianoSection = memo(function PianoSection({ store, instrument, engi
   const timbre = timbreList[Math.min(state.piano.timbre, timbreList.length - 1)]!
   // Missing-model state (spec: selection.missingModelState): the type LED
   // flashes when the selected type has no model or its samples failed to load.
-  const focusedModel = instrumentsOfType(focused.type)[focused.model]
+  const focusedModel = cachedInstrumentsOfType(focused.type)[focused.model]
   const loadFailed = focusedModel ? engine.instrumentLoadStatus(focusedModel.id) === 'error' : false
   const flashType = state.pianoNotFound ?? (loadFailed ? focused.type : null)
+  // Stable hold-gesture callbacks (see OrganSection).
+  const soloPiano = useCallback(() => instrument.soloSection('piano'), [instrument])
+  const holdOffPianoA = useCallback(() => instrument.holdOffLayer('A'), [instrument])
+  const holdOffPianoB = useCallback(() => instrument.holdOffLayer('B'), [instrument])
   return (
     <SectionShell id="piano">
       <div className="plate">
@@ -584,7 +626,7 @@ export const PianoSection = memo(function PianoSection({ store, instrument, engi
           fxFocusLit={state.fxSection === 'piano'}
           fullBand
           onZoom={onZoom}
-          onSoloHold={() => instrument.soloSection('piano')}
+          onSoloHold={soloPiano}
         />
         <div className="piano-body">
           <div className="levels-column">
@@ -593,7 +635,7 @@ export const PianoSection = memo(function PianoSection({ store, instrument, engi
                 store={store}
                 faderId="piano-level-a"
                 buttonId="piano-layer-a"
-                onHoldOff={() => instrument.holdOffLayer('A')}
+                onHoldOff={holdOffPianoA}
                 letter="A"
                 focused={state.focusedLayer === 'A' || state.fxGroupPiano}
               />
@@ -601,7 +643,7 @@ export const PianoSection = memo(function PianoSection({ store, instrument, engi
                 store={store}
                 faderId="piano-level-b"
                 buttonId="piano-layer-b"
-                onHoldOff={() => instrument.holdOffLayer('B')}
+                onHoldOff={holdOffPianoB}
                 letter="B"
                 focused={state.focusedLayer === 'B' || state.fxGroupPiano}
               />
@@ -755,9 +797,14 @@ export const PianoSection = memo(function PianoSection({ store, instrument, engi
 
 export const ProgramSection = memo(function ProgramSection({ store, instrument, engine }: BoundSectionProps & { engine: PianoEngine }) {
   const state = useInstrumentState(instrument)
+  // Stable hold-gesture callbacks: this section re-renders on EVERY commit
+  // (full subscription for the OLED), so an inline closure here would
+  // re-render its memo'd PanelButton per knob tick.
+  const holdSplitEdit = useCallback(() => instrument.setSplitEdit(!instrument.getState().splitEdit), [instrument])
+  const holdTransposeEdit = useCallback(() => instrument.setTransposeEdit(!instrument.getState().transposeEdit), [instrument])
   const engineInfo = useEngineInfo(engine)
   const focused = state.layers[state.focusedLayer]
-  const models = instrumentsOfType(focused.type)
+  const models = cachedInstrumentsOfType(focused.type)
   const model = models[focused.model]
   const loadStatus = model ? engine.instrumentLoadStatus(model.id) : undefined
   // PRESET NAME (Shift + Prog View, manual p. 42): the layer lines show the
@@ -937,11 +984,15 @@ export const ProgramSection = memo(function ProgramSection({ store, instrument, 
       ]
     : null
   const listStart = Math.max(0, Math.min(reference - 1, activeBank.length - 2))
-  const listRows = [listStart, listStart + 1].map((i) => (
+  // Built only while the list view is open — this component re-renders on
+  // every commit (full subscription), so idle branches shouldn't allocate.
+  const listRows = programs.listView
+    ? [listStart, listStart + 1].map((i) => (
     <span key={i} className="oled-slot" data-testid={`oled-list-${i}`}>
       {i === reference ? '▸' : ' '} {programLabel(i, programs.liveMode, programs.bankIndex)} {activeBank[i]!.name}
     </span>
   ))
+    : null
   // Model list view (Shift + Piano Model dial, spec.scope.optional): shows
   // every bundled model for the focused layer's type, same list-row shape as
   // the program numeric list view above.
@@ -958,7 +1009,7 @@ export const ProgramSection = memo(function ProgramSection({ store, instrument, 
   const layerMark = (on: boolean) => (on ? '●' : '○')
   const pianoLayerName = (id: 'A' | 'B') => {
     const layer = state.layers[id]
-    const m = instrumentsOfType(layer.type)[layer.model]
+    const m = cachedInstrumentsOfType(layer.type)[layer.model]
     return m ? `${presetNameOn ? `${layer.type}/` : ''}${m.name}` : '—'
   }
   const synthLayerName = (id: 'A' | 'B' | 'C') => {
@@ -1041,12 +1092,7 @@ export const ProgramSection = memo(function ProgramSection({ store, instrument, 
             <Legend>ON/SET ▾</Legend>
             {/* Press = split on/off, press-and-hold = the point editor (the
                 manual's ⑥ hold gesture, p. 39), Shift + press = SET KEY. */}
-            <PanelButton
-              store={store}
-              id="split-onset"
-              className="dark tiny"
-              holdAction={() => instrument.setSplitEdit(!instrument.getState().splitEdit)}
-            />
+            <PanelButton store={store} id="split-onset" className="dark tiny" holdAction={holdSplitEdit} />
             <Legend className="dim">SET KEY</Legend>
           </GroupBox>
           <GroupBox title="Mst Clk" className="clk-box">
@@ -1071,12 +1117,7 @@ export const ProgramSection = memo(function ProgramSection({ store, instrument, 
             {/* ONE switch, as printed: press = transpose on/off, Shift +
                 press = PANIC (manual p. 40), press-and-hold = the dial-edit
                 latch standing in for the hardware's hold-and-turn Set. */}
-            <PanelButton
-              store={store}
-              id="transpose-onset"
-              className="dark tiny"
-              holdAction={() => instrument.setTransposeEdit(!instrument.getState().transposeEdit)}
-            />
+            <PanelButton store={store} id="transpose-onset" className="dark tiny" holdAction={holdTransposeEdit} />
             <Legend className="dim">PANIC</Legend>
           </GroupBox>
         </div>
@@ -1196,13 +1237,12 @@ export const ProgramSection = memo(function ProgramSection({ store, instrument, 
                   clockRows ??
                   transposeRows ??
                   modelListRows ??
-                  (programs.listView
-                    ? listRows
-                    : configRows ??
-                      pageRows ??
-                      (programs.progView === 1
-                        ? [] // PROG VIEW mode 1: large name/number only
-                        : [
+                  listRows ?? // non-null exactly while programs.listView
+                  configRows ??
+                  pageRows ??
+                  (programs.progView === 1
+                    ? [] // PROG VIEW mode 1: large name/number only
+                    : [
                           // Reference program screen: one row per ACTIVE
                           // section (organ → piano → synth), each row led by
                           // its section glyph.
@@ -1239,7 +1279,7 @@ export const ProgramSection = memo(function ProgramSection({ store, instrument, 
                                 </span>,
                               ]
                             : []),
-                        ]))),
+                        ])),
                 ...(state.lastEdit
                   ? [
                       <span key="edit" className="oled-slot oled-edit" data-testid="oled-edit-line">
@@ -1404,6 +1444,18 @@ export const SynthSection = memo(function SynthSection({ store, instrument, onZo
       .map((step, i) => (cursor && i === arpCursor ? `[${glyph(step)}]` : glyph(step)))
       .join('')
   const gateGlyph = (step: (typeof arpPattern.steps)[number]) => (step.gate === 0 ? '·' : step.gate === 2 ? '▬' : '▪')
+  // Stable hold-gesture callbacks (see OrganSection). Layer B's hold doubles
+  // as the Shift-latched PSTICK/RNG view (manual p. 28).
+  const soloSynth = useCallback(() => instrument.soloSection('synth'), [instrument])
+  const holdOffSynthA = useCallback(() => instrument.holdOffSynthLayer('A'), [instrument])
+  const holdOffSynthB = useCallback(() => {
+    if (store.getToggle('shift')) {
+      instrument.setSynthPstickRangeEdit(!instrument.getState().synthPstickRangeEdit)
+    } else {
+      instrument.holdOffSynthLayer('B')
+    }
+  }, [instrument, store])
+  const holdOffSynthC = useCallback(() => instrument.holdOffSynthLayer('C'), [instrument])
   const arpMenuPage = state.synthArpMenuPage
   const arpStep = arpPattern.steps[arpCursor]!
   const arpPresetName = ARP_PATTERN_PRESETS[Math.min(arpPattern.preset, ARP_PATTERN_PRESETS.length - 1)]!.name
@@ -1435,7 +1487,7 @@ export const SynthSection = memo(function SynthSection({ store, instrument, onZo
   return (
     <SectionShell id="synth">
       <div className="plate">
-        <SectionHeader title="SYNTH" store={store} onId="synth-on" onZoom={onZoom} onSoloHold={() => instrument.soloSection('synth')} />
+        <SectionHeader title="SYNTH" store={store} onId="synth-on" onZoom={onZoom} onSoloHold={soloSynth} />
         <div className="synth-body">
           <div className="levels-column">
             <div className="layer-pair triple">
@@ -1443,7 +1495,7 @@ export const SynthSection = memo(function SynthSection({ store, instrument, onZo
                 store={store}
                 faderId="synth-level-a"
                 buttonId="synth-layer-a"
-                onHoldOff={() => instrument.holdOffSynthLayer('A')}
+                onHoldOff={holdOffSynthA}
                 letter="A"
                 focused={synth.focusedLayer === 'A'}
               />
@@ -1451,15 +1503,7 @@ export const SynthSection = memo(function SynthSection({ store, instrument, onZo
                 store={store}
                 faderId="synth-level-b"
                 buttonId="synth-layer-b"
-                onHoldOff={() =>
-                  // PSTICK/RNG (manual p. 28): "pressing down the button"
-                  // brings up the bend range list — Shift + hold latches it
-                  // onto OLED dial 1. A plain hold keeps the standard
-                  // layer hold-off gesture (manual p. 12/18).
-                  store.getToggle('shift')
-                    ? instrument.setSynthPstickRangeEdit(!instrument.getState().synthPstickRangeEdit)
-                    : instrument.holdOffSynthLayer('B')
-                }
+                onHoldOff={holdOffSynthB}
                 letter="B"
                 focused={synth.focusedLayer === 'B'}
               />
@@ -1467,7 +1511,7 @@ export const SynthSection = memo(function SynthSection({ store, instrument, onZo
                 store={store}
                 faderId="synth-level-c"
                 buttonId="synth-layer-c"
-                onHoldOff={() => instrument.holdOffSynthLayer('C')}
+                onHoldOff={holdOffSynthC}
                 letter="C"
                 focused={synth.focusedLayer === 'C'}
               />
@@ -1731,7 +1775,7 @@ export const SynthSection = memo(function SynthSection({ store, instrument, onZo
                     </span>
                     <span className="knob-cell">
                       {/* Red 1-4 arc print like the hardware's octave range. */}
-                      <Knob store={store} id="arp-range" className="small arp-range" scale={['1', '2', '3', '4']} />
+                      <Knob store={store} id="arp-range" className="small arp-range" scale={ARP_RANGE_SCALE} />
                       <Legend>
                         RANGE <b className="tag-box">ENV</b>
                       </Legend>
@@ -1987,7 +2031,7 @@ export const SynthSection = memo(function SynthSection({ store, instrument, onZo
                     <Legend><Led color="green" className="knob-dot" /> OSC CTRL</Legend>
                   </span>
                   <span className="knob-cell">
-                    <Knob store={store} id="osc-env-amt" className="small" scale={['-10', null, '-5', '0', '5', null, '10']} />
+                    <Knob store={store} id="osc-env-amt" className="small" scale={BIPOLAR_TEN_SCALE} />
                     <Legend><Led color="green" className="knob-dot" /> ENV AMT</Legend>
                   </span>
                 </span>
@@ -2543,7 +2587,7 @@ export const EffectsSection = memo(function EffectsSection({ store, instrument, 
                 <Legend><Led color="green" className="knob-dot" /> DRIVE</Legend>
               </span>
               <span className="knob-cell amp-cell-freq">
-                <Knob store={store} id="amp-freq" className="small" scale={['200', '250', '400', '600', '1K', '2K', '4K', '6K', '8K']} />
+                <Knob store={store} id="amp-freq" className="small" scale={AMP_FREQ_SCALE} />
                 <Legend><Led color="green" className="knob-dot" /> FREQ <b className="tag-box">FREQ</b></Legend>
               </span>
               <span className="variation-cell amp-cell-sel">
@@ -2564,15 +2608,15 @@ export const EffectsSection = memo(function EffectsSection({ store, instrument, 
                 </span>
               </span>
               <span className="knob-cell amp-cell-bass">
-                <Knob store={store} id="eq-bass" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
+                <Knob store={store} id="eq-bass" className="small" scale={EQ_DB_SCALE} />
                 <Legend>BASS</Legend>
               </span>
               <span className="knob-cell amp-cell-mid">
-                <Knob store={store} id="eq-mid" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
+                <Knob store={store} id="eq-mid" className="small" scale={EQ_DB_SCALE} />
                 <Legend>MID <b className="tag-box">RES</b></Legend>
               </span>
               <span className="knob-cell amp-cell-treble">
-                <Knob store={store} id="eq-treble" className="small" scale={['-15', null, '-5', '0', '5', null, '15']} />
+                <Knob store={store} id="eq-treble" className="small" scale={EQ_DB_SCALE} />
                 <Legend>TREBLE</Legend>
               </span>
               <span className="fx-on-cell">

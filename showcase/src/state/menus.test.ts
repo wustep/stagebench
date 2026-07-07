@@ -130,6 +130,7 @@ describe('system.menus — store gating and state hygiene', () => {
     first.stepMenuPage(1)
     first.stepMenuPage(1) // Fine Tune
     first.setMenuValueFromDial(127) // +50 cents
+    first.flushPersist() // dial-edit persistence is debounced (pagehide flushes)
     const second = new InstrumentStore(storage)
     expect(second.getState().globalSettings.memoryProtect).toBe(true)
     expect(second.getState().globalSettings.fineTune).toBe(50)

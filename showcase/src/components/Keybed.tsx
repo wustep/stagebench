@@ -74,20 +74,26 @@ const KeyView = memo(function KeyView({ keyDef, controller, onPointerDownKey, on
   )
 })
 
+/** O(1) split-marker lookup (KEYS is module-constant). */
+const KEY_BY_MIDI = new Map(KEYS.map((key) => [key.midi, key]))
+
 /**
  * The exact 73-key E–E keybed. Each key owns its pointer via pointer capture,
  * so independent touches drive independent notes through the shared
- * controller lifecycle.
+ * controller lifecycle. Memo'd: App re-renders (engine status, MIDI player
+ * visibility, chrome toggles) pass identical props, and the keybed's own
+ * inputs — key presses, the split slice — arrive via subscriptions.
  */
-export function Keybed({ controller, instrument }: KeybedProps) {
+export const Keybed = memo(function Keybed({ controller, instrument }: KeybedProps) {
   // pointerId -> midi ownership map; one pointer owns at most one note.
   const pointerNotes = useRef(new Map<number, number>())
   const split = useSplitState(instrument)
 
   // Stable across renders so the 73 memo'd KeyViews don't all re-render when
-  // Keybed re-renders (it re-renders on every instrument-store tick via
-  // useSplitState). controller is stable, so [] deps would do — [controller]
-  // keeps it correct if a new controller is ever passed.
+  // Keybed re-renders (useSplitState keeps the split slice's identity across
+  // unrelated commits, so that's rare — but the guarantee shouldn't depend
+  // on it). controller is stable, so [] deps would do — [controller] keeps
+  // it correct if a new controller is ever passed.
   const onPointerDownKey = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => {
       event.preventDefault()
@@ -143,7 +149,7 @@ export function Keybed({ controller, instrument }: KeybedProps) {
             split.points
               .filter((point) => point.active)
               .map((point) => {
-                const key = KEYS.find((k) => k.midi === point.note)
+                const key = KEY_BY_MIDI.get(point.note)
                 if (!key) return null
                 return (
                   <span
@@ -160,4 +166,4 @@ export function Keybed({ controller, instrument }: KeybedProps) {
       <div className="end-cheek right" aria-hidden="true" />
     </div>
   )
-}
+})

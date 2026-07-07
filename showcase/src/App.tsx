@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -374,6 +375,40 @@ function useControlPedal(instrument: InstrumentStore): number {
   return useSyncExternalStore(instrument.subscribe, () => instrument.getState().morphValues.pedal)
 }
 
+/** Self-subscribing ctrl-pedal widgets: a CC11 (or on-screen slider) stream
+ *  commits per changed value at pointer/MIDI rates, and these are its only
+ *  two readers — isolating them keeps each tick from re-rendering the whole
+ *  App shell (the same pattern MidiTransport uses for the position stream). */
+const CtrlPedalControl = memo(function CtrlPedalControl({ instrument }: { instrument: InstrumentStore }) {
+  const controlPedal = useControlPedal(instrument)
+  return (
+    <label className="ctrl-pedal">
+      <span className="ctrl-pedal-label">Ctrl Pedal</span>
+      <input
+        type="range"
+        min={0}
+        max={127}
+        value={controlPedal}
+        aria-label="Control Pedal"
+        data-testid="ctrl-pedal"
+        onChange={(event) => instrument.setMorphSource('pedal', Number(event.target.value))}
+      />
+      <span className="ctrl-pedal-value" aria-hidden="true">
+        {controlPedal}
+      </span>
+    </label>
+  )
+})
+
+const CtrlPedalStatus = memo(function CtrlPedalStatus({ instrument }: { instrument: InstrumentStore }) {
+  const controlPedal = useControlPedal(instrument)
+  return (
+    <span data-testid="ctrl-pedal-status">
+      <b>Ctrl pedal</b> {controlPedal} — CC11, the Control Pedal morph source
+    </span>
+  )
+})
+
 /** Tracks a CSS media query. jsdom (unit tests) and SSR have no matchMedia,
  *  so the query is treated as not matching there — the small-screen notice
  *  stays hidden by default and only a real narrow browser viewport shows it. */
@@ -459,7 +494,6 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   const engineStatus = useEngineStatus(engine)
   const midiStatus = useMidiStatus(midi)
   const pedals = usePedals(controller)
-  const controlPedal = useControlPedal(instrument)
   const midiPlaybackStatus = useMidiPlayerStatus(midiPlayer)
 
   // Drag-and-drop MIDI file playback. A dragged file shows a minimal drop
@@ -940,6 +974,30 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     }
   }, [engine, audioBoundary])
 
+  // The warmed context stays suspended until a gesture reaches the engine.
+  // Resume on the FIRST gesture anywhere (capture phase, one-shot) — not
+  // just the first note or pedal — so a user whose first interaction is a
+  // panel click doesn't pay the context-resume latency (device-dependent,
+  // tens of ms) on their first key press. Injected boundaries (tests) keep
+  // the lazy behavior, mirroring the warm-up effect above.
+  useEffect(() => {
+    if (audioBoundary) return
+    let resumed = false
+    const resume = () => {
+      if (resumed) return
+      resumed = true
+      engine.ensureStarted()
+      window.removeEventListener('pointerdown', resume, true)
+      window.removeEventListener('keydown', resume, true)
+    }
+    window.addEventListener('pointerdown', resume, true)
+    window.addEventListener('keydown', resume, true)
+    return () => {
+      window.removeEventListener('pointerdown', resume, true)
+      window.removeEventListener('keydown', resume, true)
+    }
+  }, [engine, audioBoundary])
+
   // Web MIDI wiring (injectable; truthful denied/unsupported/disconnect states).
   useEffect(() => {
     void midi.start(midiBoundary ?? realMidiBoundary())
@@ -1339,21 +1397,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             <span className="chrome-dot" aria-hidden="true" />
             Sustain Pedal
           </button>
-          <label className="ctrl-pedal">
-            <span className="ctrl-pedal-label">Ctrl Pedal</span>
-            <input
-              type="range"
-              min={0}
-              max={127}
-              value={controlPedal}
-              aria-label="Control Pedal"
-              data-testid="ctrl-pedal"
-              onChange={(event) => instrument.setMorphSource('pedal', Number(event.target.value))}
-            />
-            <span className="ctrl-pedal-value" aria-hidden="true">
-              {controlPedal}
-            </span>
-          </label>
+          <CtrlPedalControl instrument={instrument} />
           <span className="chrome-divider" aria-hidden="true" />
           <button
             type="button"
@@ -1532,9 +1576,7 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
             <b>Pedals</b> sustain {pedals.sustain ? 'down' : 'up'} (pedal latches / Space / CC64 half-pedal) · sostenuto{' '}
             {pedals.sostenuto ? 'down' : 'up'} (X / CC66) · soft {pedals.soft ? 'down' : 'up'} (Z / CC67)
           </span>
-          <span data-testid="ctrl-pedal-status">
-            <b>Ctrl pedal</b> {controlPedal} — CC11, the Control Pedal morph source
-          </span>
+          <CtrlPedalStatus instrument={instrument} />
           <span data-testid="keymap-help">
             <b>Keys</b> A S D F G H J K L ; play C4–E5, W E T Y U O P the sharps between them (physical positions,
             layout-independent) · Space/Z/X are the sustain/soft/sostenuto pedals · B hides this panel, N toggles dark

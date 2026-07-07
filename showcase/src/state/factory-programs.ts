@@ -40,11 +40,22 @@ export const PROGRAM_SNAPSHOT_KEYS: readonly (keyof ProgramSnapshot)[] = [
 ]
 
 export function snapshotOf(state: InstrumentState): ProgramSnapshot {
-  const picked: Record<string, unknown> = {}
-  for (const key of PROGRAM_SNAPSHOT_KEYS) picked[key] = state[key]
   // Plain JSON state; structuredClone is faster than the JSON round-trip and
   // this runs 40× at factory-content construction plus once per program edit.
-  return structuredClone(picked) as ProgramSnapshot
+  return structuredClone(shallowSnapshotOf(state))
+}
+
+/** snapshotOf without the deep clone, for the PER-COMMIT capture paths
+ *  (Live-mode auto-store, the pending-Store refresh — both run on every
+ *  edit, up to ~120/sec during a knob drag). Aliasing the live state slices
+ *  is safe there: no write path mutates state sub-objects in place, and
+ *  every snapshot consumer clones on read (cloneSnapshot / deepClone / JSON
+ *  persistence). Callers that hand a snapshot out for in-place mutation
+ *  (makeProgram's draft) must use snapshotOf. */
+export function shallowSnapshotOf(state: InstrumentState): ProgramSnapshot {
+  const picked: Record<string, unknown> = {}
+  for (const key of PROGRAM_SNAPSHOT_KEYS) picked[key] = state[key]
+  return picked as ProgramSnapshot
 }
 
 function makeProgram(base: InstrumentState, name: string, mutate: (draft: ProgramSnapshot) => void): ProgramSlot {

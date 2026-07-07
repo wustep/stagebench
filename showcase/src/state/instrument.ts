@@ -12,7 +12,7 @@ import {
   type SynthLayerPresetSpec,
 } from '../model/presets'
 import type { StorageBoundary } from '../audio/boundaries'
-import { buildFactoryContent, PROGRAM_SNAPSHOT_KEYS, snapshotOf } from './factory-programs'
+import { buildFactoryContent, PROGRAM_SNAPSHOT_KEYS, shallowSnapshotOf, snapshotOf } from './factory-programs'
 
 export { PROGRAM_SNAPSHOT_KEYS }
 
@@ -678,6 +678,8 @@ export interface TransposeState {
  *  and its button/LED/assignments behave exactly like the other two. */
 export type MorphSource = 'wheel' | 'at' | 'pedal'
 export const MORPH_SOURCES: readonly MorphSource[] = ['wheel', 'at', 'pedal']
+/** Shared empty result for morphSourcesFor's no-assignments fast path. */
+const EMPTY_MORPH_SOURCES: MorphSource[] = []
 
 /** One morph destination: the source interpolates the control from `start`
  *  (source at minimum) to `end` (source at maximum), manual p. 38-39. */
@@ -1353,6 +1355,7 @@ export class InstrumentStore {
   private readonly storage: StorageBoundary | null
   /** Pending trailing write for Live-mode auto-store (see schedulePersist). */
   private persistTimer: ReturnType<typeof setTimeout> | null = null
+  private settingsPersistTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(storage: StorageBoundary | null = null) {
     this.storage = storage
@@ -1384,6 +1387,15 @@ export class InstrumentStore {
     this.commit(next)
   }
 
+  /** The drag-rate setters call this instead of patch() when the write is a
+   *  value no-op (see sameValues): the state rebuild is skipped — no dirty
+   *  flag, no Live auto-store, no identity churn — but the label still
+   *  surfaces once so the OLED's last-edit line shows the control being
+   *  touched. Repeat ticks with the same label skip the commit entirely. */
+  private skipNoOpEdit(lastEdit?: string): void {
+    if (lastEdit !== undefined && lastEdit !== this.state.lastEdit) this.patch({}, lastEdit)
+  }
+
   /** Captures the current sound as a one-level UNDO point (manual p. 42-43). */
   private undoPoint(label: string): NonNullable<ProgramsState['undo']> {
     const programs = this.state.programs
@@ -1411,14 +1423,17 @@ export class InstrumentStore {
       const storePending = {
         ...programs.storePending,
         originDirty: true,
-        captured: { ...programs.storePending.captured, snapshot: snapshotOf(next) },
+        captured: { ...programs.storePending.captured, snapshot: shallowSnapshotOf(next) },
       }
       return { ...next, programs: { ...programs, storePending } }
     }
     if (programs.liveMode) {
       const live = [...programs.live]
       const slot = live[programs.current]
-      if (slot) live[programs.current] = { name: slot.name, snapshot: snapshotOf(next), ...(slot.category ? { category: slot.category } : {}) }
+      // Shallow capture: this runs per commit while Live mode is on, and the
+      // deep clone of the whole snapshot measured as the dominant cost of a
+      // Live-mode knob drag (see shallowSnapshotOf for why aliasing is safe).
+      if (slot) live[programs.current] = { name: slot.name, snapshot: shallowSnapshotOf(next), ...(slot.category ? { category: slot.category } : {}) }
       const result = { ...next, programs: { ...programs, live, dirty: false } }
       // The in-memory Live slot updates synchronously (auto-store, manual
       // p. 13); only the localStorage serialization is debounced — writing
@@ -1450,10 +1465,12 @@ export class InstrumentStore {
     }, 300)
   }
 
-  /** Writes any pending debounced Live-mode auto-store immediately. The app
-   *  calls this on pagehide/visibilitychange so a reload never loses edits. */
+  /** Writes any pending debounced persistence (Live-mode auto-store, menu
+   *  settings) immediately. The app calls this on pagehide/visibilitychange
+   *  so a reload never loses edits. */
   flushPersist(): void {
     if (this.persistTimer !== null) this.persistPrograms(this.state)
+    if (this.settingsPersistTimer !== null) this.persistSettings(this.state.globalSettings)
   }
 
   private restorePrograms(): InstrumentState | null {
@@ -1522,6 +1539,10 @@ export class InstrumentStore {
 
   setMasterVolume(value: number): void {
     const clamped = clamp(value)
+    if (clamped === this.state.masterVolume) {
+      this.skipNoOpEdit(`Master Level ${clamped}`)
+      return
+    }
     this.patch({ masterVolume: clamped }, `Master Level ${clamped}`)
   }
 
@@ -1534,9 +1555,14 @@ export class InstrumentStore {
    *  edits (Layer Scenes own the on/off configurations). */
   private patchPianoLayer(layer: LayerId, partial: Partial<PianoLayerState>, lastEdit: string, extra: Partial<InstrumentState> = {}): void {
     const targets: readonly LayerId[] = this.state.sectionEdit ? ['A', 'B'] : [layer]
+    const label = targets.length > 1 ? `${lastEdit} — both Piano layers` : lastEdit
+    if (Object.keys(extra).length === 0 && targets.every((id) => sameValues(this.state.layers[id], partial))) {
+      this.skipNoOpEdit(label)
+      return
+    }
     const layers = { ...this.state.layers }
     for (const id of targets) layers[id] = { ...layers[id], ...partial }
-    this.patch({ layers, ...extra }, targets.length > 1 ? `${lastEdit} — both Piano layers` : lastEdit)
+    this.patch({ layers, ...extra }, label)
   }
 
   setLayerEnabled(layer: LayerId, enabled: boolean): void {
@@ -2024,7 +2050,10 @@ export class InstrumentStore {
     if (this.state.globalSettings[def.key] === value) return
     const settings = { ...this.state.globalSettings, [def.key]: value }
     this.patch({ globalSettings: settings }, `${def.label}: ${menuPageValueLabel(settings, def)}`)
-    this.persistSettings(settings)
+    // Debounced (like the program bank): a Fine Tune dial sweep is ~100
+    // distinct values, each a synchronous stringify+write if unbatched.
+    // flushPersist (pagehide) writes any pending value immediately.
+    this.schedulePersistSettings()
   }
 
   /** Direct setter (tests, and anything scripting the System menu). */
@@ -2036,7 +2065,19 @@ export class InstrumentStore {
   }
 
   private persistSettings(settings: GlobalSettingsState): void {
+    if (this.settingsPersistTimer !== null) {
+      clearTimeout(this.settingsPersistTimer)
+      this.settingsPersistTimer = null
+    }
     this.storage?.save(SETTINGS_STORAGE_KEY, JSON.stringify({ version: 1, settings }))
+  }
+
+  private schedulePersistSettings(): void {
+    if (!this.storage || this.settingsPersistTimer !== null) return
+    this.settingsPersistTimer = setTimeout(() => {
+      this.settingsPersistTimer = null
+      this.persistSettings(this.state.globalSettings)
+    }, 300)
   }
 
   /* ----- Organize view (Shift + PROGRAM 3, manual p. 45) ----- */
@@ -2342,7 +2383,11 @@ export class InstrumentStore {
     const browse = this.state.presetBrowse
     if (!browse) return
     const order = presetOrderOf(this.state, browse.section, browse.sort)
-    this.loadPreset(order[Math.round((clamp(value) / 127) * (order.length - 1))]!)
+    const target = order[Math.round((clamp(value) / 127) * (order.length - 1))]!
+    // Same-band dial ticks would reload the whole section per tick (see
+    // dialProgram); the first tick of a band already loaded this preset.
+    if (target === browse.index && browse.loaded) return
+    this.loadPreset(target)
   }
 
   /** PAGE ◂ ▸ while browsing (manual p. 41-42): steps to — and loads — the
@@ -2812,6 +2857,11 @@ export class InstrumentStore {
 
   /** Sources with an assignment for a control (destination indicator data). */
   morphSourcesFor(control: string): MorphSource[] {
+    // Fast path for the overwhelmingly common state (no morphs assigned at
+    // all): this runs per mounted continuous control per commit, and the
+    // layer resolution below is the expensive part.
+    const morph = this.state.morph
+    if (morph.wheel.length === 0 && morph.at.length === 0 && morph.pedal.length === 0) return EMPTY_MORPH_SOURCES
     // Filter by the same layer resolution the range read-back uses, so the
     // green dot and the LED range can never disagree about an assignment.
     const layer = this.morphLayerFor(control)
@@ -3024,7 +3074,20 @@ export class InstrumentStore {
       return
     }
     const count = this.activeBank().length
-    this.selectProgram(Math.round((value / 127) * (count - 1)))
+    const target = Math.round((value / 127) * (count - 1))
+    // A dial drag lands on the same slot several ticks in a row (127 dial
+    // values over 32 slots): the first tick of a band performed the load or
+    // Store-destination audition — repeating it re-clones the snapshot and
+    // re-commits per tick. A dirty program still reloads (re-selecting it
+    // means "discard edits" again). Guarded HERE, not in selectProgram/
+    // auditionStoreDestination: bank switches legitimately re-run both with
+    // an unchanged slot index.
+    if (programs.storePending) {
+      if (target === programs.storePending.destination) return
+    } else if (target === programs.current && !programs.dirty) {
+      return
+    }
+    this.selectProgram(target)
   }
 
   /** Panel value of the program dial derived from the selected slot. */
@@ -3629,9 +3692,14 @@ export class InstrumentStore {
    *  edits. Percussion and the scanner type are already section-shared. */
   private patchOrganLayer(layer: LayerId, partial: Partial<OrganLayerState>, lastEdit: string): void {
     const targets: readonly LayerId[] = this.state.sectionEdit ? ['A', 'B'] : [layer]
+    const label = targets.length > 1 ? `${lastEdit} — both Organ layers` : lastEdit
+    if (targets.every((id) => sameValues(this.state.organ.layers[id], partial))) {
+      this.skipNoOpEdit(label)
+      return
+    }
     const layers = { ...this.state.organ.layers }
     for (const id of targets) layers[id] = { ...layers[id], ...partial }
-    this.patchOrgan({ layers }, targets.length > 1 ? `${lastEdit} — both Organ layers` : lastEdit)
+    this.patchOrgan({ layers }, label)
   }
 
   setOrganSectionOn(on: boolean): void {
@@ -3706,11 +3774,19 @@ export class InstrumentStore {
   setOrganDrawbar(index: number, value: number): void {
     const layer = this.state.organ.focusedLayer
     const clamped = Math.max(0, Math.min(8, Math.round(value)))
+    const layerState = this.state.organ.layers[layer]
+    // A drawbar drag repeats values (9 steps over the whole throw): skip the
+    // no-op ticks once the pose — and, in Preset mode, every target layer's
+    // registration — already holds the value.
+    const poseSame = this.state.organDrawbarPose[index] === clamped
+    if (poseSame && !layerState.presetOn) {
+      this.skipNoOpEdit(`Drawbar ${index + 1}: ${clamped} (Live)`)
+      return
+    }
     // Dragging a drawbar always moves the ONE physical pose (there is one
     // physical set of drawbars on the hardware).
     const organDrawbarPose = [...this.state.organDrawbarPose]
     organDrawbarPose[index] = clamped
-    const layerState = this.state.organ.layers[layer]
     if (!layerState.presetOn) {
       // Drawbar Live (manual p. 19/21): the physical pose drives the sound;
       // the Program's stored registration stays untouched — a pose move is
@@ -3722,6 +3798,10 @@ export class InstrumentStore {
     // layers' stored drawbars. The Drawbar-Live path above is untouched —
     // a pose move is not a parameter edit, so there is nothing to fan.
     const targets: readonly LayerId[] = this.state.sectionEdit ? ['A', 'B'] : [layer]
+    if (poseSame && targets.every((id) => this.state.organ.layers[id].drawbars[index] === clamped)) {
+      this.skipNoOpEdit(targets.length > 1 ? `Drawbar ${index + 1}: ${clamped} — both Organ layers` : `Drawbar ${index + 1}: ${clamped}`)
+      return
+    }
     const layers = { ...this.state.organ.layers }
     for (const id of targets) {
       const drawbars = [...layers[id].drawbars]
@@ -3810,9 +3890,14 @@ export class InstrumentStore {
    *  operations, not parameter edits. */
   private patchSynthLayers(layer: SynthLayerId, partialFor: (current: SynthLayerState) => Partial<SynthLayerState>, lastEdit: string): void {
     const targets: readonly SynthLayerId[] = this.state.sectionEdit ? SYNTH_LAYER_IDS : [layer]
+    const label = targets.length > 1 ? `${lastEdit} — all Synth layers` : lastEdit
+    if (targets.every((id) => sameValues(this.state.synth.layers[id], partialFor(this.state.synth.layers[id])))) {
+      this.skipNoOpEdit(label)
+      return
+    }
     const layers = { ...this.state.synth.layers }
     for (const id of targets) layers[id] = { ...layers[id], ...partialFor(layers[id]) }
-    this.patchSynth({ layers }, targets.length > 1 ? `${lastEdit} — all Synth layers` : lastEdit)
+    this.patchSynth({ layers }, label)
   }
 
   private patchSynthLayer(layer: SynthLayerId, partial: Partial<SynthLayerState>, lastEdit: string): void {
@@ -4555,6 +4640,16 @@ export class InstrumentStore {
     if (globalUnit) {
       // GLOBAL mode (manual p. 48): the edit applies to all Layers of all
       // Sections, no matter which section holds FX focus.
+      const { chains, organChain, synthChains } = this.state
+      if (
+        sameValues(chains.A[unit], partial) &&
+        sameValues(chains.B[unit], partial) &&
+        sameValues(organChain[unit], partial) &&
+        SYNTH_LAYER_IDS.every((layer) => sameValues(synthChains[layer][unit], partial))
+      ) {
+        this.skipNoOpEdit(label)
+        return
+      }
       const applyTo = (chain: EffectChainState): EffectChainState => ({
         ...chain,
         [unit]: { ...chain[unit], ...partial },
@@ -4576,6 +4671,10 @@ export class InstrumentStore {
     if (this.state.fxSection === 'organ') {
       // The single shared Organ chain is already section-wide (manual
       // p. 18), so SECTION EDIT changes nothing here.
+      if (sameValues(this.state.organChain[unit], partial)) {
+        this.skipNoOpEdit(label)
+        return
+      }
       const organChain = {
         ...this.state.organChain,
         [unit]: { ...this.state.organChain[unit], ...partial },
@@ -4586,24 +4685,30 @@ export class InstrumentStore {
     if (this.state.fxSection === 'synth') {
       // SECTION EDIT (manual p. 43) fans the unit edit to all three synth
       // layer chains, like Group mode.
-      const targets = this.fxGroupSynth || this.state.sectionEdit ? SYNTH_LAYER_IDS : [this.state.synth.focusedLayer]
+      const targets = this.state.fxGroupSynth || this.state.sectionEdit ? SYNTH_LAYER_IDS : [this.state.synth.focusedLayer]
+      const fullLabel = label && this.state.sectionEdit && targets.length > 1 ? `${label} — all Synth chains` : label
+      if (targets.every((layer) => sameValues(this.state.synthChains[layer][unit], partial))) {
+        this.skipNoOpEdit(fullLabel)
+        return
+      }
       const synthChains = { ...this.state.synthChains }
       for (const layer of targets) {
         synthChains[layer] = { ...synthChains[layer], [unit]: { ...synthChains[layer][unit], ...partial } }
       }
-      this.patch({ synthChains }, label && this.state.sectionEdit && targets.length > 1 ? `${label} — all Synth chains` : label)
+      this.patch({ synthChains }, fullLabel)
       return
     }
     const targets = this.targetLayers(unit)
+    const fullLabel = label && this.state.sectionEdit && targets.length > 1 ? `${label} — both Piano chains` : label
+    if (targets.every((layer) => sameValues(this.state.chains[layer][unit], partial))) {
+      this.skipNoOpEdit(fullLabel)
+      return
+    }
     const chains = { ...this.state.chains }
     for (const layer of targets) {
       chains[layer] = { ...chains[layer], [unit]: { ...chains[layer][unit], ...partial } }
     }
-    this.patch({ chains }, label && this.state.sectionEdit && targets.length > 1 ? `${label} — both Piano chains` : label)
-  }
-
-  private get fxGroupSynth(): boolean {
-    return this.state.fxGroupSynth
+    this.patch({ chains }, fullLabel)
   }
 
   toggleUnitOn(unit: keyof EffectChainState): void {
@@ -4773,6 +4878,10 @@ export class InstrumentStore {
 
   setRotaryDrive(value: number): void {
     const clamped = clamp(value)
+    if (clamped === this.state.rotary.drive) {
+      this.skipNoOpEdit(`Rotary Drive ${clamped}`)
+      return
+    }
     this.patch({ rotary: { ...this.state.rotary, drive: clamped } }, `Rotary Drive ${clamped}`)
   }
 
@@ -4804,6 +4913,37 @@ export class InstrumentStore {
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(127, Math.round(value)))
+}
+
+/** True when spreading `partial` onto `current` would leave every field
+ *  value-identical. The drag-rate setters early-out on these no-op writes:
+ *  a knob pinned at its limit (or a drag tick that rounds to the same
+ *  integer) otherwise rebuilds the state — minting fresh chain/layer
+ *  identities that re-render every subscriber AND defeat the engine's
+ *  reference-based dep guards — at up to ~120 commits/sec. */
+function sameValues<T extends object>(current: T, partial: Partial<T>): boolean {
+  for (const key in partial) {
+    if (!sameValue((current as Record<string, unknown>)[key], (partial as Record<string, unknown>)[key])) return false
+  }
+  return true
+}
+
+/** Object.is, except plain objects compare per-key: setter partials rebuild
+ *  nested objects ({ ...layer.filter, freq }) even when the written field's
+ *  value is unchanged. Arrays only count as same by identity — a rebuilt
+ *  array conservatively reads as a change (the skip is an optimization; a
+ *  false "changed" only forgoes it). */
+function sameValue(prev: unknown, next: unknown): boolean {
+  if (Object.is(prev, next)) return true
+  if (!prev || !next || typeof prev !== 'object' || typeof next !== 'object' || Array.isArray(prev) || Array.isArray(next)) return false
+  const prevObj = prev as Record<string, unknown>
+  const nextObj = next as Record<string, unknown>
+  const nextKeys = Object.keys(nextObj)
+  if (nextKeys.length !== Object.keys(prevObj).length) return false
+  for (const key of nextKeys) {
+    if (!sameValue(prevObj[key], nextObj[key])) return false
+  }
+  return true
 }
 
 /** Deep-clones a Mon/Copy payload (manual p. 43): the clipboard must never
@@ -5220,10 +5360,17 @@ export function useInstrumentState(store: InstrumentStore): InstrumentState {
   return useSyncExternalStore(store.subscribe, store.getState)
 }
 
+/** A useInstrumentSlices watch entry: a top-level state key (compared by
+ *  reference), or a selector narrowing the watch to the derived value a
+ *  section actually reads (e.g. `(s) => s.synth.focusedLayer` when a
+ *  section renders three LEDs off a slice that otherwise changes on every
+ *  drag tick). Selectors must be pure and cheap — they run per commit. */
+export type InstrumentSliceWatch = keyof InstrumentState | ((state: InstrumentState) => unknown)
+
 /**
- * useInstrumentState narrowed to a set of top-level state keys: the hook
- * returns the latest state only when one of the WATCHED slices changed
- * reference, and otherwise keeps returning the previous snapshot so
+ * useInstrumentState narrowed to a set of watched slices: the hook returns
+ * the latest state only when one of the WATCHED slices (or selector values)
+ * changed, and otherwise keeps returning the previous snapshot so
  * useSyncExternalStore bails out of the re-render.
  *
  * State patches are immutable (an edit re-creates every object up its own
@@ -5234,14 +5381,22 @@ export function useInstrumentState(store: InstrumentStore): InstrumentState {
  * exactly the slices its render (and its state-prop children) reads.
  *
  * CORRECTNESS CONTRACT: a caller must list every top-level key it reads —
- * an unlisted key renders stale until a listed one changes.
+ * an unlisted key renders stale until a listed one changes. A selector
+ * entry narrows that guarantee further: the section must read nothing else
+ * from that slice.
  */
-export function useInstrumentSlices(store: InstrumentStore, watch: readonly (keyof InstrumentState)[]): InstrumentState {
+export function useInstrumentSlices(store: InstrumentStore, watch: readonly InstrumentSliceWatch[]): InstrumentState {
   const cache = useRef<InstrumentState | null>(null)
   return useSyncExternalStore(store.subscribe, () => {
     const next = store.getState()
     const previous = cache.current
-    if (previous !== null && previous !== next && watch.every((key) => Object.is(previous[key], next[key]))) {
+    if (
+      previous !== null &&
+      previous !== next &&
+      watch.every((entry) =>
+        typeof entry === 'function' ? Object.is(entry(previous), entry(next)) : Object.is(previous[entry], next[entry]),
+      )
+    ) {
       return previous
     }
     cache.current = next

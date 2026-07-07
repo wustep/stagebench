@@ -80,11 +80,13 @@ export class InstrumentController {
     this.emit()
   }
 
-  /** Damper pedal — boolean (space bar) or continuous 0..1 (MIDI CC64 half-pedal). */
+  /** Damper pedal — boolean (space bar) or continuous 0..1 (MIDI CC64
+   *  half-pedal). A CC64 stream repeats values; the engine reports whether
+   *  the level actually changed, and an unchanged level skips the emit
+   *  (which wakes all 73 keybed subscribers plus the pedal hooks). */
   setSustain(value: boolean | number): void {
     this.engine.ensureStarted()
-    this.engine.setSustain(value)
-    this.emit()
+    if (this.engine.setSustain(value)) this.emit()
   }
 
   isSustainDown(): boolean {
