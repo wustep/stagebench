@@ -1764,9 +1764,14 @@ export class PianoEngine {
     return false
   }
 
-  /** Registers a freshly started voice in the map and the O(1) counters. */
+  /** Registers a freshly started voice in the map and the O(1) counters.
+   *  Overwriting an existing same-key entry (start paths normally release
+   *  it first) displaces exactly one voice of the same section/layer, so
+   *  the counters stay untouched in that case. */
   private trackVoice(key: number, voice: Voice): void {
+    const displaced = this.voices.has(key)
     this.voices.set(key, voice)
+    if (displaced) return
     const code = layerCode(voice.section, voice.layer)
     this.heldCounts.set(code, (this.heldCounts.get(code) ?? 0) + 1)
     this.heldSectionCounts[voice.section] += 1

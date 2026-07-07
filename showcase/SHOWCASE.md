@@ -2716,3 +2716,55 @@ Init Grand placeholder forever.
   and when `current` points at a backfilled slot, the restored *sound* is
   the factory program.
 - Gates: typecheck, lint, suite 627/627.
+
+### 79 — Playback performance pass: diffed applyState, sliced panel subscriptions (2026-07-07)
+
+User report: **"playback is too laggy — frames drop and the sound doesn't
+play well,"** especially around pitch shifting. Two cost centers: every
+store commit re-applied the ENTIRE state to the audio graph (a knob drag or
+morph/CC stream is ~120 commits/sec, each one a cancel/setTarget storm over
+every effect unit's AudioParams on up to six chains), and every commit
+re-rendered all six panel-section trees (each subscribed to the whole
+state object).
+
+- **applyState now diffs per block.** State patches are immutable, so each
+  block (master gain, rotary, global reverb, per piano layer, organ, per
+  synth layer, per synth LFO) keeps the reference tuple of exactly the
+  inputs it reads and is skipped wholesale while they're identical —
+  engine-external inputs that bypass the store (damper level for the
+  resonance send) join the tuple explicitly. Measured on the same machine:
+  100 sustain-pedal toggles 7.5 ms → 0.8 ms, 400 morph-wheel commits
+  36.7 ms → 14.5 ms, 400 master-level commits 30.2 ms → 10.5 ms.
+- **Note lifecycle dropped its full-map scans.** Voice keys already encode
+  (section, layer, midi), so noteOff/isNoteActive probe the seven possible
+  keys directly; O(1) per-layer held counters (maintained by trackVoice/
+  untrackVoice) replace the per-note-on polyphony-cap scan and the organ
+  percussion single-trigger scan; the per-commit `[...voices.values()]`
+  copies are direct Map iteration (releaseVoice only deletes — safe).
+- **Pitch bend got a fast path.** setPitchBend skips sections whose
+  EFFECTIVE bend didn't change (PSTICK routing off pins it at 0) — which
+  also stops a stick drag from canceling unrouted sections' scheduled
+  pitch-envelope ramps — and the voice walk hoists the per-layer cents/
+  rate-factor math out of the loop. The controller no longer emits on bend
+  input (nothing subscribed reads bend state; it woke all 73 keybed
+  subscribers per tick). nearestZones/nearestSynthZone are memoized per
+  instrument — the Grand's 90-zone scan+filter ran on every key press.
+- **Idle effect DSP goes truly silent.** A bypassed unit's wet path now
+  mutes its INPUT too, and the routing gates (toMaster/toRotary, resonance
+  send, layer levels, ping-pong topology) mute to a true 0 instead of
+  0.0001 — a -80 dB trickle kept every off-duty convolver, delay line and
+  allpass bank processing forever; silent-input subgraphs let the browser
+  skip that DSP entirely. Audibly identical (the muted paths were already
+  inaudible), and the honesty contract is untouched — off still means off.
+- **Panel sections subscribe to slices.** New useInstrumentSlices hook:
+  each section declares the top-level state keys its render actually reads
+  (extracted by static analysis; ProgramSection keeps the full subscription
+  — the OLED renders nearly everything) and returns the previous snapshot
+  when none changed, so useSyncExternalStore bails out. The six sections
+  are memo'd with App-side useCallback zoom openers, so App re-renders
+  (pedal hooks, MIDI transport, engine status) no longer re-render the
+  deck.
+- Verified in-browser (headless Chromium against the dev server): engine
+  ready, notes sound and light keys, dense rAF-driven playback (4 note
+  events/frame × 300 frames) with 0 long frames; layout suite 12/12.
+- Gates: typecheck, lint, build, suite 627/627.
