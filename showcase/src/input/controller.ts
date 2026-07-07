@@ -112,10 +112,13 @@ export class InstrumentController {
   }
 
   /** Pitch stick input: normalized throw (-1..1). Sections map it onto
-   *  their bend range — Piano/Organ ±2 st, Synth per PSTICK/RNG. */
+   *  their bend range — Piano/Organ ±2 st, Synth per PSTICK/RNG. No
+   *  listener emit: no controller subscriber reads bend state (the stick's
+   *  visual position lives in the presentation store), and bend streams
+   *  arrive at pointer/MIDI rates — waking all 73 keybed subscribers plus
+   *  the pedal hooks per tick was pure snapshot-read churn. */
   setPitchBend(throwAmount: number): void {
     this.engine.setPitchBend(throwAmount)
-    this.emit()
   }
 
   /** Releases every note owned by one source (e.g. keyboard blur). */

@@ -79,6 +79,11 @@ function makeShell(ctx: AudioContextLike): Shell {
     setActive(on, dryLevel, wetLevel, now) {
       setParam(dry.gain, on ? dryLevel : 1, now)
       setParam(wetOut.gain, on ? wetLevel : 0, now)
+      // Bypassed units also mute the wet path's INPUT: with a true zero
+      // feeding it, the browser can mark the whole wet subgraph (convolver,
+      // delay lines, allpass banks) silent and skip its DSP — an off unit
+      // previously kept processing audio it then multiplied by zero.
+      setParam(wetIn.gain, on ? 1 : 0, now)
     },
     dispose(extra) {
       for (const node of [input, dry, wetIn, wetOut, output, ...extra]) {
@@ -544,12 +549,15 @@ export function createDelay(ctx: AudioContextLike): EffectUnit<DelayState> {
     update(state, on, now) {
       setParam(delay.delayTime, mappings.delayTempoMs(state.tempo) / 1000, now, state.analog ? 0.08 : 0.02)
       setParam(delayB.delayTime, mappings.delayTempoMs(state.tempo) / 1000, now, state.analog ? 0.08 : 0.02)
+      // True-zero mutes on the topology gates: the unused branch (delay B +
+      // its panner in plain mode) goes genuinely silent instead of carrying
+      // a -80 dB trickle that kept its DSP running.
       const ping = state.pingPong
-      setParam(centerTap.gain, ping ? 0.0001 : 1, now)
-      setParam(pingATap.gain, ping ? 1 : 0.0001, now)
-      setParam(toB.gain, ping ? 1 : 0.0001, now)
-      setParam(fbFromA.gain, ping ? 0.0001 : 1, now)
-      setParam(fbFromB.gain, ping ? 1 : 0.0001, now)
+      setParam(centerTap.gain, ping ? 0 : 1, now)
+      setParam(pingATap.gain, ping ? 1 : 0, now)
+      setParam(toB.gain, ping ? 1 : 0, now)
+      setParam(fbFromA.gain, ping ? 0 : 1, now)
+      setParam(fbFromB.gain, ping ? 1 : 0, now)
       setParam(fbGain.gain, Math.min(0.92, (state.feedback / 127) * 0.92), now)
       switch (state.filter) {
         case 'Off':

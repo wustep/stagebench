@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type ReactNode } from 'react'
+import { memo, useSyncExternalStore, type ReactNode } from 'react'
 import { DRAWBAR_FOOTAGES, DRAWBAR_LEGENDS, DRAWBAR_REGISTERS, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
 import { SECTIONS } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
@@ -22,6 +22,7 @@ import {
   SYNTH_WAVEFORMS,
   timbreListFor,
   useInstrumentState,
+  useInstrumentSlices,
   type InstrumentState,
   type InstrumentStore,
   type SectionKey,
@@ -46,6 +47,40 @@ import {
 interface SectionProps {
   store: PresentationStore
 }
+
+/* Per-section watch lists for useInstrumentSlices: every top-level state key
+ * a section's render (including its state-prop children — ZoneLeds reads
+ * `split` plus the section's own slice) dereferences. Keys NOT listed here
+ * must not be read in that section, or its display goes stale (the hook's
+ * correctness contract). ProgramSection deliberately keeps the full
+ * subscription — the OLED renders nearly every kind of edit. */
+const PERFORMANCE_WATCH = ['allFxOff', 'chains', 'organ', 'rotary'] as const
+const ORGAN_WATCH = ['organ', 'fxSection', 'split'] as const
+const PIANO_WATCH = ['layers', 'piano', 'focusedLayer', 'fxSection', 'fxGroupPiano', 'pianoNotFound', 'split'] as const
+const SYNTH_WATCH = [
+  'synth',
+  'kbHold',
+  'split',
+  'synthArpMenuEdit',
+  'synthArpMenuPage',
+  'synthArpPatternCursor',
+  'synthEnvEdit',
+  'synthOscPitchEdit',
+  'synthPstickRangeEdit',
+  'synthVibratoEdit',
+] as const
+const EFFECTS_WATCH = [
+  'allFxOff',
+  'chains',
+  'focusedLayer',
+  'fxGlobal',
+  'fxGroupPiano',
+  'fxGroupSynth',
+  'fxSection',
+  'organChain',
+  'synth',
+  'synthChains',
+] as const
 
 interface BoundSectionProps extends SectionProps {
   instrument: InstrumentStore
@@ -214,8 +249,13 @@ function LayerFaderColumn({
 
 /* ---------------------------------------------------------- Performance -- */
 
-export function PerformanceSection({ store, instrument }: BoundSectionProps) {
-  const state = useInstrumentState(instrument)
+/* The six section components are memo'd: their props are stable (stores,
+ * engine, useCallback'd onZoom), and each reads live state through its own
+ * narrowed subscription — so an App-level re-render (pedal CC stream, MIDI
+ * transport, engine status) no longer re-renders six large panel trees. */
+
+export const PerformanceSection = memo(function PerformanceSection({ store, instrument }: BoundSectionProps) {
+  const state = useInstrumentSlices(instrument, PERFORMANCE_WATCH)
   // The MORPH indicator lights while a morph source is assigned to the
   // rotary speed destination (the strip's only morphable parameter).
   const rotarySpeedMorphed = useSyncExternalStore(store.subscribe, () => store.morphTag('rotary-speed') !== null)
@@ -301,7 +341,7 @@ export function PerformanceSection({ store, instrument }: BoundSectionProps) {
       </div>
     </SectionShell>
   )
-}
+})
 
 /* ---------------------------------------------------------------- Organ -- */
 
@@ -341,8 +381,8 @@ function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; i
   )
 }
 
-export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
-  const state = useInstrumentState(instrument)
+export const OrganSection = memo(function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
+  const state = useInstrumentSlices(instrument, ORGAN_WATCH)
   const organ = state.organ
   const focused = organ.layers[organ.focusedLayer]
   return (
@@ -519,12 +559,12 @@ export function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
       </div>
     </SectionShell>
   )
-}
+})
 
 /* ---------------------------------------------------------------- Piano -- */
 
-export function PianoSection({ store, instrument, engine, onZoom }: BoundSectionProps & { engine: PianoEngine }) {
-  const state = useInstrumentState(instrument)
+export const PianoSection = memo(function PianoSection({ store, instrument, engine, onZoom }: BoundSectionProps & { engine: PianoEngine }) {
+  const state = useInstrumentSlices(instrument, PIANO_WATCH)
   useEngineInfo(engine) // re-render on load-status changes for the SUSTPED/selection feedback
   const focused = state.layers[state.focusedLayer]
   const timbreList = timbreListFor(focused.type)
@@ -709,11 +749,11 @@ export function PianoSection({ store, instrument, engine, onZoom }: BoundSection
       </div>
     </SectionShell>
   )
-}
+})
 
 /* -------------------------------------------------------------- Program -- */
 
-export function ProgramSection({ store, instrument, engine }: BoundSectionProps & { engine: PianoEngine }) {
+export const ProgramSection = memo(function ProgramSection({ store, instrument, engine }: BoundSectionProps & { engine: PianoEngine }) {
   const state = useInstrumentState(instrument)
   const engineInfo = useEngineInfo(engine)
   const focused = state.layers[state.focusedLayer]
@@ -1315,12 +1355,12 @@ export function ProgramSection({ store, instrument, engine }: BoundSectionProps 
       </div>
     </SectionShell>
   )
-}
+})
 
 /* ---------------------------------------------------------------- Synth -- */
 
-export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
-  const state = useInstrumentState(instrument)
+export const SynthSection = memo(function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
+  const state = useInstrumentSlices(instrument, SYNTH_WATCH)
   const synth = state.synth
   const focused = synth.layers[synth.focusedLayer]
   const isSamplesMode = focused.mode === 'Samples'
@@ -2056,7 +2096,7 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
       </div>
     </SectionShell>
   )
-}
+})
 
 /** OLED CAT display label (spec.scope.optional's "Shape"/"Shape Sine" are
  *  separate categories internally, printed with a space like the panel's
@@ -2167,8 +2207,8 @@ function SelectorLedGrid({ rows }: { rows: SelectorRow[] }) {
   )
 }
 
-export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps) {
-  const state = useInstrumentState(instrument)
+export const EffectsSection = memo(function EffectsSection({ store, instrument, onZoom }: BoundSectionProps) {
+  const state = useInstrumentSlices(instrument, EFFECTS_WATCH)
   const chain = state.fxSection === 'organ' ? state.organChain : state.chains[state.focusedLayer]
   return (
     <SectionShell id="effects">
@@ -2605,7 +2645,7 @@ export function EffectsSection({ store, instrument, onZoom }: BoundSectionProps)
       </div>
     </SectionShell>
   )
-}
+})
 
 /* ---------------------------------------- effect type selector positions -- */
 
