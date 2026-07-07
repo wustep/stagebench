@@ -105,7 +105,7 @@ describe('organ.engine — lifecycle, layers, pedals', () => {
     const context = getContext()!
     const oscs = newOscillators(context, () => engine.noteOn(60, 0.8))
     store.toggleOrganPstick() // on -> off
-    engine.setPitchBend(2)
+    engine.setPitchBend(1) // full throw = +2 st on the Organ
     expect(oscs.every((o) => Math.abs(o.detune.value) < 20)).toBe(true) // base detunes only
     store.toggleOrganPstick() // off -> on: bend reapplies to sounding voices
     expect(oscs.some((o) => o.detune.value >= 180)).toBe(true)

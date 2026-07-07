@@ -486,7 +486,38 @@ export interface SynthState {
   /** SUSTPED (Shift + Layer A) / PSTICK (Shift + Layer B), manual p. 18. */
   sustped: boolean
   pstick: boolean
+  /** PSTICK/RNG (manual p. 28): index into PSTICK_RANGES — the Synth
+   *  section's pitch stick bend range. Program state (the hardware stores
+   *  it per program); Piano and Organ stay fixed at ±2 semitones. */
+  pstickRange: number
   arp: ArpState
+}
+
+/** PSTICK/RNG bend range list (manual p. 28: the Synth range "can be set in
+ *  semitone steps by pressing down the button and selecting a value from the
+ *  displayed list"). The values are Nord's documented Stage list: symmetric
+ *  ±1..±12 plus two guitar-style deep bend-down extensions that keep the
+ *  upward throw at +2. */
+export const PSTICK_RANGES: readonly { up: number; down: number }[] = [
+  { up: 1, down: 1 },
+  { up: 2, down: 2 },
+  { up: 3, down: 3 },
+  { up: 4, down: 4 },
+  { up: 5, down: 5 },
+  { up: 7, down: 7 },
+  { up: 10, down: 10 },
+  { up: 12, down: 12 },
+  { up: 2, down: 12 },
+  { up: 2, down: 24 },
+]
+
+/** Default PSTICK/RNG list entry (±2 st) — the fixed Piano/Organ range. */
+export const PSTICK_RANGE_DEFAULT = 1
+
+/** OLED spelling of a PSTICK_RANGES entry: '±2 st' or '+2/-12 st'. */
+export function pstickRangeLabel(index: number): string {
+  const range = PSTICK_RANGES[Math.max(0, Math.min(PSTICK_RANGES.length - 1, index))]!
+  return range.up === range.down ? `±${range.up} st` : `+${range.up}/-${range.down} st`
 }
 
 /** One of the three split points (Low/Mid/High, manual p. 39). */
@@ -962,6 +993,12 @@ export interface InstrumentState {
    *  Fine Tune cents instead of their normal roles. Mutually exclusive with
    *  synthEnvEdit and synthVibratoEdit. Not program state. */
   synthOscPitchEdit: boolean
+  /** PSTICK/RNG held (manual p. 28: "pressing down the button and selecting
+   *  a value from the displayed list"): Synth OLED dial 1 selects the Pitch
+   *  Stick bend range from PSTICK_RANGES. Latched by Shift + holding Layer B
+   *  (the pointer-first adaptation of the hardware's hold-and-turn combo).
+   *  Mutually exclusive with the other Synth dial modes. Not program state. */
+  synthPstickRangeEdit: boolean
   /** Arpeggiator MENU button latched (manual p. 35): the Synth OLED dials
    *  become page / Direction / Zig Zag. Only menu page 1 (Direction and
    *  Zig Zag) is implemented, so dial 1's page navigation stays on 1/1;
@@ -1139,6 +1176,7 @@ function baseInstrumentState(): InstrumentState {
     modelListView: false,
     synthVibratoEdit: false,
     synthOscPitchEdit: false,
+    synthPstickRangeEdit: false,
     synthArpMenuEdit: false,
     synthArpMenuPage: 1,
     synthArpPatternCursor: 0,
@@ -1174,6 +1212,7 @@ function baseInstrumentState(): InstrumentState {
       },
       sustped: true,
       pstick: true,
+      pstickRange: PSTICK_RANGE_DEFAULT,
       arp: defaultArp(),
     },
     fxGroupPiano: false,
@@ -3963,6 +4002,7 @@ export class InstrumentStore {
         synthEnvEdit: edit,
         synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
         synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+        synthPstickRangeEdit: edit ? false : this.state.synthPstickRangeEdit,
         synthArpMenuEdit: edit ? false : this.state.synthArpMenuEdit,
       },
       label,
@@ -4207,6 +4247,7 @@ export class InstrumentStore {
         synthVibratoEdit: edit,
         synthEnvEdit: edit ? null : this.state.synthEnvEdit,
         synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+        synthPstickRangeEdit: edit ? false : this.state.synthPstickRangeEdit,
         synthArpMenuEdit: edit ? false : this.state.synthArpMenuEdit,
       },
       edit ? 'Synth Vibrato Menu — dials: Rate · Amount' : 'Synth Vibrato Menu closed',
@@ -4226,10 +4267,37 @@ export class InstrumentStore {
         synthOscPitchEdit: edit,
         synthEnvEdit: edit ? null : this.state.synthEnvEdit,
         synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
+        synthPstickRangeEdit: edit ? false : this.state.synthPstickRangeEdit,
         synthArpMenuEdit: edit ? false : this.state.synthArpMenuEdit,
       },
       edit ? 'Synth Osc Pitch — dials: Pitch · Fine Tune' : 'Synth Osc Pitch closed',
     )
+  }
+
+  /** PSTICK/RNG list (manual p. 28): latches Synth OLED dial 1 onto the
+   *  Pitch Stick bend range list, mirroring setSynthEnvEdit's
+   *  dial-repurposing pattern. Mutually exclusive with the other modes. */
+  setSynthPstickRangeEdit(edit: boolean): void {
+    if (edit === this.state.synthPstickRangeEdit) return
+    this.patch(
+      {
+        synthPstickRangeEdit: edit,
+        synthEnvEdit: edit ? null : this.state.synthEnvEdit,
+        synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
+        synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+        synthArpMenuEdit: edit ? false : this.state.synthArpMenuEdit,
+      },
+      edit ? 'Synth Pitch Stick Range — dial 1: Range' : 'Synth Pitch Stick Range closed',
+    )
+  }
+
+  /** PSTICK/RNG value (manual p. 28): selects the Synth bend range from the
+   *  displayed list. Program state — sounding voices retarget immediately
+   *  through the engine's bend-reapply path. */
+  setSynthPstickRange(index: number): void {
+    const clamped = Math.max(0, Math.min(PSTICK_RANGES.length - 1, Math.round(index)))
+    if (clamped === this.state.synth.pstickRange) return
+    this.patchSynth({ pstickRange: clamped }, `Synth Pitch Stick Range ${pstickRangeLabel(clamped)}`)
   }
 
   /** Osc Pitch semitones (manual p. 28: "Pitch can be set between -24 and
@@ -4321,6 +4389,7 @@ export class InstrumentStore {
         synthEnvEdit: edit ? null : this.state.synthEnvEdit,
         synthVibratoEdit: edit ? false : this.state.synthVibratoEdit,
         synthOscPitchEdit: edit ? false : this.state.synthOscPitchEdit,
+        synthPstickRangeEdit: edit ? false : this.state.synthPstickRangeEdit,
       },
       edit ? 'Arp Menu — dial 1: Page 1-5' : 'Arp Menu closed',
     )
@@ -4760,6 +4829,7 @@ function normalizeSynthState(synth: Partial<SynthState> | null | undefined): Syn
     focusedLayer: 'A',
     sustped: true,
     pstick: true,
+    pstickRange: PSTICK_RANGE_DEFAULT,
     ...synth,
     layers: {
       A: normalizeSynthLayer(layers?.A),

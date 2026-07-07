@@ -14,6 +14,7 @@ import {
   presetListOf,
   presetOrderOf,
   programLabel,
+  pstickRangeLabel,
   splitBoundaries,
   SPLIT_POINT_NAMES,
   SPLIT_POSITION_NAMES,
@@ -1410,7 +1411,15 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                 store={store}
                 faderId="synth-level-b"
                 buttonId="synth-layer-b"
-                onHoldOff={() => instrument.holdOffSynthLayer('B')}
+                onHoldOff={() =>
+                  // PSTICK/RNG (manual p. 28): "pressing down the button"
+                  // brings up the bend range list — Shift + hold latches it
+                  // onto OLED dial 1. A plain hold keeps the standard
+                  // layer hold-off gesture (manual p. 12/18).
+                  store.getToggle('shift')
+                    ? instrument.setSynthPstickRangeEdit(!instrument.getState().synthPstickRangeEdit)
+                    : instrument.holdOffSynthLayer('B')
+                }
                 letter="B"
                 focused={synth.focusedLayer === 'B'}
               />
@@ -1460,6 +1469,29 @@ export function SynthSection({ store, instrument, onZoom }: BoundSectionProps) {
                             </span>
                             <span>
                               {arpMenuDial3.value} <b>{arpMenuDial3.label}</b>
+                            </span>
+                          </span>,
+                        ]
+                      : state.synthPstickRangeEdit
+                      ? [
+                          <span key="t" className="oled-dim">
+                            PITCH STICK RANGE
+                          </span>,
+                          <b key="w" className="oled-name" data-testid="oled-synth-name-line">
+                            {displayName}
+                          </b>,
+                          <span key="pr" data-testid="oled-synth-pstick-range-line">
+                            BEND RANGE {pstickRangeLabel(synth.pstickRange)}
+                          </span>,
+                          <span key="m" className="oled-menu">
+                            <span>
+                              {pstickRangeLabel(synth.pstickRange)} <b>RANGE</b>
+                            </span>
+                            <span>
+                              {synth.pstick ? 'On' : 'Off'} <b>PSTICK</b>
+                            </span>
+                            <span>
+                              {waveCaption} <b>WAVE</b>
                             </span>
                           </span>,
                         ]

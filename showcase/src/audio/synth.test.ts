@@ -1,8 +1,8 @@
-import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, fireEvent, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary, fakeStorageBoundary, FakeGain, FakeOscillator, FakeWaveShaper } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
-import { InstrumentStore, SYNTH_WAVEFORMS } from '../state/instrument'
+import { InstrumentStore, PSTICK_RANGES, SYNTH_WAVEFORMS } from '../state/instrument'
 import { SYNTH_SAMPLE_SETS } from './library'
 import { PianoEngine } from './engine'
 
@@ -484,6 +484,106 @@ describe('synth.osc-pitch — manual p. 28 Pitch and Fine Tune', () => {
     // state — it must also tolerate the missing nested key.
     expect(() => restored.selectProgram(7)).not.toThrow()
     expect(restored.getState().synth.layers.C.oscPitch).toEqual({ semis: 0, cents: 0 })
+  })
+})
+
+describe('synth.pstick-range — manual p. 28 PSTICK/RNG', () => {
+  it('the selected range scales the synth bend; asymmetric entries bend farther down', () => {
+    const { engine, store, getContext } = makeSystem()
+    engine.ensureStarted()
+    const context = getContext()!
+    selectWaveform(store, 'Saw')
+    const oscs = newOscillators(context, () => engine.noteOn(60, 0.8))
+    expect(oscs).toHaveLength(1)
+    engine.setPitchBend(1) // default ±2: full throw = +2 st
+    expect(oscs[0]!.detune.value).toBeCloseTo(200, 3)
+    // Selecting a wider range while the bend is held retargets the sounding
+    // voice immediately (the engine's bend-reapply path).
+    store.setSynthPstickRange(PSTICK_RANGES.findIndex((r) => r.up === 12 && r.down === 12))
+    expect(oscs[0]!.detune.value).toBeCloseTo(1200, 3)
+    // The guitar-style +2/-24 entry keeps the upward throw at +2 st…
+    store.setSynthPstickRange(PSTICK_RANGES.findIndex((r) => r.up === 2 && r.down === 24))
+    expect(oscs[0]!.detune.value).toBeCloseTo(200, 3)
+    // …while a full downward throw dives two octaves.
+    engine.setPitchBend(-1)
+    expect(oscs[0]!.detune.value).toBeCloseTo(-2400, 3)
+    engine.setPitchBend(0)
+    engine.noteOff(60)
+  })
+
+  it('the range only applies to the Synth — the Piano keeps its fixed ±2 st (manual p. 23)', () => {
+    const { engine, store, getContext } = makeSystem()
+    store.setPianoSectionOn(true)
+    store.setSynthPstickRange(PSTICK_RANGES.findIndex((r) => r.up === 12 && r.down === 12))
+    engine.ensureStarted()
+    const context = getContext()!
+    const before = context.bufferSources().length
+    engine.noteOn(60, 0.9)
+    // Only the note's own sample sources (the synth layer is Analog, so any
+    // new buffer sources belong to the piano voice).
+    const samples = context.bufferSources().slice(before)
+    expect(samples.length).toBeGreaterThan(0)
+    const baseRates = samples.map((s) => s.playbackRate.value)
+    engine.setPitchBend(1)
+    samples.forEach((s, i) => expect(s.playbackRate.value).toBeCloseTo(baseRates[i]! * Math.pow(2, 2 / 12), 5))
+    engine.setPitchBend(0)
+  })
+
+  it('Shift + holding Layer B latches the range list onto OLED dial 1', () => {
+    renderApp()
+    vi.useFakeTimers()
+    try {
+      const layerB = screen.getByRole('button', { name: 'Synth Layer B On/Off' })
+      fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
+      fireEvent.pointerDown(layerB)
+      act(() => vi.advanceTimersByTime(500))
+      fireEvent.pointerUp(layerB)
+      fireEvent.click(layerB) // the hold already fired; the trailing click must not toggle PSTICK
+      expect(screen.getByTestId('oled-synth-pstick-range-line').textContent).toMatch(/BEND RANGE ±2 st/)
+      fireEvent.keyDown(screen.getByRole('slider', { name: 'Synth Display Dial 1' }), { key: 'End' })
+      expect(screen.getByTestId('oled-synth-pstick-range-line').textContent).toMatch(/BEND RANGE \+2\/-24 st/)
+      fireEvent.keyDown(screen.getByRole('slider', { name: 'Synth Display Dial 1' }), { key: 'Home' })
+      expect(screen.getByTestId('oled-synth-pstick-range-line').textContent).toMatch(/BEND RANGE ±1 st/)
+      // A quick Shift + click still toggles PSTICK routing (no range list).
+      fireEvent.click(layerB)
+      expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Synth PSTICK Off/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the range edit mode is mutually exclusive with the other synth dial modes', () => {
+    const store = new InstrumentStore()
+    store.setSynthPstickRangeEdit(true)
+    store.setSynthEnvEdit('amp')
+    expect(store.getState().synthPstickRangeEdit).toBe(false)
+    store.setSynthPstickRangeEdit(true)
+    expect(store.getState().synthEnvEdit).toBe(null)
+    store.setSynthOscPitchEdit(true)
+    expect(store.getState().synthPstickRangeEdit).toBe(false)
+    store.setSynthPstickRangeEdit(true)
+    expect(store.getState().synthOscPitchEdit).toBe(false)
+  })
+
+  it('backfills pstickRange on programs stored before the field existed', () => {
+    const first = new InstrumentStore()
+    const stripRange = (slot: { name: string; snapshot: unknown }) => {
+      const snapshot = JSON.parse(JSON.stringify(slot.snapshot)) as { synth?: Record<string, unknown> }
+      if (snapshot.synth) delete snapshot.synth.pstickRange
+      return { name: slot.name, snapshot }
+    }
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({
+        version: 1,
+        bank: first.getState().programs.bank.map(stripRange),
+        live: first.getState().programs.live.map(stripRange),
+        liveMode: false,
+        current: 0,
+      }),
+    })
+    const restored = new InstrumentStore(storage)
+    expect(() => restored.selectProgram(7)).not.toThrow()
+    expect(PSTICK_RANGES[restored.getState().synth.pstickRange]).toEqual({ up: 2, down: 2 })
   })
 })
 

@@ -2716,3 +2716,31 @@ Init Grand placeholder forever.
   and when `current` points at a backfilled slot, the restored *sound* is
   the factory program.
 - Gates: typecheck, lint, suite 627/627.
+
+### 79 — PSTICK/RNG: selectable Synth pitch stick bend range (2026-07-06)
+
+User request: **"improve the pitch shift bar and make it more up to spec of
+the manual or online materials."** The manual (p. 28) gives the Synth
+section a PSTICK/RNG control — "the bend range for the Pitch Stick can be
+set in semitone steps by pressing down the button and selecting a value
+from the displayed list" — while Piano and Organ stay fixed at ±2 st
+(p. 18/23). The showcase hard-clamped everything to ±2.
+
+- The engine now takes the stick's normalized throw (-1..1) instead of
+  semitones and maps it per section: Piano/Organ fixed ±2 st, Synth per the
+  program's new `pstickRange` (stored per program, like the hardware). The
+  range list is Nord's documented Stage list: symmetric ±1..±12 plus the
+  two guitar-style extensions (+2/-12, +2/-24) that bend farther down than
+  up. Range edits retarget sounding voices immediately through the existing
+  bend-reapply path — widening the range while the stick is held is audible.
+- Panel gesture: Shift + holding Synth Layer B (the manual's "pressing down
+  the button") latches a PITCH STICK RANGE view onto the Synth OLED; dial 1
+  walks the displayed list. A quick Shift + click still toggles PSTICK
+  routing, and a plain hold keeps the layer hold-off gesture. The mode is
+  mutually exclusive with the other Synth dial modes (envelope, vibrato,
+  Osc Pitch, Arp Menu) like all its siblings.
+- New tests: range scaling + asymmetric down-bend + live retarget, the
+  Piano staying fixed at ±2 while the Synth range is ±12, the Shift+hold
+  panel gesture end-to-end on the OLED, mode mutual exclusion, and a
+  persisted-programs backfill roundtrip for the new field.
+- Gates: typecheck, lint, suite 632/632.

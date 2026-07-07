@@ -23,7 +23,7 @@ export interface MidiHandlers {
    *  on-screen wheel, which reads the same canonical value). */
   setModWheel?(value: number): void
   /** Pitch bend — normalized -1..1 (14-bit, center 8192 = 0); drives the
-   *  pitch stick's ±2 semitone bend. */
+   *  pitch stick's throw (Piano/Organ ±2 st, Synth per PSTICK/RNG). */
   setPitchBend?(value: number): void
   /** Channel pressure (0xD0) — continuous 0..1; drives the A.T. morph
    *  source. Aftertouch has no browser input of its own, but Web MIDI

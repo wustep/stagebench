@@ -58,6 +58,8 @@ import {
 import {
   initialInstrumentState,
   mappings,
+  PSTICK_RANGE_DEFAULT,
+  PSTICK_RANGES,
   SYNTH_LAYER_IDS,
   SYNTH_WAVEFORMS,
   selectedInstrumentId,
@@ -3292,10 +3294,13 @@ export class PianoEngine {
     }
   }
 
-  /** Pitch stick: bends sounding voices (spec: ±2 semitones) in each section
-   *  whose PSTICK routing is on. */
-  setPitchBend(semitones: number): void {
-    const clamped = Math.max(-2, Math.min(2, semitones))
+  /** Pitch stick: bends sounding voices in each section whose PSTICK routing
+   *  is on. `throwAmount` is the stick's normalized throw (-1..1); each
+   *  section maps it onto its own range — Piano and Organ are fixed at ±2
+   *  semitones (manual p. 18/23), the Synth follows the program's PSTICK/RNG
+   *  setting (manual p. 28). */
+  setPitchBend(throwAmount: number): void {
+    const clamped = Math.max(-1, Math.min(1, throwAmount))
     if (this.pitchBend === clamped) return
     this.pitchBend = clamped
     this.applyBendToVoices('piano')
@@ -3303,10 +3308,14 @@ export class PianoEngine {
     this.applyBendToVoices('synth')
   }
 
-  /** Bend a section hears: zero while its PSTICK routing is off (manual p. 18/23). */
+  /** Bend a section hears, in semitones: zero while its PSTICK routing is
+   *  off (manual p. 18/23); the throw scales by the section's up/down range
+   *  (asymmetric PSTICK/RNG entries bend farther down than up). */
   private effectiveBend(section: SectionId): number {
     const routed = section === 'piano' ? this.state.piano.pstick : section === 'synth' ? this.state.synth.pstick : this.state.organ.pstick
-    return routed ? this.pitchBend : 0
+    if (!routed) return 0
+    const range = section === 'synth' ? (PSTICK_RANGES[this.state.synth.pstickRange] ?? PSTICK_RANGES[PSTICK_RANGE_DEFAULT]!) : PSTICK_RANGES[PSTICK_RANGE_DEFAULT]!
+    return this.pitchBend * (this.pitchBend >= 0 ? range.up : range.down)
   }
 
   /** Program transpose (manual p. 40) plus the System menu's Global
@@ -3356,6 +3365,7 @@ export class PianoEngine {
     for (const voice of this.releasingVoices) apply(voice)
   }
 
+  /** The stick's current normalized throw (-1..1), not semitones. */
   pitchBendValue(): number {
     return this.pitchBend
   }

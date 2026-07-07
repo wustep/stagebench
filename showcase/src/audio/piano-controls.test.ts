@@ -153,7 +153,7 @@ describe('piano.velocity-controls', () => {
     expect(sources.length).toBeGreaterThan(0)
     const baseRates = sources.map((s) => s.playbackRate.value)
     store.togglePianoPstick() // default On -> Off
-    engine.setPitchBend(2)
+    engine.setPitchBend(1) // full throw = +2 st on the Piano
     sources.forEach((s, i) => expect(s.playbackRate.value).toBeCloseTo(baseRates[i]!, 5))
     store.togglePianoPstick() // Off -> On: the held bend reapplies to sounding voices
     sources.forEach((s, i) => expect(s.playbackRate.value).toBeCloseTo(baseRates[i]! * Math.pow(2, 2 / 12), 5))

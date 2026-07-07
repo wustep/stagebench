@@ -204,7 +204,7 @@ describe('piano.velocity-controls — rendered', () => {
       configure: withElectric,
       steps: [
         { time: 0, run: ({ engine }) => engine.noteOn(60, 0.9) },
-        { time: 0.4, run: ({ controller }) => controller.setPitchBend(2) },
+        { time: 0.4, run: ({ controller }) => controller.setPitchBend(1) }, // full throw = +2 st
       ],
     })
     const zStraight = zeroCrossingRate(straight.left, 0.7, 1.1)

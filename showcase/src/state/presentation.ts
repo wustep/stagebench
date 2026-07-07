@@ -9,6 +9,7 @@ import {
   mappings,
   MENU_PAGES,
   MORPH_DESTINATIONS,
+  PSTICK_RANGES,
   presetOrderOf,
   presetSectionName,
   SPLIT_POSITIONS,
@@ -199,6 +200,8 @@ export class PresentationStore {
           if (state.synthArpMenuEdit) return Math.round(((state.synthArpMenuPage - 1) / (ARP_MENU_PAGES.length - 1)) * 127)
           // Osc Pitch edit (manual p. 28): dial 1 spans -24..+24 semitones.
           if (state.synthOscPitchEdit) return Math.round(((synth.oscPitch.semis + 24) / 48) * 127)
+          // PSTICK/RNG (manual p. 28): dial 1 walks the bend range list.
+          if (state.synthPstickRangeEdit) return Math.round((state.synth.pstickRange / (PSTICK_RANGES.length - 1)) * 127)
           if (state.synthVibratoEdit) return synth.voice.vibratoRate
           if (state.synthEnvEdit === 'amp') return synth.ampEnvelope.attack
           if (state.synthEnvEdit === 'filter') return synth.filter.envelope.attack
@@ -521,9 +524,11 @@ export class PresentationStore {
           store.setOrganLayerLevel('B', clamped)
           return
         case 'perf-pitch-stick':
-          // Visual position is local; the bend itself is canonical (±2 semitones).
+          // Visual position is local; the bend itself is canonical. The stick
+          // sends its normalized throw (-1..1) — each section maps it onto
+          // its own range (Piano/Organ ±2 st, Synth per PSTICK/RNG).
           this.setLocalValue(id, clamped)
-          wiring.controller.setPitchBend((clamped / 100) * 2)
+          wiring.controller.setPitchBend(clamped / 100)
           return
         case 'rotary-drive':
           store.setRotaryDrive(clamped)
@@ -592,6 +597,12 @@ export class PresentationStore {
           // Osc Pitch edit (manual p. 28): dial 1 = pitch -24..+24 semitones.
           if (state.synthOscPitchEdit) {
             store.setSynthOscPitchSemis(Math.round((clamped / 127) * 48) - 24)
+            return
+          }
+          // PSTICK/RNG (manual p. 28): dial 1 selects the bend range from
+          // the displayed list by absolute position.
+          if (state.synthPstickRangeEdit) {
+            store.setSynthPstickRange(Math.round((clamped / 127) * (PSTICK_RANGES.length - 1)))
             return
           }
           if (state.synthVibratoEdit) {

@@ -111,9 +111,10 @@ export class InstrumentController {
     return this.engine.isSoftDown()
   }
 
-  /** Pitch stick input: ±2 semitone bend on sounding piano voices. */
-  setPitchBend(semitones: number): void {
-    this.engine.setPitchBend(semitones)
+  /** Pitch stick input: normalized throw (-1..1). Sections map it onto
+   *  their bend range — Piano/Organ ±2 st, Synth per PSTICK/RNG. */
+  setPitchBend(throwAmount: number): void {
+    this.engine.setPitchBend(throwAmount)
     this.emit()
   }
 
