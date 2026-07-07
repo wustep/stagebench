@@ -103,7 +103,7 @@ describe('organ-chain — To Rotary routing via the organ chain amp unit', () =>
     const { organChainToMaster, organChainToRotary } = engine.diagnostics()
     expect(organChainToRotary!.gain.value).toBeLessThan(0.001)
     store.toggleUnitOn('ampEq')
-    for (let i = 0; i < 6; i++) store.cycleAmpType() // Neutral -> ... -> To Rotary
+    for (let i = 0; i < 2; i++) store.cycleAmpType() // Neutral -> Small -> To Rotary
     expect(store.getState().organChain.ampEq.type).toBe('To Rotary')
     expect(organChainToRotary!.gain.value).toBeGreaterThan(0.9)
     expect(organChainToMaster!.gain.value).toBeLessThan(0.001)

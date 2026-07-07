@@ -216,7 +216,7 @@ describe('effects.routing', () => {
     const toMaster = channel.toMaster as unknown as FakeGain
     expect(toRotary.gain.value).toBeLessThan(0.001)
     store.toggleUnitOn('ampEq')
-    for (let i = 0; i < 6; i++) store.cycleAmpType() // Neutral -> ... -> To Rotary
+    for (let i = 0; i < 2; i++) store.cycleAmpType() // Neutral -> Small -> To Rotary
     expect(store.getState().chains.A.ampEq.type).toBe('To Rotary')
     expect(toRotary.gain.value).toBeGreaterThan(0.9)
     expect(toMaster.gain.value).toBeLessThan(0.001)

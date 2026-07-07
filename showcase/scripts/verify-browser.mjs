@@ -137,9 +137,9 @@ await attachAnalyser()
 const first = await noteBurstRms(60)
 record('grand-audible', first.max > 0.003, `max rms=${first.max.toFixed(4)}`)
 
-// 2. Piano selections: Grand -> Upright -> Electric are audible and spectrally distinct.
+// 2. Piano selections: Grand -> Misc -> Electric are audible and spectrally distinct.
 const centroids = {}
-for (const type of ['Grand', 'Upright', 'Electric']) {
+for (const type of ['Grand', 'Misc', 'Electric']) {
   if (type !== 'Grand') {
     await page.click('[data-control-id="piano-type"]')
     await whenEngineReady()
@@ -166,7 +166,7 @@ await page.click('[data-control-id="piano-type"]') // -> Clav
 const notFound = await page.textContent('[data-testid="oled-piano-line"]')
 const silent = await noteBurstRms(62, 250)
 record('piano-not-found', /Piano not found/.test(notFound ?? '') && silent.max < 0.002, `display="${notFound?.trim()}" rms=${silent.max.toFixed(4)}`)
-for (let i = 0; i < 3; i++) await page.click('[data-control-id="piano-type"]') // Digital -> Misc -> Grand
+for (let i = 0; i < 4; i++) await page.click('[data-control-id="piano-type"]') // Upright -> Digital -> Misc -> Grand
 await whenEngineReady()
 
 // 4. Two layers: enabling B thickens the sound; level fader works; octave shifts.
@@ -384,7 +384,8 @@ await fxCase(
     return { pass: sampled.max > 0.002 && ratio > 1.15, detail: `routed="${routedLine?.trim()}" rms=${sampled.max.toFixed(4)} fluctuation=${ratio.toFixed(2)}` }
   },
   async () => {
-    await page.click('[data-control-id="amp-variation"]') // -> Neutral EQ
+    await page.click('[data-control-id="amp-variation"]') // -> Small
+    await page.click('[data-control-id="amp-variation"]') // -> To Rotary
     await page.click('[data-control-id="amp-on"]')
     await page.waitForTimeout(300)
   },

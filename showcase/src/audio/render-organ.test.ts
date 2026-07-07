@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { renderEngine, rms, similarity, zeroCrossingRate, highBandRatio, bandEnergy } from '../test/offline'
-import type { InstrumentStore } from '../state/instrument'
+import type { InstrumentStore, OrganModelId } from '../state/instrument'
+import { ORGAN_MODELS } from '../state/instrument'
 
 /**
  * organ.engine / organ.models-drawbars / organ.rotary — REAL rendered audio
@@ -14,10 +15,16 @@ function organOnly(store: InstrumentStore): void {
   store.setOrganSectionOn(true)
 }
 
-function withModel(cycles: number, drawbars?: number[]) {
+function organModelCycles(from: OrganModelId, to: OrganModelId): number {
+  const start = ORGAN_MODELS.indexOf(from)
+  const target = ORGAN_MODELS.indexOf(to)
+  return (target - start + ORGAN_MODELS.length) % ORGAN_MODELS.length
+}
+
+function withModel(model: OrganModelId, drawbars?: number[]) {
   return (store: InstrumentStore) => {
     organOnly(store)
-    for (let i = 0; i < cycles; i++) store.cycleOrganModel()
+    for (let i = 0; i < organModelCycles('B3', model); i++) store.cycleOrganModel()
     if (drawbars) drawbars.forEach((value, index) => store.setOrganDrawbar(index, value))
   }
 }
@@ -37,7 +44,7 @@ async function renderOrgan(configure: (store: InstrumentStore) => void, midi = 6
 
 describe('organ — rendered behavior', () => {
   it('the organ sounds through the shared master path and stops on section off', async () => {
-    const on = await renderOrgan(withModel(0, ALL_OUT))
+    const on = await renderOrgan(withModel('B3', ALL_OUT))
     expect(rms(on.left, 0.05, 1.0)).toBeGreaterThan(0.005)
     const off = await renderEngine({
       duration: 1.0,
@@ -52,13 +59,8 @@ describe('organ — rendered behavior', () => {
 
   it('B3, Vox, Farf and Pipe 1 are audibly distinct engines', async () => {
     const renders: Record<string, Float32Array> = {}
-    for (const [name, cycles] of [
-      ['B3', 0],
-      ['Vox', 1],
-      ['Farf', 2],
-      ['Pipe1', 3],
-    ] as const) {
-      const result = await renderOrgan(withModel(cycles, ALL_OUT))
+    for (const name of ['B3', 'Vox', 'Farf', 'Pipe1'] as const) {
+      const result = await renderOrgan(withModel(name, ALL_OUT))
       expect(rms(result.left, 0.05, 1.0), name).toBeGreaterThan(0.003)
       renders[name] = result.left
     }
@@ -72,26 +74,26 @@ describe('organ — rendered behavior', () => {
     // Optional models (spec: may reuse B3/Pipe 1): Pipe 2's brighter
     // registration still measurably differs from Pipe 1, and B3 Bass (only
     // 16'+8' voiced) is non-silent on its own.
-    const pipe2 = await renderOrgan(withModel(5, ALL_OUT)) // B3 -> Vox -> Farf -> Pipe1 -> B3Bass -> Pipe2
+    const pipe2 = await renderOrgan(withModel('Pipe2', ALL_OUT))
     expect(rms(pipe2.left, 0.05, 1.0)).toBeGreaterThan(0.003)
     expect(Math.abs(similarity(renders.Pipe1!, pipe2.left, 0.1, 1.0))).toBeLessThan(0.9)
-    const b3Bass = await renderOrgan(withModel(4, ALL_OUT)) // B3 -> Vox -> Farf -> Pipe1 -> B3Bass
+    const b3Bass = await renderOrgan(withModel('B3Bass', ALL_OUT))
     expect(rms(b3Bass.left, 0.05, 1.0)).toBeGreaterThan(0.003)
   }, 240000)
 
   it('drawbar registration drives the audible spectrum (16-foot dark, 1-foot bright)', async () => {
-    const low = await renderOrgan(withModel(0, [8, 0, 0, 0, 0, 0, 0, 0, 0]))
-    const high = await renderOrgan(withModel(0, [0, 0, 0, 0, 0, 0, 0, 0, 8]))
+    const low = await renderOrgan(withModel('B3', [8, 0, 0, 0, 0, 0, 0, 0, 0]))
+    const high = await renderOrgan(withModel('B3', [0, 0, 0, 0, 0, 0, 0, 0, 8]))
     expect(rms(low.left, 0.1, 1.0)).toBeGreaterThan(0.002)
     expect(rms(high.left, 0.1, 1.0)).toBeGreaterThan(0.002)
     expect(zeroCrossingRate(high.left, 0.1, 1.0)).toBeGreaterThan(zeroCrossingRate(low.left, 0.1, 1.0) * 3)
   }, 240000)
 
   it('pulling a drawbar mid-note changes the sounding spectrum immediately', async () => {
-    const still = await renderOrgan(withModel(0, [8, 0, 0, 0, 0, 0, 0, 0, 0]))
+    const still = await renderOrgan(withModel('B3', [8, 0, 0, 0, 0, 0, 0, 0, 0]))
     const pulled = await renderEngine({
       duration: 1.4,
-      configure: withModel(0, [8, 0, 0, 0, 0, 0, 0, 0, 0]),
+      configure: withModel('B3', [8, 0, 0, 0, 0, 0, 0, 0, 0]),
       steps: [
         { time: 0, run: ({ engine }) => engine.noteOn(60, 0.85) },
         { time: 0.6, run: ({ store }) => store.setOrganDrawbar(8, 8) },
@@ -139,11 +141,11 @@ describe('organ — rendered behavior', () => {
 
   it('B3 percussion adds a decaying attack; fast decay dies sooner than slow', async () => {
     const registration = [0, 0, 8, 0, 0, 0, 0, 0, 0] // 8' only
-    const plain = await renderOrgan(withModel(0, registration))
+    const plain = await renderOrgan(withModel('B3', registration))
     const percSlow = await renderEngine({
       duration: 1.4,
       configure: (store) => {
-        withModel(0, registration)(store)
+        withModel('B3', registration)(store)
         store.toggleOrganPercussion('on')
       },
       steps: [
@@ -154,7 +156,7 @@ describe('organ — rendered behavior', () => {
     const percFast = await renderEngine({
       duration: 1.4,
       configure: (store) => {
-        withModel(0, registration)(store)
+        withModel('B3', registration)(store)
         store.toggleOrganPercussion('on')
         store.toggleOrganPercussion('fast')
       },
@@ -175,7 +177,7 @@ describe('organ — rendered behavior', () => {
   it('the B3 key click is an audible high-frequency attack transient', async () => {
     // 16'-only registration: the sustained tone is a 130 Hz sine with almost
     // no energy at 2 kHz, so early high-band energy is the click itself.
-    const result = await renderOrgan(withModel(0, [8, 0, 0, 0, 0, 0, 0, 0, 0]))
+    const result = await renderOrgan(withModel('B3', [8, 0, 0, 0, 0, 0, 0, 0, 0]))
     const attackHigh = highBandRatio(result.left, 2000, 0.0, 0.03)
     const steadyHigh = highBandRatio(result.left, 2000, 0.4, 0.8)
     expect(attackHigh).toBeGreaterThan(steadyHigh * 3)
@@ -183,7 +185,7 @@ describe('organ — rendered behavior', () => {
 
   it('vibrato and chorus scan audibly: V-mode reshapes more than C-mode, depth grows 1→3', async () => {
     const configureVib = (position: number | null) => (store: InstrumentStore) => {
-      withModel(0, ALL_OUT)(store)
+      withModel('B3', ALL_OUT)(store)
       if (position !== null) {
         // Panel order is C1 V1 C2 V2 C3 V3 starting from the C3 default.
         const order = ['C1', 'V1', 'C2', 'V2', 'C3', 'V3']
@@ -218,7 +220,7 @@ describe('organ — rendered behavior', () => {
       renderEngine({
         duration: 1.8,
         configure: (store) => {
-          withModel(0, ALL_OUT)(store)
+          withModel('B3', ALL_OUT)(store)
           store.toggleOrganRotary()
           if (speed === 'fast') store.toggleRotarySpeed()
           else store.toggleRotaryStop()

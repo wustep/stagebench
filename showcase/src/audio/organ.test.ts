@@ -2,8 +2,15 @@ import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { fakeAssetBoundary, fakeAudioBoundary, FakeGain, FakeOscillator } from '../test/fakes'
 import { renderApp } from '../test/renderApp'
-import { InstrumentStore } from '../state/instrument'
+import { InstrumentStore, ORGAN_MODELS, type OrganModelId } from '../state/instrument'
 import { PianoEngine } from './engine'
+
+function cycleOrganTo(store: InstrumentStore, model: OrganModelId): void {
+  const layer = store.getState().organ.focusedLayer
+  const current = store.getState().organ.layers[layer].model
+  const steps = (ORGAN_MODELS.indexOf(model) - ORGAN_MODELS.indexOf(current) + ORGAN_MODELS.length) % ORGAN_MODELS.length
+  for (let i = 0; i < steps; i++) store.cycleOrganModel()
+}
 
 /**
  * organ.engine / organ.models-drawbars / organ.rotary — state + graph tests
@@ -138,8 +145,8 @@ describe('organ.models-drawbars — recipes and live registration', () => {
     expect(b3.length).toBeGreaterThanOrEqual(9)
     expect(b3.every((osc) => osc.type === 'sine')).toBe(true)
     engine.noteOff(60)
-    store.cycleOrganModel() // B3 -> Vox
-    store.cycleOrganModel() // Vox -> Farf
+    store.cycleOrganModel() // B3 -> B3Bass
+    store.cycleOrganModel() // B3Bass -> Farf
     for (let i = 0; i < 9; i++) store.setOrganDrawbar(i, 8) // all registers on
     const farf = newOscillators(context, () => engine.noteOn(62, 0.8))
     expect(farf.some((osc) => osc.type === 'square')).toBe(true)
@@ -150,10 +157,7 @@ describe('organ.models-drawbars — recipes and live registration', () => {
     const { engine, store, getContext } = makeSystem()
     engine.ensureStarted()
     const context = getContext()!
-    store.cycleOrganModel() // B3 -> Vox
-    store.cycleOrganModel() // Vox -> Farf
-    store.cycleOrganModel() // Farf -> Pipe1
-    store.cycleOrganModel() // Pipe1 -> B3Bass
+    cycleOrganTo(store, 'B3Bass')
     expect(store.getState().organ.layers.A.model).toBe('B3Bass')
     for (let i = 0; i < 9; i++) store.setOrganDrawbar(i, 8) // pull every drawbar out
     const oscs = newOscillators(context, () => engine.noteOn(60, 0.8))
@@ -178,7 +182,7 @@ describe('organ.models-drawbars — recipes and live registration', () => {
     const context = getContext()!
     expect(store.getState().organ.layers.A.model).toBe('B3')
     store.setOrganFocusedLayer('B')
-    store.cycleOrganModel() // B3 -> Vox
+    cycleOrganTo(store, 'Vox')
     expect(store.getState().organ.layers.B.model).toBe('Vox')
     expect(store.getState().organ.layers.A.model).toBe('B3') // A untouched by focusing/cycling B
     store.toggleOrganLayerEnabled('B')
@@ -201,15 +205,12 @@ describe('organ.models-drawbars — recipes and live registration', () => {
     const { engine, store, getContext } = makeSystem()
     engine.ensureStarted()
     for (let i = 0; i < 9; i++) store.setOrganDrawbar(i, 8)
-    store.cycleOrganModel() // B3 -> Vox
-    store.cycleOrganModel() // Vox -> Farf
-    store.cycleOrganModel() // Farf -> Pipe1
+    cycleOrganTo(store, 'Pipe1')
     const context = getContext()!
     const pipe1 = newOscillators(context, () => engine.noteOn(60, 0.8))
     engine.noteOff(60)
     expect(pipe1.every((osc) => osc.type === 'sine')).toBe(true)
-    store.cycleOrganModel() // Pipe1 -> B3Bass
-    store.cycleOrganModel() // B3Bass -> Pipe2
+    cycleOrganTo(store, 'Pipe2')
     expect(store.getState().organ.layers.A.model).toBe('Pipe2')
     const pipe2 = newOscillators(context, () => engine.noteOn(62, 0.8))
     expect(pipe2.some((osc) => osc.type === 'triangle')).toBe(true)
@@ -305,7 +306,7 @@ describe('organ panel — canonical writes with display and LED feedback', () =>
     expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Drawbar 9: 8/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Organ Model Select' }))
-    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Organ A: Vox/)
+    expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/Organ A: B3 Bass/)
 
     const shift = screen.getByRole('button', { name: 'Shift/Exit' })
     fireEvent.click(shift)

@@ -35,7 +35,8 @@ export type SectionKey = 'piano' | 'organ' | 'synth'
 /** The four modeled organ engines (spec: nord-stage-4.organ.json). B3 Bass
  *  and Pipe 2 are not modeled; their panel LEDs exist and stay unlit. */
 export type OrganModelId = 'B3' | 'Vox' | 'Farf' | 'Pipe1' | 'B3Bass' | 'Pipe2'
-export const ORGAN_MODELS: readonly OrganModelId[] = ['B3', 'Vox', 'Farf', 'Pipe1', 'B3Bass', 'Pipe2']
+/** Organ Model triangle grid press order (each row left → right, top → bottom). */
+export const ORGAN_MODELS: readonly OrganModelId[] = ['Farf', 'Pipe1', 'Vox', 'Pipe2', 'B3', 'B3Bass']
 
 /** Panel-legend label for the Organ display (manual p. 18): "Pipe 1"/"Pipe 2"
  *  print with a space; "B3 Bass" prints with one too. */
@@ -62,10 +63,21 @@ export type RotarySpeed = 'slow' | 'fast' | 'stop'
 export type RotaryStopAngle = 'Free' | 0 | 45 | 90 | 135 | 180
 export const ROTARY_STOP_ANGLES: readonly RotaryStopAngle[] = ['Free', 0, 45, 90, 135, 180]
 
-export const MOD1_TYPES: readonly Mod1Type[] = ['A-Pan', 'Tremolo', 'Ring Mod', 'A-Wah', 'Wah', 'Pump']
-export const MOD2_TYPES: readonly Mod2Type[] = ['Phaser', 'Flanger', 'Vibe', 'Chorus', 'Ensemble', 'Spin']
-export const AMP_TYPES: readonly AmpType[] = ['Neutral EQ', 'Twin', 'JC', 'Small', 'LP24 Filter', 'HP24 Filter', 'To Rotary']
+/** Mod 1 triangle grid press order (each row left → right, top → bottom). */
+export const MOD1_TYPES: readonly Mod1Type[] = ['Ring Mod', 'A-Wah', 'Tremolo', 'Wah', 'A-Pan', 'Pump']
+/** Mod 2 triangle grid press order (each row left → right, top → bottom). */
+export const MOD2_TYPES: readonly Mod2Type[] = ['Chorus', 'Vibe', 'Flanger', 'Ensemble', 'Phaser', 'Spin']
+/** Amp Sim triangle grid press order; Neutral EQ is off-grid and leads the cycle. */
+export const AMP_TYPES: readonly AmpType[] = ['Neutral EQ', 'Small', 'To Rotary', 'JC', 'LP24 Filter', 'Twin', 'HP24 Filter']
+/** Reverb triangle grid press order (each row left → right, top → bottom). */
 export const REVERB_TYPES: readonly ReverbType[] = ['Room', 'Stage', 'Booth', 'Hall', 'Spring', 'Cathedral']
+/** Piano Select triangle grid press order (each row left → right, top → bottom). */
+export const PIANO_TYPE_CYCLE: readonly PianoType[] = ['Electric', 'Clav', 'Upright', 'Digital', 'Grand', 'Misc']
+
+function cyclePanelSelector<T extends string>(current: T, order: readonly T[]): T {
+  const index = order.indexOf(current)
+  return order[(index < 0 ? 0 : index + 1) % order.length]!
+}
 export const DELAY_FILTERS: readonly DelayFilter[] = ['Off', 'Low Pass', 'High Pass', 'Band Pass']
 export const DELAY_EFFECTS: readonly DelayEffect[] = ['Off', 'Chorus', 'Vibe', 'Ensemble', 'Flam', 'Space']
 
@@ -1604,7 +1616,7 @@ export class InstrumentStore {
   cyclePianoType(): void {
     const layer = this.state.focusedLayer
     const current = this.state.layers[layer].type
-    const nextType = PIANO_TYPES[(PIANO_TYPES.indexOf(current) + 1) % PIANO_TYPES.length]!
+    const nextType = cyclePanelSelector(current, PIANO_TYPE_CYCLE)
     this.selectPianoType(nextType)
   }
 
@@ -3687,7 +3699,7 @@ export class InstrumentStore {
   cycleOrganModel(): void {
     const layer = this.state.organ.focusedLayer
     const current = this.state.organ.layers[layer].model
-    const next = ORGAN_MODELS[(ORGAN_MODELS.indexOf(current) + 1) % ORGAN_MODELS.length]!
+    const next = cyclePanelSelector(current, ORGAN_MODELS)
     this.patchOrganLayer(layer, { model: next }, `Organ ${layer}: ${organModelLabel(next)}`)
   }
 
@@ -3743,7 +3755,7 @@ export class InstrumentStore {
   }
 
   cycleOrganVibratoType(): void {
-    const next = VIBRATO_TYPES[(VIBRATO_TYPES.indexOf(this.state.organ.vibratoType) + 1) % VIBRATO_TYPES.length]!
+    const next = cyclePanelSelector(this.state.organ.vibratoType, VIBRATO_TYPES)
     this.patchOrgan({ vibratoType: next }, `Vib/Chorus ${next}`)
   }
 
@@ -4609,25 +4621,25 @@ export class InstrumentStore {
 
   cycleMod1Type(): void {
     const current = this.focusedChain().mod1.type
-    const next = MOD1_TYPES[(MOD1_TYPES.indexOf(current) + 1) % MOD1_TYPES.length]!
+    const next = cyclePanelSelector(current, MOD1_TYPES)
     this.updateUnit('mod1', { type: next }, `Mod 1: ${next}`)
   }
 
   cycleMod2Type(): void {
     const current = this.focusedChain().mod2.type
-    const next = MOD2_TYPES[(MOD2_TYPES.indexOf(current) + 1) % MOD2_TYPES.length]!
+    const next = cyclePanelSelector(current, MOD2_TYPES)
     this.updateUnit('mod2', { type: next }, `Mod 2: ${next}`)
   }
 
   cycleAmpType(): void {
     const current = this.focusedChain().ampEq.type
-    const next = AMP_TYPES[(AMP_TYPES.indexOf(current) + 1) % AMP_TYPES.length]!
+    const next = cyclePanelSelector(current, AMP_TYPES)
     this.updateUnit('ampEq', { type: next }, `Amp Sim/EQ: ${next}`)
   }
 
   cycleReverbType(): void {
     const current = this.focusedChain().reverb.type
-    const next = REVERB_TYPES[(REVERB_TYPES.indexOf(current) + 1) % REVERB_TYPES.length]!
+    const next = cyclePanelSelector(current, REVERB_TYPES)
     this.updateUnit('reverb', { type: next }, `Reverb: ${next}`)
   }
 

@@ -179,7 +179,10 @@ describe('piano.velocity-controls', () => {
     renderApp()
     fireEvent.click(screen.getByRole('button', { name: 'KB Touch Select' }))
     expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/KB Touch Mid/)
-    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Grand -> Misc
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Misc -> Electric
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Electric -> Clav
+    fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Clav -> Upright
     expect(screen.getByTestId('oled-piano-line').textContent).toMatch(/Tack Upright/)
     // INFO = Shift + Piano Select (manual p. 25) — the panel has one button.
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))

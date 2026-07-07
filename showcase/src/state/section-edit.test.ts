@@ -58,7 +58,7 @@ describe('programs.section-edit — parameter fan-out', () => {
   it('organ per-layer parameters (model, level, stored drawbars) fan to both layers', () => {
     const store = new InstrumentStore()
     store.setSectionEdit(true)
-    store.cycleOrganModel() // B3 -> Vox, computed from focused A
+    store.cycleOrganModel() // B3 -> B3 Bass, computed from focused A
     store.setOrganLayerLevel('A', 77)
     store.setOrganDrawbar(3, 5) // both layers' presetOn is true at boot
     const s = store.getState()
