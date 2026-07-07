@@ -228,9 +228,22 @@ export function getSynthSampleSet(id: string): SynthSampleSet {
   return found
 }
 
+/** Per-set memo for nearestSynthZone: the zone list is immutable, so the
+ *  nearest root for a given (possibly fractional, via global fine tune)
+ *  target note never changes — computing it per key press was a linear scan
+ *  on the note-on hot path. */
+const synthZoneCache = new WeakMap<SynthSampleSet, Map<number, SampleZone>>()
+
 /** Picks the closest recorded root for a target note (fewest semitones of
  *  shift) from a synth sample set — mirrors nearestZones for InstrumentSpec. */
 export function nearestSynthZone(set: SynthSampleSet, midi: number): SampleZone {
+  let cache = synthZoneCache.get(set)
+  if (!cache) {
+    cache = new Map()
+    synthZoneCache.set(set, cache)
+  }
+  const cached = cache.get(midi)
+  if (cached) return cached
   let best = set.zones[0]!
   let bestDistance = Math.abs(midi - best.rootMidi)
   for (const zone of set.zones) {
@@ -240,6 +253,7 @@ export function nearestSynthZone(set: SynthSampleSet, midi: number): SampleZone 
       best = zone
     }
   }
+  cache.set(midi, best)
   return best
 }
 
@@ -249,8 +263,20 @@ export function getInstrument(id: string): InstrumentSpec {
   return found
 }
 
+/** Per-instrument memo for nearestZones: scanning + filtering 90 zones (the
+ *  Grand) allocated a fresh array on every key press. Callers only read the
+ *  returned list, so one shared array per (instrument, note) is safe. */
+const instrumentZoneCache = new WeakMap<InstrumentSpec, Map<number, SampleZone[]>>()
+
 /** Picks the closest recorded root for a target note (fewest semitones of shift). */
 export function nearestZones(spec: InstrumentSpec, midi: number): SampleZone[] {
+  let cache = instrumentZoneCache.get(spec)
+  if (!cache) {
+    cache = new Map()
+    instrumentZoneCache.set(spec, cache)
+  }
+  const cached = cache.get(midi)
+  if (cached) return cached
   let bestRoot = spec.zones[0]!.rootMidi
   let bestDistance = Math.abs(midi - bestRoot)
   for (const zone of spec.zones) {
@@ -260,8 +286,13 @@ export function nearestZones(spec: InstrumentSpec, midi: number): SampleZone[] {
       bestRoot = zone.rootMidi
     }
   }
-  return spec.zones.filter((z) => z.rootMidi === bestRoot)
+  const zones = spec.zones.filter((z) => z.rootMidi === bestRoot)
+  cache.set(midi, zones)
+  return zones
 }
+
+/** Shared single-layer result (callers only index into the array). */
+const SINGLE_LAYER_GAINS = [1]
 
 /**
  * Recorded-layer crossfade for a velocity in [0,1]: returns per-layer gains.
@@ -269,7 +300,9 @@ export function nearestZones(spec: InstrumentSpec, midi: number): SampleZone[] {
  * gain and a velocity-keyed filter instead (declared, truthful).
  */
 export function velocityLayerGains(layerCount: number, velocity: number): number[] {
-  if (layerCount <= 1) return [1]
+  if (layerCount <= 1) return SINGLE_LAYER_GAINS
   const position = velocity * (layerCount - 1)
-  return Array.from({ length: layerCount }, (_, i) => Math.max(0, 1 - Math.abs(position - i)))
+  const gains = new Array<number>(layerCount)
+  for (let i = 0; i < layerCount; i++) gains[i] = Math.max(0, 1 - Math.abs(position - i))
+  return gains
 }

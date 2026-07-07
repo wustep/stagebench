@@ -211,6 +211,25 @@ function voiceKey(section: SectionId, layer: VoiceLayer, midi: number): number {
   return (SECTION_KEY_CODE[section] * 4 + LAYER_KEY_CODE[layer]) * 128 + midi
 }
 
+/** Packed (section, layer) code — the midi-independent prefix of voiceKey —
+ *  keying the O(1) held-voice counters that replaced full voice-map scans on
+ *  the note-on path (polyphony cap, organ percussion single-trigger). */
+function layerCode(section: SectionId, layer: VoiceLayer): number {
+  return SECTION_KEY_CODE[section] * 4 + LAYER_KEY_CODE[layer]
+}
+
+/** Every (section, layer) a voice map key can address. noteOff/isNoteActive
+ *  probe these seven keys directly instead of scanning every held voice. */
+const VOICE_ADDRESSES: ReadonlyArray<readonly [SectionId, VoiceLayer]> = [
+  ['piano', 'A'],
+  ['piano', 'B'],
+  ['organ', 'A'],
+  ['organ', 'B'],
+  ['synth', 'A'],
+  ['synth', 'B'],
+  ['synth', 'C'],
+]
+
 /** Free-list cap: pooled Voice objects hold no AudioNode references (cleanup
  *  empties their arrays), so this only bounds retained plain-object count. */
 const VOICE_POOL_MAX = 64
@@ -546,6 +565,13 @@ export class PianoEngine {
 
   private voices = new Map<number, Voice>()
   private releasingVoices = new Set<Voice>()
+  /** Held-voice count per packed (section, layer) code — kept in sync with
+   *  `voices` by the start paths and releaseVoice, so the per-note-on
+   *  polyphony-cap check reads O(1) instead of scanning every voice. */
+  private heldCounts = new Map<number, number>()
+  /** Held-voice count per section (organ percussion's single-trigger check
+   *  reads this instead of scanning the voice map on every key press). */
+  private heldSectionCounts: Record<SectionId, number> = { piano: 0, organ: 0, synth: 0 }
   /** Voice free-list (iteration 23 GC pass): cleanupVoice returns the JS
    *  bookkeeping object here — with its sources/ownedNodes arrays emptied in
    *  place — so sustained playing stops allocating one object plus two
@@ -602,6 +628,16 @@ export class PianoEngine {
   private state: InstrumentState = initialInstrumentState()
   private detachStore: (() => void) | null = null
 
+  /** Last-applied dependency tuples per applyState block (see depsChanged):
+   *  a block whose inputs are reference-identical to the previous apply is
+   *  skipped wholesale. Every store commit runs applyState — knob drags and
+   *  morph/CC input arrive at ~120 commits/sec — and re-ramping every
+   *  AudioParam of every effect unit on each one flooded the audio thread
+   *  with cancelScheduledValues/setTargetAtTime messages. State patches are
+   *  immutable (unchanged sub-objects keep identity), so reference checks
+   *  are exact. */
+  private appliedDeps = new Map<string, readonly unknown[]>()
+
   private sampleCache = new Map<string, AudioBufferLike>()
   private instrumentStatus = new Map<string, InstrumentLoadStatus>()
   private instrumentError = new Map<string, string>()
@@ -621,11 +657,17 @@ export class PianoEngine {
     this.detachStore?.()
     this.state = store.getState()
     this.detachStore = store.subscribe(() => {
+      const previous = this.state
       this.state = store.getState()
       if (this.context) {
-        this.loadNeededInstruments()
+        // The needed sample sets and the status line only depend on the
+        // piano layer selections and the synth section (Samples mode);
+        // unrelated commits — knob drags at ~120/sec — skip both. Load
+        // completions refresh the status themselves.
+        const selectionChanged = this.state.layers !== previous.layers || this.state.synth !== previous.synth
+        if (selectionChanged) this.loadNeededInstruments()
         this.applyState()
-        this.refreshStatus()
+        if (selectionChanged) this.refreshStatus()
       }
     })
   }
@@ -722,6 +764,7 @@ export class PianoEngine {
       // OfflineAudioContext (offline render tests) rejects resume() before
       // startRendering; a live context resumes on this first gesture.
       if (context.state === 'suspended') void Promise.resolve(context.resume()).catch(() => undefined)
+      this.appliedDeps.clear()
       this.loadNeededInstruments()
       this.applyState()
       this.refreshStatus()
@@ -790,7 +833,7 @@ export class PianoEngine {
     // short bright impulse fed from the voice bus, active with String Res +
     // damper lift. Declared as generated DSP, not recorded pedal-down samples.
     const resSend = context.createGain()
-    resSend.gain.value = 0.0001
+    resSend.gain.value = 0
     const resConvolver = context.createConvolver()
     resConvolver.buffer = this.makeResonanceImpulse(context)
     voiceBus.connect(resSend)
@@ -809,7 +852,7 @@ export class PianoEngine {
     // level rides the post-reverb split feeding both sends instead.)
     const toMaster = context.createGain()
     const toRotary = context.createGain()
-    toRotary.gain.value = 0.0001
+    toRotary.gain.value = 0
     units.reverb.output.connect(levelGain)
     levelGain.connect(toMaster)
     levelGain.connect(toRotary)
@@ -828,6 +871,9 @@ export class PianoEngine {
       A: this.buildOrganChannel(this.context, this.organChain),
       B: this.buildOrganChannel(this.context, this.organChain),
     }
+    // Fresh nodes carry construction-default params: the next applyState
+    // must apply every block to them regardless of what state it last saw.
+    this.appliedDeps.clear()
   }
 
   /** Organ layer path: voices → vib/chorus scanner → level → shared chain
@@ -866,7 +912,7 @@ export class PianoEngine {
 
     const toMaster = context.createGain()
     const toRotary = context.createGain()
-    toRotary.gain.value = 0.0001
+    toRotary.gain.value = 0
     units.reverb.output.connect(toMaster)
     units.reverb.output.connect(toRotary)
     toMaster.connect(this.preMaster ?? this.masterGain!)
@@ -885,6 +931,8 @@ export class PianoEngine {
       B: this.buildSynthChannel(this.context),
       C: this.buildSynthChannel(this.context),
     }
+    // See ensureOrganChannels: fresh nodes need a full applyState pass.
+    this.appliedDeps.clear()
   }
 
   private buildSynthChannel(context: AudioContextLike): SynthChannel {
@@ -909,7 +957,7 @@ export class PianoEngine {
     // piano channel note.
     const toMaster = context.createGain()
     const toRotary = context.createGain()
-    toRotary.gain.value = 0.0001
+    toRotary.gain.value = 0
     units.reverb.output.connect(levelGain)
     levelGain.connect(toMaster)
     levelGain.connect(toRotary)
@@ -1208,12 +1256,35 @@ export class PianoEngine {
 
   /* ------------------------------------------------------- state -> DSP -- */
 
+  /** True when `deps` differs from the tuple last recorded under `key`
+   *  (Object.is per slot), recording the new tuple. Guards applyState's
+   *  blocks: skipping a block whose inputs are unchanged is semantically a
+   *  no-op (every ramp it would schedule targets the already-applied value)
+   *  but saves the whole cancel/setTarget message storm per commit. */
+  private depsChanged(key: string, deps: readonly unknown[]): boolean {
+    const previous = this.appliedDeps.get(key)
+    if (previous && previous.length === deps.length) {
+      let same = true
+      for (let i = 0; i < deps.length; i++) {
+        if (!Object.is(previous[i], deps[i])) {
+          same = false
+          break
+        }
+      }
+      if (same) return false
+    }
+    this.appliedDeps.set(key, deps)
+    return true
+  }
+
   private applyState(): void {
     const context = this.context
     if (!context || !this.masterGain) return
     const now = context.currentTime
     const state = this.state
-    rampTo(this.masterGain.gain, mappings.levelToGain(state.masterVolume) * 0.9, now)
+    if (this.depsChanged('master', [state.masterVolume])) {
+      rampTo(this.masterGain.gain, mappings.levelToGain(state.masterVolume) * 0.9, now)
+    }
 
     // KB HOLD off: everything the hold was carrying (keys already lifted)
     // releases now, and the held stacks shrink back to the keys still down.
@@ -1221,8 +1292,9 @@ export class PianoEngine {
     this.lastKbHold = state.kbHold
 
     // SUSTPED off: the damper is no longer routed to that section — release
-    // anything it was holding there.
-    for (const voice of [...this.voices.values()]) {
+    // anything it was holding there. (Direct Map iteration: releaseVoice
+    // only ever deletes entries, which is safe mid-iteration.)
+    for (const voice of this.voices.values()) {
       if (this.sectionSustped(voice.section)) continue
       if (voice.sustained && !voice.keyDown && !voice.sostenuto) {
         voice.sustained = false
@@ -1235,19 +1307,21 @@ export class PianoEngine {
     }
 
     if (!this.channels || !this.rotary) return
-    this.rotary.update(
-      {
-        ...state.rotary,
-        // Sound menu 8-11 (manual p. 58): global rotor/horn speed + acceleration.
-        tuning: {
-          rotorSpeed: state.globalSettings.rotaryRotorSpeed,
-          rotorAcc: state.globalSettings.rotaryRotorAcc,
-          hornSpeed: state.globalSettings.rotaryHornSpeed,
-          hornAcc: state.globalSettings.rotaryHornAcc,
+    if (this.depsChanged('rotary', [state.rotary, state.globalSettings])) {
+      this.rotary.update(
+        {
+          ...state.rotary,
+          // Sound menu 8-11 (manual p. 58): global rotor/horn speed + acceleration.
+          tuning: {
+            rotorSpeed: state.globalSettings.rotaryRotorSpeed,
+            rotorAcc: state.globalSettings.rotaryRotorAcc,
+            hornSpeed: state.globalSettings.rotaryHornSpeed,
+            hornAcc: state.globalSettings.rotaryHornAcc,
+          },
         },
-      },
-      now,
-    )
+        now,
+      )
+    }
 
     // GLOBAL Reverb relocation (manual p. 52-53): with Reverb in Global
     // mode the ONE shared post-rotary reverb takes over and every chain's
@@ -1255,7 +1329,9 @@ export class PianoEngine {
     // All chains mirror the same reverb settings in Global mode, so chain
     // A's state speaks for all of them.
     const globalReverbOn = state.fxGlobal.reverb
-    this.globalReverb?.update(state.chains.A.reverb, !state.allFxOff && globalReverbOn && state.chains.A.reverb.on, now)
+    if (this.depsChanged('globalReverb', [state.chains.A.reverb, state.allFxOff, globalReverbOn])) {
+      this.globalReverb?.update(state.chains.A.reverb, !state.allFxOff && globalReverbOn && state.chains.A.reverb.on, now)
+    }
 
     // Master-clock sync (manual p. 17/40/49/51): while a unit's MST CLK is
     // lit its OWN Rate/Tempo knob selects a subdivision of the master beat
@@ -1275,9 +1351,29 @@ export class PianoEngine {
       const channel = this.channels[layer]
       const layerState = state.layers[layer]
       const chain = state.chains[layer]
+      // Resonance routing follows the damper, which lives OUTSIDE the store
+      // (setSustain calls applyState directly) — so the damper-derived
+      // boolean joins the dependency tuple alongside the state references.
+      const resActive = state.piano.stringRes && this.effectiveSustainLevel('piano') >= SUSTAIN_LIFT
+      if (
+        !this.depsChanged(`piano:${layer}`, [
+          layerState,
+          chain,
+          state.piano,
+          state.soloLayer,
+          state.allFxOff,
+          globalReverbOn,
+          state.masterClock,
+          state.morphValues.pedal,
+          state.globalSettings,
+          resActive,
+        ])
+      ) {
+        continue
+      }
       const solo = state.soloLayer
       const audible = layerState.enabled && state.piano.sectionOn && (!solo || (solo.section === 'piano' && solo.layer === layer))
-      rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
+      rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0, now)
 
       // Timbre voicing (family-aware).
       const family = layerState.type === 'Electric' ? 'electric' : 'acoustic'
@@ -1297,9 +1393,10 @@ export class PianoEngine {
 
       // Resonance send follows String Res + damper state (as routed by
       // SUSTPED), trimmed by the Sound menu's String Res level (±6 dB).
-      const resActive = state.piano.stringRes && this.effectiveSustainLevel('piano') >= SUSTAIN_LIFT
+      // A true-zero mute lets the browser mark the resonance convolver's
+      // subgraph silent and skip its DSP while the damper is up.
       const resLevel = 0.4 * Math.pow(10, state.globalSettings.stringResDb / 20)
-      rampTo(channel.resSend.gain, resActive ? resLevel : 0.0001, now)
+      rampTo(channel.resSend.gain, resActive ? resLevel : 0, now)
 
       // Ordered effect chain (families process real audio; allFxOff bypasses everything).
       const fxOn = !state.allFxOff
@@ -1312,10 +1409,13 @@ export class PianoEngine {
       channel.units.reverb.update(chain.reverb, fxOn && chain.reverb.on && !globalReverbOn, now)
 
       // Routing: Amp unit in "To Rotary" mode sends this layer through the
-      // single rotary instance (post-reverb: Reverb precedes Rotary).
+      // single rotary instance (post-reverb: Reverb precedes Rotary). The
+      // unused send is muted to a TRUE zero so the browser can silence-skip
+      // the whole branch (0.0001 kept a -80 dB trickle flowing through the
+      // rotary's delay/panner DSP forever).
       const routed = fxOn && chain.ampEq.on && chain.ampEq.type === 'To Rotary'
-      rampTo(channel.toRotary.gain, routed ? 1 : 0.0001, now)
-      rampTo(channel.toMaster.gain, routed ? 0.0001 : 1, now)
+      rampTo(channel.toRotary.gain, routed ? 1 : 0, now)
+      rampTo(channel.toMaster.gain, routed ? 0 : 1, now)
     }
 
     // Organ section: per-layer level + scanner feed the single shared effect
@@ -1323,13 +1423,25 @@ export class PianoEngine {
     // whose output then follows the same rotary/master routing pattern as a
     // piano layer.
     if (state.organ.sectionOn) this.ensureOrganChannels()
-    if (this.organChannels) {
+    if (
+      this.organChannels &&
+      this.depsChanged('organ', [
+        state.organ,
+        state.organChain,
+        state.organDrawbarPose,
+        state.soloLayer,
+        state.allFxOff,
+        globalReverbOn,
+        state.masterClock,
+        state.morphValues.pedal,
+      ])
+    ) {
       for (const layer of ['A', 'B'] as const) {
         const channel = this.organChannels[layer]
         const layerState = state.organ.layers[layer]
         const organSolo = state.soloLayer
         const audible = layerState.enabled && state.organ.sectionOn && (!organSolo || (organSolo.section === 'organ' && organSolo.layer === layer))
-        rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
+        rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0, now)
         channel.scanner.update({ type: state.organ.vibratoType }, layerState.vibrato, now)
       }
       // Drawbar moves retune sounding organ voices immediately.
@@ -1348,11 +1460,12 @@ export class PianoEngine {
 
       // Routing: the ORGAN button in the Rotary group (manual p. 53) OR the
       // shared chain's Amp unit in "To Rotary" mode sends the organ through
-      // the single rotary instance, post-reverb.
+      // the single rotary instance, post-reverb. True-zero mutes on the
+      // unused send (see the piano routing note).
       const ampToRotary = organFxOn && organFxState.ampEq.on && organFxState.ampEq.type === 'To Rotary'
       const routed = state.organ.toRotary || ampToRotary
-      rampTo(organChain.toRotary.gain, routed ? 1 : 0.0001, now)
-      rampTo(organChain.toMaster.gain, routed ? 0.0001 : 1, now)
+      rampTo(organChain.toRotary.gain, routed ? 1 : 0, now)
+      rampTo(organChain.toMaster.gain, routed ? 0 : 1, now)
     }
 
     // Synth section: three layers, each with its own independent effect
@@ -1363,9 +1476,26 @@ export class PianoEngine {
       for (const layer of SYNTH_LAYER_IDS) {
         const channel = this.synthChannels[layer]
         const layerState = state.synth.layers[layer]
+        if (
+          !this.depsChanged(`synth:${layer}`, [
+            layerState,
+            state.synthChains[layer],
+            state.synth.sectionOn,
+            state.soloLayer,
+            state.allFxOff,
+            globalReverbOn,
+            state.masterClock,
+            // Vibrato's Wheel/Pedal modes and Mod 1's PED mode read the live
+            // morph source positions.
+            state.morphValues.wheel,
+            state.morphValues.pedal,
+          ])
+        ) {
+          continue
+        }
         const synthSolo = state.soloLayer
         const audible = layerState.enabled && state.synth.sectionOn && (!synthSolo || (synthSolo.section === 'synth' && synthSolo.layer === layer))
-        rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0.0001, now)
+        rampTo(channel.levelGain.gain, audible ? mappings.levelToGain(layerState.level) : 0, now)
 
         const synthChain = state.synthChains[layer]
         channel.units.mod1.setPedal?.(pedal)
@@ -1378,9 +1508,10 @@ export class PianoEngine {
 
         // Routing: the layer's Amp unit in "To Rotary" mode sends it through
         // the single rotary instance, post-reverb (mirrors a Piano layer).
+        // True-zero mutes on the unused send (see the piano routing note).
         const routed = fxOn && synthChain.ampEq.on && synthChain.ampEq.type === 'To Rotary'
-        rampTo(channel.toRotary.gain, routed ? 1 : 0.0001, now)
-        rampTo(channel.toMaster.gain, routed ? 0.0001 : 1, now)
+        rampTo(channel.toRotary.gain, routed ? 1 : 0, now)
+        rampTo(channel.toMaster.gain, routed ? 0 : 1, now)
 
         // Vibrato rate: the layer's mapped Rate (spec voice.vibrato.menu:
         // 2.0-8.0 Hz) drives the per-layer pitch LFO oscillator directly.
@@ -1580,6 +1711,9 @@ export class PianoEngine {
       const channel = this.synthChannels[layer]
       const layerState = this.state.synth.layers[layer]
       const lfo = layerState.lfo
+      // Runs on every store commit: skip the layer's four ramps unless its
+      // LFO settings (or the master clock a synced rate reads) changed.
+      if (!this.depsChanged(`synthLfo:${layer}`, [lfo, this.state.masterClock])) continue
       if (lfo.waveform !== channel.lfo.waveform) {
         channel.lfo.waveform = lfo.waveform
         channel.lfo.osc.type = lfo.waveform === 'Square' ? 'square' : lfo.waveform === 'Saw Up' || lfo.waveform === 'Saw Down' ? 'sawtooth' : 'triangle'
@@ -1620,14 +1754,34 @@ export class PianoEngine {
   }
 
   layerVoiceCount(layer: VoiceLayer, section: SectionId = 'piano'): number {
-    let count = 0
-    for (const voice of this.voices.values()) if (voice.layer === layer && voice.section === section) count++
-    return count
+    return this.heldCounts.get(layerCode(section, layer)) ?? 0
   }
 
   isNoteActive(midi: number): boolean {
-    for (const voice of this.voices.values()) if (voice.midi === midi) return true
+    for (const [section, layer] of VOICE_ADDRESSES) {
+      if (this.voices.has(voiceKey(section, layer, midi))) return true
+    }
     return false
+  }
+
+  /** Registers a freshly started voice in the map and the O(1) counters. */
+  private trackVoice(key: number, voice: Voice): void {
+    this.voices.set(key, voice)
+    const code = layerCode(voice.section, voice.layer)
+    this.heldCounts.set(code, (this.heldCounts.get(code) ?? 0) + 1)
+    this.heldSectionCounts[voice.section] += 1
+  }
+
+  /** Removes a voice from the map (identity-checked) and the counters. */
+  private untrackVoice(voice: Voice): void {
+    const key = voiceKey(voice.section, voice.layer, voice.midi)
+    if (this.voices.get(key) !== voice) return
+    this.voices.delete(key)
+    const code = layerCode(voice.section, voice.layer)
+    const count = (this.heldCounts.get(code) ?? 1) - 1
+    if (count > 0) this.heldCounts.set(code, count)
+    else this.heldCounts.delete(code)
+    this.heldSectionCounts[voice.section] = Math.max(0, this.heldSectionCounts[voice.section] - 1)
   }
 
   noteOn(midi: number, velocity: number): void {
@@ -1645,14 +1799,7 @@ export class PianoEngine {
     // a chord held by the sustain pedal suppresses it just like held keys —
     // unless Percussion POLY is on (Shift + Percussion Volume, manual
     // p. 20), which lets every new key retrigger its own percussion partial.
-    let organNoteSounding = false
-    for (const voice of this.voices.values()) {
-      if (voice.section === 'organ') {
-        organNoteSounding = true
-        break
-      }
-    }
-    const allowPercussion = state.organ.percussion.poly ? true : !organNoteSounding
+    const allowPercussion = state.organ.percussion.poly ? true : this.heldSectionCounts.organ === 0
     for (const layer of AB_LAYERS) {
       // Keyboard zones (manual p. 39): a layer only sounds inside its
       // assigned zones; crossfades scale adjacent layers complementarily.
@@ -1841,7 +1988,7 @@ export class PianoEngine {
     // step boundaries otherwise leaves the last arp note hanging until its
     // key lifts (or forever under KB HOLD) — and re-open any half-closed
     // gate stages so normally-played voices aren't stuck dimmed.
-    for (const voice of [...this.voices.values()]) {
+    for (const voice of this.voices.values()) {
       if (voice.section !== 'synth') continue
       if (voice.arpDriven) {
         this.releaseVoice(voice, QUICK_RELEASE_SECONDS)
@@ -2214,7 +2361,7 @@ export class PianoEngine {
 
     gain.connect(bus)
     voice.synthFallback = synthFallback
-    this.voices.set(key, voice)
+    this.trackVoice(key, voice)
   }
 
   /* --------------------------------------------------------- organ voices -- */
@@ -2339,7 +2486,7 @@ export class PianoEngine {
 
     gain.connect(channel.voiceBus)
     voice.organLive = { model: layerState.model, partials, voxMix }
-    this.voices.set(key, voice)
+    this.trackVoice(key, voice)
   }
 
   /* -------------------------------------------------------- synth voices -- */
@@ -2872,7 +3019,7 @@ export class PianoEngine {
     voice.gateGain = gateGain
     voice.synthLive = synthLive
     voice.synthFilter = synthFilter
-    this.voices.set(key, voice)
+    this.trackVoice(key, voice)
     return voice
   }
 
@@ -3074,11 +3221,13 @@ export class PianoEngine {
 
   noteOff(midi: number): void {
     this.synthKeyUp(midi)
-    // Direct Map iteration (no copy array per key release): the loop body
-    // only flags voices or releases them, and releaseVoice deletes entries —
-    // never inserts — which is safe during Map iteration.
-    for (const voice of this.voices.values()) {
-      if (voice.midi !== midi) continue
+    // Direct keyed lookups: a key can address at most one voice per
+    // (section, layer), so probing the seven possible map keys replaces the
+    // old full scan over every held voice per key release. (Voice map keys
+    // always carry the raw key number — glide renames keep them in sync.)
+    for (const [section, layer] of VOICE_ADDRESSES) {
+      const voice = this.voices.get(voiceKey(section, layer, midi))
+      if (!voice) continue
       voice.keyDown = false
       // KB HOLD (manual p. 36): synth notes keep sounding after keys are
       // lifted; the release happens when KB HOLD is turned off. An EXCLUDEd
@@ -3117,7 +3266,7 @@ export class PianoEngine {
     for (const voice of this.voices.values()) {
       if (voice.section === 'synth' && voice.keyDown) downMidis.add(voice.midi)
     }
-    for (const voice of [...this.voices.values()]) {
+    for (const voice of this.voices.values()) {
       if (voice.section !== 'synth' || voice.keyDown || voice.sostenuto || voice.sustained) continue
       if (this.effectiveSustainLevel('synth') >= SUSTAIN_DOWN) {
         voice.sustained = true
@@ -3195,7 +3344,8 @@ export class PianoEngine {
     if (previous === level) return
     this.sustainLevel = level
     if (level < SUSTAIN_DOWN) {
-      for (const voice of [...this.voices.values()]) {
+      // Direct Map iteration: releaseVoice only deletes entries, safe mid-loop.
+      for (const voice of this.voices.values()) {
         if (voice.sustained && !voice.keyDown && !voice.sostenuto) {
           voice.sustained = false
           const halfPedal = voice.section === 'piano' && level >= SUSTAIN_LIFT
@@ -3224,7 +3374,7 @@ export class PianoEngine {
     if (down) {
       for (const voice of this.voices.values()) if (voice.keyDown) voice.sostenuto = true
     } else {
-      for (const voice of [...this.voices.values()]) {
+      for (const voice of this.voices.values()) {
         if (!voice.sostenuto) continue
         voice.sostenuto = false
         if (!voice.keyDown) {
@@ -3293,14 +3443,17 @@ export class PianoEngine {
   }
 
   /** Pitch stick: bends sounding voices (spec: ±2 semitones) in each section
-   *  whose PSTICK routing is on. */
+   *  whose PSTICK routing is on. Sections whose EFFECTIVE bend is unchanged
+   *  (PSTICK routing off pins it at 0) are skipped entirely — a stick drag
+   *  on a piano-only program no longer walks organ/synth voices, and — more
+   *  importantly — never cancels their scheduled pitch-envelope ramps. */
   setPitchBend(semitones: number): void {
     const clamped = Math.max(-2, Math.min(2, semitones))
     if (this.pitchBend === clamped) return
     this.pitchBend = clamped
-    this.applyBendToVoices('piano')
-    this.applyBendToVoices('organ')
-    this.applyBendToVoices('synth')
+    for (const section of ['piano', 'organ', 'synth'] as const) {
+      if (this.effectiveBend(section) !== this.appliedBend[section]) this.applyBendToVoices(section)
+    }
   }
 
   /** Bend a section hears: zero while its PSTICK routing is off (manual p. 18/23). */
@@ -3332,23 +3485,39 @@ export class PianoEngine {
     if (!context) return
     const bend = this.effectiveBend(section)
     this.appliedBend[section] = bend
+    // Per-layer pitch offsets and rate factors, hoisted out of the voice
+    // walk: bend streams (MIDI pitch wheel, stick drags) retarget every
+    // sounding source, and recomputing Math.pow per voice was pure waste.
+    const bendCents = bend * 100
+    const centsByLayer: Record<VoiceLayer, number> = { A: bendCents, B: bendCents, C: bendCents }
+    const factorByLayer: Record<VoiceLayer, number> = { A: 1, B: 1, C: 1 }
     if (section === 'synth') {
-      for (const layer of SYNTH_LAYER_IDS) this.appliedSynthPitch[layer] = this.synthOscPitchCents(layer)
+      for (const layer of SYNTH_LAYER_IDS) {
+        const pitchCents = this.synthOscPitchCents(layer)
+        this.appliedSynthPitch[layer] = pitchCents
+        centsByLayer[layer] = bendCents + pitchCents
+        factorByLayer[layer] = Math.pow(2, (bendCents + pitchCents) / 1200)
+      }
+    } else {
+      const factor = Math.pow(2, bendCents / 1200)
+      factorByLayer.A = factor
+      factorByLayer.B = factor
+      factorByLayer.C = factor
     }
     const now = context.currentTime
     const apply = (voice: Voice) => {
       if (voice.section !== section) return
       // Synth voices carry their layer's Osc Pitch offset on top of the bend
       // (manual p. 28); piano/organ voices have no such offset.
-      const pitchCents = section === 'synth' ? this.synthOscPitchCents(voice.layer as SynthLayerId) : 0
-      const factor = Math.pow(2, (bend * 100 + pitchCents) / 1200)
+      const cents = centsByLayer[voice.layer]
+      const factor = factorByLayer[voice.layer]
       for (const source of voice.sources) {
         if (source.kind === 'sample') {
           source.node.playbackRate.cancelScheduledValues(now)
           source.node.playbackRate.setTargetAtTime(source.baseRate * factor, now, 0.015)
         } else {
           source.node.detune.cancelScheduledValues(now)
-          source.node.detune.setTargetAtTime(source.baseDetune + bend * 100 + pitchCents, now, 0.015)
+          source.node.detune.setTargetAtTime(source.baseDetune + cents, now, 0.015)
         }
       }
     }
@@ -3372,13 +3541,13 @@ export class PianoEngine {
       this.synthSoundingMidi = { A: null, B: null, C: null }
     }
     const releaseSeconds = reason === 'panic' ? PANIC_RELEASE_SECONDS : QUICK_RELEASE_SECONDS
-    for (const voice of [...this.voices.values()]) this.releaseVoice(voice, releaseSeconds)
+    for (const voice of this.voices.values()) this.releaseVoice(voice, releaseSeconds)
   }
 
   private releaseVoice(voice: Voice, releaseSeconds: number): void {
     if (voice.releasing) return
     voice.releasing = true
-    this.voices.delete(voiceKey(voice.section, voice.layer, voice.midi))
+    this.untrackVoice(voice)
     this.releasingVoices.add(voice)
     const context = this.context
     if (context) {
@@ -3542,6 +3711,8 @@ export class PianoEngine {
     }
     this.stopArp(false)
     this.voicePool.length = 0
+    this.heldCounts.clear()
+    this.heldSectionCounts = { piano: 0, organ: 0, synth: 0 }
     this.synthHeld = { A: [], B: [], C: [] }
     this.synthSoundingMidi = { A: null, B: null, C: null }
     this.rotary?.dispose()
@@ -3568,6 +3739,7 @@ export class PianoEngine {
     this.masterGain = null
     if (this.context) void this.context.close()
     this.context = null
+    this.appliedDeps.clear()
     this.sampleCache.clear()
     this.instrumentStatus.clear()
     this.instrumentError.clear()
