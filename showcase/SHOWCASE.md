@@ -2796,3 +2796,35 @@ state object).
   ready, notes sound and light keys, dense rAF-driven playback (4 note
   events/frame × 300 frames) with 0 long frames; layout suite 12/12.
 - Gates: typecheck, lint, build, suite 632/632.
+
+### 81 — Piano sample quality: 4-layer Grand, real Rhodes/Upright/Harpsichord (2026-07-07)
+
+User report: **"the piano samples are not that good."** The Grand bundled
+only 3 of Salamander's 16 velocity layers and truncated tails at 6.5 s; the
+Upright, Electric and second-Clav models were single-layer GM-soundfont
+renders (~58 kbps, ~3 s) — the "cheap MIDI" sound no engine shaping fixes.
+
+- **Grand: 4 recorded velocity layers** (Salamander 4/8/13/16 — adds the
+  fortissimo top layer) via the new `@audio-samples/piano-mp3-velocity16`
+  package; 30 roots × 4 layers = 120 files. Runtime tail truncation raised
+  6.5 s → 12 s (1 s fade) so bass notes ring out.
+- **Electric replaced: "Rhodes Mk I"** — jRhodes3d, Jeff Learman's 1977
+  Rhodes Mark I Stage 73 recorded from the harp connector; 15 roots × 3 of
+  the 5 recorded layers (CC-BY-NC-4.0, attribution in SOURCES.md).
+- **Upright replaced: "VS Upright"** — VCSL "Upright Piano, Yamaha"
+  (Versilian Studios, CC0); 13 roots (C/G per octave) × 3 recorded layers.
+- **Harpsichord replaced** — VCSL "Harpsichord, French" (CC0); 28 roots × 1
+  layer (harpsichords are not velocity sensitive). Clavinet, FM Piano,
+  Vibraphone and Marimba remain GM sets (no better free sources exist for
+  those characters).
+- New `scripts/fetch-samples.mjs`: downloads WAV/FLAC from pinned GitHub
+  commits, trims (8–10 s) and encodes MP3 via `ffmpeg-static`, writes
+  `public/samples/fetched.json`; `sync-samples.mjs` merges it into the
+  manifest and no longer owns the three replaced directories. VCSL's
+  octave-low file naming was verified by autocorrelation pitch detection
+  and corrected to sounding pitch in the zone tables.
+- Multi-layer sets get real velocity crossfade automatically (the engine's
+  single-layer gain+lowpass shaping stays only for true single-layer sets).
+  Provenance updated in `IMPLEMENTATION_DETAILS.json` (npm-only wording
+  replaced with the dual npm/pinned-fetch chain), `SOURCES.md`, manifest,
+  and the library/provenance tests. Bundle: 19 MB → 32 MB.

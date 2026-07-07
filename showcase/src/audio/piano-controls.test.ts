@@ -183,13 +183,13 @@ describe('piano.velocity-controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Misc -> Electric
     fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Electric -> Clav
     fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' })) // Clav -> Upright
-    expect(screen.getByTestId('oled-piano-line').textContent).toMatch(/Tack Upright/)
+    expect(screen.getByTestId('oled-piano-line').textContent).toMatch(/VS Upright/)
     // INFO = Shift + Piano Select (manual p. 25) — the panel has one button.
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
     fireEvent.click(screen.getByRole('button', { name: 'Piano Type Select' }))
     expect(screen.getByTestId('oled-edit-line').textContent).toMatch(/vel layer/)
     // Shift+Piano Select must not have cycled the type.
-    expect(screen.getByTestId('oled-piano-line').textContent).toMatch(/Tack Upright/)
+    expect(screen.getByTestId('oled-piano-line').textContent).toMatch(/VS Upright/)
     fireEvent.click(screen.getByRole('button', { name: 'Shift/Exit' }))
     const fader = screen.getByRole('slider', { name: 'Piano Layer A Level' })
     fireEvent.keyDown(fader, { key: 'PageDown' })

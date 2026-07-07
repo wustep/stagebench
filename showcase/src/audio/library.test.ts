@@ -32,18 +32,24 @@ describe('piano.instrument-library — bundled provenance', () => {
     }
   })
 
-  it('declares distinct sources and redistributable licenses per instrument', () => {
+  it('declares distinct sources and truthful licenses per instrument', () => {
     const sources = new Set(INSTRUMENTS.map((i) => i.source))
     expect(sources.size).toBe(8)
     for (const instrument of INSTRUMENTS) {
       expect(instrument.license.length).toBeGreaterThan(5)
       expect(instrument.source.length).toBeGreaterThan(20)
-      expect(instrument.source).toMatch(/npm/i) // registry-only acquisition
+      // Acquisition chain is declared: npm registry or the pinned-commit
+      // fetch script (scripts/fetch-samples.mjs).
+      expect(instrument.source).toMatch(/npm|fetch-samples\.mjs/i)
     }
     expect(INSTRUMENTS.find((i) => i.id === 'grand-salamander')!.license).toMatch(/CC BY 3\.0/)
-    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone', 'clav-harpsichord', 'misc-marimba']) {
+    for (const id of ['clav-gm', 'digital-fm', 'misc-vibraphone', 'misc-marimba']) {
       expect(INSTRUMENTS.find((i) => i.id === id)!.license, id).toMatch(/MIT/)
     }
+    for (const id of ['upright-vcsl', 'clav-harpsichord']) {
+      expect(INSTRUMENTS.find((i) => i.id === id)!.license, id).toMatch(/CC0/)
+    }
+    expect(INSTRUMENTS.find((i) => i.id === 'electric-rhodes')!.license).toMatch(/CC-BY-NC/)
   })
 
   it('bundles every declared sample file on disk (offline capable, no remote URLs)', () => {
@@ -81,16 +87,35 @@ describe('piano.instrument-library — bundled provenance', () => {
     const grand = INSTRUMENTS.find((i) => i.id === 'grand-salamander')!
     const grandRoots = new Set(grand.zones.map((z) => z.rootMidi))
     expect(grandRoots.size).toBe(30) // minor-third spacing A0..C8
-    expect(grand.velocityLayers).toBe(3)
-    expect(grand.zones).toHaveLength(90)
-    for (const id of ['upright-tack', 'electric-tine', 'clav-gm', 'digital-fm', 'misc-vibraphone', 'clav-harpsichord', 'misc-marimba']) {
-      const instrument = INSTRUMENTS.find((i) => i.id === id)!
-      expect(new Set(instrument.zones.map((z) => z.rootMidi)).size, id).toBe(19) // major-third spacing
+    expect(grand.velocityLayers).toBe(4)
+    expect(grand.zones).toHaveLength(120)
+    const expectedRoots: Record<string, number> = {
+      'upright-vcsl': 13, // C/G per octave, C1..C7, x3 recorded layers
+      'electric-rhodes': 15, // every 4th white key F1..C7, x3 recorded layers
+      'clav-gm': 19, // major-third spacing (GM render set)
+      'digital-fm': 19,
+      'misc-vibraphone': 19,
+      'clav-harpsichord': 28, // VCSL wholetone-ish coverage D1..C6
+      'misc-marimba': 19,
     }
+    for (const [id, count] of Object.entries(expectedRoots)) {
+      const instrument = INSTRUMENTS.find((i) => i.id === id)!
+      expect(new Set(instrument.zones.map((z) => z.rootMidi)).size, id).toBe(count)
+    }
+    expect(INSTRUMENTS.find((i) => i.id === 'upright-vcsl')!.zones).toHaveLength(39)
+    expect(INSTRUMENTS.find((i) => i.id === 'electric-rhodes')!.zones).toHaveLength(45)
     // Max shift distance from any keybed note (28..100) to a grand root <= 2 semitones.
     for (let midi = 28; midi <= 100; midi++) {
       const zone = nearestZones(grand, midi)[0]!
       expect(Math.abs(midi - zone.rootMidi), `midi ${midi}`).toBeLessThanOrEqual(2)
+    }
+    // The fetched multi-layer sets stay within 4 semitones of a recorded root.
+    for (const id of ['upright-vcsl', 'electric-rhodes']) {
+      const instrument = INSTRUMENTS.find((i) => i.id === id)!
+      for (let midi = 28; midi <= 100; midi++) {
+        const zone = nearestZones(instrument, midi)[0]!
+        expect(Math.abs(midi - zone.rootMidi), `${id} midi ${midi}`).toBeLessThanOrEqual(4)
+      }
     }
   })
 

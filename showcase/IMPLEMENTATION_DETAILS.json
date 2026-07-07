@@ -3,34 +3,34 @@
   "version": 1,
   "phase": 2,
   "audio": {
-    "strategy": "Sampled multi-piano instrument with a live-DSP effect chain, plus generated Organ and Synth engines sharing the same audio graph. Primary piano sound: eight bundled RECORDED sample sets across the six selectable piano types — Grand/Upright/Electric/Digital bundle one model each, Clav and Misc each bundle a SECOND model (Clavinet+Harpsichord, Vibraphone+Marimba — spec.scope.optional model list view) — played through AudioBufferSourceNodes with nearest-root selection, recorded-velocity-layer crossfading (grand) or declared gain+filter velocity shaping (single-layer sets), unison detune copies, and per-voice envelopes. Organ and Synth are GENERATED live Web Audio additive/subtractive/oscillator synthesis, never recordings, declared as digital models throughout. One shared AudioContext: Piano voices enter per-layer buses (timbre EQ, dynamic compression, level); Organ layers feed one shared effect chain; each Synth layer (A/B/C) has its own independent effect chain. Every chain is the same ordered unit list Mod 1 → Mod 2 → Delay → Amp Sim/EQ → Compressor → Reverb, then either the single Rotary Speaker instance (Amp unit 'To Rotary', or the Organ strip's dedicated ORGAN rotary-source button) or directly the master gain → limiter → one destination. All effects are live Web Audio processing (LFOs, modulated delays, biquads, waveshapers, convolution). The Phase 1 oscillator voice survives only as a clearly labeled synthesized fallback after primary piano sample failure.",
+    "strategy": "Sampled multi-piano instrument with a live-DSP effect chain, plus generated Organ and Synth engines sharing the same audio graph. Primary piano sound: eight bundled RECORDED sample sets across the six selectable piano types — Grand/Upright/Electric/Digital bundle one model each, Clav and Misc each bundle a SECOND model (Clavinet+Harpsichord, Vibraphone+Marimba — spec.scope.optional model list view) — played through AudioBufferSourceNodes with nearest-root selection, recorded-velocity-layer crossfading (Grand 4 layers, Upright and Electric 3 layers) or declared gain+filter velocity shaping (single-layer sets), unison detune copies, and per-voice envelopes. Organ and Synth are GENERATED live Web Audio additive/subtractive/oscillator synthesis, never recordings, declared as digital models throughout. One shared AudioContext: Piano voices enter per-layer buses (timbre EQ, dynamic compression, level); Organ layers feed one shared effect chain; each Synth layer (A/B/C) has its own independent effect chain. Every chain is the same ordered unit list Mod 1 → Mod 2 → Delay → Amp Sim/EQ → Compressor → Reverb, then either the single Rotary Speaker instance (Amp unit 'To Rotary', or the Organ strip's dedicated ORGAN rotary-source button) or directly the master gain → limiter → one destination. All effects are live Web Audio processing (LFOs, modulated delays, biquads, waveshapers, convolution). The Phase 1 oscillator voice survives only as a clearly labeled synthesized fallback after primary piano sample failure.",
     "sampleSources": [
       {
         "name": "Salamander Grand ('Grand' type)",
-        "source": "Salamander Grand Piano V3 — Yamaha C5 recorded by Alexander Holm (archive.org/details/SalamanderGrandPianoV3), obtained exclusively through the npm registry packages @audio-samples/piano-mp3-velocity4, -velocity8 and -velocity13 (v1.0.5) and copied into public/samples/grand by scripts/sync-samples.mjs.",
+        "source": "Salamander Grand Piano V3 — Yamaha C5 recorded by Alexander Holm (archive.org/details/SalamanderGrandPianoV3), obtained exclusively through the npm registry packages @audio-samples/piano-mp3-velocity4, -velocity8, -velocity13 and -velocity16 (v1.0.5) and copied into public/samples/grand by scripts/sync-samples.mjs.",
         "license": "CC BY 3.0 — attribution: 'Salamander Grand Piano V3' by Alexander Holm.",
         "files": [
-          "public/samples/grand/<a0|c1|ds1|fs1…c8>-l<1|2|3>.mp3 — 30 root notes (A/C/D#/F# per octave, A0–C8) × 3 recorded velocity layers (Salamander layers 4, 8, 13 of 16) = 90 files; per-file roots/layers listed in public/samples/manifest.json"
+          "public/samples/grand/<a0|c1|ds1|fs1…c8>-l<1|2|3|4>.mp3 — 30 root notes (A/C/D#/F# per octave, A0–C8) × 4 recorded velocity layers (Salamander layers 4, 8, 13, 16 of 16) = 120 files; per-file roots/layers listed in public/samples/manifest.json"
         ],
-        "notes": "Recorded velocity layers are crossfaded by played velocity. Decoded tails longer than 6.5 s are truncated with a fade to bound memory; this is declared processing of recorded material, not synthesis."
+        "notes": "Recorded velocity layers are crossfaded by played velocity. Decoded tails longer than 12 s are truncated with a fade to bound memory; this is declared processing of recorded material, not synthesis."
       },
       {
-        "name": "Tack Upright ('Upright' type)",
-        "source": "GM Honky-tonk piano program (detuned tack-upright character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts, Benjamin Gleitzman), obtained via the npm registry package web-music-score-samples v3.0.0 (samples/003-honkytonk-piano) and copied into public/samples/upright.",
-        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "name": "VS Upright ('Upright' type)",
+        "source": "Upright Piano, Yamaha (a.k.a. 'VS Upright No. 1') from the Versilian Community Sample Library, recorded by Versilian Studios LLC — fetched from the pinned GitHub commit sgossner/VCSL@c1ea7bc (Chordophones/Zithers/Upright Piano, Yamaha/Sustains, rr1 takes), trimmed to 8 s and re-encoded to MP3 into public/samples/upright by scripts/fetch-samples.mjs (fetched provenance recorded in public/samples/fetched.json).",
+        "license": "CC0 1.0 (Versilian Studios LLC).",
         "files": [
-          "public/samples/upright/<c1|e1|gs1…c7>.mp3 — 19 root notes (C/E/Ab per octave) × 1 velocity layer"
+          "public/samples/upright/<c1|g1…c7>-l<1|2|3>.mp3 — 13 root notes (C/G per octave, sounding C1–C7) × 3 recorded velocity layers = 39 files"
         ],
-        "notes": "The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy soundfont banks; the packaging does not identify which bank produced these renders — declared honestly. Single recorded velocity layer: velocity response is shaped by gain and a velocity-keyed lowpass in the engine and is declared as such."
+        "notes": "Three recorded velocity layers crossfaded by played velocity. VCSL file names are written one octave below sounding pitch (verified by autocorrelation of the recordings); manifest root notes use the sounding pitch. The sounding C6 root has no vl1 recording in VCSL, so its l1 slot reuses the vl2 take — declared, not hidden."
       },
       {
-        "name": "Tine EP ('Electric' type)",
-        "source": "GM Electric Piano 1 (tine/electromechanical character) from the same MIDI-JS Soundfonts collection via npm web-music-score-samples v3.0.0 (samples/004-electric-piano-1), copied into public/samples/electric.",
-        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "name": "Rhodes Mk I ('Electric' type)",
+        "source": "jRhodes3d — Jeff Learman's 1977 Rhodes Mark I Stage 73 electric piano, recorded directly from the harp connector (mono) — fetched from the pinned GitHub commit sfzinstruments/jlearman.jRhodes3d@6b9fbd0 (jRhodes3d-mono FLAC files), trimmed to 10 s and re-encoded to MP3 into public/samples/electric by scripts/fetch-samples.mjs (fetched provenance recorded in public/samples/fetched.json).",
+        "license": "CC-BY-NC-4.0 (Jeff Learman) — non-commercial use only; attribution: 'jRhodes3d' sampled by Jeff Learman.",
         "files": [
-          "public/samples/electric/<c1|e1|gs1…c7>.mp3 — 19 root notes × 1 velocity layer"
+          "public/samples/electric/<f1|b1…c7>-l<1|2|3>.mp3 — 15 root notes (every 4th white key, F1–C7) × 3 recorded velocity layers = 45 files"
         ],
-        "notes": "Same provenance chain and single-layer velocity declaration as the Upright set."
+        "notes": "Three of the set's five recorded velocity layers are bundled per root (soft/mid/hard takes chosen from those recorded at each root — high roots lack the softest takes) and crossfaded by played velocity."
       },
       {
         "name": "Clavinet ('Clav' type)",
@@ -61,12 +61,12 @@
       },
       {
         "name": "Harpsichord ('Clav' type, second model — spec.scope.optional model list view)",
-        "source": "GM Harpsichord (plucked-string harpsichord character; the spec's Clav source rule allows clavinet or harpsichord) from the same MIDI-JS Soundfonts collection via npm web-music-score-samples v3.0.0 (samples/006-harpsichord), copied into public/samples/harpsichord.",
-        "license": "MIT (MIDI-JS Soundfonts collection; repackaged MIT by web-music-score-samples).",
+        "source": "Harpsichord, French from the Versilian Community Sample Library, recorded by Versilian Studios LLC (the spec's Clav source rule allows clavinet or harpsichord) — fetched from the pinned GitHub commit sgossner/VCSL@c1ea7bc (Chordophones/Zithers/Harpsichord, French/Sustains, rr1 takes), trimmed to 8 s and re-encoded to MP3 into public/samples/harpsichord by scripts/fetch-samples.mjs (fetched provenance recorded in public/samples/fetched.json).",
+        "license": "CC0 1.0 (Versilian Studios LLC).",
         "files": [
-          "public/samples/harpsichord/<c1|e1|gs1…c7>.mp3 — 19 root notes × 1 velocity layer"
+          "public/samples/harpsichord/<d1|gs1…c6>.mp3 — 28 root notes (sounding D1–C6) × 1 velocity layer"
         ],
-        "notes": "Same provenance chain and single-layer velocity declaration as the Upright set. Second Clav-type model (id clav-harpsichord), selectable via the Piano Model dial and the Shift + Piano Model dial model LIST view; audibly distinct from Clavinet (rendered-audio proof in render-library.test.ts)."
+        "notes": "Single recorded layer — real harpsichords are not velocity sensitive; velocity response is shaped by gain and a velocity-keyed lowpass in the engine and is declared as such. VCSL file names are written one octave below sounding pitch (verified by autocorrelation); manifest root notes use the sounding pitch. Second Clav-type model (id clav-harpsichord), selectable via the Piano Model dial and the Shift + Piano Model dial model LIST view; audibly distinct from Clavinet (rendered-audio proof in render-library.test.ts)."
       },
       {
         "name": "Marimba ('Misc' type, second model — spec.scope.optional model list view)",
@@ -192,7 +192,7 @@
       }
     ],
     "notes": [
-      "All recorded material was obtained exclusively through the npm registry (the run's only permitted network source) and is bundled under public/samples/ for fully offline playback; see public/samples/SOURCES.md and scripts/sync-samples.mjs for the exact provenance chain.",
+      "All recorded material is bundled under public/samples/ for fully offline playback, obtained either through the npm registry (scripts/sync-samples.mjs) or fetched from pinned GitHub commits and re-encoded to MP3 (scripts/fetch-samples.mjs, provenance in public/samples/fetched.json); see public/samples/SOURCES.md for the exact per-set chain.",
       "One AudioContext feeds per-layer buses, ordered effects (Piano layers, the shared Organ chain, and each Synth layer's own independent chain), the single rotary instance, master gain and limiter into one destination; no engine or effect creates a parallel context or destination.",
       "All six piano types (Grand/Upright/Electric/Clav/Digital/Misc) bundle a recorded model, and Clav and Misc each bundle a SECOND recorded model (Harpsichord, Marimba — spec.scope.optional 'More than one model per type and the model list view'); the missing-model state (spec: nord-stage-4.piano.json selection.missingModelState — flashing type LED, truthful Program-display report, labeled playable fallback) is reached through sample load failure. While Shift is latched, turning the Piano Model dial shows the focused layer's type's model list on the Program OLED, mirroring the Shift + Program dial numeric list view.",
       "SOLO (manual p. 18): holding a Piano/Organ/Synth section's ON button for roughly half a second, or Shift + clicking the same button (a keyboard-accessible equivalent, since long-press isn't reachable without a pointer), activates only that section and turns the other two off. sectionOn fields are ordinary snapshot state, so a solo round-trips through Store/recall like any other program edit.",

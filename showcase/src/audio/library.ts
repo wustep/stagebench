@@ -9,15 +9,15 @@
  * for the complete source/license provenance):
  *
  * - Grand    "Salamander Grand" — Salamander Grand Piano V3 (Alexander Holm,
- *            CC BY 3.0), 30 roots x 3 recorded velocity layers.
- * - Upright  "Tack Upright" — GM Honky-tonk (detuned tack-upright character)
- *            from the MIDI-JS Soundfonts collection (MIT), 19 roots x 1 layer.
- * - Electric "Tine EP" — GM Electric Piano 1 (tine/electromechanical) from the
- *            MIDI-JS Soundfonts collection (MIT), 19 roots x 1 layer.
- * - Clav     "Clavinet" — GM Clavinet from the same collection (MIT),
- *            19 roots x 1 layer (spec: clavinet/harpsichord character).
- *            "Harpsichord" — a second Clav model, GM Harpsichord (MIT),
- *            19 roots x 1 layer.
+ *            CC BY 3.0), 30 roots x 4 recorded velocity layers.
+ * - Upright  "VS Upright" — VCSL Upright Piano, Yamaha (Versilian Studios,
+ *            CC0), 13 roots x 3 recorded velocity layers.
+ * - Electric "Rhodes Mk I" — jRhodes3d, Jeff Learman's 1977 Rhodes Mark I
+ *            Stage 73 (CC-BY-NC-4.0), 15 roots x 3 recorded velocity layers.
+ * - Clav     "Clavinet" — GM Clavinet from the MIDI-JS Soundfonts collection
+ *            (MIT), 19 roots x 1 layer (spec: clavinet/harpsichord character).
+ *            "Harpsichord" — a second Clav model, VCSL Harpsichord, French
+ *            (CC0), 28 roots x 1 layer.
  * - Digital  "FM Piano" — GM Electric Piano 2 (FM/DX digital piano character)
  *            from the same collection (MIT), 19 roots x 1 layer.
  * - Misc     "Vibraphone" — GM Vibraphone (mallet character) from the same
@@ -83,7 +83,7 @@ const GM_ROOT_STEMS: Array<[string, number]> = []
 function salamanderZones(): SampleZone[] {
   const zones: SampleZone[] = []
   for (const [stem, rootMidi] of SALAMANDER_ROOT_STEMS) {
-    for (const layer of [1, 2, 3]) {
+    for (const layer of [1, 2, 3, 4]) {
       zones.push({ file: `samples/grand/${stem}-l${layer}.mp3`, rootMidi, velocityLayer: layer })
     }
   }
@@ -94,36 +94,79 @@ function gmZones(dir: string): SampleZone[] {
   return GM_ROOT_STEMS.map(([stem, rootMidi]) => ({ file: `samples/${dir}/${stem}.mp3`, rootMidi, velocityLayer: 1 }))
 }
 
+const STEM_NAMES = ['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b']
+
+function midiToStem(midi: number): string {
+  return `${STEM_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`
+}
+
+/** Multi-layer zones for the fetched sets (scripts/fetch-samples.mjs). */
+function layeredZones(dir: string, roots: readonly number[], layers: number): SampleZone[] {
+  const zones: SampleZone[] = []
+  for (const rootMidi of roots) {
+    for (let layer = 1; layer <= layers; layer++) {
+      zones.push({ file: `samples/${dir}/${midiToStem(rootMidi)}-l${layer}.mp3`, rootMidi, velocityLayer: layer })
+    }
+  }
+  return zones
+}
+
+/** VCSL Upright Piano, Yamaha: C/G per octave, sounding C1..C7. */
+const UPRIGHT_ROOTS: readonly number[] = [24, 31, 36, 43, 48, 55, 60, 67, 72, 79, 84, 91, 96]
+
+/** jRhodes3d recorded roots (filenames encode the sounding MIDI note). */
+const RHODES_ROOTS: readonly number[] = [29, 35, 40, 45, 50, 55, 59, 62, 65, 71, 76, 81, 86, 91, 96]
+
+/** VCSL Harpsichord, French recorded roots (sounding pitch; single layer). */
+const HARPSICHORD_ROOTS: readonly number[] = [
+  26, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84,
+]
+
+function harpsichordZones(): SampleZone[] {
+  return HARPSICHORD_ROOTS.map((rootMidi) => ({
+    file: `samples/harpsichord/${midiToStem(rootMidi)}.mp3`,
+    rootMidi,
+    velocityLayer: 1,
+  }))
+}
+
 export const INSTRUMENTS: readonly InstrumentSpec[] = [
   {
     id: 'grand-salamander',
     type: 'Grand',
     name: 'Salamander Grand',
-    velocityLayers: 3,
-    source: 'Salamander Grand Piano V3 (Yamaha C5, rec. Alexander Holm) via npm @audio-samples/piano-mp3-velocity{4,8,13}',
+    velocityLayers: 4,
+    source: 'Salamander Grand Piano V3 (Yamaha C5, rec. Alexander Holm) via npm @audio-samples/piano-mp3-velocity{4,8,13,16}',
     license: 'CC BY 3.0 — Alexander Holm',
     gain: 1.0,
     zones: salamanderZones(),
   },
   {
-    id: 'upright-tack',
+    id: 'upright-vcsl',
     type: 'Upright',
-    name: 'Tack Upright',
-    velocityLayers: 1,
-    source: 'GM Honky-tonk (tack-upright character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
-    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
-    gain: 1.6,
-    zones: gmZones('upright'),
+    name: 'VS Upright',
+    velocityLayers: 3,
+    source: 'VCSL Upright Piano, Yamaha ("VS Upright No. 1", Versilian Studios) fetched from github.com/sgossner/VCSL by scripts/fetch-samples.mjs',
+    license: 'CC0 1.0 — Versilian Studios LLC',
+    // The fetched VCSL recordings are much hotter than the GM renders this
+    // set replaced (forte layer mean -25.8 dB vs the old set's -36 dB):
+    // gain mean-level-matches the previous Upright so program balances hold.
+    gain: 0.5,
+    zones: layeredZones('upright', UPRIGHT_ROOTS, 3),
   },
   {
-    id: 'electric-tine',
+    id: 'electric-rhodes',
     type: 'Electric',
-    name: 'Tine EP',
-    velocityLayers: 1,
-    source: 'GM Electric Piano 1 (tine EP), MIDI-JS Soundfonts collection via npm web-music-score-samples',
-    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
-    gain: 1.5,
-    zones: gmZones('electric'),
+    name: 'Rhodes Mk I',
+    velocityLayers: 3,
+    source: 'jRhodes3d — 1977 Rhodes Mark I Stage 73 (rec. Jeff Learman) fetched from github.com/sfzinstruments/jlearman.jRhodes3d by scripts/fetch-samples.mjs',
+    license: 'CC-BY-NC-4.0 — Jeff Learman (non-commercial, attribution)',
+    // The jRhodes recordings are much hotter than the GM renders this set
+    // replaced (mean -16 dB / peaks near -3 dB vs the old set's -36 dB
+    // mean): gain mean-level-matches the previous Electric so program
+    // balances and master-limiter headroom (24-note clipping test) hold.
+    gain: 0.16,
+    zones: layeredZones('electric', RHODES_ROOTS, 3),
   },
   {
     id: 'clav-gm',
@@ -160,10 +203,10 @@ export const INSTRUMENTS: readonly InstrumentSpec[] = [
     type: 'Clav',
     name: 'Harpsichord',
     velocityLayers: 1,
-    source: 'GM Harpsichord (plucked-string harpsichord character), MIDI-JS Soundfonts collection via npm web-music-score-samples',
-    license: 'MIT — MIDI-JS Soundfonts (B. Gleitzman)',
+    source: 'VCSL Harpsichord, French (Versilian Studios) fetched from github.com/sgossner/VCSL by scripts/fetch-samples.mjs',
+    license: 'CC0 1.0 — Versilian Studios LLC',
     gain: 1.5,
-    zones: gmZones('harpsichord'),
+    zones: harpsichordZones(),
   },
   {
     id: 'misc-marimba',

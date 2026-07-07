@@ -2,21 +2,23 @@
 /**
  * Copies the bundled recorded Piano sample sets from their npm source
  * packages into public/samples/ with normalized file names, and writes a
- * machine-readable manifest next to them.
+ * machine-readable manifest next to them (merging the fetched non-npm sets
+ * described by public/samples/fetched.json — see scripts/fetch-samples.mjs).
  *
- * Sources (npm registry only; see public/samples/SOURCES.md):
+ * npm-sourced sets (see public/samples/SOURCES.md):
  * - Grand:    Salamander Grand Piano V3 (Alexander Holm, CC BY 3.0) via
- *             @audio-samples/piano-mp3-velocity{4,8,13} — 30 roots x 3 layers.
- * - Upright:  GM Honky-tonk (tack-upright character) via
- *             web-music-score-samples/003-honkytonk-piano (MIDI-JS Soundfonts, MIT).
- * - Electric: GM Electric Piano 1 (tine EP) via
- *             web-music-score-samples/004-electric-piano-1 (MIDI-JS Soundfonts, MIT).
+ *             @audio-samples/piano-mp3-velocity{4,8,13,16} — 30 roots x 4 layers.
  * - Clav:     GM Clavinet via
  *             web-music-score-samples/007-clavinet (MIDI-JS Soundfonts, MIT).
  * - Digital:  GM Electric Piano 2 (FM/DX digital piano character) via
  *             web-music-score-samples/005-electric-piano-2 (MIDI-JS Soundfonts, MIT).
  * - Misc:     GM Vibraphone (mallet character) via
  *             web-music-score-samples/011-vibraphone (MIDI-JS Soundfonts, MIT).
+ *
+ * Fetched sets (scripts/fetch-samples.mjs; NOT touched by this script):
+ * - Upright:  VCSL Upright Piano, Yamaha (CC0) — public/samples/upright.
+ * - Electric: jRhodes3d Rhodes Mark I (CC-BY-NC-4.0) — public/samples/electric.
+ * - Clav #2:  VCSL Harpsichord, French (CC0) — public/samples/harpsichord.
  *
  * Synth section (optional Samples mode, spec.scope.optional):
  * - synth-strings: GM String Ensemble 1 via
@@ -26,7 +28,7 @@
  *
  * Run manually: node scripts/sync-samples.mjs
  */
-import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -60,6 +62,7 @@ const instruments = []
     { pkg: '@audio-samples/piano-mp3-velocity4', tag: 'v4', layer: 1 },
     { pkg: '@audio-samples/piano-mp3-velocity8', tag: 'v8', layer: 2 },
     { pkg: '@audio-samples/piano-mp3-velocity13', tag: 'v13', layer: 3 },
+    { pkg: '@audio-samples/piano-mp3-velocity16', tag: 'v16', layer: 4 },
   ]
   const dir = join(out, 'grand')
   mkdirSync(dir, { recursive: true })
@@ -80,9 +83,9 @@ const instruments = []
     type: 'Grand',
     name: 'Salamander Grand',
     dir: 'grand',
-    velocityLayers: 3,
+    velocityLayers: 4,
     kind: 'recorded',
-    source: 'Salamander Grand Piano V3 (Yamaha C5) recorded by Alexander Holm — archive.org/details/SalamanderGrandPianoV3, bundled from npm @audio-samples/piano-mp3-velocity{4,8,13}',
+    source: 'Salamander Grand Piano V3 (Yamaha C5) recorded by Alexander Holm — archive.org/details/SalamanderGrandPianoV3, bundled from npm @audio-samples/piano-mp3-velocity{4,8,13,16}',
     license: 'CC BY 3.0 (Alexander Holm)',
     zones: zones.sort((a, b) => a.rootMidi - b.rootMidi || a.velocityLayer - b.velocityLayer),
   })
@@ -90,26 +93,6 @@ const instruments = []
 
 /* ------------------------------------- MIDI-JS soundfont based pianos -- */
 for (const spec of [
-  {
-    folder: '003-honkytonk-piano',
-    id: 'upright-tack',
-    type: 'Upright',
-    name: 'Tack Upright',
-    dir: 'upright',
-    source:
-      'GM Honky-tonk piano (detuned tack-upright character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/003-honkytonk-piano. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
-    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
-  },
-  {
-    folder: '004-electric-piano-1',
-    id: 'electric-tine',
-    type: 'Electric',
-    name: 'Tine EP',
-    dir: 'electric',
-    source:
-      'GM Electric Piano 1 (tine/electromechanical character), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/004-electric-piano-1. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
-    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
-  },
   {
     folder: '007-clavinet',
     id: 'clav-gm',
@@ -138,16 +121,6 @@ for (const spec of [
     dir: 'misc',
     source:
       'GM Vibraphone (mallet character, per the spec\'s Misc source rule), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/011-vibraphone. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
-    license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
-  },
-  {
-    folder: '006-harpsichord',
-    id: 'clav-harpsichord',
-    type: 'Clav',
-    name: 'Harpsichord',
-    dir: 'harpsichord',
-    source:
-      'GM Harpsichord (plucked-string harpsichord character; the spec\'s Clav source rule allows clavinet or harpsichord — this is a second, audibly distinct Clav-type model), note-per-note mp3 renders from the MIDI-JS Soundfonts collection (github.com/gleitz/midi-js-soundfonts), bundled from npm web-music-score-samples/006-harpsichord. The collection is rendered from the FluidR3_GM / MusyngKite / FatBoy banks; the packaging does not identify the exact bank.',
     license: 'MIT (MIDI-JS Soundfonts collection, Benjamin Gleitzman; repackaged MIT by web-music-score-samples)',
   },
   {
@@ -233,6 +206,21 @@ for (const spec of [
 }
 
 if (!existsSync(join(out, 'grand', 'c4-l2.mp3'))) throw new Error('grand copy incomplete')
+
+/* Merge the fetched (non-npm) sets described by fetched.json — written by
+ * scripts/fetch-samples.mjs — so manifest.json stays the single machine-
+ * readable index of everything under public/samples/. */
+const fetchedPath = join(out, 'fetched.json')
+if (existsSync(fetchedPath)) {
+  const fetched = JSON.parse(readFileSync(fetchedPath, 'utf8'))
+  for (const instrument of fetched.instruments) {
+    if (!existsSync(join(out, instrument.dir, instrument.zones[0].file))) {
+      throw new Error(`fetched set ${instrument.id} incomplete — run scripts/fetch-samples.mjs`)
+    }
+    instruments.push(instrument)
+  }
+}
+
 writeFileSync(join(out, 'manifest.json'), JSON.stringify({ version: 1, instruments }, null, 2))
 console.log(
   'Wrote',

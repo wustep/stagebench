@@ -1171,19 +1171,20 @@ export class PianoEngine {
   }
 
   private truncateBuffer(context: AudioContextLike, buffer: AudioBufferLike): AudioBufferLike {
-    const MAX_SECONDS = 6.5
+    const MAX_SECONDS = 12
     if (buffer.duration <= MAX_SECONDS) return buffer
     const rate = buffer.sampleRate
     const length = Math.floor(MAX_SECONDS * rate)
-    const fade = Math.floor(0.4 * rate)
+    const fade = Math.floor(1.0 * rate)
     const truncated = context.createBuffer(buffer.numberOfChannels, length, rate)
     for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
       const source = buffer.getChannelData(channel)
       const target = truncated.getChannelData(channel)
-      for (let i = 0; i < length; i++) {
-        const gain = i > length - fade ? (length - i) / fade : 1
-        target[i] = source[i]! * gain
-      }
+      // Bulk copy, then fade only the tail window — a per-sample gain
+      // multiply over the whole buffer stalled the main thread during the
+      // (90-file) library load.
+      target.set(source.subarray(0, length))
+      for (let i = length - fade + 1; i < length; i++) target[i] = source[i]! * ((length - i) / fade)
     }
     return truncated
   }

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { highBandRatio, peak, renderEngine, rms, similarity, type RenderOptions } from '../test/offline'
+import { bandEnergy, highBandRatio, peak, renderEngine, rms, similarity, type RenderOptions } from '../test/offline'
 import type { InstrumentStore } from '../state/instrument'
 
 /**
@@ -163,7 +163,10 @@ describe('effects.processing — rendered', () => {
       store.updateUnit('ampEq', { type: 'Neutral EQ', drive: 0, mid: 0, freq: 79 })
       store.toggleUnitOn('ampEq')
     })
-    const midRatio = (data: Float32Array) => highBandRatio(data, 1400, 0.1, 0.5)
+    // Measure at the swept mid band itself (freq 79 -> ~1.98 kHz), energy
+    // normalized by overall level: robust across source sample sets (the
+    // broadband highpass ratio depended on the Electric set's spectrum).
+    const midRatio = (data: Float32Array) => bandEnergy(data, 1983, 0.1, 0.5) / Math.max(1e-9, rms(data, 0.1, 0.5))
     expect(midRatio(midBoost.left)).toBeGreaterThan(midRatio(flat.left) * 1.15)
     expect(midRatio(midCut.left)).toBeLessThan(midRatio(flat.left) * 0.85)
 
