@@ -54,21 +54,26 @@ describe('organ.preset-drawbar-live — state and engine', () => {
     expect(store.getState().programs.dirty).toBe(false)
 
     const context = getContext()!
-    const before = context.nodes.length
+    const oscsBefore = context.oscillators().length
     engine.noteOn(60, 0.8)
-    const partialGains = context.nodes.slice(before).filter((n): n is FakeGain => n instanceof FakeGain)
-    const values = () => partialGains.map((g) => +g.gain.value.toFixed(6))
-    const initial = values()
+    // Lazy registration: only the pose's pulled 16' builds an oscillator.
+    expect(context.oscillators().length - oscsBefore).toBe(1)
+    const nodesBefore = context.nodes.length
     store.setOrganDrawbar(5, 8) // physical 2' pull mid-note (pose only)
-    const pulled = values()
-    expect(pulled).not.toEqual(initial)
+    // The pose pull materializes the 2' partial on the sounding voice…
+    const added = context.nodes.slice(nodesBefore).filter((n): n is FakeGain => n instanceof FakeGain)
+    expect(added.length).toBe(1)
+    const pulledValue = added[0]!.gain.value
+    expect(pulledValue).toBeGreaterThan(0.001)
     expect(store.getState().organDrawbarPose[5]).toBe(8)
-    // The Program heard nothing: registration untouched, no dirty edit.
+    // …while the Program heard nothing: registration untouched, no dirty edit.
     expect(store.getState().organ.layers.A.drawbars).toEqual(registration)
     expect(store.getState().programs.dirty).toBe(false)
-    // Back in Preset mode the stored registration sounds again.
+    // Back in Preset mode the stored registration sounds again: the
+    // pose-only partial mutes back to the silent floor.
     store.toggleOrganPreset()
-    expect(values()).toEqual(initial)
+    expect(added[0]!.gain.value).toBeLessThan(pulledValue)
+    expect(added[0]!.gain.value).toBeLessThanOrEqual(0.0001)
   })
 
   it('SYNC copies the physical pose into the stored registration as one ordinary dirty edit, leaving Preset state untouched', () => {

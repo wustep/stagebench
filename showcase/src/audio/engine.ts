@@ -36,7 +36,7 @@ import {
   type RotaryUnit,
   type ScannerState,
 } from './effects'
-import { drawbarPartialGain, ORGAN_MODEL_RECIPES } from './organ-models'
+import { drawbarPartialGain, ORGAN_MODEL_RECIPES, type OrganPartial } from './organ-models'
 import {
   FM_INHARMONIC_RATIO,
   fmModulationIndex,
@@ -119,6 +119,15 @@ interface OrganVoiceLive {
   model: OrganModelId
   partials: Array<{ drawbar: number; level: number; gain: GainNodeLike }>
   voxMix: { dark: GainNodeLike; bright: GainNodeLike } | null
+  /** Voice-graph entry the partials feed (the Vox tone-mix bus, or the voice gain). */
+  entry: AudioNodeLike
+  /** Build-time fundamental in Hz (includes octave + transpose at note-on). */
+  fundamental: number
+  /** Recipe-partial indices whose drawbar was silent at note-on, so no
+   *  oscillator was built: updateOrganVoiceGains creates one the first time
+   *  a pull makes it audible. A typical 3-drawbar registration then pays
+   *  for 3 oscillators per note instead of 9. */
+  pending: number[]
 }
 
 /** A detuned oscillator voice source retargeted live by Osc Ctrl: `source`
@@ -387,6 +396,16 @@ function midiToFrequency(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12)
 }
 
+/** Shared power-on state for engines not yet attached to a store: the
+ *  engine treats state as immutable and attachStore replaces it, so every
+ *  detached engine can read one lazily built instance — constructing a
+ *  fresh initialInstrumentState (factory bank included, ~40 snapshot
+ *  clones) per engine was pure startup/test-suite waste. */
+let sharedDefaultState: InstrumentState | null = null
+function engineDefaultState(): InstrumentState {
+  return (sharedDefaultState ??= initialInstrumentState())
+}
+
 /** Cents-depth-to-playbackRate-ratio translator scale for Samples-mode
  *  pitch modulation (see the pitchScalers hookup in startSynthVoice).
  *  Hoisted from a per-press closure (iteration 23 GC pass). */
@@ -607,7 +626,7 @@ export class PianoEngine {
   private arpRngState = 0
   private arpRunning = false
 
-  private state: InstrumentState = initialInstrumentState()
+  private state: InstrumentState = engineDefaultState()
   private detachStore: (() => void) | null = null
 
   /** Last-applied dependency tuples per applyState block (see depsChanged):
@@ -1083,10 +1102,55 @@ export class PianoEngine {
     return anySamplesLayer ? SYNTH_SAMPLE_SETS.map((set) => set.id) : []
   }
 
+  /** Enabled layers' selections load immediately; a DISABLED layer's
+   *  selection is deferred prefetch (see loadNeededInstruments). */
+  private partitionNeededInstrumentIds(): { active: string[]; prefetch: string[] } {
+    const active: string[] = []
+    const prefetch: string[] = []
+    for (const layer of ['A', 'B'] as const) {
+      const layerState = this.state.layers[layer]
+      const id = selectedInstrumentId(layerState)
+      if (!id) continue
+      const list = layerState.enabled ? active : prefetch
+      if (!active.includes(id) && !list.includes(id)) list.push(id)
+    }
+    return { active, prefetch }
+  }
+
   private loadNeededInstruments(): void {
     if (!this.context || !this.channels) return
-    for (const id of this.neededInstrumentIds()) this.loadInstrument(getInstrument(id))
+    const { active, prefetch } = this.partitionNeededInstrumentIds()
+    for (const id of active) this.loadInstrument(getInstrument(id))
     for (const id of this.neededSynthSampleSetIds()) this.loadInstrument(getSynthSampleSet(id))
+    // A DISABLED layer's selection still prefetches (enabling the layer is
+    // then gap-free) but only once every audible instrument has settled:
+    // at boot the disabled layer's set competed with the played piano for
+    // bandwidth and decode, delaying the first playable note. This path
+    // (selection changes / start) retries errored sets like it always did;
+    // enabling a layer promotes its set to an immediate load above.
+    if (prefetch.length > 0 && active.every((id) => this.instrumentSettled(id))) {
+      for (const id of prefetch) this.loadInstrument(getInstrument(id))
+    }
+  }
+
+  /** finalize()'s deferred-prefetch kick: starts only NEVER-ATTEMPTED
+   *  prefetch sets once the audible instruments settle. Unlike
+   *  loadNeededInstruments it must not retry errored sets — loadInstrument
+   *  deliberately retries on 'error' (failure recovery), so a settling
+   *  transition that re-ran the full loader would recurse forever on a
+   *  synchronously failing asset boundary. */
+  private startDeferredPrefetch(): void {
+    if (!this.context || !this.channels) return
+    const { active, prefetch } = this.partitionNeededInstrumentIds()
+    if (prefetch.length === 0 || !active.every((id) => this.instrumentSettled(id))) return
+    for (const id of prefetch) {
+      if (this.instrumentStatus.get(id) === undefined) this.loadInstrument(getInstrument(id))
+    }
+  }
+
+  private instrumentSettled(id: string): boolean {
+    const status = this.instrumentStatus.get(id)
+    return status === 'ready' || status === 'error'
   }
 
   private loadInstrument(spec: { id: string; zones: SampleZone[] }): void {
@@ -1128,6 +1192,8 @@ export class PianoEngine {
         this.instrumentStatus.set(spec.id, 'ready')
       }
       this.refreshStatus()
+      // Kick any deferred disabled-layer prefetch whose turn arrived.
+      this.startDeferredPrefetch()
     }
 
     if (syncFailure) {
@@ -1552,6 +1618,7 @@ export class PianoEngine {
     // arrays are immutably replaced on every edit/morph write, so the
     // reference tuple is exact.
     if (!this.depsChanged('organDrawbars', [this.effectiveOrganDrawbars('A'), this.effectiveOrganDrawbars('B')])) return
+    const bend = this.effectiveBend('organ')
     const apply = (voice: Voice) => {
       const live = voice.organLive
       if (!live) return
@@ -1560,6 +1627,18 @@ export class PianoEngine {
       for (const partial of live.partials) {
         const value = drawbars[partial.drawbar] ?? 0
         rampTo(partial.gain.gain, Math.max(0.0001, drawbarPartialGain(recipe, value) * partial.level), now)
+      }
+      // A pull can make a note-on-silent (pending) partial audible for the
+      // first time: build its oscillator now, fading in from silence.
+      if (live.pending.length > 0) {
+        const stillPending: number[] = []
+        for (const index of live.pending) {
+          const partial = recipe.partials[index]!
+          const drawbarGain = drawbarPartialGain(recipe, drawbars[partial.drawbar] ?? 0)
+          if (drawbarGain > 0) this.buildOrganPartial(voice, live, partial, drawbarGain, bend, now, 0.0001)
+          else stillPending.push(index)
+        }
+        live.pending = stillPending
       }
       if (live.voxMix) {
         const mix = (drawbars[8] ?? 0) / 8
@@ -2399,28 +2478,20 @@ export class PianoEngine {
       voxMix = { dark, bright }
     }
 
-    const partials: OrganVoiceLive['partials'] = []
+    const live: OrganVoiceLive = { model: layerState.model, partials: [], voxMix, entry, fundamental, pending: [] }
     const frequencyCap = Math.min(9000, context.sampleRate * 0.45)
-    for (const partial of recipe.partials) {
-      const frequency = fundamental * partial.ratio
-      if (frequency > frequencyCap) continue // top tonewheels are simply absent
-      const osc = context.createOscillator()
-      osc.type = partial.wave
-      osc.frequency.value = frequency
-      const baseDetune = partial.detune ?? 0
-      osc.detune.value = baseDetune + bend * 100
-      const level = partial.level * ORGAN_PARTIAL_LEVEL
-      const partialGain = context.createGain()
-      partialGain.gain.value = Math.max(
-        0.0001,
-        drawbarPartialGain(recipe, drawbars[partial.drawbar] ?? 0) * level,
-      )
-      osc.connect(partialGain)
-      partialGain.connect(entry)
-      osc.start(now)
-      ownedNodes.push(partialGain)
-      sources.push({ kind: 'synth', node: osc, baseDetune })
-      partials.push({ drawbar: partial.drawbar, level, gain: partialGain })
+    for (let index = 0; index < recipe.partials.length; index++) {
+      const partial = recipe.partials[index]!
+      if (fundamental * partial.ratio > frequencyCap) continue // top tonewheels are simply absent
+      const drawbarGain = drawbarPartialGain(recipe, drawbars[partial.drawbar] ?? 0)
+      if (drawbarGain <= 0) {
+        // Silent registration at note-on: no oscillator until a pull makes
+        // it audible (updateOrganVoiceGains builds it, mirroring how a real
+        // pushed-in tonewheel contributes nothing).
+        live.pending.push(index)
+        continue
+      }
+      this.buildOrganPartial(voice, live, partial, drawbarGain, bend, now)
     }
 
     // B3 percussion: a single decaying 2nd/3rd-harmonic partial (manual p. 20).
@@ -2468,8 +2539,41 @@ export class PianoEngine {
     }
 
     gain.connect(channel.voiceBus)
-    voice.organLive = { model: layerState.model, partials, voxMix }
+    voice.organLive = live
     this.trackVoice(key, voice)
+  }
+
+  /** One tonewheel/rank oscillator + its drawbar gain, feeding the voice's
+   *  entry node. Shared by note-on construction and the lazy path that
+   *  materializes a pending partial when a mid-note pull first makes it
+   *  audible (updateOrganVoiceGains). `initialGain` lets the lazy path fade
+   *  in from silence instead of stepping. */
+  private buildOrganPartial(
+    voice: Voice,
+    live: OrganVoiceLive,
+    partial: OrganPartial,
+    drawbarGain: number,
+    bend: number,
+    now: number,
+    initialGain?: number,
+  ): void {
+    const context = this.context!
+    const osc = context.createOscillator()
+    osc.type = partial.wave
+    osc.frequency.value = live.fundamental * partial.ratio
+    const baseDetune = partial.detune ?? 0
+    osc.detune.value = baseDetune + bend * 100
+    const level = partial.level * ORGAN_PARTIAL_LEVEL
+    const partialGain = context.createGain()
+    const target = Math.max(0.0001, drawbarGain * level)
+    partialGain.gain.value = initialGain ?? target
+    osc.connect(partialGain)
+    partialGain.connect(live.entry)
+    osc.start(now)
+    voice.ownedNodes.push(partialGain)
+    voice.sources.push({ kind: 'synth', node: osc, baseDetune })
+    live.partials.push({ drawbar: partial.drawbar, level, gain: partialGain })
+    if (initialGain !== undefined) rampTo(partialGain.gain, target, now)
   }
 
   /* -------------------------------------------------------- synth voices -- */

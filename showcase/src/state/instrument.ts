@@ -1,5 +1,5 @@
 import { useRef, useSyncExternalStore } from 'react'
-import { INSTRUMENTS, instrumentsOfType, PIANO_TYPES, SYNTH_SAMPLE_SETS, type PianoType } from '../audio/library'
+import { INSTRUMENTS, instrumentsOfType, SYNTH_SAMPLE_SETS, type PianoType } from '../audio/library'
 import { DRAWBAR_INITIAL, getControl } from '../model/hardware'
 import {
   ORGAN_PRESETS,
@@ -2777,18 +2777,19 @@ export class InstrumentStore {
     if (!arming) this.applyMorphNow(source)
   }
 
-  /** Re-applies both morph sources at their parked positions after a
-   *  snapshot load (program change / store / undo / bank switch): with the
-   *  wheel left high, the loaded program must sound and display the
-   *  interpolated values immediately — not on the source's next move.
-   *  Never dirties (interpolation writes use a bare commit). All sources
-   *  accumulate into ONE commit — each commit re-runs the engine's full
-   *  applyState and re-renders every panel section, so a program change
-   *  must not pay that up to three extra times. */
-  private reapplyMorphSources(): void {
-    let next = this.state
+  /** Folds every morph source's parked position into a snapshot-load state
+   *  (program change / store / undo / bank switch): with the wheel left
+   *  high, the loaded program must sound and display the interpolated
+   *  values immediately — not on the source's next move. The load paths
+   *  wrap their commit's state in this so the load and its morph reapply
+   *  are ONE commit — a follow-up commit was a second full engine
+   *  applyState + panel pass on every program switch while a wheel/pedal
+   *  sat off-center. Identity-preserving when nothing is assigned; never
+   *  dirties (interpolation writes never mark the program edited). */
+  private withMorphSourcesApplied(state: InstrumentState): InstrumentState {
+    let next = state
     for (const source of MORPH_SOURCES) next = withMorphApplied(next, source)
-    if (next !== this.state) this.commit(next)
+    return next
   }
 
   /** Interpolates every destination of a source at its current position. */
@@ -2857,9 +2858,11 @@ export class InstrumentStore {
 
   /** Sources with an assignment for a control (destination indicator data). */
   morphSourcesFor(control: string): MorphSource[] {
-    // Fast path for the overwhelmingly common state (no morphs assigned at
-    // all): this runs per mounted continuous control per commit, and the
-    // layer resolution below is the expensive part.
+    // Fast paths for the overwhelmingly common states — no morphs assigned
+    // at all, or a control that can never be a destination (recordMorphEdit
+    // gates on the same set): this runs per mounted continuous control per
+    // commit, and the layer resolution below is the expensive part.
+    if (!MORPH_DESTINATIONS.has(control)) return EMPTY_MORPH_SOURCES
     const morph = this.state.morph
     if (morph.wheel.length === 0 && morph.at.length === 0 && morph.pedal.length === 0) return EMPTY_MORPH_SOURCES
     // Filter by the same layer resolution the range read-back uses, so the
@@ -2904,6 +2907,10 @@ export class InstrumentStore {
   /** The first assignment (any source) for `control` on its currently
    *  resolved layer — raw start/end panel values (0..127), not LED indices. */
   morphAssignmentFor(control: string): MorphAssignment | null {
+    // Only destinations can carry assignments (recordMorphEdit gates on the
+    // same set) — the ~35 non-destination continuous controls skip the layer
+    // resolution, which runs per mounted control per commit.
+    if (!MORPH_DESTINATIONS.has(control)) return null
     const layer = this.morphLayerFor(control)
     for (const source of MORPH_SOURCES) {
       const found = this.state.morph[source].find((a) => a.control === control && a.layer === layer)
@@ -2946,7 +2953,7 @@ export class InstrumentStore {
     }
     const undo = programs.dirty ? this.undoPoint('program change') : programs.undo
     const slot = bank[clamped]!
-    this.commit({
+    this.commit(this.withMorphSourcesApplied({
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
@@ -2967,8 +2974,7 @@ export class InstrumentStore {
       presetStore: null,
       programs: { ...programs, current: clamped, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `${programLabel(clamped, programs.liveMode, programs.bankIndex)} ${slot.name}`,
-    })
-    this.reapplyMorphSources()
+    }))
     // Debounced (like Live-mode edits): serializing all program banks
     // synchronously on every program change is an audible main-thread spike
     // when switching sounds mid-performance; only `current` changed here and
@@ -3207,14 +3213,13 @@ export class InstrumentStore {
     const bank = liveMode ? programs.live : programs.bank
     const clamped = Math.max(0, Math.min(bank.length - 1, index))
     const slot = bank[clamped]!
-    this.commit({
+    this.commit(this.withMorphSourcesApplied({
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
       programs: { ...programs, liveMode, storePending: { ...pending, destination: clamped } },
       lastEdit: `Store "${pending.captured.name}" to ${programLabel(clamped, liveMode, this.state.programs.bankIndex)}? STORE confirms`,
-    })
-    this.reapplyMorphSources()
+    }))
   }
 
   private confirmStore(): void {
@@ -3227,7 +3232,7 @@ export class InstrumentStore {
       snapshot: cloneSnapshot(pending.captured.snapshot),
       ...(pending.captured.category ? { category: pending.captured.category } : {}),
     }
-    this.commit({
+    this.commit(this.withMorphSourcesApplied({
       ...this.state,
       ...cloneSnapshot(pending.captured.snapshot),
       pianoNotFound: null,
@@ -3239,8 +3244,7 @@ export class InstrumentStore {
         storePending: null,
       },
       lastEdit: `Stored ${programLabel(pending.destination, programs.liveMode, programs.bankIndex)} ${pending.captured.name}`,
-    })
-    this.reapplyMorphSources()
+    }))
     this.persistPrograms(this.state)
   }
 
@@ -3261,7 +3265,7 @@ export class InstrumentStore {
     // including the origin bank A-H if BANK ◂ ▸ moved during destination
     // selection (manual p. 44).
     const { bank, banks, bankIndex } = this.bankShelfFor(pending.originBank)
-    this.commit({
+    this.commit(this.withMorphSourcesApplied({
       ...this.state,
       ...cloneSnapshot(pending.captured.snapshot),
       pianoNotFound: null,
@@ -3280,8 +3284,7 @@ export class InstrumentStore {
         liveMode: pending.originLiveMode,
       },
       lastEdit: 'Store cancelled',
-    })
-    this.reapplyMorphSources()
+    }))
     return true
   }
 
@@ -3324,7 +3327,7 @@ export class InstrumentStore {
     }
     const undo = programs.dirty ? this.undoPoint('program change') : programs.undo
     const slot = shelf.bank[programs.current]!
-    this.commit({
+    this.commit(this.withMorphSourcesApplied({
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
@@ -3341,8 +3344,7 @@ export class InstrumentStore {
       presetStore: null,
       programs: { ...programs, ...shelf, dirty: false, undo, naming: null, presetName: false },
       lastEdit: `Bank ${BANK_LETTERS[target]} — ${programLabel(programs.current, false, target)} ${slot.name}`,
-    })
-    this.reapplyMorphSources()
+    }))
     this.persistPrograms(this.state)
   }
 
@@ -3361,7 +3363,7 @@ export class InstrumentStore {
     const undo = programs.dirty ? this.undoPoint('program change') : programs.undo
     const bank = liveMode ? programs.live : programs.bank
     const slot = bank[target]!
-    this.commit({
+    this.commit(this.withMorphSourcesApplied({
       ...this.state,
       ...cloneSnapshot(slot.snapshot),
       pianoNotFound: null,
@@ -3390,8 +3392,7 @@ export class InstrumentStore {
         numPadPending: null,
       },
       lastEdit: `${liveMode ? 'Live Mode' : 'Program Mode'} — ${programLabel(target, liveMode, programs.bankIndex)} ${slot.name}`,
-    })
-    this.reapplyMorphSources()
+    }))
     this.persistPrograms(this.state)
   }
 
@@ -3419,7 +3420,7 @@ export class InstrumentStore {
     // The undo point may live in another bank A-H: pull its bank back in.
     const shelf = this.bankShelfFor(undo.bank)
     const dirty = undo.liveMode ? false : undo.dirty
-    this.commit({
+    this.commit(this.withMorphSourcesApplied({
       ...this.state,
       ...cloneSnapshot(undo.snapshot),
       pianoNotFound: null,
@@ -3433,8 +3434,7 @@ export class InstrumentStore {
       organize: null,
       programs: { ...programs, ...shelf, live, liveMode: undo.liveMode, current: undo.slot, dirty, undo: null },
       lastEdit: `Undo ${undo.label} — ${programLabel(undo.slot, undo.liveMode, undo.bank)}${dirty ? ' (edited)' : ''}`,
-    })
-    this.reapplyMorphSources()
+    }))
     if (undo.liveMode || shelf.bankIndex !== programs.bankIndex) this.persistPrograms(this.state)
   }
 
@@ -5227,7 +5227,7 @@ const MORPH_EFFECT_FIELDS: Record<string, { unit: keyof EffectChainState; field:
 
 /** Pure accumulation of every destination of `source` at its current
  *  position — shared by the single-commit morph paths (setMorphSource,
- *  applyMorphNow, reapplyMorphSources). */
+ *  applyMorphNow, withMorphSourcesApplied). */
 function withMorphApplied(state: InstrumentState, source: MorphSource): InstrumentState {
   const t = state.morphValues[source] / 127
   let next = state

@@ -2920,3 +2920,90 @@ visual behavior changes; every fix removes redundant work:
   300 dense 4-event playback bursts = 38 ms total main-thread time
   (0.13 ms/burst), zero console errors.
 - Gates: typecheck, lint, suite 636/636, build, verify:layout 12/12.
+
+### 83 — Second perf audit: lazy organ partials, one-commit loads, paint-tree fast paths (2026-07-07)
+
+Round two of the deep audit (widget/presentation layer, startup/sample
+loading, CSS/DOM paint cost — the ground iteration 82 didn't cover), plus
+the items 82 explicitly deferred. No audible or visual behavior changes:
+
+- **Organ voices only build the tonewheels their registration sounds.**
+  Iteration 82 deferred this as test-pinned; now done: a partial whose
+  drawbar is silent at note-on is recorded as `pending` instead of built
+  (previously every voice constructed all 9 oscillators + gains, most held
+  at the -80 dB floor — 60 wasted oscillators under a 10-note chord on a
+  3-drawbar registration). A mid-note pull MATERIALIZES the pending partial
+  on every sounding voice, fading in from silence through the same
+  `updateOrganVoiceGains` walk that retunes built partials (one shared
+  `buildOrganPartial` for note-on and lazy paths; frequency derives from
+  the voice's stored build-time fundamental, detune from the live bend).
+  The drawbar-retune tests in `organ.test.ts`/`organ-preset.test.ts`
+  evolved to pin the new honest shape — silent drawbars build nothing, a
+  pull adds exactly one oscillator at the right ratio on the LIVE note, and
+  flipping back to Preset mutes it — and the rendered mid-note-pull
+  brightening proof passes unchanged.
+- **Program switches are ONE commit again.** Every snapshot-load path
+  (select/store/audition/cancel/bank switch/Live toggle/undo) folded its
+  morph-source reapply into the load commit (`withMorphSourcesApplied`
+  wraps the commit state instead of a follow-up commit) — with a wheel or
+  pedal parked off-center, every program change was paying a second full
+  engine applyState + panel pass. Verified live: 1 commit per switch with
+  an assigned morph at wheel 96 (was 2).
+- **The disabled layer's piano no longer races the played one at boot.**
+  All 165 sample files (120 Grand + 45 Rhodes) fetched in one burst even
+  though layer B ships disabled; the Rhodes now prefetches only after every
+  AUDIBLE instrument settles (enabling a layer still promotes its set to an
+  immediate load, and selection changes still retry errored sets). Verified
+  live: first electric fetch at 863 ms vs last grand fetch done at 313 ms.
+  Lesson pinned in a comment: the finalize-time kick must only start
+  NEVER-ATTEMPTED sets — `loadInstrument` deliberately retries on 'error'
+  (failure recovery), so a naive re-run recursed forever on synchronously
+  failing asset boundaries (caught by the fallback suite, kept honest).
+- **Presentation store sheds its dead immutability.** `values`/`toggles`
+  are plain mutable records now — every consumer reads per-id primitives
+  (`getValue`/`getToggle`); the whole-record spread per pitch-stick move
+  (pointer rate) plus the unused `getState`/`PresentationState` accessor
+  are gone. `setValue` reads canonical state once (was 4×) and hands its
+  already-fetched control to `applyValue`; waveform-category indices are
+  precomputed at module load; `morphSourcesFor`/`morphAssignmentFor`
+  early-out for controls that can never be morph destinations (the same
+  set `recordMorphEdit` gates on).
+- **Paint-tree fast paths, measured.** A live-Chromium property-bisection
+  audit found white-key presses paying ~7× (and button caps ~5×) style
+  recalc because their pressed transform toggled `none` ↔ value — a paint
+  -tree topology rebuild. Base identity `transform: translateY(0)` on
+  `.white-key` and `.panel-button-cap` turns the two highest-frequency
+  playing interactions into Blink's transform-value fast path. Black keys
+  still paint above via their explicit z-index; verify:layout's geometry
+  checks and a side-by-side screenshot confirmed pixel-stable rendering.
+  The same audit measured `contain: layout style` on keys/sections as a
+  NO-op (the container-query root already isolates the panel; invalidation
+  is subject-level attribute selectors) — documented so nobody adds it.
+- **Widget-layer memo gaps closed.** `KnobScaleArc` (a ~30-node SVG print
+  rebuilt per knob re-render — per drag frame, per morph sweep) is memo'd
+  on its module-constant labels; `DrawbarColumn`/`LayerFaderColumn` are
+  memo'd so an organ/piano/synth drag tick re-renders one column instead
+  of fanning into all 9 drawbars / 7 faders; their inline literals hoisted.
+  The magnifier's pointermove stopped forcing style/layout per move
+  (computed-cursor cached per hovered element, canvas size written only on
+  change — it re-dirtied layout every move, forcing the next move's
+  getBoundingClientRect to reflow).
+- **Startup dedupe:** engines constructed before `attachStore` share one
+  lazily built power-on state (`engineDefaultState`) instead of each
+  building `initialInstrumentState` — the factory bank's ~40 snapshot
+  clones per engine (measured 2.1 ms + 296 KiB apiece, once per offline
+  render in the suite). New root-repo `vercel.json` gives deployed preview
+  sample files a day of real caching (+ a week stale-while-revalidate;
+  they change in place, so never `immutable`) and hashed preview `assets/`
+  a year — repeat visits previously revalidated all 165 files.
+- Audited and deliberately NOT done: per-zone sample readiness (playable
+  mid-load — an honesty/product decision: notes would sound while the
+  status line truthfully still says loading), fader/drawbar cap `top` →
+  `transform` (sub-pixel visual differences need sign-off), byte-level
+  sample prefetch before the AudioContext exists (~300 ms, real plumbing),
+  font preloads, MIDI-file lookahead scheduling (still needs `noteOn(when)`
+  plumbing and midi-player test coverage first).
+- Gates: typecheck, lint, suite 636/636 (organ/organ-preset shape tests
+  evolved as above), build, verify:layout 12/12; live-verified organ note
+  voicing, program-switch commit count, prefetch sequencing, and a clean
+  console.

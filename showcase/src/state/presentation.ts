@@ -27,10 +27,21 @@ const SYNTH_CATEGORIES: readonly SynthWaveformCategory[] = SYNTH_WAVEFORMS.reduc
   [],
 )
 
-function categoryWaveIndices(category: SynthWaveformCategory): number[] {
-  const indices: number[] = []
-  for (let i = 0; i < SYNTH_WAVEFORMS.length; i++) if (SYNTH_WAVEFORMS[i]!.category === category) indices.push(i)
-  return indices
+/** Waveform-list indices per category, computed once (SYNTH_WAVEFORMS is a
+ *  module constant; this ran per commit inside getValue's dial-3 read). */
+const CATEGORY_WAVE_INDICES: ReadonlyMap<SynthWaveformCategory, readonly number[]> = (() => {
+  const map = new Map<SynthWaveformCategory, number[]>()
+  for (let i = 0; i < SYNTH_WAVEFORMS.length; i++) {
+    const category = SYNTH_WAVEFORMS[i]!.category
+    const list = map.get(category)
+    if (list) list.push(i)
+    else map.set(category, [i])
+  }
+  return map
+})()
+
+function categoryWaveIndices(category: SynthWaveformCategory): readonly number[] {
+  return CATEGORY_WAVE_INDICES.get(category) ?? []
 }
 
 /**
@@ -44,11 +55,6 @@ function categoryWaveIndices(category: SynthWaveformCategory): number[] {
  *   InstrumentStore / note-lifecycle controller, so panel state, LEDs,
  *   displays and audible output always agree.
  */
-export interface PresentationState {
-  values: Readonly<Record<string, number>>
-  toggles: Readonly<Record<string, boolean>>
-}
-
 type Listener = () => void
 
 export interface PanelWiring {
@@ -59,7 +65,12 @@ export interface PanelWiring {
 }
 
 export class PresentationStore {
-  private state: PresentationState
+  // Plain mutable records: every consumer reads per-id primitives through
+  // getValue/getToggle (nothing consumes a state object or its identity),
+  // so the old immutable rebuild of the ~50-entry records per local write —
+  // pitch-stick moves arrive at pointer rate — was pure allocation churn.
+  private values: Record<string, number> = {}
+  private toggles: Record<string, boolean> = {}
   private listeners = new Set<Listener>()
   private wiring: PanelWiring | null
   private tapTimes: number[] = []
@@ -69,18 +80,13 @@ export class PresentationStore {
   constructor(wiring: PanelWiring | null = null) {
     this.wiring = wiring
     this.now = wiring?.now ?? (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()))
-    const values: Record<string, number> = {}
-    const toggles: Record<string, boolean> = {}
     for (const control of HARDWARE_CONTROLS) {
-      if (control.type === 'button') toggles[control.id] = false
-      else values[control.id] = control.initial ?? 0
+      if (control.type === 'button') this.toggles[control.id] = false
+      else this.values[control.id] = control.initial ?? 0
     }
-    this.state = { values, toggles }
     // Functional control positions/lights derive from canonical state.
     wiring?.instrument.subscribe(() => this.emit())
   }
-
-  getState = (): PresentationState => this.state
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)
@@ -288,7 +294,7 @@ export class PresentationStore {
           return chain.reverb.mix
       }
     }
-    return this.state.values[id] ?? 0
+    return this.values[id] ?? 0
   }
 
   /** Destination indicator: space-separated sources with an assignment for this control. */
@@ -334,7 +340,7 @@ export class PresentationStore {
       switch (id) {
         case 'shift-2':
           // Second physical Shift/Exit button (FX FOCUS strip): same latch.
-          return this.state.toggles['shift'] === true
+          return this.toggles['shift'] === true
         case 'piano-on':
           return state.piano.sectionOn
         case 'piano-layer-a':
@@ -427,7 +433,7 @@ export class PresentationStore {
           return state.rotary.speed === 'stop'
       }
     }
-    return this.state.toggles[id] ?? false
+    return this.toggles[id] ?? false
   }
 
   /* ------------------------------------------------------------ writes -- */
@@ -438,11 +444,12 @@ export class PresentationStore {
     const max = control.max ?? 127
     const clamped = Math.min(max, Math.max(min, Math.round(value)))
     const wiring = this.wiring
+    const canonical = wiring && !control.decorative ? wiring.instrument.getState() : null
     // MON/COPY monitor (manual p. 43: hold Mon/Copy and turn a knob to
     // display its value WITHOUT changing it) — pointer-first adaptation:
     // while either latch is on, every continuous functional control becomes
     // a read-only OLED readout of its canonical value; nothing is written.
-    if (wiring && !control.decorative && wiring.instrument.getState().monCopy !== null) {
+    if (wiring && canonical && canonical.monCopy !== null) {
       wiring.instrument.setLastEdit(`${control.label}: ${this.getValue(id)}`)
       return
     }
@@ -450,13 +457,11 @@ export class PresentationStore {
     // morphable destination records its start→end range as it applies —
     // except a Drawbar Live layer's drawbars: "morphs are not applicable in
     // Drawbar Live mode" (manual p. 39), so a Live drag captures nothing.
-    const arming = wiring && !control.decorative ? wiring.instrument.getState().morphArming : null
+    const arming = canonical?.morphArming ?? null
     const liveDrawbar =
-      wiring !== null &&
-      id.startsWith('organ-drawbar-') &&
-      !wiring.instrument.getState().organ.layers[wiring.instrument.getState().organ.focusedLayer].presetOn
+      canonical !== null && id.startsWith('organ-drawbar-') && !canonical.organ.layers[canonical.organ.focusedLayer].presetOn
     const previous = arming && MORPH_DESTINATIONS.has(id) && !liveDrawbar ? this.getValue(id) : null
-    this.applyValue(id, clamped)
+    this.applyValue(id, clamped, control)
     if (wiring && arming && previous !== null && previous !== clamped) {
       // One shared resolver (instrument.morphLayerFor) decides the captured
       // layer: id-encoded level faders bind to their own layer, drawbars to
@@ -468,8 +473,7 @@ export class PresentationStore {
     }
   }
 
-  private applyValue(id: string, clamped: number): void {
-    const control = getControl(id)
+  private applyValue(id: string, clamped: number, control = getControl(id)): void {
     const wiring = this.wiring
     if (wiring && !control.decorative) {
       const store = wiring.instrument
@@ -512,7 +516,7 @@ export class PresentationStore {
           // Shift + dial browses in the numeric list view (manual p. 41) —
           // unless the Preset Library screen has the dial (dialProgram then
           // routes to the preset list and loads, manual p. 41).
-          if (this.state.toggles['shift'] === true && !store.getState().programs.naming && !store.getState().presetBrowse) {
+          if (this.toggles['shift'] === true && !store.getState().programs.naming && !store.getState().presetBrowse) {
             store.setProgramListView(true)
           }
           store.dialProgram(clamped)
@@ -544,7 +548,7 @@ export class PresentationStore {
           const models = instrumentsOfType(layer.type)
           // Shift + dial browses the model list on the Program OLED (spec
           // scope.optional model list view), mirroring Shift + Program dial.
-          if (this.state.toggles['shift'] === true) store.setModelListView(true)
+          if (this.toggles['shift'] === true) store.setModelListView(true)
           store.selectPianoModel(models.length > 1 ? Math.round((clamped / 127) * (models.length - 1)) : 0)
           return
         }
@@ -745,8 +749,8 @@ export class PresentationStore {
   }
 
   private setLocalValue(id: string, clamped: number): void {
-    if (this.state.values[id] === clamped) return
-    this.state = { ...this.state, values: { ...this.state.values, [id]: clamped } }
+    if (this.values[id] === clamped) return
+    this.values[id] = clamped
     for (const listener of this.listeners) listener()
   }
 
@@ -778,7 +782,7 @@ export class PresentationStore {
     const wiring = this.wiring
     if (wiring && !control.decorative) {
       const store = wiring.instrument
-      const shift = this.state.toggles['shift'] === true
+      const shift = this.toggles['shift'] === true
       // MON/COPY / PASTE latch (manual p. 43): while latched, the Layer,
       // effect ON, Morph Assign and PROGRAM buttons become copy sources /
       // paste targets instead of performing their normal action (the
@@ -1461,8 +1465,8 @@ export class PresentationStore {
           break // functional modifier; lit state kept locally below
       }
     }
-    const current = this.state.toggles[id] ?? false
-    this.state = { ...this.state, toggles: { ...this.state.toggles, [id]: !current } }
+    const current = this.toggles[id] ?? false
+    this.toggles[id] = !current
     for (const listener of this.listeners) listener()
   }
 

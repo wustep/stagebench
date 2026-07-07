@@ -121,26 +121,37 @@ describe('organ.engine — lifecycle, layers, pedals', () => {
 })
 
 describe('organ.models-drawbars — recipes and live registration', () => {
-  it('drawbar moves retune sounding voices immediately', () => {
+  it('drawbar moves retune sounding voices immediately; pulls materialize pending partials', () => {
     const { engine, store, getContext } = makeSystem()
     engine.ensureStarted()
     const context = getContext()!
     for (let i = 0; i < 9; i++) store.setOrganDrawbar(i, i === 0 ? 8 : 0) // 16' only
     const before = context.nodes.length
-    engine.noteOn(60, 0.8)
+    const voiceOscs = newOscillators(context, () => engine.noteOn(60, 0.8))
+    // Lazy registration: a silent drawbar builds no oscillator at note-on —
+    // only the pulled 16' tonewheel exists.
+    expect(voiceOscs.length).toBe(1)
     const partialGains = context.nodes.slice(before).filter((n): n is FakeGain => n instanceof FakeGain)
     const values = () => partialGains.map((g) => +g.gain.value.toFixed(6))
-    const silentBefore = values()
+    const initial = values()
+    // Half-pushing the SOUNDING 16' retargets its gain in place…
+    store.setOrganDrawbar(0, 4)
+    expect(values()).not.toEqual(initial)
+    // …and pulling a silent drawbar mid-note materializes its partial on the
+    // sounding voice: exactly one new oscillator, at the 2' ratio (8x the
+    // 16' pitch), fading in on the live note.
+    const oscsBefore = context.oscillators().length
     store.setOrganDrawbar(5, 8) // pull the 2' drawbar mid-note
-    const after = values()
-    expect(after).not.toEqual(silentBefore)
-    expect(Math.max(...after)).toBeGreaterThan(Math.max(...silentBefore.slice(1)))
+    const added = context.oscillators().slice(oscsBefore)
+    expect(added.length).toBe(1)
+    expect(added[0]!.frequency.value).toBeCloseTo(voiceOscs[0]!.frequency.value * 8, 3)
   })
 
   it('B3 partials are all sines; Farf uses buzzy register waveforms', () => {
     const { engine, store, getContext } = makeSystem()
     engine.ensureStarted()
     const context = getContext()!
+    for (let i = 0; i < 9; i++) store.setOrganDrawbar(i, 8) // full registration
     const b3 = newOscillators(context, () => engine.noteOn(60, 0.8))
     expect(b3.length).toBeGreaterThanOrEqual(9)
     expect(b3.every((osc) => osc.type === 'sine')).toBe(true)
@@ -181,6 +192,9 @@ describe('organ.models-drawbars — recipes and live registration', () => {
     engine.ensureStarted()
     const context = getContext()!
     expect(store.getState().organ.layers.A.model).toBe('B3')
+    // Full registration on A so all nine B3 tonewheels build (lazy
+    // registration skips silent drawbars).
+    for (let i = 0; i < 9; i++) store.setOrganDrawbar(i, 8)
     store.setOrganFocusedLayer('B')
     cycleOrganTo(store, 'Vox')
     expect(store.getState().organ.layers.B.model).toBe('Vox')

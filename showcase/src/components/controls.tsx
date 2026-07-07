@@ -45,7 +45,7 @@ function useContinuous(store: PresentationStore, id: string) {
   // this, arrow keys would park a bend the hardware can never hold.
   const onKeyUp = control.springLoaded
     ? (event: ReactKeyboardEvent) => {
-        if (['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
+        if (SLIDER_STEP_KEYS.has(event.key)) {
           store.setValue(id, control.initial ?? 0)
         }
       }
@@ -146,10 +146,15 @@ function useContinuous(store: PresentationStore, id: string) {
 
 const SCALE_TEN = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
 
+/** Keys that step a slider role (shared by every spring-loaded key-up). */
+const SLIDER_STEP_KEYS = new Set(['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'PageUp', 'PageDown', 'Home', 'End'])
+
 /** Printed arc scale around a knob (reference: nearly every panel knob wears
  *  a 0-10 numeral arc; EQ knobs are bipolar and the Amp Sim/EQ freq knob is
- *  labeled in Hz). Decorative print only — it never intercepts the pointer. */
-function KnobScaleArc({ labels }: { labels: (string | null)[] }) {
+ *  labeled in Hz). Decorative print only — it never intercepts the pointer.
+ *  Memo'd: label arrays are module constants, so the ~30-node SVG print
+ *  fully bails while its knob's cap rotates through a drag or morph sweep. */
+const KnobScaleArc = memo(function KnobScaleArc({ labels }: { labels: (string | null)[] }) {
   const last = labels.length - 1
   // The svg box matches the knob box (so it never adds scroll size to its
   // flex cell); the print draws OUTSIDE the viewBox with overflow visible.
@@ -174,7 +179,7 @@ function KnobScaleArc({ labels }: { labels: (string | null)[] }) {
       })}
     </svg>
   )
-}
+})
 
 export interface KnobProps extends ContinuousProps {
   /** Printed scale: the default 0-10 arc, a custom label list (null = bare

@@ -235,7 +235,12 @@ function PlateTitle({ title, onZoom, subtitle }: { title: string; onZoom?: () =>
   )
 }
 
-function LayerFaderColumn({
+/** Memo'd (with DrawbarColumn below): the parent section re-renders per
+ *  drag tick of ANY control in its state slice, and these columns fan out
+ *  ×7 (faders) / ×9 (drawbars). Their props are identity-stable (stores,
+ *  ids, useCallback'd holds, primitive flags), so only the dragged column
+ *  re-renders through its own subscriptions. */
+const LayerFaderColumn = memo(function LayerFaderColumn({
   store,
   faderId,
   buttonId,
@@ -278,7 +283,7 @@ function LayerFaderColumn({
       <PanelButton store={store} id={buttonId} className="pill small blank" holdAction={onHoldOff} />
     </div>
   )
-}
+})
 
 /* ---------------------------------------------------------- Performance -- */
 
@@ -378,14 +383,18 @@ export const PerformanceSection = memo(function PerformanceSection({ store, inst
 
 /* ---------------------------------------------------------------- Organ -- */
 
-function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; index: number; presetOn: boolean }) {
+// Reference photo: the Stage 4's drawbar caps are only charcoal-black and
+// white (classic B3 placement, but the sub-octave pair is black — not the
+// Hammond brown).
+const WHITE_CAP_DRAWBARS = new Set([2, 3, 5, 8])
+const DRAWBAR_NUMERALS = [1, 2, 3, 4, 5, 6, 7, 8]
+
+/** Memo'd — see LayerFaderColumn. */
+const DrawbarColumn = memo(function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; index: number; presetOn: boolean }) {
   const id = `organ-drawbar-${index + 1}`
   const value = usePresentationValue(store, id)
   const range = usePresentationMorphRange(store, id, 8)
-  // Reference photo: the Stage 4's drawbar caps are only charcoal-black and
-  // white (classic B3 placement, but the sub-octave pair is black — not the
-  // Hammond brown).
-  const color = [2, 3, 5, 8].includes(index) ? 'white' : 'black'
+  const color = WHITE_CAP_DRAWBARS.has(index) ? 'white' : 'black'
   return (
     <div className="drawbar-column">
       <Legend className="drawbar-name">{DRAWBAR_LEGENDS[index]}</Legend>
@@ -402,7 +411,7 @@ function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; i
         <Drawbar store={store} id={id} className={`cap-${color}`} />
         <span className="drawbar-scale" aria-hidden="true">
           <span className="drawbar-scale-nums">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+            {DRAWBAR_NUMERALS.map((n) => (
               <i key={n}>{n}</i>
             ))}
           </span>
@@ -412,7 +421,7 @@ function DrawbarColumn({ store, index, presetOn }: { store: PresentationStore; i
       <Legend className="drawbar-footage">{DRAWBAR_FOOTAGES[index]}</Legend>
     </div>
   )
-}
+})
 
 export const OrganSection = memo(function OrganSection({ store, instrument, onZoom }: BoundSectionProps) {
   const state = useInstrumentSlices(instrument, ORGAN_WATCH)

@@ -746,6 +746,8 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
   // next appearance snap instead of gliding in from a stale position.
   const lensTargetRef = useRef({ left: 0, top: 0, cx: 0, cy: 0, shown: false })
   const lensPosRef = useRef({ left: 0, top: 0, cx: 0, cy: 0 })
+  /** Computed-cursor cache for onLensMove (style flush once per hovered element, not per move). */
+  const lensCursorCacheRef = useRef<{ target: Element | null; cursor: string }>({ target: null, cursor: '' })
 
   const applyLensPosition = () => {
     const lens = lensRef.current
@@ -799,7 +801,19 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     const lens = lensRef.current
     const canvas = lensCanvasRef.current
     if (!chassis || !lens || !canvas) return
-    const hoveredCursor = event.target instanceof Element ? getComputedStyle(event.target).cursor : ''
+    // getComputedStyle forces a style flush; the hovered target only changes
+    // between elements, not between the many moves inside one element.
+    const cursorCache = lensCursorCacheRef.current
+    let hoveredCursor = ''
+    if (event.target instanceof Element) {
+      if (cursorCache.target === event.target) {
+        hoveredCursor = cursorCache.cursor
+      } else {
+        hoveredCursor = getComputedStyle(event.target).cursor
+        cursorCache.target = event.target
+        cursorCache.cursor = hoveredCursor
+      }
+    }
     // Drag freeze: value drags capture the pointer on the control
     // (controls.tsx onPointerDown), so while a button is held the event
     // target stays the dragged resize-cursor control. Skipping all updates
@@ -828,8 +842,13 @@ export default function App({ audioBoundary, midiBoundary, assetBoundary, storag
     // the transform magnifies and centers the cursor point in the lens.
     target.cx = x
     target.cy = y
-    canvas.style.width = `${c.width}px`
-    canvas.style.height = `${c.height}px`
+    // Write-only-on-change: an unconditional width/height write dirties
+    // layout every move, making the NEXT move's getBoundingClientRect a
+    // forced reflow — a write-then-read thrash cycle at pointer rate.
+    const width = `${c.width}px`
+    const height = `${c.height}px`
+    if (canvas.style.width !== width) canvas.style.width = width
+    if (canvas.style.height !== height) canvas.style.height = height
     // Cursor clone glyph swaps instantly (easing a glyph swap means showing
     // the wrong cursor); its position eases with everything else.
     const cursorEl = lensCursorRef.current
