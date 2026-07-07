@@ -737,7 +737,6 @@ function App() {
           <a className="wordmark" href="#runs" aria-label="Stagebench runs">
             <span>STAGEBENCH</span>
           </a>
-          <a href="https://github.com/wustep/stagebench/blob/main/BENCHMARK.md">BENCHMARK.md</a>
         </nav>
 
         <div className="header-intro">
