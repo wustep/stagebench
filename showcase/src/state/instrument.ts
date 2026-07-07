@@ -1423,7 +1423,6 @@ export class InstrumentStore {
       const liveMode = parsed.liveMode === true
       const count = liveMode ? 8 : 32
       const current = Math.max(0, Math.min(count - 1, Math.floor(parsed.current)))
-      const slot = (liveMode ? parsed.live : parsed.bank)[current]!
       // Bank fields arrived after v1 shipped: backfill bank A, no parked
       // banks. Parked banks that fail the shape check are dropped.
       const bankIndex = Math.max(0, Math.min(7, Math.floor(parsed.bankIndex ?? 0)))
@@ -1433,6 +1432,13 @@ export class InstrumentStore {
         if (index >= 0 && index <= 7 && index !== bankIndex && Array.isArray(value) && value.length === 32) banks[index] = value
       }
       const base = this.state
+      // Factory programs shipped AFTER this payload was persisted would
+      // otherwise never appear (the stored bank is restored wholesale):
+      // land them in whichever bank-A slots are still pristine placeholders.
+      // base.programs.bank is the current factory content (initial state).
+      const bank = bankIndex === 0 ? backfillFactoryPlaceholders(parsed.bank, base.programs.bank) : parsed.bank
+      if (bankIndex !== 0 && banks[0]) banks[0] = backfillFactoryPlaceholders(banks[0], base.programs.bank)
+      const slot = (liveMode ? parsed.live : bank)[current]!
       const snapshot = cloneSnapshot(slot.snapshot)
       return {
         ...base,
@@ -1446,7 +1452,7 @@ export class InstrumentStore {
         pianoNotFound: null,
         programs: {
           ...base.programs,
-          bank: parsed.bank,
+          bank,
           bankIndex,
           banks,
           live: parsed.live,
@@ -4769,6 +4775,43 @@ function normalizeSynthState(synth: Partial<SynthState> | null | undefined): Syn
 let defaultSnapshotCache: Record<string, unknown> | null = null
 function defaultSnapshotValues(): Record<string, unknown> {
   return (defaultSnapshotCache ??= snapshotOf(baseInstrumentState()) as unknown as Record<string, unknown>)
+}
+
+/** Key-order-insensitive deep equality for plain JSON values (program
+ *  snapshots and their persisted payloads). */
+function jsonEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    return a.every((value, index) => jsonEqual(value, b[index]))
+  }
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) return false
+  return keys.every((key) => jsonEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+}
+
+/** Backfills factory programs that shipped after a bank-A payload was
+ *  persisted. A persisted slot is replaced only when the current factory
+ *  content has a real program there, that program's name appears NOWHERE
+ *  in the persisted bank (a factory program the user rearranged with
+ *  Organize still exists under another slot — re-adding it at its home
+ *  slot would duplicate it and undo the arrangement), AND the slot is
+ *  still a pristine placeholder: named 'Init Grand', uncategorized, and —
+ *  after legacy-key normalization — sounding exactly like the power-on
+ *  default. A program the user stored over a placeholder is never touched
+ *  (plain STORE keeps the old name, manual p. 13, so the name alone is
+ *  not proof of pristineness); when defaults have drifted since the
+ *  payload was saved, the slot stays as persisted — a stale placeholder
+ *  is recoverable, an overwritten user program is not. */
+function backfillFactoryPlaceholders(persisted: ProgramSlot[], factory: ProgramSlot[]): ProgramSlot[] {
+  const persistedNames = new Set(persisted.map((slot) => slot.name))
+  return persisted.map((slot, index) => {
+    const shipped = factory[index]
+    if (!shipped || shipped.name === 'Init Grand' || persistedNames.has(shipped.name)) return slot
+    if (slot.name !== 'Init Grand' || slot.category) return slot
+    return jsonEqual(cloneSnapshot(slot.snapshot), defaultSnapshotValues()) ? deepClone(shipped) : slot
+  })
 }
 
 /** Deep-clones a program snapshot and backfills any synth layer sub-object

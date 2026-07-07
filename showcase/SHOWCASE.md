@@ -2687,3 +2687,32 @@ Three user reports worked through together:
   runs through the fixed Ensemble. All four verified loading and sounding
   in-browser by OLED name and played notes.
 - Gates: typecheck, lint, build, suite 626/626.
+
+### 78 — Factory-program backfill for persisted banks (2026-07-06)
+
+User report: **"A:25-A:28 are still empty."** Iteration 77 shipped them, but
+only for fresh visitors — the program bank persists to localStorage
+(`stagebench.programs.v1`) and `restorePrograms` restores the stored bank
+wholesale, so any payload saved before a factory program shipped keeps its
+Init Grand placeholder forever.
+
+- The restore path now backfills newly shipped factory content into bank A
+  (active or parked): a persisted slot is replaced only when the factory
+  slot holds a real program, that program's name appears nowhere in the
+  persisted bank, and the slot is still a *pristine* placeholder — named
+  Init Grand, uncategorized, and deep-equal to the power-on default after
+  legacy-key normalization. The tight predicate is the point: plain STORE
+  keeps the destination's old name (manual p. 13), so a user program stored
+  over a placeholder is only distinguishable by its snapshot; and a factory
+  program the user moved with Organize still exists elsewhere in the bank,
+  where re-adding it at its home slot would duplicate it and undo the
+  arrangement (the organize-persist test caught exactly this on the first
+  cut). When defaults have drifted since the payload was saved the slot
+  stays as persisted — a stale placeholder is recoverable, an overwritten
+  user program is not.
+- New roundtrip test: a pre-iteration-77 payload (including one slot with
+  the legacy missing-`synth` shape) gains Trem Tines/Farf Combo on restore,
+  while a stored-over Init Grand and a renamed My Patch survive untouched —
+  and when `current` points at a backfilled slot, the restored *sound* is
+  the factory program.
+- Gates: typecheck, lint, suite 627/627.

@@ -198,6 +198,40 @@ describe('programs.roundtrip — store and reload restores supported state', () 
     expect(restored.getState().synth.layers.A.mode).toBe('Analog')
   })
 
+  it('backfills factory programs shipped after the payload was persisted — into pristine placeholder slots only', () => {
+    // A payload saved before A:25–A:28 shipped holds pristine 'Init Grand'
+    // placeholders in those slots. Restoring it must land the new factory
+    // programs there WITHOUT touching anything the user actually stored:
+    // plain STORE keeps the placeholder name (manual p. 13), so the name
+    // alone is not proof a slot is untouched.
+    const seed = new InstrumentStore()
+    const factory = seed.getState().programs.bank
+    // factory[16] is the first pristine 'Init Grand' placeholder.
+    const placeholder = () => JSON.parse(JSON.stringify(factory[16])) as (typeof factory)[number]
+    const bank = factory.map((slot) => JSON.parse(JSON.stringify(slot)) as (typeof factory)[number])
+    bank[12] = placeholder() // pristine → backfilled
+    bank[13] = placeholder() // pristine with a legacy shape → still backfilled
+    delete (bank[13].snapshot as unknown as Record<string, unknown>).synth
+    bank[14] = placeholder() // user STOREd an edit here, name kept → untouched
+    bank[14].snapshot.layers.A = { ...bank[14].snapshot.layers.A, level: 55 }
+    bank[15] = { ...placeholder(), name: 'My Patch' } // user renamed → untouched
+    const storage = fakeStorageBoundary({
+      'stagebench.programs.v1': JSON.stringify({ version: 1, bank, live: seed.getState().programs.live, liveMode: false, current: 12 }),
+    })
+
+    const restored = new InstrumentStore(storage)
+    const slots = restored.getState().programs.bank
+    expect(slots[12].name).toBe('Trem Tines')
+    expect(slots[13].name).toBe('Farf Combo')
+    expect(slots[14].name).toBe('Init Grand')
+    expect(slots[14].snapshot.layers.A.level).toBe(55)
+    expect(slots[15].name).toBe('My Patch')
+    // `current` pointed at a backfilled slot: the restored SOUND is the
+    // factory program, not the stale placeholder.
+    expect(restored.getState().chains.A.mod1.on).toBe(true)
+    expect(restored.getState().chains.A.mod1.type).toBe('Tremolo')
+  })
+
   it('program state excludes Master Level', () => {
     const store = new InstrumentStore()
     store.setMasterVolume(30)
