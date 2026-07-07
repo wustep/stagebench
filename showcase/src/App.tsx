@@ -219,6 +219,7 @@ function MidiTransport({
   onDismissError: () => void
 }) {
   const state = useMidiPlayer(player)
+  const barRef = useRef<HTMLSpanElement>(null)
   if (error && state.status === 'idle') {
     return (
       <div className="midi-transport is-error" role="alert" data-testid="midi-transport">
@@ -233,6 +234,14 @@ function MidiTransport({
   }
   const playing = state.status === 'playing'
   const progress = state.durationSec > 0 ? Math.min(1, state.positionSec / state.durationSec) : 0
+  const seekFromClientX = (clientX: number) => {
+    const bar = barRef.current
+    if (!bar || state.durationSec <= 0) return
+    const { left, width } = bar.getBoundingClientRect()
+    if (width <= 0) return
+    const fraction = Math.max(0, Math.min(1, (clientX - left) / width))
+    player.seek(fraction * state.durationSec)
+  }
   return (
     <div className="midi-transport" data-testid="midi-transport" data-status={state.status}>
       <button
@@ -275,7 +284,17 @@ function MidiTransport({
         <span className="midi-transport-name" title={state.name ?? undefined}>
           {state.name}
         </span>
-        <span className="midi-transport-bar" aria-hidden="true">
+        <span
+          ref={barRef}
+          className="midi-transport-bar"
+          role="slider"
+          aria-label="Playback position"
+          aria-valuemin={0}
+          aria-valuemax={state.durationSec}
+          aria-valuenow={state.positionSec}
+          data-testid="midi-transport-seek"
+          onClick={(event) => seekFromClientX(event.clientX)}
+        >
           <span className="midi-transport-fill" style={{ width: `${progress * 100}%` }} />
         </span>
       </div>

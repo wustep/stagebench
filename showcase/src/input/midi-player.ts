@@ -127,6 +127,36 @@ export class MidiFilePlayer {
     else this.play()
   }
 
+  /** Jump to an absolute position in seconds. Playback continues if already playing. */
+  seek(positionSec: number): void {
+    if (!this.file) return
+    const wasPlaying = this.state.status === 'playing'
+    const target = Math.max(0, Math.min(positionSec, this.file.durationSec))
+    const atEnd = target >= this.file.durationSec
+
+    this.releaseOwnNotes()
+    this.positionSec = target
+    this.index = this.indexAtTime(target)
+
+    if (atEnd) {
+      this.stopLoop()
+      this.setState({ ...this.state, status: 'ended', positionSec: target })
+      return
+    }
+
+    if (wasPlaying) {
+      this.startClock = this.now() - target * 1000
+      this.lastEmit = this.now()
+      if (!this.raf) {
+        this.controller.engine.ensureStarted()
+        this.raf = this.requestFrame(this.tick)
+      }
+      this.setState({ ...this.state, status: 'playing', positionSec: target })
+    } else {
+      this.setState({ ...this.state, status: 'paused', positionSec: target })
+    }
+  }
+
   /** Unload the file entirely and return to the idle (no-transport) state. */
   close(): void {
     this.stopLoop()
@@ -205,6 +235,20 @@ export class MidiFilePlayer {
       this.cancelFrame(this.raf)
       this.raf = 0
     }
+  }
+
+  /** Index of the first event at or after `timeSec`. */
+  private indexAtTime(timeSec: number): number {
+    if (!this.file) return 0
+    const { events } = this.file
+    let lo = 0
+    let hi = events.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (events[mid].time < timeSec) lo = mid + 1
+      else hi = mid
+    }
+    return lo
   }
 
   private setStatus(status: MidiPlayerStatus): void {
