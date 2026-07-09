@@ -1,0 +1,75 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 3,
+  "audio": {
+    "strategy": "One lazy Web Audio context owns the inherited Piano A/B racks, Organ A/B source rendering into one shared Organ effect target, independent Synth A/B/C effect targets, one shared Rotary route, master gain, limiter, and one destination. Deterministic local renderers exercise the identical canonical parameters for cross-browser audio verification.",
+    "generatedSources": [
+      {
+        "name": "Grand, Upright, and Electric multi-root/multi-velocity PCM plans",
+        "source": "candidate/src/dsp.ts renderPianoNote",
+        "generation": "Original deterministic physical-model rendering at six roots and three velocity plans per family, generated and cached locally.",
+        "license": "Original implementation authored for this benchmark; no external recording or copyrighted audio is included."
+      },
+      {
+        "name": "Clav, Digital, Misc, and failure-fallback synthesis",
+        "source": "candidate/src/dsp.ts and candidate/src/stage-engine.ts",
+        "generation": "Live deterministic additive and physical-model synthesis with family-specific spectra and envelopes.",
+        "license": "Original implementation authored for this benchmark."
+      },
+      {
+        "name": "B3, Vox, Farf, Pipe 1, B3 Bass, and Pipe 2 organ engines",
+        "source": "candidate/src/phase3-dsp.ts renderOrganNote",
+        "generation": "Live deterministic model-specific additive/register synthesis. B3 uses tonewheel ratios, percussion and click; Vox uses transistor partial shaping; Farf uses threshold registers; Pipe uses pipe-rank spectra. B3 Bass and Pipe 2 intentionally reuse their permitted engine families with different ranks.",
+        "license": "Original implementation authored for this benchmark."
+      },
+      {
+        "name": "Pure, Sync, Multi, Super, and FM-H synth sources",
+        "source": "candidate/src/phase3-dsp.ts renderSynthNote",
+        "generation": "Live deterministic oscillators with category-specific Osc Ctrl, envelopes, filters, LFO, unison, vibrato, glide, and clocked arp/gate modulation.",
+        "license": "Original implementation authored for this benchmark."
+      },
+      {
+        "name": "Reverb impulse responses",
+        "source": "candidate/src/stage-engine.ts StageAudioGraph.impulseResponse",
+        "generation": "Deterministic seeded noise with model-specific decay and optional spring coloration, generated in memory.",
+        "license": "Original implementation authored for this benchmark."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "All sound generation and processing is local and works without network access.",
+      "The isolated workspace supplied no redistributable acoustic-piano recordings. Grand, Upright, and Electric remain generated PCM plans, never described as recorded samples.",
+      "This preserves the inherited Phase 2 recorded-sample hard-gate deviation honestly; no provenance claim is fabricated.",
+      "A PCM-loading/startup failure reports a synthesized playable fallback rather than claiming the primary library is ready."
+    ]
+  },
+  "architecture": {
+    "audioContexts": 1,
+    "effectTargets": ["Organ A+B shared", "Piano A", "Piano B", "Synth A", "Synth B", "Synth C"],
+    "signalOrder": ["Layer source", "Mod 1", "Mod 2", "Delay with filtered feedback loop", "Amp Sim/EQ or Filter", "Compressor", "Reverb", "Shared Rotary when routed", "Layer level", "Master gain", "Limiter", "Destination"],
+    "parameterSmoothingSeconds": 0.018,
+    "programState": "One JSON-serializable InstrumentState round-trips section/layer state, every sound parameter, all six effect targets, splits/zones/crossfades, scenes, morph assignments, clock, and transpose. Master Level and held performance inputs are excluded on restore.",
+    "storage": "Versioned localStorage contains 32 regular program snapshots and 8 auto-storing Live snapshots; the boundary is represented by ProgramStorageLike for deterministic tests.",
+    "voiceOwnership": "Each pointer/keyboard/MIDI token owns its Piano, Organ, and Synth handles. Section/layer disable, note-off, pedal-up, Panic, disconnect, blur, and unmount release the appropriate handles; mono priority and arp hold are resolved per Synth layer.",
+    "offlineRenderers": ["candidate/src/dsp.ts", "candidate/src/phase3-dsp.ts"]
+  },
+  "controlAudit": {
+    "functional": "Every visible control not listed under unsupported has data-functional=true and changes canonical state, memory, routing, or audible parameters.",
+    "unsupportedPresentation": "Spec-excluded controls remain tactile, expose data-functional=false, include '(unsupported)' in their accessible name, and are repeated in the UI footer and visual audit."
+  },
+  "unsupported": [
+    "Recorded acoustic sample assets (not present in the isolated inputs; generated PCM plans are used and labeled)",
+    "Performance Monitor Level and Panel Lock (not behaviorally specified by the assigned benchmark scope)",
+    "Aftertouch morph source",
+    "Synth Shape and optional oscillator/filter/sample categories",
+    "Banks beyond one, 512-program layout, Organize swap/move, and per-section preset libraries",
+    "Num Pad, Monitor/Copy/Paste/Swap, Section Edit, Layer Init, Aux KB, Extern, and Shift menus",
+    "External MIDI clock and pedal tap",
+    "Organ Drawbar Live/sync, swell pedal, tonewheel wear, trigger-point and rotary tuning menus",
+    "Arpeggiator pattern editing, zig-zag, accent, pan, and per-layer hold exclude",
+    "Filter/LFO/Arp Group modes and Synth preset/download systems",
+    "Pedal noise, half-pedaling, Nord Triple Pedal configuration, piano sizes/INFO/downloads",
+    "Effect Variations, Reverb Chorale, delay feedback-loop effects, Analog delay, Mod 1 pedal modes, Rotary close mic and stop angle"
+  ]
+}

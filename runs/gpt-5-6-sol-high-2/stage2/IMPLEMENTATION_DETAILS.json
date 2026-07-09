@@ -1,0 +1,66 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "One lazy Web Audio context owns two Piano layer buses, six ordered per-layer effect units, shared post-reverb Rotary routing, layer levels, master gain, limiter, and one destination. Deterministic offline DSP mirrors the audible controls for rendered-audio verification.",
+    "generatedSources": [
+      {
+        "name": "Grand multi-sample PCM bank",
+        "source": "candidate/src/dsp.ts renderPianoNote('Grand')",
+        "generation": "Original physical-model rendering with four inharmonic partial groups, acoustic decay, velocity-dependent amplitude, six root notes (MIDI 36, 48, 60, 72, 84, 96), and three velocity plans (0.32, 0.66, 1.0). Buffers are generated locally and cached by the browser graph.",
+        "license": "Original implementation authored for this benchmark; no external recording or copyrighted audio is included."
+      },
+      {
+        "name": "Upright multi-sample PCM bank",
+        "source": "candidate/src/dsp.ts renderPianoNote('Upright')",
+        "generation": "Original physical-model rendering with an audibly different partial/decay profile, six root notes (MIDI 36, 48, 60, 72, 84, 96), and three velocity plans (0.32, 0.66, 1.0).",
+        "license": "Original implementation authored for this benchmark; no external recording or copyrighted audio is included."
+      },
+      {
+        "name": "Electric multi-sample PCM bank",
+        "source": "candidate/src/dsp.ts renderPianoNote('Electric')",
+        "generation": "Original tine-style physical-model rendering with an audibly different harmonic/decay profile, six root notes (MIDI 36, 48, 60, 72, 84, 96), and three velocity plans (0.32, 0.66, 1.0).",
+        "license": "Original implementation authored for this benchmark; no external recording or copyrighted audio is included."
+      },
+      {
+        "name": "Clav, Digital, Misc, and failure-fallback synthesis",
+        "source": "candidate/src/dsp.ts and candidate/src/stage-engine.ts",
+        "generation": "Live deterministic additive/physical-model synthesis with family-specific spectra and envelopes.",
+        "license": "Original implementation authored for this benchmark."
+      },
+      {
+        "name": "Reverb impulse responses",
+        "source": "candidate/src/stage-engine.ts StageAudioGraph.impulseResponse",
+        "generation": "Deterministic seeded noise with a squared decay envelope, generated in memory.",
+        "license": "Original implementation authored for this benchmark."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "The isolated workspace supplied no redistributable acoustic-piano recordings. Grand, Upright, and Electric are bundled generated PCM plans, not recordings, and are never described as recorded samples.",
+      "This truthfully deviates from the Phase 2 hard gate requiring recorded sample sets; no provenance claim is fabricated.",
+      "All sound generation and processing is local and works without network access.",
+      "A PCM-loading/startup failure reports 'PCM library failed · synthesized playable fallback active' and continues through the synthesized path."
+    ]
+  },
+  "architecture": {
+    "audioContexts": 1,
+    "layerBuses": ["Piano A", "Piano B"],
+    "signalOrder": ["Layer source", "Mod 1", "Mod 2", "Delay with filtered feedback loop", "Amp Sim/EQ or Filter", "Compressor", "Reverb", "Rotary when routed", "Layer level", "Master gain", "Limiter", "Destination"],
+    "parameterSmoothingSeconds": 0.018,
+    "voiceOwnership": "Input token owns independent A/B handles; layer disable, note-off, pedal-up, all-notes-off, disconnect, blur, and unmount release only the appropriate owned handles.",
+    "offlineRenderer": "candidate/src/dsp.ts"
+  },
+  "unsupported": [
+    "Recorded acoustic sample assets (not present in the isolated inputs; generated PCM is used and labeled)",
+    "Pedal noise and half-pedaling",
+    "Nord Triple Pedal hardware configuration",
+    "Piano size classes, INFO view, downloads, and preset library",
+    "Effect Variations and Reverb Chorale",
+    "Delay feedback-loop effects and Analog mode",
+    "Mod 1 pedal modes",
+    "Rotary close mic and stop angle",
+    "Organ, Program, and Synth engines (their panel controls remain decorative in Phase 2)"
+  ]
+}
