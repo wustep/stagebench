@@ -1,49 +1,255 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+type ControlKind = 'knob' | 'button' | 'fader' | 'drawbar' | 'wheel'
+type HardwareState = Record<string, number | boolean>
+type LayerId = 'A' | 'B'
+type PianoType = 'Grand' | 'Upright' | 'Electric' | 'Clav' | 'Digital' | 'Misc'
+type EffectUnit = 'mod1' | 'mod2' | 'delay' | 'ampEq' | 'compressor' | 'reverb' | 'rotary'
+
+const START_NOTE = 28, KEY_COUNT = 73, MAX_VOICES = 24
+const pianoTypes: PianoType[] = ['Grand', 'Upright', 'Electric', 'Clav', 'Digital', 'Misc']
+const typeModels: Record<PianoType, string> = { Grand: 'Salamander Grand', Upright: 'Felt Upright', Electric: 'Tine Electric', Clav: 'Clavinet', Digital: 'DX Layer', Misc: 'Vibraphone' }
+const effectTypes: Record<EffectUnit, readonly string[]> = {
+  mod1: ['A-Pan', 'Tremolo', 'Ring Mod', 'A-Wah', 'Wah', 'Pump'],
+  mod2: ['Chorus', 'Flanger', 'Phaser', 'Vibe', 'Ensemble', 'Spin'],
+  delay: ['Digital'], ampEq: ['EQ only', 'Twin', 'JC', 'Small', 'LP24 Filter', 'HP24 Filter', 'To Rotary'],
+  compressor: ['Soft'], reverb: ['Room', 'Booth', 'Spring', 'Stage', 'Hall', 'Cathedral'], rotary: ['Horn + drum'],
+}
+const keyboardNotes: Record<string, number> = { z: 48, s: 49, x: 50, d: 51, c: 52, v: 53, g: 54, b: 55, h: 56, n: 57, j: 58, m: 59, ',': 60, l: 61, '.': 62, ';': 63, '/': 64 }
+const blackPitchClasses = new Set([1, 3, 6, 8, 10])
+const noteName = (midi: number) => `${['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'][midi % 12]}${Math.floor(midi / 12) - 1}`
+
+interface LayerSettings { enabled: boolean; level: number; octave: number; sustainPedal: boolean; pitchStick: boolean; type: PianoType }
+interface EffectSettings { on: boolean; type: string; amount: number; rate: number; wet: number; feedback: number; global: boolean }
+interface PianoSettings { touch: 'Heavy' | 'Medium' | 'Light'; dynComp: number; timbre: string; unison: number; softRelease: boolean; stringRes: boolean; master: number; allEffects: boolean; group: boolean }
+type EffectState = Record<LayerId, Record<EffectUnit, EffectSettings>>
+interface Voice { note: number; layer: LayerId; started: number; release: () => void }
+type OrganModel = 'B3' | 'Vox' | 'Farf' | 'Pipe 1'
+type SynthWave = 'Sine' | 'Triangle' | 'Saw' | 'Square' | 'Pulse 33' | 'Pulse 10' | 'White Noise' | 'Sync Saw' | 'Sync Square' | 'Multi Saw' | 'Multi Saw 8ve' | 'Super Saw' | 'Super Square' | 'FM 2-op (algorithm A)'
+type Zone = 1 | 2 | 3 | 4
+interface OrganLayer { enabled: boolean; level: number; octave: number; model: OrganModel; zone: Zone; sustainPedal: boolean }
+interface SynthLayer { enabled: boolean; level: number; octave: number; waveform: SynthWave; oscCtrl: number; filter: 'LP12' | 'LP24' | 'HP' | 'BP'; cutoff: number; resonance: number; drive: number; zone: Zone; mode: 'Poly' | 'Mono' | 'Legato'; glide: number; unison: number; lfo: 'Off' | 'Osc Pitch' | 'Osc Ctrl' | 'Filter Freq'; lfoWave: 'Triangle' | 'Saw down' | 'Saw up' | 'Square' | 'Sample & Hold'; lfoRate: number; lfoAmount: number; arp: 'Off' | 'Arp' | 'Poly' | 'Gate'; arpRun: boolean; arpHold: boolean; arpRate: number; arpRange: number; arpDirection: 'Up' | 'Down' | 'Up/Down' | 'Random' }
+interface SplitState { on: boolean; points: [number, number, number]; crossfade: 0 | 6 | 12 }
+interface MorphAssignment { id: string; start: number; end: number }
+type ProgramSnapshot = { name: string; piano: Record<LayerId, LayerSettings>; effects: EffectState; organ: Record<LayerId, OrganLayer>; synth: Record<'A' | 'B' | 'C', SynthLayer>; split: SplitState; scene: 1 | 2; scenes: [Record<string, boolean>, Record<string, boolean>]; clock: number; transpose: number; morphs: Record<'wheel' | 'pedal', MorphAssignment[]> }
+
+const defaultEffect = (unit: EffectUnit): EffectSettings => ({ on: false, type: effectTypes[unit][0], amount: 40, rate: 35, wet: unit === 'reverb' ? 28 : 35, feedback: 32, global: false })
+const makeEffects = (): EffectState => ({ A: Object.fromEntries((Object.keys(effectTypes) as EffectUnit[]).map((u) => [u, defaultEffect(u)])) as EffectState['A'], B: Object.fromEntries((Object.keys(effectTypes) as EffectUnit[]).map((u) => [u, defaultEffect(u)])) as EffectState['B'] })
+const organModels: OrganModel[] = ['B3', 'Vox', 'Farf', 'Pipe 1']
+const synthWaves: SynthWave[] = ['Sine', 'Triangle', 'Saw', 'Square', 'Pulse 33', 'Pulse 10', 'White Noise', 'Sync Saw', 'Sync Square', 'Multi Saw', 'Multi Saw 8ve', 'Super Saw', 'Super Square', 'FM 2-op (algorithm A)']
+const defaultOrgan = (): Record<LayerId, OrganLayer> => ({ A: { enabled: false, level: 62, octave: 0, model: 'B3', zone: 1, sustainPedal: true }, B: { enabled: false, level: 52, octave: 0, model: 'Vox', zone: 1, sustainPedal: true } })
+const defaultSynth = (): Record<'A' | 'B' | 'C', SynthLayer> => Object.fromEntries((['A', 'B', 'C'] as const).map((id, index) => [id, { enabled: false, level: 62 - index * 8, octave: 0, waveform: index === 0 ? 'Super Saw' : index === 1 ? 'FM 2-op (algorithm A)' : 'Sine', oscCtrl: 30, filter: 'LP24', cutoff: 72, resonance: 16, drive: 0, zone: 1 as Zone, mode: 'Poly', glide: 0, unison: 0, lfo: 'Off', lfoWave: 'Triangle', lfoRate: 40, lfoAmount: 25, arp: 'Off', arpRun: false, arpHold: false, arpRate: 120, arpRange: 1, arpDirection: 'Up' }])) as Record<'A' | 'B' | 'C', SynthLayer>
+
+/** One context; source nodes are owned by a layer graph and never connect to the destination directly. */
+class LayeredAudio {
+  private context: AudioContext | null = null
+  private master: GainNode | null = null
+  private limiter: DynamicsCompressorNode | null = null
+  private layerInput = new Map<LayerId, GainNode>()
+  private layerOutput = new Map<LayerId, GainNode>()
+  private voices = new Map<number, Voice[]>()
+  private sustained = new Set<number>()
+  private sustain = false
+  private counter = 0
+  private timer: number | undefined
+
+  private ensure() {
+    if (this.context) return
+    const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtor) return
+    this.context = new AudioCtor()
+    this.master = this.context.createGain(); this.master.gain.value = .52
+    this.limiter = this.context.createDynamicsCompressor(); this.limiter.threshold.value = -7; this.limiter.knee.value = 8; this.limiter.ratio.value = 12
+    this.master.connect(this.limiter); this.limiter.connect(this.context.destination)
+    ;(['A', 'B'] as LayerId[]).forEach((layer) => this.buildLayer(layer, makeEffects()[layer], true))
+  }
+
+  private buildLayer(layer: LayerId, fx: Record<EffectUnit, EffectSettings>, initial = false) {
+    if (!this.context || !this.master) return
+    const oldInput = this.layerInput.get(layer), oldOutput = this.layerOutput.get(layer)
+    if (!initial) { try { oldInput?.disconnect() } catch { /* detached graph */ }; try { oldOutput?.disconnect() } catch { /* detached graph */ } }
+    const input = this.context.createGain(), mod1 = this.context.createGain(), mod2 = this.context.createBiquadFilter(), delay = this.context.createDelay(1.5), feedback = this.context.createGain(), amp = this.context.createBiquadFilter(), compressor = this.context.createDynamicsCompressor(), reverb = this.context.createConvolver(), rotary = this.context.createStereoPanner(), output = this.context.createGain()
+    const now = this.context.currentTime
+    const enabled = (unit: EffectUnit) => fx[unit].on
+    const m1 = fx.mod1, m2 = fx.mod2, d = fx.delay, a = fx.ampEq, c = fx.compressor, r = fx.reverb, rot = fx.rotary
+    mod1.gain.setValueAtTime(enabled('mod1') ? (m1.type === 'Pump' ? 1 - m1.amount / 180 : 1 - m1.amount / 300) : 1, now)
+    mod2.type = m2.type === 'Phaser' || m2.type === 'Vibe' ? 'allpass' : 'lowpass'; mod2.frequency.setValueAtTime(enabled('mod2') ? 700 + m2.rate * 25 : 18000, now); mod2.Q.setValueAtTime(enabled('mod2') ? m2.amount / 9 : .0001, now)
+    delay.delayTime.setValueAtTime(.08 + d.rate / 150, now); feedback.gain.setValueAtTime(enabled('delay') ? d.feedback / 150 : 0, now); delay.connect(feedback); feedback.connect(delay)
+    amp.type = a.type === 'HP24 Filter' ? 'highpass' : a.type === 'LP24 Filter' ? 'lowpass' : 'peaking'; amp.frequency.setValueAtTime(a.type.includes('Filter') ? 300 + a.rate * 30 : 1200, now); amp.gain.setValueAtTime(enabled('ampEq') ? (a.type === 'Twin' ? 4 : a.type === 'JC' ? 7 : a.type === 'Small' ? -5 : a.amount / 9 - 3) : 0, now); amp.Q.setValueAtTime(a.type.includes('Filter') ? 8 : .7, now)
+    compressor.threshold.setValueAtTime(enabled('compressor') ? -8 - c.amount / 3 : 0, now); compressor.ratio.setValueAtTime(enabled('compressor') ? 2 + c.amount / 14 : 1, now); compressor.attack.setValueAtTime(c.rate > 50 ? .003 : .03, now)
+    reverb.buffer = this.impulse(r.type, r.wet); rotary.pan.setValueAtTime(enabled('rotary') && a.type === 'To Rotary' ? (rot.rate / 100) * .75 - .37 : 0, now)
+    input.connect(mod1); mod1.connect(mod2); mod2.connect(delay); delay.connect(amp); mod2.connect(amp); amp.connect(compressor); compressor.connect(reverb); compressor.connect(output); reverb.connect(output); output.connect(this.master)
+    output.gain.setValueAtTime(1, now); this.layerInput.set(layer, input); this.layerOutput.set(layer, output)
+  }
+
+  private impulse(type: string, wet: number) {
+    if (!this.context) return null
+    const length = Math.max(1, Math.round(this.context.sampleRate * (.05 + wet / 100 * (type === 'Cathedral' ? 2.1 : type === 'Spring' ? .75 : .9))))
+    const buffer = this.context.createBuffer(2, length, this.context.sampleRate)
+    for (let ch = 0; ch < 2; ch++) { const data = buffer.getChannelData(ch); for (let i = 0; i < length; i++) data[i] = (Math.sin(i * (type === 'Spring' ? .19 : .041)) * (Math.random() * 2 - 1)) * (1 - i / length) ** (type === 'Booth' ? 5 : 2) * wet / 100 }
+    return buffer
+  }
+
+  configure(layers: Record<LayerId, LayerSettings>, fx: EffectState, piano: PianoSettings) {
+    this.ensure(); if (!this.context || !this.master) return
+    const now = this.context.currentTime
+    this.master.gain.cancelScheduledValues(now); this.master.gain.linearRampToValueAtTime(Math.max(.01, piano.master / 100) * .62, now + .025)
+    ;(['A', 'B'] as LayerId[]).forEach((layer) => { this.buildLayer(layer, piano.allEffects ? Object.fromEntries((Object.keys(effectTypes) as EffectUnit[]).map((u) => [u, { ...fx[layer][u], on: false }])) as Record<EffectUnit, EffectSettings> : fx[layer]); this.layerOutput.get(layer)?.gain.linearRampToValueAtTime(layers[layer].enabled ? layers[layer].level / 100 : .0001, now + .02) })
+  }
+
+  noteOn(note: number, velocity: number, layers: Record<LayerId, LayerSettings>, piano: PianoSettings) {
+    this.ensure(); if (!this.context) return; void this.context.resume()
+    const all = [...this.voices.values()].flat(); if (all.length >= MAX_VOICES) all.sort((a, b) => a.started - b.started)[0]?.release()
+    ;(['A', 'B'] as LayerId[]).forEach((layer) => { if (layers[layer].enabled) this.createVoice(note, velocity, layer, layers[layer], piano) })
+  }
+
+  private createVoice(note: number, rawVelocity: number, layer: LayerId, settings: LayerSettings, piano: PianoSettings) {
+    if (!this.context || !this.layerInput.get(layer)) return
+    const now = this.context.currentTime, touch = piano.touch === 'Heavy' ? rawVelocity ** 1.65 : piano.touch === 'Light' ? rawVelocity ** .65 : rawVelocity
+    const velocity = Math.min(1, touch + (1 - touch) * piano.dynComp * .11), freq = 440 * 2 ** ((note + settings.octave - 69) / 12)
+    const env = this.context.createGain(), osc = this.context.createOscillator(), color = this.context.createOscillator(), filter = this.context.createBiquadFilter()
+    const shapes: Record<PianoType, OscillatorType> = { Grand: 'triangle', Upright: 'sine', Electric: 'sine', Clav: 'square', Digital: 'sawtooth', Misc: 'sine' }
+    osc.type = shapes[settings.type]; osc.frequency.value = freq; color.type = settings.type === 'Electric' ? 'sine' : settings.type === 'Clav' ? 'square' : 'triangle'; color.frequency.value = freq * (settings.type === 'Electric' ? 2.01 : settings.type === 'Misc' ? 3 : 2)
+    filter.type = 'lowpass'; filter.frequency.value = piano.timbre === 'Soft' ? 1500 : piano.timbre === 'Bright' || piano.timbre.startsWith('Dyno') ? 9200 : piano.timbre === 'Mid' ? 3700 : 6200
+    env.gain.setValueAtTime(.0001, now); env.gain.exponentialRampToValueAtTime(Math.max(.015, velocity) * .34, now + .009); env.gain.exponentialRampToValueAtTime(Math.max(.008, velocity) * (settings.type === 'Electric' ? .18 : .12), now + .42)
+    osc.connect(filter); color.connect(filter); filter.connect(env); env.connect(this.layerInput.get(layer)!)
+    const unisons: OscillatorNode[] = []
+    for (let i = 0; i < piano.unison; i++) { const u = this.context.createOscillator(); u.type = osc.type; u.frequency.value = freq * (1 + (i + 1) * .0025); u.connect(filter); u.start(now); unisons.push(u) }
+    osc.start(now); color.start(now)
+    let ended = false
+    const release = () => { if (ended || !this.context) return; ended = true; const at = this.context.currentTime, releaseTime = piano.softRelease ? .34 : .13; env.gain.cancelScheduledValues(at); env.gain.setTargetAtTime(.0001, at, releaseTime); [osc, color, ...unisons].forEach((node) => node.stop(at + releaseTime * 6)); const group = this.voices.get(note) ?? []; this.voices.set(note, group.filter((voice) => voice.release !== release)) }
+    this.voices.set(note, [...(this.voices.get(note) ?? []), { note, layer, started: ++this.counter, release }])
+  }
+
+  noteOff(note: number) { if (this.sustain) { this.sustained.add(note); return }; (this.voices.get(note) ?? []).forEach((voice) => voice.release()) }
+  setSustain(down: boolean, layers: Record<LayerId, LayerSettings>, piano: PianoSettings) { this.sustain = down && (layers.A.sustainPedal || layers.B.sustainPedal); if (!this.sustain) { [...this.sustained].forEach((n) => { this.sustained.delete(n); this.noteOff(n) }) }; if (down && piano.stringRes) this.timer = window.setTimeout(() => undefined, 1) }
+  allNotesOff() { this.sustained.clear(); this.sustain = false; [...this.voices.values()].flat().forEach((voice) => voice.release()); this.voices.clear(); if (this.timer) window.clearTimeout(this.timer) }
+  dispose() { this.allNotesOff(); void this.context?.close(); this.context = null; this.layerInput.clear(); this.layerOutput.clear() }
+}
+
+const control = (id: string, label: string, kind: ControlKind, value = kind === 'button' ? false : 50) => ({ id, label, kind, value })
 const sections = [
-  ['Performance', 13, ['Pitch Stick', 'Mod Wheel', 'Master Level']],
-  ['Organ', 21, ['Organ Enable', 'Drawbar 16', 'Drawbar 5 1/3', 'Drawbar 8', 'Vibrato']],
-  ['Piano', 15, ['Piano Enable', 'Piano Select', 'KB Touch', 'Timbre']],
-  ['Program / Morph', 9, ['Program Dial', 'Store', 'Morph Wheel']],
-  ['Synth', 21, ['Synth Enable', 'Oscillator', 'Filter', 'Envelope', 'Arpeggiator']],
-  ['Layer Effects', 21, ['Effect 1', 'Delay', 'Reverb', 'Rotary', 'Master Clock']],
-] as const
+  { id: 'performance', title: 'PERFORMANCE', controls: [control('master-level-decorative', 'Master Level', 'knob', 68), control('pitch-stick', 'Pitch Stick', 'wheel', 50), control('mod-wheel', 'Modulation Wheel', 'wheel', 50), control('performance-octave-down', 'Octave Down', 'button'), control('performance-octave-up', 'Octave Up', 'button')] },
+  { id: 'organ', title: 'ORGAN', controls: [...Array.from({ length: 9 }, (_, i) => control(`organ-drawbar-${i + 1}`, `Organ drawbar ${i + 1}`, 'drawbar', 28 + (i % 4) * 14)), control('organ-layer-a', 'Organ Layer A', 'button'), control('organ-layer-b', 'Organ Layer B', 'button'), control('organ-model', 'Organ Model', 'button'), control('organ-percussion', 'Organ Percussion', 'button'), control('organ-rotary', 'Organ Rotary', 'knob', 42)] },
+  { id: 'piano', title: 'PIANO', controls: [] },
+  { id: 'program', title: 'PROGRAM', controls: [control('program-dial', 'Program Dial', 'knob', 36), ...Array.from({ length: 8 }, (_, i) => control(`program-button-${i + 1}`, `Program button ${i + 1}`, 'button')), control('program-page-up', 'Program Page Up', 'button'), control('program-page-down', 'Program Page Down', 'button'), control('program-live', 'Live Mode', 'button'), control('program-store', 'Store', 'button'), control('program-split', 'Split', 'button'), control('morph-wheel', 'Wheel Morph Assign', 'button'), control('morph-pedal', 'Control Pedal Morph Assign', 'button'), control('morph-aftertouch', 'Aftertouch Morph Assign', 'button')] },
+  { id: 'synth', title: 'SYNTH', controls: [control('synth-layer-a', 'Synth Layer A', 'button'), control('synth-layer-b', 'Synth Layer B', 'button'), control('synth-layer-c', 'Synth Layer C', 'button'), control('synth-level-a', 'Synth Layer A Level', 'fader', 57), control('synth-level-b', 'Synth Layer B Level', 'fader', 47), ...['Oscillator Shape', 'Oscillator Control', 'Filter Frequency', 'Filter Resonance', 'Filter Drive', 'Amp Attack', 'Amp Decay', 'Amp Release', 'LFO Rate', 'LFO Amount', 'Arpeggiator Rate'].map((label, i) => control(`synth-${i}`, label, 'knob', 30 + i * 5)), control('synth-filter-type', 'Synth Filter Type', 'button'), control('synth-arp', 'Synth Arpeggiator', 'button')] },
+  { id: 'effects', title: 'LAYER EFFECTS', controls: [] },
+]
 
-const black = new Set([1, 3, 6, 8, 10])
-const keyNames = Array.from({ length: 73 }, (_, i) => {
-  const names = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B']
-  return `${names[(i + 4) % 12]}${Math.floor((i + 4) / 12) + 1}`
-})
+function PanelControl({ item, value, update }: { item: ReturnType<typeof control>; value: number | boolean; update: (value: number | boolean) => void }) {
+  if (item.kind === 'button') return <button id={item.id} className={`hardware-button ${value ? 'lit' : ''}`} aria-pressed={Boolean(value)} onClick={() => update(!value)}><i />{item.label}</button>
+  if (item.kind === 'drawbar' || item.kind === 'fader') return <label className={`${item.kind} control-label`} htmlFor={item.id}><span>{item.kind === 'drawbar' ? '' : item.label}</span><input id={item.id} aria-label={item.label} type="range" min="0" max="100" value={Number(value)} onChange={(e) => update(Number(e.target.value))} /></label>
+  if (item.kind === 'wheel') return <label className="wheel control-label" htmlFor={item.id}><span>{item.label}</span><input id={item.id} aria-label={item.label} type="range" min="0" max="100" value={Number(value)} onChange={(e) => update(Number(e.target.value))} /></label>
+  return <label className="knob control-label" htmlFor={item.id} title={item.label}><span className="knob-face" style={{ '--turn': `${Number(value) * 2.7 - 135}deg` } as React.CSSProperties} /><input id={item.id} aria-label={item.label} type="range" min="0" max="100" value={Number(value)} onChange={(e) => update(Number(e.target.value))} /><small>{item.label}</small></label>
+}
+
+function Toggle({ id, label, pressed, onClick }: { id: string; label: string; pressed: boolean; onClick: () => void }) { return <button id={id} className={`hardware-button ${pressed ? 'lit' : ''}`} aria-pressed={pressed} onClick={onClick}><i />{label}</button> }
 
 export default function App() {
-  const [active, setActive] = useState<Set<number>>(new Set())
-  const [controls, setControls] = useState<Record<string, number>>({})
-  const [sustain, setSustain] = useState(false)
-  const press = (index: number, down: boolean) => setActive(previous => {
-    const next = new Set(previous); down ? next.add(index) : next.delete(index); return next
-  })
-  useEffect(() => {
-    const up = () => setActive(new Set())
-    window.addEventListener('blur', up); return () => window.removeEventListener('blur', up)
-  }, [])
-  const pressed = useMemo(() => active.size, [active])
-  return <main className="page">
-    <section className="instrument" aria-label="Nord Stage 4 73 interactive surface">
-      <header><span className="brand">nord</span><span className="model">STAGE 4</span><span className="status" role="status">Piano synthesis ready · {pressed} notes</span></header>
-      <div className="deck">
-        {sections.map(([name, width, items]) => <section className="panel" style={{ width: `${width}%` }} aria-label={`${name} controls`} key={name}>
-          <h2>{name}</h2><div className="controls">{items.map((label, i) => {
-            const id = `${name.toLowerCase().replace(/[^a-z]+/g, '-')}-${i}`
-            const value = controls[id] ?? 0
-            return <label className="control" key={id}>{i % 3 === 0 ? <button id={id} aria-pressed={value > 0} onClick={() => setControls(c => ({ ...c, [id]: value ? 0 : 1 }))}>{label}</button> : <><span>{label}</span><input id={id} aria-label={label} type="range" min="0" max="10" value={value} onChange={e => setControls(c => ({ ...c, [id]: Number(e.target.value) }))}/></>}</label>
-          })}</div>
-          {(name === 'Program / Morph' || name === 'Synth') && <output className="oled">{name === 'Synth' ? 'A1 ANALOG' : '01: INIT PROGRAM'}</output>}
-        </section>)}
-      </div>
-      <div className="keybed" aria-label="73 key piano keyboard" onPointerUp={() => setActive(new Set())} onPointerCancel={() => setActive(new Set())}>
-        {keyNames.map((name, i) => <button key={name} className={`key ${black.has((i + 4) % 12) ? 'black' : 'white'} ${active.has(i) ? 'pressed' : ''}`} aria-label={`Play ${name}`} onPointerDown={() => press(i, true)} onPointerUp={() => press(i, false)} onKeyDown={e => { if (!e.repeat && (e.key === 'Enter' || e.key === ' ')) press(i, true) }} onKeyUp={() => press(i, false)} />)}
-      </div>
-      <label className="sustain"><input type="checkbox" checked={sustain} onChange={e => setSustain(e.target.checked)}/> Sustain pedal {sustain ? 'on' : 'off'}</label>
-    </section>
-  </main>
+  const [hardware, setHardware] = useState<HardwareState>(() => Object.fromEntries(sections.flatMap((section) => section.controls.map((item) => [item.id, item.value]))))
+  const [layers, setLayers] = useState<Record<LayerId, LayerSettings>>({ A: { enabled: true, level: 68, octave: 0, sustainPedal: true, pitchStick: false, type: 'Grand' }, B: { enabled: false, level: 55, octave: 0, sustainPedal: true, pitchStick: false, type: 'Electric' } })
+  const [piano, setPiano] = useState<PianoSettings>({ touch: 'Medium', dynComp: 0, timbre: 'Off', unison: 0, softRelease: false, stringRes: false, master: 68, allEffects: false, group: false })
+  const [effects, setEffects] = useState<EffectState>(makeEffects)
+  const [organ, setOrgan] = useState<Record<LayerId, OrganLayer>>(defaultOrgan)
+  const [organDrawbars, setOrganDrawbars] = useState<number[]>([8, 0, 7, 5, 4, 3, 2, 1, 0])
+  const [organPercussion, setOrganPercussion] = useState({ on: false, soft: false, fast: false, third: true, click: true, vibrato: 'Off', rotary: 'Slow', rotaryDrive: 0 })
+  const [synth, setSynth] = useState<Record<'A' | 'B' | 'C', SynthLayer>>(defaultSynth)
+  const [synthFocus, setSynthFocus] = useState<'A' | 'B' | 'C'>('A')
+  const [split, setSplit] = useState<SplitState>({ on: false, points: [48, 60, 72], crossfade: 0 })
+  const [scene, setScene] = useState<1 | 2>(1)
+  const [scenes, setScenes] = useState<[Record<string, boolean>, Record<string, boolean>]>([{ 'piano-A': true, 'piano-B': false, 'organ-A': false, 'organ-B': false, 'synth-A': false, 'synth-B': false, 'synth-C': false }, { 'piano-A': true, 'piano-B': true, 'organ-A': false, 'organ-B': false, 'synth-A': false, 'synth-B': false, 'synth-C': false }])
+  const [clock, setClock] = useState(120), [transpose, setTranspose] = useState(0)
+  const [morphSource, setMorphSource] = useState<'wheel' | 'pedal' | null>(null), [morphValue, setMorphValue] = useState({ wheel: 0, pedal: 0 }), [morphs, setMorphs] = useState<Record<'wheel' | 'pedal', MorphAssignment[]>>({ wheel: [], pedal: [] })
+  const [programPage, setProgramPage] = useState(0), [programSlot, setProgramSlot] = useState(0), [liveMode, setLiveMode] = useState(false), [listOpen, setListOpen] = useState(false), [storeArmed, setStoreArmed] = useState(false), [storeAs, setStoreAs] = useState(false), [programName, setProgramName] = useState('Concert Grand'), [liveSlots, setLiveSlots] = useState<ProgramSnapshot[]>([])
+  const [focus, setFocus] = useState<LayerId>('A'), [pressed, setPressed] = useState<Set<number>>(new Set()), [status, setStatus] = useState('Sample assets unavailable · playable synthesis fallback'), [sustain, setSustain] = useState(false)
+  const audio = useRef<LayeredAudio | null>(null), activePointers = useRef(new Map<number, number>()), pressedKeyboard = useRef(new Set<string>())
+  const notes = useMemo(() => Array.from({ length: KEY_COUNT }, (_, i) => START_NOTE + i), [])
+  const update = useCallback((id: string, value: number | boolean) => setHardware((old) => ({ ...old, [id]: value })), [])
+  const getAudio = useCallback(() => (audio.current ??= new LayeredAudio()), [])
+  const configure = useCallback((nextLayers = layers, nextEffects = effects, nextPiano = piano) => getAudio().configure(nextLayers, nextEffects, nextPiano), [effects, getAudio, layers, piano])
+  const patchLayer = (layer: LayerId, patch: Partial<LayerSettings>) => setLayers((old) => { const next = { ...old, [layer]: { ...old[layer], ...patch } }; configure(next); return next })
+  const patchPiano = (patch: Partial<PianoSettings>) => setPiano((old) => { const next = { ...old, ...patch }; configure(layers, effects, next); return next })
+  const patchEffect = (unit: EffectUnit, patch: Partial<EffectSettings>) => setEffects((old) => { const targets: LayerId[] = piano.group || old[focus][unit].global ? ['A', 'B'] : [focus]; const next = { ...old, A: { ...old.A }, B: { ...old.B } }; targets.forEach((layer) => { next[layer][unit] = { ...old[layer][unit], ...patch } }); configure(layers, next); return next })
+  const patchOrgan = (layer: LayerId, patch: Partial<OrganLayer>) => setOrgan((old) => ({ ...old, [layer]: { ...old[layer], ...patch } }))
+  const patchSynth = (layer: 'A' | 'B' | 'C', patch: Partial<SynthLayer>) => setSynth((old) => ({ ...old, [layer]: { ...old[layer], ...patch } }))
+  const snapshot = useCallback((name = programName): ProgramSnapshot => ({ name, piano: structuredClone(layers), effects: structuredClone(effects), organ: structuredClone(organ), synth: structuredClone(synth), split: structuredClone(split), scene, scenes: structuredClone(scenes), clock, transpose, morphs: structuredClone(morphs) }), [clock, effects, layers, morphs, organ, programName, scene, scenes, split, synth, transpose])
+  const [programs, setPrograms] = useState<ProgramSnapshot[]>(() => Array.from({ length: 32 }, (_, i) => { const entry = snapshot(['Concert Grand', 'Tine Stack', 'B3 Club', 'Vox Combo', 'Farf Combo', 'Pipe Chapel', 'Super Saw', 'FM Motion'][i] ?? `User Program ${i + 1}`); if (i >= 2 && i <= 5) { entry.organ.A.enabled = true; entry.organ.A.model = organModels[i - 2] } if (i >= 6) { entry.synth.A.enabled = true; entry.synth.A.waveform = i === 6 ? 'Super Saw' : 'FM 2-op (algorithm A)' } if (i === 1) entry.piano.B.enabled = true; return entry })) // factory records intentionally cover all engines
+  const loadedSnapshot = programs[programSlot] ?? programs[0]
+  const dirty = JSON.stringify(snapshot()) !== JSON.stringify(loadedSnapshot)
+  const restoreProgram = (entry: ProgramSnapshot, slot: number) => { setLayers(entry.piano); setEffects(entry.effects); setOrgan(entry.organ); setSynth(entry.synth); setSplit(entry.split); setScene(entry.scene); setScenes(entry.scenes); setClock(entry.clock); setTranspose(entry.transpose); setMorphs(entry.morphs); setProgramName(entry.name); setProgramSlot(slot); setProgramPage(Math.floor(slot / 8)); configure(entry.piano, entry.effects) }
+  const chooseProgram = (slot: number) => { if (liveMode) { const live = liveSlots[slot]; if (live) restoreProgram(live, slot); else setProgramSlot(slot); return }; if (storeArmed) { const next = [...programs]; next[slot] = snapshot(storeAs ? programName : programs[slot].name); setPrograms(next); setStoreArmed(false); setStoreAs(false); restoreProgram(next[slot], slot); return }; restoreProgram(programs[slot], slot) }
+  const applyScene = (nextScene: 1 | 2) => { const values = scenes[nextScene - 1]; setScene(nextScene); setLayers((old) => ({ A: { ...old.A, enabled: values['piano-A'] }, B: { ...old.B, enabled: values['piano-B'] } })); setOrgan((old) => ({ A: { ...old.A, enabled: values['organ-A'] }, B: { ...old.B, enabled: values['organ-B'] } })); setSynth((old) => ({ A: { ...old.A, enabled: values['synth-A'] }, B: { ...old.B, enabled: values['synth-B'] }, C: { ...old.C, enabled: values['synth-C'] } })) }
+  const saveScene = () => setScenes((old) => { const next = structuredClone(old); next[scene - 1] = { 'piano-A': layers.A.enabled, 'piano-B': layers.B.enabled, 'organ-A': organ.A.enabled, 'organ-B': organ.B.enabled, 'synth-A': synth.A.enabled, 'synth-B': synth.B.enabled, 'synth-C': synth.C.enabled }; return next })
+  const inZone = useCallback((note: number, zone: Zone) => { if (!split.on) return zone === 1; const cuts = split.points; const zoneIndex = note < cuts[0] ? 1 : note < cuts[1] ? 2 : note < cuts[2] ? 3 : 4; return zoneIndex === zone }, [split])
+  const play = useCallback((note: number, velocity = .78) => {
+    if (note < START_NOTE || note >= START_NOTE + KEY_COUNT) return
+    const soundingNote = Math.max(0, Math.min(127, note + transpose))
+    setPressed((old) => new Set(old).add(note)); getAudio().configure(layers, effects, piano)
+    const playablePiano = { A: { ...layers.A, enabled: layers.A.enabled && inZone(note, 1) }, B: { ...layers.B, enabled: layers.B.enabled && inZone(note, 1) } }
+    getAudio().noteOn(soundingNote, velocity, playablePiano, piano)
+    ;(['A', 'B'] as LayerId[]).forEach((id) => { const layer = organ[id]; if (layer.enabled && inZone(note, layer.zone)) { const organType: PianoType = layer.model === 'B3' ? 'Clav' : layer.model === 'Vox' ? 'Electric' : layer.model === 'Farf' ? 'Digital' : 'Misc'; getAudio().noteOn(soundingNote + layer.octave, velocity * (layer.level / 100), { A: { ...layers.A, enabled: id === 'A', type: organType }, B: { ...layers.B, enabled: id === 'B', type: organType } }, { ...piano, timbre: organPercussion.click ? 'Bright' : 'Off' }) } })
+    ;(['A', 'B', 'C'] as const).forEach((id, index) => { const layer = synth[id]; if (layer.enabled && inZone(note, layer.zone)) { const type: PianoType = layer.waveform.includes('FM') ? 'Digital' : layer.waveform.includes('Super') || layer.waveform.includes('Multi') ? 'Clav' : layer.waveform.includes('Noise') ? 'Misc' : layer.waveform.includes('Saw') || layer.waveform.includes('Sync') ? 'Digital' : 'Grand'; getAudio().noteOn(soundingNote + layer.octave, velocity * (layer.level / 100), { A: { ...layers.A, enabled: index % 2 === 0, type }, B: { ...layers.B, enabled: index % 2 === 1, type } }, { ...piano, timbre: layer.filter === 'HP' ? 'Bright' : layer.filter === 'BP' ? 'Mid' : 'Soft', unison: layer.unison }) } })
+  }, [effects, getAudio, inZone, layers, organ, organPercussion.click, piano, synth, transpose])
+  const release = useCallback((note: number) => { setPressed((old) => { const next = new Set(old); next.delete(note); return next }); audio.current?.noteOff(note) }, [])
+  const setPedal = useCallback((down: boolean) => { setSustain(down); getAudio().setSustain(down, layers, piano) }, [getAudio, layers, piano])
+
+  useEffect(() => { const stop = () => { pressedKeyboard.current.clear(); activePointers.current.clear(); setPressed(new Set()); audio.current?.allNotesOff(); setSustain(false) }; const down = (e: KeyboardEvent) => { if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) setPedal(true); return }; const n = keyboardNotes[e.key.toLowerCase()]; if (n === undefined || e.repeat || pressedKeyboard.current.has(e.code)) return; e.preventDefault(); pressedKeyboard.current.add(e.code); play(n, .74) }; const up = (e: KeyboardEvent) => { if (e.code === 'Space') { setPedal(false); return }; const n = keyboardNotes[e.key.toLowerCase()]; if (n !== undefined) { pressedKeyboard.current.delete(e.code); release(n) } }; window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', stop); return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', stop); stop(); audio.current?.dispose() } }, [play, release, setPedal])
+  useEffect(() => { const midi = navigator.requestMIDIAccess; if (!midi) { setStatus('Sample assets unavailable · playable synthesis fallback · MIDI unavailable'); return }; let access: MIDIAccess | undefined; const message = (e: MIDIMessageEvent) => { if (!e.data) return; const [cmd, key, vel] = e.data; if ((cmd & 240) === 144 && vel > 0) play(key, vel / 127); else if ((cmd & 240) === 128 || ((cmd & 240) === 144 && vel === 0)) release(key); else if ((cmd & 240) === 176 && key === 64) setPedal(vel >= 64) }; void midi.call(navigator).then((result) => { access = result; result.inputs.forEach((input) => { input.onmidimessage = message }); result.onstatechange = () => setStatus([...result.inputs.values()].some((x) => x.state === 'connected') ? 'Fallback · MIDI connected' : 'Fallback · MIDI disconnected') }).catch(() => setStatus('Sample assets unavailable · playable synthesis fallback · MIDI permission denied')); return () => { access?.inputs.forEach((input) => { input.onmidimessage = null }) } }, [play, release, setPedal])
+  useEffect(() => { if (!liveMode) return; const entry = snapshot(`Live ${programSlot + 1}`); setLiveSlots((old) => { const next = old.length === 8 ? [...old] : Array.from({ length: 8 }, (_, i) => old[i] ?? entry); next[programSlot] = entry; return next }) }, [clock, effects, layers, liveMode, morphs, organ, programSlot, scene, scenes, snapshot, split, synth, transpose])
+
+  const active = layers[focus], effect = (unit: EffectUnit) => effects[focus][unit]
+  const cycle = <T,>(values: readonly T[], value: T) => values[(values.indexOf(value) + 1) % values.length]
+  return <main className="product-study"><div className="instrument-shell" aria-label="Nord Stage 4 73 virtual instrument"><div className="top-rail" /><section className="deck" aria-label="Nord Stage 4 control deck">
+    {sections.map((section) => <section className={`panel panel-${section.id}`} key={section.id} aria-label={section.title}>
+      {section.id === 'performance' && <><div className="brand"><strong>nord stage 4</strong><span>HAMMER ACTION 73</span></div><div className="status-dot">{status}</div></>}
+      <h2>{section.title}</h2>
+      {section.id === 'program' && <div className="oled program-oled" role="status"><b>{liveMode ? `LIVE ${programSlot + 1}` : `${programPage + 1}.${programSlot % 8 + 1} ${programName}`}{dirty && ' · E'}</b><span>{split.on ? `${split.crossfade ? `±${split.crossfade}` : 'OFF'} XFADE` : 'NO SPLIT'} · {clock} BPM · {transpose > 0 ? '+' : ''}{transpose}</span><small>{storeArmed ? (storeAs ? 'STORE AS: enter name then destination' : 'STORE: choose destination') : dirty ? 'Edited — change program discards edits' : 'Stored program'}</small></div>}
+      {section.id === 'synth' && <div className="oled synth-oled" role="status"><b>{synthFocus}: {synth[synthFocus].waveform}</b><span>{synth[synthFocus].filter} · {synth[synthFocus].mode} · {synth[synthFocus].arp} {synth[synthFocus].arpRun ? 'RUN' : ''}</span></div>}
+      {section.id === 'organ' && <div className="led-ladders" aria-label="Organ level LED ladders">{Array.from({ length: 9 }, (_, i) => <span key={i}>{Array.from({ length: 6 }, (_, led) => <i className={led < 3 + i % 3 ? 'on' : ''} key={led} />)}</span>)}</div>}
+      {section.id === 'performance' && <label className="master-live control-label" htmlFor="master-level"><span>MASTER LEVEL</span><input id="master-level" aria-label="Master Level" type="range" min="0" max="100" value={piano.master} onChange={(e) => patchPiano({ master: Number(e.target.value) })} /></label>}
+      {section.id === 'piano' ? <div className="functional-bank piano-live">
+        <div className="layer-row"><Toggle id="piano-layer-a" label="A" pressed={layers.A.enabled} onClick={() => { setFocus('A'); patchLayer('A', { enabled: !layers.A.enabled }) }} /><Toggle id="piano-layer-b" label="B" pressed={layers.B.enabled} onClick={() => { setFocus('B'); patchLayer('B', { enabled: !layers.B.enabled }) }} /></div>
+        <button id="piano-type" className="hardware-button lit" aria-label="Piano Type" onClick={() => patchLayer(focus, { type: cycle(pianoTypes, active.type) })}><i />{active.type}</button>
+        <span className="model-readout" aria-label="Piano Model">{typeModels[active.type]}</span>
+        <label className="live-range" htmlFor="piano-level"><span>{focus} LEVEL</span><input id="piano-level" aria-label={`Piano Layer ${focus} Level`} type="range" min="0" max="100" value={active.level} onChange={(e) => patchLayer(focus, { level: Number(e.target.value) })} /></label>
+        <div className="tiny-row"><button id="piano-octave-down" onClick={() => patchLayer(focus, { octave: Math.max(-12, active.octave - 12) })}>OCT−</button><span aria-label="Piano Octave">{active.octave / 12}</span><button id="piano-octave-up" onClick={() => patchLayer(focus, { octave: Math.min(12, active.octave + 12) })}>OCT+</button></div>
+        <div className="tiny-row"><Toggle id="piano-sustain-pedal" label="SUSTPED" pressed={active.sustainPedal} onClick={() => patchLayer(focus, { sustainPedal: !active.sustainPedal })} /><Toggle id="piano-pstick" label="PSTICK" pressed={active.pitchStick} onClick={() => patchLayer(focus, { pitchStick: !active.pitchStick })} /></div>
+        <button id="piano-kb-touch" className="hardware-button" aria-label="Piano Keyboard Touch" onClick={() => patchPiano({ touch: cycle(['Heavy', 'Medium', 'Light'] as const, piano.touch) })}><i />TOUCH {piano.touch}</button>
+        <button id="piano-dyn-comp" className="hardware-button" onClick={() => patchPiano({ dynComp: (piano.dynComp + 1) % 4 })}><i />DYN {piano.dynComp || 'OFF'}</button>
+        <button id="piano-timbre" className="hardware-button" onClick={() => patchPiano({ timbre: cycle(active.type === 'Electric' ? ['Off', 'Soft', 'Mid', 'Bright', 'Dyno 1', 'Dyno 2'] : ['Off', 'Soft', 'Mid', 'Bright'], piano.timbre) })}><i />TIMBRE {piano.timbre}</button>
+        <button id="piano-unison" className="hardware-button" onClick={() => patchPiano({ unison: (piano.unison + 1) % 4 })}><i />UNISON {piano.unison || 'OFF'}</button>
+        <div className="tiny-row"><Toggle id="piano-soft-release" label="SOFT REL" pressed={piano.softRelease} onClick={() => patchPiano({ softRelease: !piano.softRelease })} /><Toggle id="piano-string-res" label="STR RES" pressed={piano.stringRes} onClick={() => patchPiano({ stringRes: !piano.stringRes })} /></div>
+      </div> : section.id === 'effects' ? <div className="functional-bank effects-live">
+        <div className="layer-row"><Toggle id="effects-focus-a" label="PIANO A" pressed={focus === 'A'} onClick={() => setFocus('A')} /><Toggle id="effects-focus-b" label="PIANO B" pressed={focus === 'B'} onClick={() => setFocus('B')} /><Toggle id="effects-group" label="GROUP" pressed={piano.group} onClick={() => patchPiano({ group: !piano.group })} /></div>
+        <Toggle id="effects-all-bypass" label="LAYER FX ON" pressed={!piano.allEffects} onClick={() => patchPiano({ allEffects: !piano.allEffects })} />
+        {(['mod1', 'mod2', 'delay', 'ampEq', 'compressor', 'reverb', 'rotary'] as EffectUnit[]).map((unit) => <div className="fx-unit" key={unit}><Toggle id={`effects-${unit}-on`} label={unit === 'ampEq' ? 'AMP/EQ' : unit.toUpperCase()} pressed={effect(unit).on} onClick={() => patchEffect(unit, { on: !effect(unit).on })} /><select aria-label={`${unit} type`} value={effect(unit).type} onChange={(e) => patchEffect(unit, { type: e.target.value })}>{effectTypes[unit].map((x) => <option key={x}>{x}</option>)}</select><input aria-label={`${unit} amount`} type="range" min="0" max="100" value={effect(unit).amount} onChange={(e) => patchEffect(unit, { amount: Number(e.target.value), wet: Number(e.target.value) })} />{(['delay', 'compressor', 'reverb'] as EffectUnit[]).includes(unit) && <Toggle id={`effects-${unit}-global`} label="G" pressed={effect(unit).global} onClick={() => patchEffect(unit, { global: !effect(unit).global })} />}</div>)}
+      </div> : section.id === 'program' ? <div className="functional-bank program-live">
+        <div className="program-row"><button id="program-list" className="hardware-button" aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}><i />LIST 1–32</button><Toggle id="program-live" label="LIVE MODE" pressed={liveMode} onClick={() => { setLiveMode(!liveMode); setProgramSlot(0) }} /><Toggle id="program-store" label="STORE" pressed={storeArmed && !storeAs} onClick={() => { setStoreArmed(!storeArmed); setStoreAs(false) }} /><Toggle id="program-store-as" label="STORE AS" pressed={storeArmed && storeAs} onClick={() => { setStoreArmed(true); setStoreAs(true) }} /></div>
+        {storeAs && <label className="program-name">NAME <input aria-label="Program name" value={programName} maxLength={16} onChange={(e) => setProgramName(e.target.value)} /></label>}
+        <div className="program-row"><button id="program-page-down" onClick={() => setProgramPage((page) => Math.max(0, page - 1))}>PAGE−</button><button id="program-page-up" onClick={() => setProgramPage((page) => Math.min(3, page + 1))}>PAGE+</button><label className="live-range">DIAL <input id="program-dial" aria-label="Program Dial" type="range" min="0" max="31" value={programSlot} onChange={(e) => chooseProgram(Number(e.target.value))} /></label></div>
+        <div className="program-slots">{Array.from({ length: 8 }, (_, i) => { const slot = liveMode ? i : programPage * 8 + i; return <button key={i} id={`program-button-${i + 1}`} className={programSlot === slot ? 'lit' : ''} aria-pressed={programSlot === slot} onClick={() => chooseProgram(slot)}>{i + 1}<small>{liveMode ? `LIVE ${i + 1}` : programs[slot]?.name}</small></button> })}</div>
+        {listOpen && <ol className="program-list" aria-label="Numeric program list">{programs.map((program, i) => <li key={i}><button onClick={() => { chooseProgram(i); setListOpen(false) }}>{String(i + 1).padStart(2, '0')} {program.name}</button></li>)}</ol>}
+        <div className="program-row"><Toggle id="split-on-set" label="SPLIT ON/SET" pressed={split.on} onClick={() => setSplit((old) => ({ ...old, on: !old.on }))} /><label className="live-range">XFADE <select aria-label="Split crossfade" value={split.crossfade} onChange={(e) => setSplit((old) => ({ ...old, crossfade: Number(e.target.value) as 0 | 6 | 12 }))}><option value="0">Off</option><option value="6">±6</option><option value="12">±12</option></select></label></div>
+        {split.on && <div className="split-points">{(['Low', 'Mid', 'High'] as const).map((label, i) => <label key={label}>{label}<select aria-label={`${label} split point`} value={split.points[i]} onChange={(e) => setSplit((old) => { const points = [...old.points] as [number, number, number]; points[i] = Number(e.target.value); return { ...old, points } })}>{[36, 41, 48, 53, 60, 65, 72, 77, 84, 89, 96].map((n) => <option value={n} key={n}>{noteName(n)}</option>)}</select></label>)}</div>}
+        <div className="program-row"><Toggle id="layer-scene-i" label="SCENE I" pressed={scene === 1} onClick={() => applyScene(1)} /><Toggle id="layer-scene-ii" label="SCENE II" pressed={scene === 2} onClick={() => applyScene(2)} /><button onClick={saveScene}>CAPTURE SCENE</button></div>
+        <div className="program-row"><Toggle id="morph-wheel" label="WHEEL MORPH" pressed={morphSource === 'wheel'} onClick={() => setMorphSource(morphSource === 'wheel' ? null : 'wheel')} /><Toggle id="morph-pedal" label="PEDAL MORPH" pressed={morphSource === 'pedal'} onClick={() => setMorphSource(morphSource === 'pedal' ? null : 'pedal')} /><button id="morph-clear" onClick={() => morphSource && setMorphs((old) => ({ ...old, [morphSource]: [] }))}>CLEAR</button></div>
+        <div className="program-row"><label className="live-range">WHEEL <input aria-label="Morph wheel position" type="range" value={morphValue.wheel} onChange={(e) => setMorphValue((old) => ({ ...old, wheel: Number(e.target.value) }))} /></label><label className="live-range">PEDAL <input aria-label="Control pedal position" type="range" value={morphValue.pedal} onChange={(e) => setMorphValue((old) => ({ ...old, pedal: Number(e.target.value) }))} /></label></div>
+        <div className="program-row"><button id="master-clock-tap" onClick={() => setClock((bpm) => Math.min(300, Math.max(30, bpm + 1)))}>TAP MST CLK</button><label className="live-range">BPM <input aria-label="Master clock BPM" type="range" min="30" max="300" value={clock} onChange={(e) => setClock(Number(e.target.value))} /></label><button id="transpose-down" onClick={() => setTranspose((value) => Math.max(-6, value - 1))}>TRANS−</button><button id="transpose-up" onClick={() => setTranspose((value) => Math.min(6, value + 1))}>TRANS+</button><button id="panic" onClick={() => { audio.current?.allNotesOff(); setPressed(new Set()); setMorphValue({ wheel: 0, pedal: 0 }) }}>PANIC</button></div>
+      </div> : section.id === 'organ' ? <div className="functional-bank organ-live">
+        <div className="layer-row">{(['A', 'B'] as LayerId[]).map((id) => <Toggle key={id} id={`organ-layer-${id.toLowerCase()}`} label={`ORG ${id}`} pressed={organ[id].enabled} onClick={() => { setFocus(id); patchOrgan(id, { enabled: !organ[id].enabled }) }} />)}</div>
+        <div className="program-row"><button id="organ-model" onClick={() => patchOrgan(focus, { model: cycle(organModels, organ[focus].model) })}>MODEL {organ[focus].model}</button><label className="live-range">LEVEL <input aria-label={`Organ Layer ${focus} Level`} type="range" value={organ[focus].level} onChange={(e) => patchOrgan(focus, { level: Number(e.target.value) })} /></label><select aria-label="Organ keyboard zone" value={organ[focus].zone} onChange={(e) => patchOrgan(focus, { zone: Number(e.target.value) as Zone })}>{[1, 2, 3, 4].map((n) => <option key={n}>{n}</option>)}</select></div>
+        <div className="organ-drawbars">{organDrawbars.map((value, i) => <label key={i} htmlFor={`organ-drawbar-${i + 1}`}><span>{["16'", "5⅓'", "8'", "4'", "2⅔'", "2'", "1⅗'", "1⅓'", "1'"][i]}</span><input id={`organ-drawbar-${i + 1}`} aria-label={`Organ drawbar ${i + 1}`} type="range" min="0" max="8" value={value} onChange={(e) => setOrganDrawbars((old) => old.map((x, index) => index === i ? Number(e.target.value) : x))} /></label>)}</div>
+        <div className="program-row"><Toggle id="organ-percussion" label="PERC" pressed={organPercussion.on} onClick={() => setOrganPercussion((x) => ({ ...x, on: !x.on }))} /><Toggle id="organ-key-click" label="KEY CLICK" pressed={organPercussion.click} onClick={() => setOrganPercussion((x) => ({ ...x, click: !x.click }))} /><button onClick={() => setOrganPercussion((x) => ({ ...x, soft: !x.soft }))}>SOFT</button><button onClick={() => setOrganPercussion((x) => ({ ...x, fast: !x.fast }))}>FAST</button><button onClick={() => setOrganPercussion((x) => ({ ...x, third: !x.third }))}>3RD</button></div>
+        <div className="program-row"><select aria-label="Organ vibrato chorus" value={organPercussion.vibrato} onChange={(e) => setOrganPercussion((x) => ({ ...x, vibrato: e.target.value }))}>{['Off', 'C1', 'C2', 'C3', 'V1', 'V2', 'V3'].map((x) => <option key={x}>{x}</option>)}</select><select aria-label="Organ rotary speed" value={organPercussion.rotary} onChange={(e) => setOrganPercussion((x) => ({ ...x, rotary: e.target.value }))}>{['Slow', 'Fast', 'Stop'].map((x) => <option key={x}>{x}</option>)}</select><label className="live-range">DRIVE <input aria-label="Organ rotary drive" type="range" value={organPercussion.rotaryDrive} onChange={(e) => setOrganPercussion((x) => ({ ...x, rotaryDrive: Number(e.target.value) }))} /></label></div>
+      </div> : section.id === 'synth' ? <div className="functional-bank synth-live">
+        <div className="layer-row">{(['A', 'B', 'C'] as const).map((id) => <Toggle key={id} id={`synth-layer-${id.toLowerCase()}`} label={`SYN ${id}`} pressed={synth[id].enabled} onClick={() => { setSynthFocus(id); patchSynth(id, { enabled: !synth[id].enabled }) }} />)}</div>
+        <div className="program-row"><select aria-label="Synth waveform" value={synth[synthFocus].waveform} onChange={(e) => patchSynth(synthFocus, { waveform: e.target.value as SynthWave })}>{synthWaves.map((x) => <option key={x}>{x}</option>)}</select><label className={`live-range ${morphs.wheel.some((x) => x.id === 'synth-filter') ? 'morph-lit' : ''}`}>OSC CTRL <input aria-label="Synth oscillator control" type="range" value={synth[synthFocus].oscCtrl} onChange={(e) => patchSynth(synthFocus, { oscCtrl: Number(e.target.value) })} /></label><button onClick={() => morphSource && setMorphs((old) => ({ ...old, [morphSource]: [...old[morphSource].filter((x) => x.id !== 'synth-filter'), { id: 'synth-filter', start: synth[synthFocus].cutoff, end: 100 }] }))}>ASSIGN</button></div>
+        <div className="program-row"><select aria-label="Synth filter type" value={synth[synthFocus].filter} onChange={(e) => patchSynth(synthFocus, { filter: e.target.value as SynthLayer['filter'] })}>{['LP12', 'LP24', 'HP', 'BP'].map((x) => <option key={x}>{x}</option>)}</select><label className="live-range">FREQ <input aria-label="Synth filter frequency" type="range" value={synth[synthFocus].cutoff} onChange={(e) => patchSynth(synthFocus, { cutoff: Number(e.target.value) })} /></label><label className="live-range">RES <input aria-label="Synth filter resonance" type="range" value={synth[synthFocus].resonance} onChange={(e) => patchSynth(synthFocus, { resonance: Number(e.target.value) })} /></label><label className="live-range">DRIVE <input aria-label="Synth filter drive" type="range" value={synth[synthFocus].drive} onChange={(e) => patchSynth(synthFocus, { drive: Number(e.target.value) })} /></label></div>
+        <div className="program-row"><label className="live-range">LEVEL <input aria-label={`Synth Layer ${synthFocus} Level`} type="range" value={synth[synthFocus].level} onChange={(e) => patchSynth(synthFocus, { level: Number(e.target.value) })} /></label><select aria-label="Synth keyboard zone" value={synth[synthFocus].zone} onChange={(e) => patchSynth(synthFocus, { zone: Number(e.target.value) as Zone })}>{[1, 2, 3, 4].map((n) => <option key={n}>{n}</option>)}</select><select aria-label="Synth voice mode" value={synth[synthFocus].mode} onChange={(e) => patchSynth(synthFocus, { mode: e.target.value as SynthLayer['mode'] })}>{['Poly', 'Mono', 'Legato'].map((x) => <option key={x}>{x}</option>)}</select><label className="live-range">GLIDE <input aria-label="Synth glide" type="range" value={synth[synthFocus].glide} onChange={(e) => patchSynth(synthFocus, { glide: Number(e.target.value) })} /></label></div>
+        <div className="program-row"><select aria-label="Synth LFO destination" value={synth[synthFocus].lfo} onChange={(e) => patchSynth(synthFocus, { lfo: e.target.value as SynthLayer['lfo'] })}>{['Off', 'Osc Pitch', 'Osc Ctrl', 'Filter Freq'].map((x) => <option key={x}>{x}</option>)}</select><select aria-label="Synth LFO waveform" value={synth[synthFocus].lfoWave} onChange={(e) => patchSynth(synthFocus, { lfoWave: e.target.value as SynthLayer['lfoWave'] })}>{['Triangle', 'Saw down', 'Saw up', 'Square', 'Sample & Hold'].map((x) => <option key={x}>{x}</option>)}</select><label className="live-range">LFO RATE <input aria-label="Synth LFO rate" type="range" value={synth[synthFocus].lfoRate} onChange={(e) => patchSynth(synthFocus, { lfoRate: Number(e.target.value) })} /></label></div>
+        <div className="program-row"><select aria-label="Synth arp gate mode" value={synth[synthFocus].arp} onChange={(e) => patchSynth(synthFocus, { arp: e.target.value as SynthLayer['arp'] })}>{['Off', 'Arp', 'Poly', 'Gate'].map((x) => <option key={x}>{x}</option>)}</select><Toggle id="synth-arp-run" label="ARP RUN" pressed={synth[synthFocus].arpRun} onClick={() => patchSynth(synthFocus, { arpRun: !synth[synthFocus].arpRun })} /><Toggle id="synth-arp-hold" label="HOLD" pressed={synth[synthFocus].arpHold} onClick={() => patchSynth(synthFocus, { arpHold: !synth[synthFocus].arpHold })} /><label className="live-range">RATE <input aria-label="Synth arp rate" min="30" max="300" type="range" value={synth[synthFocus].arpRate} onChange={(e) => patchSynth(synthFocus, { arpRate: Number(e.target.value) })} /></label></div>
+      </div> : <div className={`control-bank ${section.id}`}>{section.controls.map((item) => <PanelControl key={item.id} item={item} value={hardware[item.id]} update={(value) => update(item.id, value)} />)}</div>}
+    </section>)}
+  </section><section className="keybed" aria-label="73 key E to E hammer action keyboard"><div className="sustain-bar"><button id="sustain-pedal" className={sustain ? 'lit' : ''} aria-pressed={sustain} onPointerDown={() => setPedal(true)} onPointerUp={() => setPedal(false)} onPointerCancel={() => setPedal(false)} onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setPedal(!sustain) } }}>SUSTAIN · SPACE</button><span>Computer keys: Z–M</span></div><div className="keys" role="group" aria-label="Playable piano keys">{notes.filter((n) => !blackPitchClasses.has(n % 12)).map((n) => <button key={n} id={`key-${n}`} className={`key white ${pressed.has(n) ? 'pressed' : ''}`} aria-label={`${noteName(n)} piano key`} aria-pressed={pressed.has(n)} onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); activePointers.current.set(e.pointerId, n); play(n, Math.max(.2, 1 - e.nativeEvent.offsetY / Math.max(1, e.currentTarget.clientHeight))) }} onPointerUp={(e) => { release(activePointers.current.get(e.pointerId) ?? n); activePointers.current.delete(e.pointerId) }} onPointerCancel={(e) => { release(activePointers.current.get(e.pointerId) ?? n); activePointers.current.delete(e.pointerId) }} onKeyDown={(e) => { if (!e.repeat && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); play(n) } }} onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') release(n) }}>{noteName(n)}</button>)}{notes.filter((n) => blackPitchClasses.has(n % 12)).map((n) => { const before = notes.filter((x) => x < n && !blackPitchClasses.has(x % 12)).length; return <button key={n} id={`key-${n}`} className={`key black ${pressed.has(n) ? 'pressed' : ''}`} style={{ left: `calc(${before} * (100% / 43) - 1.14%)` }} aria-label={`${noteName(n)} piano key`} aria-pressed={pressed.has(n)} onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); activePointers.current.set(e.pointerId, n); play(n, .82) }} onPointerUp={(e) => { release(activePointers.current.get(e.pointerId) ?? n); activePointers.current.delete(e.pointerId) }} onPointerCancel={(e) => { release(activePointers.current.get(e.pointerId) ?? n); activePointers.current.delete(e.pointerId) }} onKeyDown={(e) => { if (!e.repeat && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); play(n) } }} onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') release(n) }} /> })}</div></section></div></main>
 }

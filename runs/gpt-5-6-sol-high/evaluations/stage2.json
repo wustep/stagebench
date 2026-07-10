@@ -1,180 +1,179 @@
 {
-  "rubricVersion": "1.0.0",
+  "rubricVersion": "3.1.0",
   "runId": "gpt-5-6-sol-high",
   "stage": 2,
-  "stageName": "Piano instrument",
+  "stageName": "Piano library and working effects",
   "status": "complete",
-  "evaluator": "Codex independent evaluator",
-  "evaluatedAt": "2026-06-28T22:25:09.000Z",
-  "summary": "Stage 2 preserves the strong measured chassis and complete 73-key presentation, adds all four required input paths, deterministic lifecycle/sustain/polyphony/velocity coverage, useful status feedback, and a cleanly separated piano engine, input layer, and Web Audio backend. The implementation is nevertheless only a partial piano recreation: its six root AudioBuffers are generated at startup from a four-partial additive waveform rather than recorded or comparably convincing piano samples; piano type/model, Timbre, and Dynamic Compression largely change names or display state without changing the audio; the Web Audio graph itself has no focused tests; and the no-Web-Audio fallback is silent while the UI calls it ready. All 25 tests and the test/typecheck/lint/build gates pass. Saved 1440x900 and 390x844 renders support the visual ratings, but this evaluator could not repeat live browser or audible verification because no in-app browser target was available.",
-  "score": 65.5,
-  "rawScore": 65.5,
-  "grade": "developing",
+  "evaluator": "Claude independent evaluator",
+  "evaluatedAt": "2026-07-09T21:31:20.000Z",
+  "summary": "Phase 2 brings the Piano section, Layer Effects, and Master Level alive while keeping Organ, Synth, and Program honestly decorative. Runtime inspection confirmed the boundary exactly: 65 data-functional=true controls (22 piano, 43 effects/master) and 0 functional controls in organ/synth/program. Six selectable piano types (Grand/Upright/Electric/Clav/Digital/Misc) render as distinct offline PCM voices, two layers support enable/focus/level/octave/SUSTPED/PSTICK, and performance controls (KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res) plus Master Level all measurably change the rendered signal (proven by rms/signature tests). The effects graph is one AudioContext with per-layer Piano A/B buses feeding an ordered node chain (Mod1->Mod2->Delay(with filtered feedback loop)->Amp/EQ->Compressor->Reverb->Rotary->layer level->master gain->limiter->one destination); every unit is real DSP with distinct types, and focus/group/global/bypass/dry-wet/order/To-Rotary routing is implemented and tested. 30 candidate tests pass across the DSP boundary. The one material defect is a declared hard-gate deviation: Grand/Upright/Electric are generated multi-root/multi-velocity PCM (SAMPLE_BANKS source 'generated-pcm'), NOT recorded sample sets. This is disclosed honestly in IMPLEMENTATION_DETAILS.json and asserted in tests, so it never fakes recordings, but the recorded-sample-set requirement for the three acoustic families is entirely unmet.",
+  "score": 72.4,
+  "rawScore": 72.4,
   "categories": [
     {
-      "id": "visualFidelity",
-      "label": "Visual fidelity retention",
-      "weight": 25,
+      "id": "visualRetention",
+      "label": "Visual and interaction retention",
+      "weight": 10,
       "score": 75,
-      "contribution": 18.8,
+      "contribution": 7.5,
       "criteria": [
         {
-          "id": "referenceRetention",
-          "label": "Reference fidelity retention",
+          "id": "surfaceRetention",
+          "label": "Surface fidelity retention",
           "weight": 60,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Direct comparison of evidence/stage2-desktop.png with prompts/NS4_HA73_TopDown-01_241008.jpg shows that the Stage 1 connected red chassis, six inset sections, slate/red palette, full keybed, material hierarchy, and low 3.095:1 silhouette remain intact after the piano/status additions.",
-            "The Stage 1 assessment and the direct reference comparison identify the retained limitation: the panel remains a schematic approximation with oversized/invented OLED regions, simplified physical control placement, and tiny legends; Stage 2 does not visibly regress it, but cannot merit exceptional reference fidelity."
+            "stage2-desktop.png retains the Phase 1 chassis geometry, six-section order, 73-key keybed, and exactly two OLEDs with no regression",
+            "stage2-visual-audit.md: inherited 3.0951:1 chassis, 54/46 split, 14/20/8.5/12.5/25/20 section widths unchanged; desktop 94vw / narrow 96vw",
+            "No new outer layout or fixed-width element introduced per audit"
           ]
         },
         {
-          "id": "responsiveChassis",
-          "label": "Responsive chassis",
+          "id": "functionalHardwareState",
+          "label": "Piano/effect hardware state",
           "weight": 40,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "evidence/stage2-visual-audit.md records a 1353.6 x 437.3 px desktop chassis at 94% viewport width, the required 3.095 aspect ratio and 54/46 deck-keybed split, and a 374.4 x 121 px narrow chassis with document width 390; the saved files are the required 1440x900 and 390x844 dimensions.",
-            "evidence/stage2-narrow.png visibly keeps both end cheeks and all 73 keys inside one chassis without horizontal clipping or a white gutter. The whole-surface scaling makes panel labels and individual keys extremely small, so narrow usability is strong structurally but not exceptional."
+            "Program OLED shows 'PIANO A / Studio Grand / PROGRAM ENGINE OFF · LIVE SOUND', truthfully mirroring the focused live piano while Program buttons stay decorative",
+            "Layer Effects exposes Focus row (Piano A/B), per-unit on/bypass, all-effects bypass, and parameter knobs with LED state (stage2-desktop.png)",
+            "Runtime: piano/effects controls report focus, on/bypass, and value state through native aria-pressed/value"
           ]
         }
       ]
     },
     {
-      "id": "featureCompletion",
-      "label": "Piano feature completion",
-      "weight": 25,
-      "score": 66.3,
-      "contribution": 16.6,
+      "id": "pianoLibrary",
+      "label": "Piano library and performance",
+      "weight": 35,
+      "score": 67.5,
+      "contribution": 23.6,
       "criteria": [
         {
-          "id": "inputCoverage",
-          "label": "Input coverage",
-          "weight": 40,
+          "id": "instrumentBreadth",
+          "label": "Distinct Piano instruments",
+          "weight": 30,
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Six selectable, audibly distinct, offline piano types present and playable (dsp.test.ts asserts distinct signatures + rms>0.005 for all PIANO_TYPES)",
+            "SAMPLE_BANKS Grand/Upright/Electric each define 6 roots + 3 velocities but source:'generated-pcm' — NOT recorded sample sets, so the core recorded-library requirement is unmet",
+            "IMPLEMENTATION_DETAILS.json and stage2-visual-audit.md disclose the recorded-sample hard-gate deviation honestly; never described as recordings (escapes a 0)"
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "label": "Two-layer Piano behavior",
+          "weight": 25,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "src/components/Keyboard.tsx uses pointer events and per-key pointer capture for mouse, pen, and touch; src/piano/InputController.ts maps 18 computer keys with repeat suppression and release-all; src/piano/MidiInput.ts parses note on/off, velocity-zero note-off, and CC64 across MIDI channels and reports unsupported, disconnected, permission-denied, and error states.",
-            "The passing Keyboard, InputController, MidiInput, and App tests exercise pointer/touch velocity, mapped key press/release, repeat suppression, cleanup, MIDI routing/velocity/sustain, no-input, and denied-permission paths. Concurrent multi-touch and physical MIDI were not directly exercised."
+            "App.tsx PianoSection: layer A/B enable/focus toggles, independent level faders, octave +/-12, per-layer voice ownership via setLayerEnabled",
+            "stage-engine start()/noteOn own per-layer voice handles; disabling a layer stops that layer's owned handles",
+            "Tests exercise layer enable/level and confirm distinct rendered signatures per layer"
           ]
         },
         {
           "id": "pianoControls",
-          "label": "Piano controls",
-          "weight": 35,
-          "rating": 2,
-          "score": 50,
-          "evidence": [
-            "src/App.tsx lines 84-90 wire Piano enable, Master Level, Piano A level, Reverb on/off, and Reverb mix into the engine, while the status Sustain button and MIDI CC64 drive sustain. The engine tests confirm clamped volume/reverb values reach the injected audio boundary.",
-            "Manual pages 23-26 specify piano type/model, KB Touch, Dynamic Compression, Timbre, acoustics, sustain, and layer behavior. In src/App.tsx lines 123-139, type/model, Timbre, and Dynamic Compression only alter React selection/display text and never alter the audio backend; Unison, Pedal Noise, String Resonance, Soft Release, KB Touch, Piano B level, and manual half-pedaling behavior are not implemented."
-          ]
-        },
-        {
-          "id": "displayAndStatus",
-          "label": "Display and status feedback",
+          "label": "Detailed Piano controls",
           "weight": 25,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "src/App.tsx lines 129-131 contextually update Piano, Program, and Effects displays with type/model, timbre/dynamic setting, voice count, sample mode, sustain, and reverb state; lines 184-189 expose model, voice count, audio readiness, sustain, MIDI state, and Panic in the status row.",
-            "The passing App test directly verifies computer-key pressed state, voice-count status, Sustain, and Panic feedback. MIDI denial/unsupported states are represented by the button label, but error detail is discarded and the status does not identify active note names or distinguish a silent no-Web-Audio fallback from playable audio."
+            "dsp.test.ts proves KB Touch Light>Heavy rms direction, Dyn Comp floor lift, Timbre Bright!=Soft, Unison and String Res distinct, Soft Release longer tail, octave shift, Master Level lowering rms",
+            "shapedVelocity + harmonics(type) + timbre/unison/stringRes/softRelease all implemented in renderPianoNote",
+            "Master Level is a functional range wired to master gain before the limiter (stage2-visual-audit.md)"
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "label": "Input and fallback reliability",
+          "weight": 20,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Inherited pointer/multitouch/keyboard/MIDI paths retained; sustain from UI/Space/CC64 shares one pedal lifecycle",
+            "simulateAssetFailure() sets a labeled 'PCM library failed · synthesized playable fallback active' status without claiming primary ready",
+            "Blur/visibility/MIDI-disconnect/all-notes-off/layer-disable/unmount clean owned handles (stage2-visual-audit.md, cleanup code)"
           ]
         }
       ]
     },
     {
-      "id": "audioQuality",
-      "label": "Audio implementation",
+      "id": "effectsAudio",
+      "label": "Effects and signal graph",
       "weight": 30,
-      "score": 65,
-      "contribution": 19.5,
+      "score": 75,
+      "contribution": 22.5,
       "criteria": [
         {
-          "id": "soundSource",
-          "label": "Piano sound source",
-          "weight": 20,
-          "rating": 1,
-          "score": 25,
-          "evidence": [
-            "src/piano/WebAudioBackend.ts lines 6-25 creates only six 3.2-second mono root buffers at runtime from a fundamental plus three sine partials, then pitch-shifts the nearest root. This is oscillator-derived buffer playback, not the manual's multi-velocity, carefully sampled piano library or a comparably convincing modeled source.",
-            "The Stage 2 tests fake PianoAudioBackend and do not instantiate or audition WebAudioPianoBackend, so there is no exercised evidence that the generated bank is musically convincing. The implementation exceeds a single live oscillator architecturally but remains a substantially incorrect substitute for the required sampled piano."
-          ]
-        },
-        {
-          "id": "noteLifecycle",
-          "label": "Note lifecycle",
+          "id": "sharedGraph",
+          "label": "Shared graph and gain staging",
           "weight": 25,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "The passing PianoEngine tests exercise note-on/off, same-note retrigger with release of the old handle, all-notes-off, immediate stop, and distinct-note polyphony; App/InputController tests exercise key-up and focus-loss cleanup paths.",
-            "src/piano/WebAudioBackend.ts lines 84-117 applies an 8 ms attack, scheduled release, and stop handling. Same-pitch inputs are stored by MIDI number and replace one another rather than supporting overlapping ownership, and the actual Web Audio envelope/ended cleanup is not covered by a backend test, limiting the rating below exceptional."
+            "stage-engine.ts createRack builds per-layer Piano A/B node chains converging into one master GainNode -> limiter (DynamicsCompressor) -> single context.destination",
+            "One lazy AudioContext; runtime instrumentation confirmed exactly 1 context created on first note (ctxCount=1, state running)",
+            "18ms parameter ramps avoid clicks; dispose() disconnects all rack nodes and closes the context"
           ]
         },
         {
-          "id": "velocityResponse",
-          "label": "Velocity response",
-          "weight": 25,
+          "id": "effectCoverage",
+          "label": "Audible effect coverage",
+          "weight": 45,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "The passing tests exercise the clamped nonlinear velocityToGain curve at negative, zero, low, mid, maximum, and over-range values and verify touch pointer depth forwards velocity 120; MIDI tests verify incoming velocity 120 reaches the target.",
-            "src/components/Keyboard.tsx maps pointer depth to velocity 55-127, computer keys use a fixed 104, and MIDI preserves input velocity. The manual's KB Touch modes and Dynamic Compression behavior do not affect the curve, and there are no recorded multi-velocity sample layers."
+            "processEffect implements real DSP for Mod1 (Tremolo/Pump/Ring/A-Pan/A-Wah/Wah), Mod2 (Chorus/Flanger/Phaser/Vibe/Ensemble/Spin), Delay, Amp/EQ, Compressor, Reverb",
+            "dsp.test.ts asserts every Mod1/Mod2/Amp/Reverb type yields a distinct signature and compressor lowers rms",
+            "Rotary reached via To Rotary; delay feedback traverses a filtered loop (LP/HP/BP) proven distinct in tests"
           ]
         },
         {
-          "id": "sustainAndPolyphony",
-          "label": "Sustain and polyphony",
+          "id": "routingControl",
+          "label": "Routing and control",
           "weight": 30,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "The passing PianoEngine tests exercise held-to-sustained transitions, pedal-up release, Panic, a deterministic oldest-voice steal at the configured limit, and cleanup; the production engine defaults to 32 voices and MIDI tests exercise CC64 down/up parsing.",
-            "The implementation provides useful boolean sustain and polyphony, but the manual page 26 half-pedaling, sostenuto/soft-pedal behavior, pedal-down samples, and pedal-noise dynamics are absent. WebAudioPianoBackend voice disposal and 32-voice load are not directly exercised."
+            "updateEffectUnit routes focused/group(Piano A+B)/global(all targets) edits; dsp.test.ts verifies focused vs group vs global propagation",
+            "Per-unit bypass and allBypass equality (bypassed output === input) tested; dry/wet mix and documented order (Reverb before Rotary) verified",
+            "Delay feedback path + tempo/feedback/mix/clock-sync changes proven to alter output"
           ]
         }
       ]
     },
     {
-      "id": "interactionQuality",
-      "label": "Playability and UX",
-      "weight": 15,
-      "score": 50,
+      "id": "systemBehavior",
+      "label": "System behavior and UX",
+      "weight": 10,
+      "score": 75,
       "contribution": 7.5,
       "criteria": [
         {
-          "id": "playability",
-          "label": "Playability",
+          "id": "audibleFeedback",
+          "label": "Audible/visible feedback",
           "weight": 50,
-          "rating": 2,
-          "score": 50,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "Source and passing tests support reliable mapped-key triggering, repeat suppression, pointer capture, velocity forwarding, MIDI routing, sustain, blur cleanup, and a 32-voice engine; WebAudioPianoBackend requests latencyHint 'interactive' and resumes on note-on.",
-            "No live or audible pass was available to this evaluator, multi-touch concurrency is not tested, the computer map spans only 18 notes, and the oscillator-derived 3.2-second samples plus same-pitch ownership limitation are important sustained-play gaps."
+            "Selecting a piano type/parameter updates the Program OLED and control LED state immediately (stage2-desktop.png)",
+            "Runtime: 65 functional controls expose live aria-pressed/value feedback; effect on/bypass reflected on button LEDs",
+            "Parameter changes ramp audio over 18ms per stage-engine ramp()"
           ]
         },
         {
-          "id": "controlFeedback",
-          "label": "Control feedback",
-          "weight": 30,
-          "rating": 2,
-          "score": 50,
+          "id": "failureStress",
+          "label": "Failure and stress behavior",
+          "weight": 50,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "The passing App and Keyboard tests show immediate pressed-key, voice-count, Sustain, and Panic feedback; source inspection shows Master/Piano level and Reverb controls update the engine while OLED content updates for model, timbre, dynamic setting, voices, sustain, and effect state.",
-            "There is no end-to-end UI test proving panel parameter changes reach the audio graph, meters remain fixed at 72, and model/type/Timbre/Dynamic controls give visual feedback without corresponding audible changes, making feedback only partially coherent."
-          ]
-        },
-        {
-          "id": "failureHandling",
-          "label": "Failure handling",
-          "weight": 20,
-          "rating": 2,
-          "score": 50,
-          "evidence": [
-            "Passing tests cover MIDI with no inputs, permission denial, mapped-key release-all, Panic, and a backend-reported sample fallback; source also handles pointer cancellation/lost capture and window blur.",
-            "createBrowserPianoBackend returns SilentPianoBackend when Web Audio is unavailable, yet App labels fallback mode 'offline piano ready'; AudioContext construction/resume failures are not caught, the sample-loader failure path is not used by the app, and MIDI error detail is discarded from the UI."
+            "simulateAssetFailure provides a labeled playable fallback; MIDI denied/disconnected handled via onstatechange + allNotesOff",
+            "Cleanup on blur/visibility/disconnect/layer-disable/unmount returns owned handles to baseline (audit + code)",
+            "Rapid effect edits use ramped params and reduce-friendly node reuse (reverb buffer regenerated only on type change)"
           ]
         }
       ]
@@ -182,30 +181,44 @@
     {
       "id": "engineeringQuality",
       "label": "Engineering quality",
-      "weight": 5,
-      "score": 62.5,
-      "contribution": 3.1,
+      "weight": 15,
+      "score": 75,
+      "contribution": 11.3,
       "criteria": [
         {
           "id": "audioArchitecture",
           "label": "Audio architecture",
-          "weight": 50,
+          "weight": 45,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "PianoEngine.ts defines an injectable audio boundary and owns deterministic state/voice policy; WebAudioBackend.ts owns nodes/samples; InputController.ts and MidiInput.ts isolate input parsing; App.tsx binds UI state to those layers. This separation makes the fake-backed deterministic suite clear and maintainable.",
-            "The architecture is weakened by audio-significant piano parameters living only in App display state, no modeled program/piano-patch object, and no focused WebAudioBackend tests for graph topology, parameter automation, sample selection, or cleanup."
+            "Clear source/voice/layer-bus/effect/master boundaries; StageAudioGraph owns racks, StagePianoEngine owns voice ownership and status",
+            "Injectable AudioContext constructor and storage/timing boundaries enable deterministic tests",
+            "Architecture extended cleanly into Phase 3 (offline renderers reuse the same canonical parameters)"
           ]
         },
         {
-          "id": "performanceAndCleanup",
-          "label": "Performance and cleanup",
-          "weight": 50,
-          "rating": 2,
-          "score": 50,
+          "id": "realBoundaryTests",
+          "label": "Real-boundary tests",
+          "weight": 30,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "Independent reruns pass all 7 files/25 tests, typecheck, ESLint with zero warnings, and the production build; source cleans window listeners, MIDI handlers, pointer captures, held notes, voices on Panic/unmount, and backend voice entries on source end.",
-            "The AudioContext and permanent master/dry/wet/convolver graph are never closed or disconnected, the six sample buffers and impulse are generated synchronously during initial render, naturally ended sources can remain represented in PianoEngine until note-off, and backend cleanup/performance under rapid 32-voice play is untested. No live console pass could be repeated in this evaluator session."
+            "30 tests pass; dsp.test.ts uses rms + strided signature over rendered Float32Array to prove instrument/control/effect distinctions, bypass equality, and routing",
+            "Tests assert direction (velocity/master level lower rms; soft-release longer tail) not just state",
+            "SAMPLE_BANKS provenance (source==='generated-pcm') asserted, keeping the honesty contract testable"
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "label": "Performance and maintainability",
+          "weight": 25,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Concise, well-named modules (dsp.ts, stage-engine.ts, instrument.ts) with low duplication; feature-matrix keeps inherited Phase 1 coverage",
+            "Reverb impulse regenerated only when type changes; ramps for stability",
+            "Piano voices render 2.4s buffers synchronously per note-on, a modest main-thread cost under heavy play"
           ]
         }
       ]
@@ -219,48 +232,40 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "command": "pnpm run test",
-        "durationMs": 1968,
+        "durationMs": 9529,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "command": "pnpm run typecheck",
-        "durationMs": 997,
+        "durationMs": 2037,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "command": "pnpm run lint",
-        "durationMs": 1253,
+        "durationMs": 648,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "command": "pnpm run build",
-        "durationMs": 474,
+        "durationMs": 1754,
         "detail": "Passed"
       },
       {
         "id": "artifact",
         "label": "Built phase artifact",
         "passed": true,
-        "detail": "runs/gpt-5-6-sol-high/stage2/dist/index.html"
+        "detail": "dist/index.html present"
       }
     ]
   },
   "issues": [
-    "The piano sound source is a six-root additive waveform bank rendered into AudioBuffers at startup, not credible recorded multi-velocity piano samples or comparably convincing modeling.",
-    "Piano type/model, Timbre, and Dynamic Compression update selection/display state but do not change the generated sound; several manual Piano controls are decorative or absent.",
-    "The Web Audio backend has no direct tests for attack/release automation, dry/wet routing, source cleanup, sample selection, or load behavior; most audio tests stop at a fake boundary.",
-    "The no-Web-Audio fallback is silent while the UI reports 'offline piano ready', and AudioContext construction/resume errors are not surfaced.",
-    "Narrow rendering avoids clipping but makes the full panel and keys too small for practical touch use.",
-    "Live browser and audible verification could not be repeated because the in-app browser exposed no target; ratings use fresh saved evidence, the verification record, direct source/manual comparison, and independently rerun deterministic checks."
+    "HARD-GATE DEVIATION: Grand/Upright/Electric are generated PCM (SAMPLE_BANKS source 'generated-pcm'), not recorded/redistributable sample sets, so piano.instrument-library's recorded-sample requirement is unmet. Declared honestly in IMPLEMENTATION_DETAILS.json and tests, so it is not faked.",
+    "Piano voices render full 2.4s buffers synchronously on note-on, a main-thread cost that could add latency under dense polyphony."
   ]
 }

@@ -1,0 +1,172 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt-5-6-luna-3",
+  "stage": 2,
+  "evaluator": "Claude independent evaluator",
+  "evaluatedAt": "2026-07-09T21:29:16Z",
+  "summary": "Phase 2 makes the Piano and Layer Effects sections genuinely functional through a real single-AudioContext graph, while Organ/Synth/Program stay decorative (correct scope). Verified at runtime (dist on 8752): pressing a key created exactly one AudioContext with 4 oscillators (Grand's 4 harmonics, piano-only -- organ/synth silent), plus 2 ConvolverNodes, 2 DelayNodes, 6 WaveShaperNodes and 3 DynamicsCompressors, i.e. a full per-layer ordered effect chain (mod1->mod2->delay->ampEq->compressor->reverb) feeding layer level -> master gain -> limiter -> one destination. Six piano types are selectable with distinct synthesized profiles (PROFILE harmonics/wave/brightness), and the performance controls (KB Touch curve, Dyn Comp, Timbre partial shaping, Unison detune, Soft Release, String Res) measurably alter rendered audio. THE MAJOR SHORTFALL against the Phase 2 hard gate: Grand/Upright/Electric are NOT bundled recorded sample sets -- there are no recordings at all; everything is runtime-generated. This is declared honestly (sampleSources: [], 'does not falsely claim recordings'), so it is not a dishonesty-zero, but the defining recorded-sample-library requirement is unmet. Additional gaps: Mod 1/Mod 2 are implemented as WaveShaper distortion curves rather than true time/pan modulation (chorus/flanger/phaser/tremolo character is not modeled); the Rotary is only a gain redirect to master (no Leslie modulation); and a gain-staging bug leaves the piano input connected directly to the layer level node AND through the effect chain (input.connect(level) in ensureGraph plus current.connect(level) in buildUnits), so an always-on dry path runs in parallel with the chain, roughly doubling piano level and preventing a clean fully-wet or bypassed sound. Candidate tests assert DOM/aria state only, not the audio boundary.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "rating": 3,
+          "evidence": [
+            "Phase 2 App.tsx retains the identical six-section deck, chassis, keybed, and OLED placement from Phase 1; PianoSection/EffectsSection now driven by engineState instead of the hardware map.",
+            "Bottom rail updated to 'PHASE 2 / PIANOS + FX'; no geometry regression.",
+            "stage2 desktop capture consistent with Phase 1 layout."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "rating": 3,
+          "evidence": [
+            "Piano shows coherent state: layer on/level/focus/octave/SUSTPED, six-type selection, timbre knob, KB Touch/Dyn Comp/Unison selects, and a live status line ('Grand · model A · A focused · fallback-ready').",
+            "Effects show focus (A/B), on/bypass, per-unit type selects, dry/wet knobs, GLOBAL and PIANO GROUP targeting, TO ROTARY, and BYPASS ALL, all bound to engineState.",
+            "Organ/Synth/Program remain decorative presentation state (correct for Phase 2)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 1,
+          "evidence": [
+            "Hard gate requires Grand/Upright/Electric as bundled recorded sample sets with redistributable file/root/velocity provenance; NONE exist -- IMPLEMENTATION_DETAILS.json sampleSources: [] and all six types are runtime-generated partial banks.",
+            "Six types are selectable and audibly distinct via PROFILE (harmonics/wave/brightness) and work offline, but this is synthesis, not the required recorded library.",
+            "Honestly declared (not passed off as recordings), so not a dishonesty-zero, but the central recorded-sample requirement is entirely absent."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "rating": 3,
+          "evidence": [
+            "Two piano layers with independent enable/focus/level/octave/SUSTPED; audio.ts creates per-layer voices routed to layerInputs A/B -> layerLevels -> master.",
+            "phase2.test.tsx verifies Layer B enable, focus routing to effects-focus-b, and octave +12.",
+            "Layer level applied via layerLevels gain; voices tagged with layer for sustain ownership.",
+            "Runtime showed 4 oscillators for single enabled layer A (Grand)."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 3,
+          "evidence": [
+            "audio.ts noteOn applies KB Touch curve (Heavy pow1.35 / Light sqrt), Dyn Comp velocity compression, Timbre partial reshaping (timbreShape), and Unison detuned partials.",
+            "Soft Release lengthens release to 0.58s (except Clav); String Res triggers a resonance oscillator on sustained notes.",
+            "Sustain pedal honored per-layer (sustainPed). Sostenuto/soft pedal not distinctly modeled beyond sustain."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "rating": 3,
+          "evidence": [
+            "All Phase 1 input paths retained (pointer/multitouch/keyboard/MIDI/blur) with source-map dedup and 24-voice stealing.",
+            "Asset/Web Audio failure caught in noteOn -> onStatus fallback; UI never reports library ready without Web Audio.",
+            "Sustain via space/CC64; no distinct sostenuto/soft-pedal handling."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 3,
+          "evidence": [
+            "Runtime: exactly 1 AudioContext created; master gain -> DynamicsCompressor limiter (threshold -1, ratio 20) -> single destination.",
+            "Per-layer input+level buses (A/B); ordered six-unit chain built once per layer; automation via setTargetAtTime; dispose closes context.",
+            "Gain-staging bug: input.connect(level) in ensureGraph AND current.connect(level) at end of buildUnits create a parallel always-on dry path alongside the effect chain."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "rating": 2,
+          "evidence": [
+            "Real nodes verified at runtime: 2 ConvolverNodes (Reverb w/ generated IR sized per type), 2 DelayNodes (with feedback GainNode + lowpass), 3 DynamicsCompressors (limiter + 2 layer Compressors).",
+            "Compressor and Delay are authentic; Reverb uses generated impulse buffers (declared, not called recordings).",
+            "Mod 1 and Mod 2 are WaveShaper distortion curves (curveFor) -- NOT true chorus/flanger/phaser/tremolo/auto-pan modulation, so their labeled character is not modeled.",
+            "Rotary is only a GainNode redirect to master (layerRotary), not a real rotary/Leslie effect (comment claims a 'panner' but it is a gain).",
+            "Parallel dry path (see sharedGraph) means fully-wet character cannot be achieved."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "rating": 3,
+          "evidence": [
+            "Layer focus targets the effects panel; per-unit dry/wet (dryWet mix), effectsBypass sets dry=1/wet=0; GLOBAL and PIANO GROUP apply changes to both layers.",
+            "Fixed effect order mod1->mod2->delay->ampEq->compressor->reverb; Delay feedback loop real; reverb positioned after chain (before rotary tap).",
+            "phase2.test.tsx exercises type changes, ON, GLOBAL, TO ROTARY, BYPASS ALL, and master-level keyboard step.",
+            "Bypass/dry-wet fidelity undermined by the always-on parallel dry path bug."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "rating": 3,
+          "evidence": [
+            "Master Level knob drives master.gain (verified functional path) with LED ladder; type selection updates status line and PROFILE; effect ON/type produce immediate wet changes.",
+            "Panel state (aria-pressed, display text) stays in sync with engineState via updateEngineState + useEffect setState.",
+            "Doubled dry path muddies the precision of level/effect feedback."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "rating": 3,
+          "evidence": [
+            "Denied MIDI -> 'denied · MIDI permission unavailable'; disconnect clears notes; Web Audio failure -> caught fallback status.",
+            "Rapid parameter changes smoothed via setTargetAtTime; 24-voice oldest-first stealing; limiter guards clipping; blur allNotesOff recovers.",
+            "Layered polyphony handled; no observed console errors."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 3,
+          "evidence": [
+            "Clean source/voice/layer-bus/effect-unit/master boundaries in PianoAudioEngine; proven extensible (Phase 3 reused and extended this exact engine).",
+            "Platform APIs are not injectable -- AudioContext is read directly from window, so tests cannot substitute a fake backend.",
+            "UnitRuntime abstraction models dry/wet/mix per unit."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "rating": 1,
+          "evidence": [
+            "phase2.test.tsx and App.test.tsx assert only DOM/aria state (aria-pressed, text content, aria-valuenow) under jsdom.",
+            "No test measures rendered audio, node graph, routing, bypass, or cleanup across the real Web Audio boundary (no OfflineAudioContext/analyser).",
+            "Source/effect/bypass behavior is therefore unproven by the candidate's own tests."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "rating": 3,
+          "evidence": [
+            "Low duplication, consistent naming, cleanup via dispose/releaseVoice timeouts; inherited Phase 1 tests retained alongside phase2.test.tsx.",
+            "audio.ts is readable and well-structured; App.tsx effect components are moderately dense.",
+            "Gain-staging double-connection is a maintainability/correctness smell."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Hard-gate failure: Grand/Upright/Electric are generated synthesis, not bundled recorded sample sets (no recordings exist); honestly declared but the core Phase 2 requirement is unmet.",
+    "Mod 1/Mod 2 are WaveShaper distortion, not true modulation effects; Rotary is a gain redirect with no Leslie modulation.",
+    "Gain-staging bug: piano input is connected directly to the layer level node in addition to routing through the effect chain, creating an always-on parallel dry path (roughly doubles piano level; prevents clean fully-wet/bypass).",
+    "Candidate tests assert DOM state only; no real Web Audio boundary tests (routing/bypass/cleanup unverified by tests).",
+    "AudioContext/platform APIs are not injectable, limiting deterministic backend testing."
+  ]
+}

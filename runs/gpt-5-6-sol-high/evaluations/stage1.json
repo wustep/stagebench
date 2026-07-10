@@ -1,127 +1,146 @@
 {
-  "rubricVersion": "1.0.0",
+  "rubricVersion": "3.1.0",
   "runId": "gpt-5-6-sol-high",
   "stage": 1,
-  "stageName": "Visual recreation",
+  "stageName": "Complete surface and basic piano",
   "status": "complete",
-  "evaluator": "Codex independent evaluator",
-  "evaluatedAt": "2026-06-28T22:13:33.000Z",
-  "summary": "A geometrically disciplined and technically clean Stage 1 recreation with an exact 73-key model, connected chassis, measured desktop proportions, and broad interactive control coverage. Direct comparison with the primary photograph and the manual's panel overview shows that the control deck remains a schematic approximation: several displays are oversized or invented, physical control placement and density differ materially, tiny legends are difficult to read, and the narrow layout preserves the whole instrument by shrinking controls below practical touch sizes. Core key, button/LED, and knob behavior is exercised by passing tests, but display and meter content is static and the controls do not form the coupled hardware state described by the manual.",
-  "score": 70.3,
-  "rawScore": 70.3,
-  "grade": "competent",
+  "evaluator": "Claude independent evaluator",
+  "evaluatedAt": "2026-07-09T21:31:20.000Z",
+  "summary": "Phase 1 delivers the full Nord Stage 4 73 surface on one continuous red chassis with a measured 3.0951:1 aspect ratio, 54/46 deck/keybed split, and an exact 73-key E1-E7 keybed (43 white / 30 black). The six sections render in the documented order (Performance, Organ, Piano, Program/Morph, Synth, Layer Effects) and exactly two elements carry data-primary-oled (Program and Synth). Runtime inspection at 1949px viewport found 146 buttons and 57 ranges; 129 controls are marked data-functional=false with '(decorative)' in their accessible names, and the Program/Synth OLEDs read 'PANEL ONLY / PROGRAM ENGINE OFF' and 'ENGINE OFF / DECORATIVE PANEL'. The basic piano is a live three-oscillator modeled voice (triangle fundamental + sine partials at 2.01/3.98 with a velocity low-pass) honestly labeled 'Modeled piano ready'; IMPLEMENTATION_DETAILS.json declares no recorded samples. Driving the keyboard confirmed a keydown creates one voice (status 'Modeled piano ready · 1 voices'), and PianoNoteEngine implements 24-voice polyphony with oldest-sequence stealing, sustain, release, and blur/disconnect/unmount cleanup. Inputs cover pointer, independent multitouch, mapped computer keys with repeat suppression, and Web MIDI note/velocity/CC64 plus denied/disconnected handling. 15 candidate tests pass. The recreation is clean and geometrically faithful but visually schematic and lower-density than the reference photo, with tiny legends acknowledged at 390px.",
+  "score": 75,
+  "rawScore": 75,
   "categories": [
     {
       "id": "visualFidelity",
-      "label": "Visual fidelity",
-      "weight": 55,
-      "score": 68.8,
-      "contribution": 37.8,
+      "label": "Complete visual fidelity",
+      "weight": 45,
+      "score": 75,
+      "contribution": 33.8,
       "criteria": [
         {
-          "id": "silhouetteAndProportions",
-          "label": "Silhouette and proportions",
-          "weight": 25,
-          "rating": 4,
-          "score": 100,
-          "evidence": [
-            "Direct comparison of evidence/stage1-desktop.png with prompts/NS4_HA73_TopDown-01_241008.jpg shows one connected red chassis and end cheeks around the full keybed, with the same low, wide product silhouette.",
-            "evidence/stage1-visual-audit.md records a 1353.1 x 437.2 px chassis at 1440 x 900 (3.095:1), 94% viewport width, a 54/46 deck-keybed contract, and no overflow; evidence/stage1-narrow.png also keeps the complete chassis visible."
-          ]
-        },
-        {
-          "id": "panelLayoutAndDensity",
-          "label": "Panel layout and density",
+          "id": "silhouetteGeometry",
+          "label": "Silhouette, chassis, and geometry",
           "weight": 30,
-          "rating": 2,
-          "score": 50,
-          "evidence": [
-            "The direct desktop/reference comparison preserves the six measured section widths, but the rendered panels are much more schematic: Organ, Piano, Synth, and Effects use large horizontal OLED/header regions and simplified grids that do not match the reference's actual clusters.",
-            "The manual page 9 panel overview and the primary photograph show substantially denser, more irregular placement, especially in Program, Synth, and Layer Effects; evidence/stage1-desktop.png has visibly larger empty/group-box areas and fewer fine controls."
-          ]
-        },
-        {
-          "id": "controlMaterialsAndColor",
-          "label": "Control materials and color",
-          "weight": 25,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "evidence/stage1-desktop.png directly shows the correct red metal/slate-panel palette, dimensional black knobs, silver switches, red LEDs, green/yellow meters, cyan OLEDs, light/dark faders, and shaded white/black keys.",
-            "Against the primary photograph, the Organ drawbar caps render as rounded range-slider forms rather than the reference's rectangular physical caps, and the gold modulation wheel/silver pitch stick are reduced to generic vertical slider treatments."
+            "stage1-visual-audit.md measured instrument aspect 3.0951:1 with deck 54% / keybed 46% on one continuous red chassis",
+            "Audit: 73 keys, MIDI 28-100, E1-E7, 43 white + 30 black, black keys 61% of white height",
+            "stage1-desktop.png shows continuous red chassis filling ~94vw with no vertical scroll and correct end cheeks/rails"
           ]
         },
         {
-          "id": "typographyAndDisplays",
-          "label": "Typography and displays",
-          "weight": 20,
-          "rating": 2,
-          "score": 50,
+          "id": "hardwareInventory",
+          "label": "Complete hardware inventory and placement",
+          "weight": 35,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "evidence/stage1-desktop.png contains Nord Stage 4 branding, section headings, fine legends, and illuminated display text, but most labels are only a few pixels high and are difficult to read even at 1440 x 900.",
-            "Direct comparison with the reference and the manual overview shows materially different display hierarchy: the recreation adds long cyan OLED bars to sections where the hardware uses smaller displays/LED indications, while the central Program and Synth display relationships are only approximate."
+            "Runtime querySelectorAll found 6 ordered sections (Performance/Organ/Piano/Program/Synth/Layer Effects) with 146 buttons and 57 ranges",
+            "Exactly 2 [data-primary-oled] elements, on Program and Synth, matching the spec's OLED constraint",
+            "Organ shows nine drawbars with LED ladders and two layer faders; Layer Effects shows Mod1/Mod2/Amp-EQ/Delay/Comp/Reverb blocks; density is lower and more schematic than reference/nord-stage-4-73.jpg"
+          ]
+        },
+        {
+          "id": "materialsTypography",
+          "label": "Materials, color, typography, and displays",
+          "weight": 20,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "stage1-desktop.png shows red metal chassis, dark inset panels, blue-green OLEDs, white legends, black knobs and fader/drawbar caps",
+            "Rendering is flat/schematic versus the photorealistic reference, and legends are small",
+            "Nord branding lockup and '73 · HAMMER ACTION' badge rendered in the Performance deck"
+          ]
+        },
+        {
+          "id": "responsiveRetention",
+          "label": "Narrow retention",
+          "weight": 15,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "stage1-narrow.png (390x844) shows the complete chassis and keybed scaled to fit with no clipping or lost controls",
+            "stage1-visual-audit.md: narrow width 96vw, no horizontal/vertical document overflow, all sections retained",
+            "Audit acknowledges legends become very small at 390px; browser zoom/focus is the practical inspection path"
           ]
         }
       ]
     },
     {
-      "id": "featureCompletion",
-      "label": "Feature completion",
-      "weight": 20,
+      "id": "basicPiano",
+      "label": "Basic Piano functionality",
+      "weight": 25,
       "score": 75,
-      "contribution": 15,
+      "contribution": 18.8,
       "criteria": [
         {
-          "id": "visibleHardwareInventory",
-          "label": "Visible hardware inventory",
-          "weight": 60,
+          "id": "unifiedInputs",
+          "label": "Unified playable inputs",
+          "weight": 35,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "src/model/hardware.ts defines 73 keys and section-specific inventories for buttons, knobs, encoders, faders, displays, meters, pitch stick, and modulation wheel; the saved desktop render visibly includes all of those hardware classes plus branding and dividers.",
-            "The inventory is broad but approximate: direct comparison with the photograph/manual panel overview shows missing or consolidated fine switches, LEDs, and legends, and the pitch/mod controls do not reproduce their distinct physical forms."
+            "inputs.ts PianoInputController handles pointerDown/Up (independent pointer ids), keyDown/Up with repeat suppression, and MIDI 0x90/0x80/CC64/CC120-123",
+            "Runtime: dispatching keydown KeyK produced status 'Modeled piano ready · 1 voices'; blur event returns count to baseline",
+            "MIDI denied/disconnected handled via onstatechange + allNotesOff; UI status shows 'MIDI not connected'"
           ]
         },
         {
-          "id": "visualStateCoverage",
-          "label": "Visual state coverage",
+          "id": "voiceLifecycle",
+          "label": "Voice lifecycle and performance",
           "weight": 40,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "The rerun 10-test suite exercises key pressed/released states, button/LED toggles, and knob rotation/clamping; src/styles.css also defines hover, active, pressed, lit, and focus-visible treatments for the hardware surface.",
-            "src/components/Controls.tsx renders OLED and meter content as fixed values, so display/meter state does not change when adjacent controls move; fader and wheel state exists through range inputs but is not covered by the Stage 1 tests."
+            "piano.ts PianoNoteEngine: maxPolyphony 24, stealOldestVoice by monotonic sequence, sustain hold/release, allNotesOff stop-all",
+            "BrowserPianoBackend schedules gain attack/decay and release (0.58s) / stop (0.018s) with setTimeout node disconnect cleanup",
+            "15 candidate tests pass including overlapping/repeated notes and cleanup; decorative panel controls stay isolated from the engine"
+          ]
+        },
+        {
+          "id": "honestBasicSource",
+          "label": "Basic source and status honesty",
+          "weight": 25,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares a modeled 3-oscillator voice, 1 AudioContext, no recorded/generated-buffer/network sources",
+            "Status strings cover ready/starting/error/fallback ('Audio unavailable · silent visual fallback', 'Audio start failed')",
+            "UI header reads 'Modeled piano ready · audio starts on first note'; never described as a recording"
           ]
         }
       ]
     },
     {
-      "id": "interactionQuality",
-      "label": "Interaction and UX",
+      "id": "interaction",
+      "label": "Surface interaction and honesty",
       "weight": 15,
-      "score": 66.3,
-      "contribution": 9.9,
+      "score": 75,
+      "contribution": 11.3,
       "criteria": [
         {
-          "id": "controlInteraction",
-          "label": "Control interaction",
-          "weight": 65,
+          "id": "physicalInteraction",
+          "label": "Control movement and feedback",
+          "weight": 55,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "The rerun tests directly exercise pointer and Space/Enter key press/release, button clicks with matching LED/aria-pressed feedback, and knob pointer/Arrow/Home/End behavior with clamping; all 10 tests passed.",
-            "Faders and wheels are functional range inputs in src/components/Controls.tsx, but the Program/Synth/Piano displays and meters remain static and button toggles are isolated local states rather than coherent updates to the related display state described on manual pages 11-12."
+            "All decorative controls are native button/range elements with aria-label, aria-pressed/value, and visible focus",
+            "Runtime: setting a range input value updated its visual state; controls expose data-control-id stable IDs",
+            "129 normalized panel inputs expose accessible names and pressed/turn/slide state per stage1-visual-audit.md"
           ]
         },
         {
-          "id": "responsiveAccessibility",
-          "label": "Responsive accessibility",
-          "weight": 35,
-          "rating": 2,
-          "score": 50,
+          "id": "decorativeBoundary",
+          "label": "Decorative-control boundary",
+          "weight": 45,
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "evidence/stage1-narrow.png at 390 x 844 shows the complete 73-key chassis without horizontal clipping, and the source provides accessible names, button/slider semantics, focus-visible outlines, blur cleanup for keys, and reduced-motion-safe animation.",
-            "The narrow screenshot also shows the cost of whole-instrument scaling: panel legends and controls become microscopic and individual white keys are roughly single-digit pixels wide, well below practical touch-target sizes despite remaining technically focusable."
+            "Runtime: 129 [data-functional=false] controls; sample aria-labels 'Master level (decorative)', 'Panel lock (decorative)'",
+            "Changing the decorative Master level range to 100 created no voices (status stayed '1 voices' from the prior keypress, not incremented)",
+            "Program/Synth OLEDs render 'PANEL ONLY / PROGRAM ENGINE OFF' and 'DECORATIVE PANEL', never faking engine state"
           ]
         }
       ]
@@ -129,30 +148,32 @@
     {
       "id": "engineeringQuality",
       "label": "Engineering quality",
-      "weight": 10,
+      "weight": 15,
       "score": 75,
-      "contribution": 7.5,
+      "contribution": 11.3,
       "criteria": [
         {
-          "id": "componentStructure",
-          "label": "Component structure",
-          "weight": 50,
+          "id": "structureTests",
+          "label": "Data structure and tests",
+          "weight": 55,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "src/model/hardware.ts supplies normalized sections and stable IDs; App.tsx data-drives the six panels; Controls.tsx and Keyboard.tsx provide reusable typed primitives; tests/feature-matrix.json maps all 8 required IDs exactly once to existing tests.",
-            "The structure is understandable and compact, but every control owns isolated local state and most stable IDs are not propagated to rendered controls, which limits cross-control/display behavior and makes later stage integration less cohesive."
+            "Normalized typed hardware model (hardware.ts) with stable IDs; input boundary (inputs.ts) and audio backend (piano.ts) are separated and injectable",
+            "tests/feature-matrix.json maps every Phase 1 feature ID to non-empty test files; 15 tests pass on Node 24",
+            "Clean React/TypeScript with an injectable Clock and VoiceBackend enabling deterministic tests without devices/audio"
           ]
         },
         {
-          "id": "runtimeQuality",
+          "id": "runtime",
           "label": "Runtime quality",
-          "weight": 50,
+          "weight": 45,
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Independent reruns completed 4 test files/10 tests, typecheck, ESLint with zero warnings, and the Vite production build successfully; dist/index.html and relative built assets were produced.",
-            "runs/gpt-5-6-sol-high/verifications/stage1.json and evidence/stage1-visual-audit.md report clean desktop/narrow console checks and stable loading. The evaluator could not repeat a live console pass because no in-app browser backend was available in this session."
+            "stage1-capture.json records no console messages or page errors at capture; only a favicon 404 seen when serving locally",
+            "Repeated keydown/keyup and decorative interactions remained stable with correct voice counts",
+            "Instrument fits both required viewports without overflow"
           ]
         }
       ]
@@ -166,46 +187,40 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "command": "pnpm run test",
-        "durationMs": 1312,
+        "durationMs": 3581,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "command": "pnpm run typecheck",
-        "durationMs": 964,
+        "durationMs": 1558,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "command": "pnpm run lint",
-        "durationMs": 1132,
+        "durationMs": 632,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "command": "pnpm run build",
-        "durationMs": 466,
+        "durationMs": 2438,
         "detail": "Passed"
       },
       {
         "id": "artifact",
         "label": "Built phase artifact",
         "passed": true,
-        "detail": "runs/gpt-5-6-sol-high/stage1/dist/index.html"
+        "detail": "dist/index.html present"
       }
     ]
   },
   "issues": [
-    "The panel layout is visibly more schematic and less reference-faithful than the chassis and keybed, with oversized/invented OLED bars, consolidated controls, and reduced density in several sections.",
-    "Displays and meters are static; control changes do not update related display content or form the coupled state relationships documented in the Nord manual.",
-    "At 390 px width the full instrument avoids clipping, but labels and interaction targets shrink below practical reading and touch sizes.",
-    "Live browser verification could not be repeated because the in-app browser was unavailable; visual ratings use the required saved desktop/narrow evidence and interactions use the exercised test suite plus source inspection."
+    "Visual rendering is a clean but schematic recreation with notably lower control density and flatter materials than the reference photo; legends are very small at 390px.",
+    "The basic piano voice is honest live synthesis rather than a bundled sample (expected for Phase 1)."
   ]
 }

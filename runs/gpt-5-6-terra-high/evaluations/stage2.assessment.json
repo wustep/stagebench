@@ -1,0 +1,166 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt-5-6-terra-high",
+  "stage": 2,
+  "evaluator": "Independent Phase 2 evaluator",
+  "evaluatedAt": "2026-07-09T22:17:17Z",
+  "summary": "This is a functional, visually retained Phase 2 fallback rather than a complete Phase 2 instrument. The sealed verification passed all four package gates and recorded no page errors in the canonical captures. The artifact truthfully reports that Grand, Upright, and Electric recorded libraries are unavailable and uses live oscillator synthesis instead, so it misses a central hard gate. Direct source inspection finds one AudioContext, two layer inputs, a master gain and limiter, but the effect implementation is materially incomplete: the created Rotary node is not connected, most listed modulation types share the same processing, and the rendered controls omit key routing and parameter behavior. The sole six-test DOM suite checks state changes only and provides no rendered-audio or backend-bound evidence.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "rating": 3,
+          "evidence": [
+            "The sealed 1440x900 capture retains a continuous red 73-key chassis, six ordered panels, the Program and Synth OLED positions, and the Phase 1 deck/keybed proportion; the sealed verification records the captures as present and no page errors.",
+            "stage2/src/App.tsx models 73 E1-E7 keys and keeps the inherited Performance, Organ, Piano, Program, Synth, and Layer Effects surface; CSS retains a 54% deck / 46% keybed shell.",
+            "The 390x844 capture intentionally uses horizontal inspection and visibly retains the shell and keybed, but shows only a portion at once; it is less convenient than a responsive compact surface."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "rating": 2,
+          "evidence": [
+            "Piano A/B, selected type/model, layer level, octave, SUSTPED, KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, Master Level, focus, group, global buttons, and per-unit on/type/amount controls are wired to React state in App.tsx lines 139-183.",
+            "The desktop capture visibly presents Piano/effect LEDs, selections, sliders, model readout, and a live Program OLED, but the compact effect area exposes only one generic amount slider per unit rather than the documented dry/wet, rate, feedback, drive, EQ, and rotary controls.",
+            "The direct UI tests exercise a Piano B switch and effect focus/on/type/all-bypass state, but do not test physical-state coherence across the full control surface."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 1,
+          "evidence": [
+            "Six selectable type labels are implemented (Grand, Upright, Electric, Clav, Digital, Misc), with different oscillator shapes/partials in App.tsx lines 94-106.",
+            "IMPLEMENTATION_DETAILS.json truthfully declares sampleSources: [] and marks Grand, Upright, and Electric unavailable; it explicitly identifies the audible source as a live-synthesis fallback rather than recordings.",
+            "The required bundled, redistributable recorded Grand/Upright/Electric libraries with root-note/velocity provenance are absent, so the principal library hard gate is not met."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "rating": 2,
+          "evidence": [
+            "The artifact has independent A/B enabled, level, octave, sustain-pedal, pitch-stick, and type settings; noteOn creates a voice for each enabled layer (App.tsx lines 88-109).",
+            "The Piano controls can select/focus each layer, toggle it, set its level, and change octave; the source test confirms B enable/type/level UI state.",
+            "Voice entries retain a layer field but are indexed only by note, and every configure call rebuilds/disconnects layer inputs. There is no backend test proving per-layer ownership, cleanup, or stable sounding voices during a layer/FX change."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 2,
+          "evidence": [
+            "KB Touch changes the velocity curve, Dyn Comp changes gain, Timbre changes filter cutoff, Unison adds detuned oscillators, Soft Release lengthens release, and Master Level ramps master gain (App.tsx lines 84 and 96-108).",
+            "The UI exposes all required named controls, and sustain is gated by the per-layer SUSTPED setting.",
+            "String Res only schedules a one-millisecond no-op timer (line 113), PSTICK is stored but unused, and no audio-bound test demonstrates measurable output changes for any control."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "rating": 3,
+          "evidence": [
+            "Pointer controls, independent pointer IDs, mapped computer keys with repeat suppression, Space sustain, MIDI note on/off, MIDI CC64, blur cleanup, and unmount cleanup are implemented in App.tsx lines 151-156 and 186.",
+            "The status has explicit MIDI-unavailable, permission-denied, disconnected, and labeled playable synthesis-fallback states; IMPLEMENTATION_DETAILS.json does not claim the unavailable primary library is ready.",
+            "The test suite exercises pointer press/release, mapped keyboard notes, Space sustain, and fallback text, but does not exercise real MIDI, rapid multitouch, asset failure injection, or stuck-note stress."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 2,
+          "evidence": [
+            "LayeredAudio lazily creates one AudioContext, two layer input/output paths, a master gain, DynamicsCompressor limiter, and one context.destination connection (App.tsx lines 31-70).",
+            "The nominal layer path is input -> Mod 1 -> Mod 2 -> Delay -> Amp/EQ -> Compressor -> Reverb/output -> master -> limiter -> destination, with short master/layer ramps.",
+            "The Rotary StereoPanner is created and configured but never connected (lines 59 and 68-70); reverb and dry compressor are mixed directly into output, and repeated reconfiguration disconnects only old input/output endpoints."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "rating": 1,
+          "evidence": [
+            "Delay feedback, several Amp/EQ choices, compressor settings, and generated reverb impulses change node parameters, so this is not label-only implementation.",
+            "Mod 1 implements a static gain reduction (with only a Pump variation); Mod 2 maps all listed types to either lowpass or allpass behavior without modulation. There are no distinct implementations for most advertised types.",
+            "Rotary is disconnected from the audio path, and the supplied tests never render/measure effect output. This falls far short of the required audible coverage for all units and listed types."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "rating": 2,
+          "evidence": [
+            "The interface implements manual Piano A/B focus, a group switch, per-unit on/type/amount controls, all-effects bypass, and visible global buttons for Delay, Compressor, and Reverb (App.tsx lines 150 and 180-183).",
+            "patchEffect targets both layers in group mode or after a unit's global flag is active, and the source test verifies focus, Mod 1 bypass/type, and all-effects-bypass state transitions.",
+            "Delay feedback/filter, dry/wet, full effect parameter bindings, reliable global application at activation, and actual To Rotary/Reverb-before-Rotary routing are incomplete or absent; Rotary is not in the connected graph."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "rating": 2,
+          "evidence": [
+            "Selections immediately update visible buttons, model text, OLED piano type/focus, sliders, and LEDs; the desktop capture clearly shows the live Piano and Layer Effects state.",
+            "Several piano controls and parts of the graph are connected to oscillator-source parameters, but no independent browser audio pass was available and no rendered-audio test proves immediate audible feedback.",
+            "The recorded sample library is unavailable by design, limiting the musical fidelity of the feedback even where the fallback synthesizer responds."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "rating": 2,
+          "evidence": [
+            "The app explicitly handles unavailable/denied/disconnected MIDI, labels the sample failure fallback, releases voices on blur/unmount, and caps voices at 24 with oldest-voice release.",
+            "The sealed capture manifest reports no page errors (only a non-fatal slider-vertical warning).",
+            "No stress or real-audio tests cover rapid effect changes, layered polyphony under load, clipping recovery, MIDI device changes, or graph/node cleanup following repeated configuration changes."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 2,
+          "evidence": [
+            "LayeredAudio has explicit source, voice, layer input/output, effect-node, master, limiter, and disposal concepts, and uses one lazy context rather than a context per note.",
+            "The architecture is all embedded in one 187-line App.tsx rather than injectable audio/platform modules, making it difficult to test or extend into Phase 3.",
+            "The disconnected Rotary, partial effect semantics, and rebuild/disconnect strategy prevent the graph from being a sound, complete Phase 2 architecture."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "rating": 0,
+          "evidence": [
+            "The artifact contains only src/App.test.tsx, with six Testing Library DOM/state tests; src/test-setup.ts only imports jest-dom.",
+            "tests/feature-matrix.json maps every one of the 20 inherited and Phase 2 feature IDs, including effects.graph/effects.processing and piano.instrument-library, to that same App.test.tsx file.",
+            "There are no injectable AudioContext fakes, deterministic rendered-signal measurements, source distinctions, routing/bypass/order tests, MIDI boundary tests, or audio cleanup assertions."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "rating": 2,
+          "evidence": [
+            "The sealed verification records passing test, typecheck, lint, and build gates, and canonical captures have no page errors; the implementation is concise and uses stable IDs/accessibility labels for its controls.",
+            "The single-file implementation tightly couples UI, input, state, synthesis, graph construction, and MIDI, while the feature matrix overstates meaningful test coverage.",
+            "Repeated control changes rebuild portions of the graph, and the missing sample library plus incomplete effects leave significant Phase 2 maintainability and performance work for a future phase."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Grand, Upright, and Electric have no bundled recorded sample sets or provenance. The fallback labeling is honest, but this misses a central Phase 2 hard gate and sharply limits Piano-library credit.",
+    "The Rotary node is never connected; most Mod 1/Mod 2 types are not distinct processing; several required effect parameters/routing semantics are absent. The UI therefore overrepresents the actual effects implementation.",
+    "All 20 feature IDs point to one six-test DOM suite. There is no real audio-bound evidence for source distinction, controls, effect processing, routing/order, or cleanup."
+  ]
+}

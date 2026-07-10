@@ -1,0 +1,139 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt-5-6-luna-3",
+  "stage": 1,
+  "evaluator": "Claude independent evaluator",
+  "evaluatedAt": "2026-07-09T21:29:16Z",
+  "summary": "A clean, honest Phase 1 recreation of the Nord Stage 4 73 surface. The desktop capture (stage1-desktop.png) shows a continuous red chassis with the six sections in the correct left-to-right order (Performance, Organ, Piano, Program, Synth, Effects), dark inset panels, nine drawbars with LED ladders, and Program + Synth as the only OLED-style displays (matches the audit and hard gate). The keybed models 73 keys E-to-E (43 white / 30 black; whiteKeys length 43 in App.tsx). All panel controls are honestly presentation-only: they write only the normalized `hardware` map, displays are explicitly labeled DECORATIVE, and the footer reads '0 PRESENTATION CONTROLS'. I verified at runtime (served dist on 8751) that pressing a key created exactly one AudioContext and 3 oscillators (triangle + two sines) with status 'ready · generated piano', while dispatching input on a drawbar created zero audio nodes -- confirming the decorative boundary. Input handling is comprehensive: pointer with pointer-capture and per-pointerId source keys (multitouch), computer keyboard with repeat suppression, Web MIDI (note/velocity/note-off/CC64, statechange disconnect clears notes), space/CC64 sustain, and blur/unmount cleanup, all through one activeSources lifecycle. Voice management includes velocity, exponential release, 24-voice oldest-first stealing, and disconnect cleanup. IMPLEMENTATION_DETAILS.json truthfully declares a generated synthesis source with no recorded-sample claim. Main limitations: the geometry is a stylized simplification of the far denser reference, knobs move only by click-increment and keyboard (no pointer drag), and candidate tests assert DOM state rather than the audio boundary (jsdom has no AudioContext).",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "silhouetteGeometry",
+          "rating": 3,
+          "evidence": [
+            "stage1-desktop.png: continuous red chassis, six ordered sections, dark inset Organ/Piano/Synth/Effects plates, deck/keybed roughly 54/46.",
+            "stage1-visual-audit.md documents source aspect ratio 3.0951, instrument width min(92vw,1450px)=~92% of 1440 viewport within 88-97% band.",
+            "Keybed models 73 keys E-to-E: App.tsx whiteKeys = Array.from({length:43}), blacks via BLACK_AFTER giving 30 -> 73 total.",
+            "Geometry is a clean but stylized simplification versus the much denser reference/nord-stage-4-73.jpg."
+          ]
+        },
+        {
+          "id": "hardwareInventory",
+          "rating": 3,
+          "evidence": [
+            "All six sections rendered with dense controls: Organ (4 models, 9 drawbars with LED ladders, perc, vib/chorus, rotary), Piano (2 layers, 6 types, timbre, detail), Program (dial, 8 buttons, pages, Live/Scene/Store/Split, morph), Synth (2 layers, osc/filter/env/lfo/arp), Effects (focus + 4 effect groups + rotary + bypass).",
+            "Program and Synth are the only primary OLED displays; Performance/Organ/Piano/Effects have none (verified in image + audit section 'No primary OLED is rendered in Performance, Organ, Piano, or Effects').",
+            "Inventory simplified vs reference (effects collapsed into 4 columns, fewer synth params than hardware)."
+          ]
+        },
+        {
+          "id": "materialsTypography",
+          "rating": 3,
+          "evidence": [
+            "Red brushed chassis, dark inset panels, green OLED displays, dot-LED ladders, knob markers, Nord Stage 4 branding, small legends (stage1-desktop.png).",
+            "Section headers use eyebrow + title + ON/OFF state chips; sustain/level micro-copy present.",
+            "Materials are convincing but flatter/less photographic than the reference."
+          ]
+        },
+        {
+          "id": "responsiveRetention",
+          "rating": 3,
+          "evidence": [
+            "stage1-visual-audit.md: at 390px shell switches to 3x2 section grid retaining both OLEDs and all 73 keys with a 790px min height to avoid horizontal clipping.",
+            "Phase 1 has comparatively few controls so narrow retention is legible (stage3 narrow later shows crowding once controls multiply)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "basicPiano",
+      "criteria": [
+        {
+          "id": "unifiedInputs",
+          "rating": 3,
+          "evidence": [
+            "App.tsx routes pointer (setPointerCapture + `pointer-${pointerId}-${note}` source keys enabling multitouch), computer keyboard (COMPUTER_KEYS map, repeat suppression via heldComputerKeys), and MIDI (handleMidiMessage: 0x90/0x80/0x90-vel0/CC64) through one activeSources lifecycle.",
+            "Runtime verified: pressing 'z' created one AudioContext and a voice (3 oscillators).",
+            "MIDI failure/denied handled ('denied · MIDI permission unavailable'), statechange disconnect calls stopEverything and clears notes; blur clears all.",
+            "Pointer velocity derives from event.pressure (48 + pressure*79), which is 0/coarse on most devices; multitouch and MIDI paths verified by code only."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "rating": 3,
+          "evidence": [
+            "BasicPianoEngine.noteOn: velocity->gain, exponential attack; noteOff: 0.35s exponential release; sustain flag holds voices; 24-voice MAX with oldest-first releaseVoice steal.",
+            "releaseVoice stops oscillators and disconnects via setTimeout; dispose() closes context on unmount; blur triggers allNotesOff.",
+            "Overlap/repeat guarded by activeSources map keyed per source.",
+            "Panel controls remain decorative (verified drawbar input created 0 audio nodes)."
+          ]
+        },
+        {
+          "id": "honestBasicSource",
+          "rating": 3,
+          "evidence": [
+            "Runtime rail status read 'ready · generated piano'; keybed caption 'GENERATED PIANO'.",
+            "IMPLEMENTATION_DETAILS.json declares strategy 'Generated Web Audio piano fallback', generatedSources only, sampleSources: [], 'No recording is claimed.'",
+            "Error path: getContext throws if no Web Audio -> onStatus('error', ...) while keyboard remains usable.",
+            "Dependable audible three-partial voice; no distinct loading state (synthesis is instant)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interaction",
+      "criteria": [
+        {
+          "id": "physicalInteraction",
+          "rating": 3,
+          "evidence": [
+            "Knob: role=slider, aria-valuemin/max/now, ArrowUp/Down/Left/Right/Home/End keyboard handling, click increments +0.08, CSS --knob-angle rotation.",
+            "Fader/drawbar are range inputs with aria-labels; Toggle uses aria-pressed; wheels/pitch-stick role=slider with keyboard.",
+            "Limitation: knobs respond to click and keyboard only -- no pointer drag/rotation gesture."
+          ]
+        },
+        {
+          "id": "decorativeBoundary",
+          "rating": 4,
+          "evidence": [
+            "All panel controls call setHardware into the normalized `hardware` map only; none touch the audio engine.",
+            "Runtime verified: dispatching input on #organ-drawbar-0 left oscillator count unchanged (0 new audio nodes).",
+            "Program and Synth displays render explicit 'DECORATIVE' text; footer shows presentation-control count; audit states no panel action claims unimplemented behavior.",
+            "IMPLEMENTATION_DETAILS.json note: 'Panel controls update normalized presentation state only; they do not alter the audio graph in Phase 1.'"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "structureTests",
+          "rating": 3,
+          "evidence": [
+            "Stable string IDs throughout; normalized hardware state via useHardwareState; audio isolated in BasicPianoEngine class separate from React input layer.",
+            "App.test.tsx (67 lines) covers key inventory, section order, OLED count, pointer press/release, computer-key repeat suppression, sustain/blur cleanup, accessible knob state, and MIDI availability boundary.",
+            "Tests assert DOM state only (jsdom has no AudioContext) rather than audio output."
+          ]
+        },
+        {
+          "id": "runtime",
+          "rating": 3,
+          "evidence": [
+            "Runtime console clean except favicon 404 (no app errors/pageErrors); stage1-capture.json consoleMessages/pageErrors empty.",
+            "Cleanup on unmount (dispose) and blur; responsive layout renders at 390 and 1440.",
+            "Repeated key interaction stable; single AudioContext reused."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Piano source is generated synthesis only (honestly declared) -- acceptable for Phase 1's basic-voice scope but no recorded sample.",
+    "Knobs move only via click-increment and keyboard; no pointer drag gesture for continuous controls.",
+    "Candidate tests assert DOM/aria state, not the Web Audio backend (jsdom limitation).",
+    "Surface geometry is a stylized simplification of the substantially denser reference panel."
+  ]
+}

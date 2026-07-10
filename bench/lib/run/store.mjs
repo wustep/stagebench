@@ -113,6 +113,88 @@ export function createRun(root, metadata = {}, now = new Date()) {
   return { id, targetPhase, selectedPhases: selected, runDir: path.join(locations.runs, id), run }
 }
 
+// Update the human-facing run label without changing its model identity,
+// artifacts, evaluations, or telemetry.
+export function renameRun(root, id, title) {
+  const run = loadRun(root, id)
+  if (isLegacyRun(run)) throw new Error(`${id} is a legacy run; its title is frozen`)
+  const cleaned = String(title ?? '').trim()
+  if (!cleaned) throw new Error('--title is required')
+  run.title = cleaned
+  saveRun(root, run)
+  return { id: run.id, title: run.title }
+}
+
+function replaceRunId(value, sourceId, targetId) {
+  return typeof value === 'string' ? value.replaceAll(sourceId, targetId) : value
+}
+
+function rewriteRunMetadataTree(directory, sourceId, targetId) {
+  if (!fs.existsSync(directory)) return
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name)
+    if (entry.isDirectory()) {
+      rewriteRunMetadataTree(entryPath, sourceId, targetId)
+      continue
+    }
+    if (!entry.isFile() || !/\.(?:html|json|md)$/.test(entry.name)) continue
+    const before = fs.readFileSync(entryPath, 'utf8')
+    const after = before.replaceAll(sourceId, targetId)
+    if (after !== before) fs.writeFileSync(entryPath, after)
+  }
+}
+
+// Promote a completed run to a cleaner id. With `replace`, an existing run at
+// the target id and its published preview/report are removed first. Sealed
+// stage contents are moved without rewriting so their artifact digests remain
+// valid; only run metadata and generated reports receive the new id.
+export function promoteRun(root, sourceId, targetId, { replace = false } = {}) {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(String(targetId ?? ''))) throw new Error('--to must be a lowercase run id containing only letters, numbers, and hyphens')
+  if (sourceId === targetId) throw new Error('Source and target run ids must differ')
+  const sourceRun = loadRun(root, sourceId)
+  if (isLegacyRun(sourceRun)) throw new Error(`${sourceId} is a legacy run; its id is frozen`)
+  if (sourceRun.status !== 'complete') throw new Error(`${sourceId} must be complete before it can be promoted`)
+
+  const locations = pathsFor(root)
+  const pairs = [
+    [path.join(locations.runs, sourceId), path.join(locations.runs, targetId)],
+    [path.join(locations.previews, sourceId), path.join(locations.previews, targetId)],
+    [path.join(locations.reports, sourceId), path.join(locations.reports, targetId)],
+  ]
+  const targetRunDir = pairs[0][1]
+  if (fs.existsSync(targetRunDir) && !replace) throw new Error(`Target run ${targetId} already exists; pass --replace to remove it`)
+
+  if (replace) {
+    for (const [, target] of pairs) fs.rmSync(target, { recursive: true, force: true })
+  }
+  for (const [source, target] of pairs) {
+    if (fs.existsSync(source)) fs.renameSync(source, target)
+  }
+
+  const run = readJson(path.join(targetRunDir, 'run.json'))
+  run.id = targetId
+  run.previews = Object.fromEntries(Object.entries(run.previews ?? {}).map(([phase, preview]) => [phase, replaceRunId(preview, sourceId, targetId)]))
+  run.previewPath = replaceRunId(run.previewPath, sourceId, targetId)
+  if (run.evaluation) run.evaluation.reportPath = replaceRunId(run.evaluation.reportPath, sourceId, targetId)
+  for (const stage of run.stages ?? []) {
+    stage.verificationPath = replaceRunId(stage.verificationPath, sourceId, targetId)
+    if (stage.evaluation) {
+      stage.evaluation.path = replaceRunId(stage.evaluation.path, sourceId, targetId)
+      stage.evaluation.reportPath = replaceRunId(stage.evaluation.reportPath, sourceId, targetId)
+    }
+  }
+  saveRun(root, run)
+
+  rewriteRunMetadataTree(path.join(targetRunDir, 'evaluations'), sourceId, targetId)
+  rewriteRunMetadataTree(path.join(targetRunDir, 'verifications'), sourceId, targetId)
+  rewriteRunMetadataTree(path.join(locations.reports, targetId), sourceId, targetId)
+
+  const workRoot = path.join(root, '.stagebench', 'work')
+  fs.rmSync(path.join(workRoot, sourceId), { recursive: true, force: true })
+  fs.rmSync(path.join(workRoot, targetId), { recursive: true, force: true })
+  return { id: targetId, replaced: replace, model: run.model, title: run.title }
+}
+
 export function stageState(run, phase) {
   const state = run.stages.find((entry) => entry.number === Number(phase))
   if (!state) throw new Error(`Phase ${phase} is not selected for run ${run.id} (target ${run.targetPhase})`)
@@ -138,7 +220,7 @@ export function markRunning(root, id, phase, now = new Date()) {
   return run
 }
 
-export const TELEMETRY_FIELDS = ['wallTimeSeconds', 'costUsd', 'inputTokens', 'outputTokens', 'reasoningTokens', 'toolCalls']
+export const TELEMETRY_FIELDS = ['wallTimeSeconds', 'totalTokens', 'costUsd', 'inputTokens', 'outputTokens', 'reasoningTokens', 'toolCalls']
 
 // Sum per-stage telemetry into run totals. A total is null until at least one
 // stage reports that field — never silently zero.

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { readJson, writeJson } from '../bench/lib/shared.mjs'
-import { createRun, loadRun, markSealed, recordTelemetry, registerEvaluation, registryEntry, reindexRegistry, statusSummary } from '../bench/lib/run/store.mjs'
+import { createRun, loadRun, markSealed, promoteRun, recordTelemetry, registerEvaluation, registryEntry, reindexRegistry, statusSummary } from '../bench/lib/run/store.mjs'
 import { exportRun, __internals as exportInternals } from '../bench/lib/run/export.mjs'
 import { importWorkspace, startPhase } from '../bench/lib/run/workspace.mjs'
 import { REQUIRED_FEATURES, runChecks, verifyPhase } from '../bench/lib/run/verify.mjs'
@@ -119,11 +119,12 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     // wall time is recorded automatically; usage is recorded explicitly and
     // rolled up into run totals
     assert.equal(typeof sealed.stages[0].telemetry.wallTimeSeconds, 'number')
-    recordTelemetry(root, created.id, 1, { costUsd: '12.5', inputTokens: 1_200_000, outputTokens: 300000, toolCalls: 42 })
+    recordTelemetry(root, created.id, 1, { costUsd: '12.5', totalTokens: 1_500_000, inputTokens: 1_200_000, outputTokens: 300000, toolCalls: 42 })
     const withUsage = loadRun(root, created.id)
     assert.equal(withUsage.stages[0].telemetry.costUsd, 12.5)
     assert.equal(withUsage.telemetry.costUsd, 12.5)
     assert.equal(withUsage.telemetry.inputTokens, 1_200_000)
+    assert.equal(withUsage.telemetry.totalTokens, 1_500_000)
     assert.equal(withUsage.telemetry.reasoningTokens, null, 'unrecorded telemetry stays null, never zero')
     assert.throws(() => recordTelemetry(root, created.id, 1, { costUsd: -1 }), /non-negative/)
 
@@ -178,6 +179,7 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     assert.equal(entry.score, 75)
     assert.equal(entry.stages[0].score, 75)
     assert.equal(entry.telemetry.costUsd, 12.5)
+    assert.equal(entry.telemetry.totalTokens, 1_500_000)
     assert.equal(entry.telemetry.outputTokens, 300000)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
@@ -219,6 +221,50 @@ test('pre-v4 run records project into frozen legacy registry entries', () => {
     { number: 2, status: 'running', score: null, reportPath: null },
   ])
   assert.equal('grade' in legacy, false)
+})
+
+test('promote replaces an obsolete run and preserves sealed stage contents', async () => {
+  const root = fixtureRoot()
+  try {
+    const obsolete = createRun(root, { model: 'clean-id', target: '1' })
+    const replacement = createRun(root, { model: 'replacement-model', target: '1' })
+    const replacementRun = loadRun(root, replacement.id)
+    replacementRun.status = 'complete'
+    replacementRun.previewPath = `/previews/${replacement.id}/stage1/index.html`
+    replacementRun.previews = { 1: replacementRun.previewPath }
+    replacementRun.evaluation = { reportPath: `/reports/${replacement.id}/index.html` }
+    replacementRun.stages[0].status = 'complete'
+    replacementRun.stages[0].verificationPath = `runs/${replacement.id}/verifications/stage1.json`
+    replacementRun.stages[0].evaluation = {
+      path: `runs/${replacement.id}/evaluations/stage1.json`,
+      reportPath: `/reports/${replacement.id}/index.html#stage-1`,
+    }
+    writeJson(path.join(root, 'runs', replacement.id, 'run.json'), replacementRun)
+
+    fs.mkdirSync(path.join(root, 'runs', replacement.id, 'stage1'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'runs', replacement.id, 'stage1', 'sealed.txt'), replacement.id)
+    writeJson(path.join(root, 'runs', replacement.id, 'evaluations', 'stage1.json'), { runId: replacement.id })
+    writeJson(path.join(root, 'runs', replacement.id, 'verifications', 'stage1.json'), { runId: replacement.id })
+    fs.mkdirSync(path.join(root, 'public', 'previews', replacement.id, 'stage1'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'public', 'previews', replacement.id, 'stage1', 'index.html'), '<h1>replacement</h1>')
+    fs.mkdirSync(path.join(root, 'public', 'reports', replacement.id), { recursive: true })
+    fs.writeFileSync(path.join(root, 'public', 'reports', replacement.id, 'index.html'), replacement.id)
+
+    const promoted = promoteRun(root, replacement.id, obsolete.id, { replace: true })
+    assert.equal(promoted.id, obsolete.id)
+    assert.equal(loadRun(root, obsolete.id).model, 'replacement-model')
+    assert.equal(loadRun(root, obsolete.id).previewPath, `/previews/${obsolete.id}/stage1/index.html`)
+    assert.equal(readJson(path.join(root, 'runs', obsolete.id, 'evaluations', 'stage1.json')).runId, obsolete.id)
+    assert.equal(readJson(path.join(root, 'runs', obsolete.id, 'verifications', 'stage1.json')).runId, obsolete.id)
+    assert.equal(fs.readFileSync(path.join(root, 'public', 'reports', obsolete.id, 'index.html'), 'utf8'), obsolete.id)
+    assert.equal(fs.readFileSync(path.join(root, 'runs', obsolete.id, 'stage1', 'sealed.txt'), 'utf8'), replacement.id, 'sealed stage contents are not rewritten')
+    assert.ok(!fs.existsSync(path.join(root, 'runs', replacement.id)))
+
+    await reindexRegistry(root)
+    assert.deepEqual(readJson(path.join(root, 'src', 'data', 'runs.json')).map((run) => run.id), [obsolete.id])
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('implementation manifest validation rejects dishonest or malformed declarations', () => {

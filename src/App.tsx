@@ -16,7 +16,7 @@ import type { RawRunEntry, RunEntry, StageStatus, Telemetry } from './types'
 import './App.css'
 
 const TELEMETRY_FIELDS: Array<keyof Telemetry> = [
-  'wallTimeSeconds', 'costUsd', 'inputTokens', 'outputTokens', 'reasoningTokens', 'toolCalls',
+  'wallTimeSeconds', 'totalTokens', 'costUsd', 'inputTokens', 'outputTokens', 'reasoningTokens', 'toolCalls',
 ]
 
 // Project a raw runs.json entry into a complete RunEntry so the render path can
@@ -54,16 +54,14 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
   }
 }
 
-// GPT5.6 runs are hidden from the main gallery until the visitor unlocks
-// them at /secret (same access password, separate cookie set by middleware.js).
-const EXTRA_MODEL_PREFIX = 'gpt-5.6'
-const extraModelsUnlocked =
+// The secret cookie still unlocks private artifacts, but benchmark runs are
+// always public in the gallery.
+const artifactsUnlocked =
   typeof document !== 'undefined' &&
   document.cookie.split(';').some((entry) => entry.trim().startsWith('stagebench_extras='))
 
 const runs = (runsData as RawRunEntry[])
   .map(normalizeRunEntry)
-  .filter((run) => extraModelsUnlocked || !run.model.startsWith(EXTRA_MODEL_PREFIX))
 // Phase display names come from the phase manifest via src/data/protocol.json
 // (generated at reindex time); legacy/v2 mappings live there too because the
 // current spec has no data for those retired protocol layouts.
@@ -144,15 +142,20 @@ function formatTokens(value: number) {
   return String(value)
 }
 
+function formatDuration(value: number) {
+  const totalSeconds = Math.round(value)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return hours > 0 ? `${hours}h ${minutes}m ${seconds}s` : `${minutes}m ${seconds}s`
+}
+
 function formatTelemetry(telemetry: RunEntry['telemetry']) {
   if (!telemetry) return null
   const parts: string[] = []
   if (typeof telemetry.costUsd === 'number') parts.push(`$${telemetry.costUsd.toFixed(2)}`)
-  if (typeof telemetry.wallTimeSeconds === 'number') {
-    const hours = Math.floor(telemetry.wallTimeSeconds / 3600)
-    const minutes = Math.round((telemetry.wallTimeSeconds % 3600) / 60)
-    parts.push(hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`)
-  }
+  if (typeof telemetry.wallTimeSeconds === 'number') parts.push(formatDuration(telemetry.wallTimeSeconds))
+  if (typeof telemetry.totalTokens === 'number') parts.push(`${formatTokens(telemetry.totalTokens)} total tokens`)
   if (typeof telemetry.inputTokens === 'number') parts.push(`${formatTokens(telemetry.inputTokens)} tok in`)
   if (typeof telemetry.outputTokens === 'number') parts.push(`${formatTokens(telemetry.outputTokens)} tok out`)
   if (typeof telemetry.reasoningTokens === 'number') parts.push(`${formatTokens(telemetry.reasoningTokens)} reasoning`)
@@ -733,12 +736,6 @@ function App() {
     <main>
       <a className="skip-link" href="#runs">Skip to runs</a>
       <header className="instrument-header">
-        <nav className="topbar" aria-label="Primary navigation">
-          <a className="wordmark" href="#runs" aria-label="Stagebench runs">
-            <span>STAGEBENCH</span>
-          </a>
-        </nav>
-
         <div className="header-intro">
           <div>
             <span className="header-eyebrow">Unofficial fan project</span>
@@ -965,7 +962,7 @@ function App() {
         </section>
       </section>
 
-      {extraModelsUnlocked && (
+      {artifactsUnlocked && (
         <section className="artifacts" aria-labelledby="artifacts-heading">
           <h3 id="artifacts-heading">Artifacts</h3>
           <p className="artifacts-lead">

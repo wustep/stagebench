@@ -1,0 +1,185 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt-5-6-terra-high",
+  "stage": 3,
+  "evaluator": "Independent Phase 3 evaluator",
+  "evaluatedAt": "2026-07-09T22:52:53Z",
+  "summary": "The sealed Phase 3 artifact is a visually retained, accessible control-state prototype rather than a complete Stage 4 system. Its verification passed test, typecheck, lint, build, sealed-digest, and capture checks; the canonical captures have no page errors. It adds UI and serializable state for Programs, Organ, Synth, splits, scenes, and morphs, but source inspection shows many required behaviors are state-only: split crossfade and morph positions do not affect rendering, Organ drawbars and most Organ parameters do not affect its source, and Synth filter parameters, envelopes, LFO, voice modes, and arp do not affect sound. The sole 127-line test file has nine DOM/state tests, while all 38 required IDs map to it; it contains no rendered-audio or real-boundary evidence.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 3,
+          "evidence": [
+            "The sealed 1440x900 capture retains the continuous red 73-key chassis, six ordered deck panels, dark inset panels, and the Program/Synth OLED locations; the CSS preserves the 54% deck / 46% keybed composition.",
+            "App.tsx renders MIDI 28–100 (73 E1–E7 keys), and the sealed verification records both canonical captures with no console messages or page errors.",
+            "Hardware density, legends, and micro-layout remain simplified relative to the reference; the 390x844 capture is a horizontally scrollable 1060px inspection canvas with most of the instrument initially off-screen."
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "rating": 2,
+          "evidence": [
+            "The desktop capture visibly presents named Program, split, scene, morph, Organ, Synth, Piano, and Layer Effects state with OLEDs, lit buttons, sliders, and Organ LED ladders.",
+            "App.tsx provides React state and visible controls for program slot/page/list/store, split points/crossfade, scenes, morph selection, Organ model/drawbars/rotary, and Synth waveform/filter/LFO/arp.",
+            "Several visible state indicators are not faithful to their actual state: Organ LED ladders are rendered from fixed `3 + i % 3` values, and many controls either do not bind to canonical audio behavior or are generic presentation controls."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 2,
+          "evidence": [
+            "The program UI implements four pages of eight slots, a 0–31 dial, numeric list view, Store/Store As name entry, dirty `E` display, edit-discard on normal program choice, and eight in-memory Live slots (App.tsx lines 164, 177–181, 227–232).",
+            "`ProgramSnapshot` serializes Piano/effects, Organ/Synth layer records, split, scenes, clock, transpose, and morph assignments; the DOM test stores a named program, changes split state, and loads another slot.",
+            "The snapshot omits supported Organ drawbar/percussion/rotary state, focus, master level, and morph positions. Live data is memory-only and its initialization/autosave is not independently tested, so round-trip completeness and Live behavior remain partial."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 1,
+          "evidence": [
+            "The UI exposes three editable split points from the documented 11 note positions, zones 1–4 for Organ/Synth, Off/±6/±12 crossfade selection, two captured scenes, wheel/pedal assignment buttons, clock, transpose, and Panic.",
+            "`inZone` is a hard zone test only; `split.crossfade` is never read by note rendering. Piano is always restricted to zone 1 and has no editable zone assignment (App.tsx lines 184, 189).",
+            "Morph positions only update `morphValue`; they never interpolate a target. Scene enables do not reconfigure the audio graph, and clock is not connected to arp, LFO, or delay. Transpose and Panic work at the basic note path."
+          ]
+        },
+        {
+          "id": "organSystem",
+          "rating": 1,
+          "evidence": [
+            "Two Organ layer records, four model labels, independent enable/level/octave/zone state, nine drawbar controls, percussion/key-click/vibrato/rotary UI, and a representative DOM test are present.",
+            "On a note, Organ merely maps B3/Vox/Farf/Pipe 1 to four inherited Piano fallback types (Clav/Electric/Digital/Misc); drawbar values, percussion soft/fast/third, vibrato/chorus, rotary speed, and rotary drive are not read in audio rendering (App.tsx lines 191, 242–244).",
+            "The inherited Rotary is also disconnected from the graph, so the required model/drawbar spectral behavior, rotary motion, and shared-effect integration are not established."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 1,
+          "evidence": [
+            "Three Synth layer records and UI expose Pure-like basic waves, Sync, Multi, Super, and FM labels plus filter, cutoff/resonance/drive, voice-mode, glide, LFO, and arp controls.",
+            "Sound generation reduces every Synth waveform to one of five inherited Piano types; only the selected filter kind changes a coarse Piano timbre. Osc Ctrl, cutoff, resonance, drive, all envelopes, LFO, mode/priority/glide, arp run/hold/rate/range/direction, and vibrato do not feed the renderer (App.tsx lines 192, 247–251).",
+            "The test changes waveform/filter/LFO state and toggles arp run, but contains no deterministic timing, envelope, filter, mode, or rendered-source verification."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 1,
+          "evidence": [
+            "The artifact honestly declares generated Web Audio oscillator/filter/envelope fallback sources, not recordings, and Organ/Synth selection causes some coarse oscillator-type/partial changes through inherited Piano types.",
+            "Organ models and the many Synth source families are not separate engine implementations: they are renamed mappings into the same `createVoice` Piano source path, with no use of drawbars, most waveform-specific controls, or FM amount.",
+            "No test renders or measures spectra, envelopes, or time behavior for any Organ model or Synth category."
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "rating": 1,
+          "evidence": [
+            "`LayeredAudio` lazily creates one AudioContext, two inherited input/output buses, master gain, limiter, and one destination connection (App.tsx lines 44–83); Organ and Synth call this same object.",
+            "The two-bus Piano graph cannot provide independent chains for three Synth layers, Organ state does not control effects targeting, and the created Rotary panner is configured but never connected to the graph.",
+            "Repeated configuration rebuilds/disconnects bus endpoints, while no test verifies all-engine routing, master-path gain staging, bypass, or cleanup at the audio boundary."
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "rating": 1,
+          "evidence": [
+            "Basic fallback voices have velocity envelopes, a 24-voice oldest-first cap, release/all-notes-off, and the sealed captures report no page errors.",
+            "The required layered/split musical behavior, crossfade gains, rotary acceleration, arp timing, voice modes, and useful source quality cannot be exercised because their controls are state-only or coarse mappings.",
+            "There are no audio-rendered latency, clipping, timing, load, or cleanup measurements; after transpose, `noteOn` is indexed by the transposed note while `noteOff` receives the untransposed key, creating a stuck-voice risk."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "rating": 1,
+          "evidence": [
+            "Normal program load restores the snapshot's Piano/effect/Organ/Synth layer records, split, scenes, clock, transpose, and morph assignments, then reconfigures the inherited Piano buses (App.tsx line 180).",
+            "The snapshot does not include Organ drawbars/percussion/rotary, master, focus, or live morph positions; it restores Organ/Synth state without configuring a corresponding engine graph because none exists.",
+            "Dirty comparison uses this incomplete snapshot, so edits to omitted supported state are not reliably dirty or restored."
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "rating": 0,
+          "evidence": [
+            "The rubric requires every non-excluded hardware control to have meaningful canonical and audible behavior; the source leaves required controls such as Performance pitch/mod wheels and octave buttons in the generic `hardware` presentation record only (lines 130–145, 150, 168).",
+            "Many required Organ and Synth controls visibly change state but are never consumed by audio rendering, including drawbars, rotary speed/drive, oscillator control, filter parameters, envelopes, LFO, voice modes, and arp behavior.",
+            "Unsupported exclusions are described in IMPLEMENTATION_PLAN.md but not surfaced as a UI audit/notes, and generic no-op fallbacks directly trigger the rubric's zero guidance."
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "rating": 1,
+          "evidence": [
+            "A key press does consult split zones and can call the inherited source path for enabled Piano, Organ, and Synth layer records; Program OLED and panel state give coherent visible feedback.",
+            "The cross-system links central to the phase are not operational: morphs do not interpolate, scenes do not reconfigure audio, clock does not sync time-based systems, and effects focus targets only the A/B inherited buses.",
+            "The supplied workflow test only asserts DOM presence/state for split, scene, morph slider, and Panic; it does not prove an integrated audible workflow."
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "rating": 1,
+          "evidence": [
+            "Sealed verification records all four technical gates as passed and captures without page errors; the 73-key surface, pointer/keyboard/sustain paths, basic fallback voice, and inherited Piano/effect UI remain present.",
+            "The inherited Phase 2 artifact still has no recorded Grand/Upright/Electric libraries and an incomplete/disconnected Rotary/effects graph, so the full inherited phase contract is not reliable.",
+            "The nine DOM/state tests do not exercise inherited audio cleanup, real MIDI, audio effects, multi-touch stress, sample failure, or the new Stage 3 integration behaviors."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "architecture",
+          "rating": 1,
+          "evidence": [
+            "There is a useful serializable `ProgramSnapshot` shape and a single lazy AudioContext/master/limiter concept, with explicit basic voice release and disposal methods.",
+            "All UI, program storage, inputs, MIDI, state, engines, effects, and Web Audio construction are tightly coupled in one 255-line App.tsx; Organ and Synth are not engine boundaries, and several serialized fields have no runtime behavior.",
+            "The disconnected Rotary, two-bus limitation for five non-Piano layers, incomplete snapshots, and graph rebuilding make the architecture unsuitable as a complete extensible Stage 4 system."
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "rating": 0,
+          "evidence": [
+            "The artifact contains one 127-line Testing Library DOM suite with nine tests; it checks selected buttons, ranges, and text but no Web Audio implementation behavior.",
+            "Every one of the 38 required IDs in tests/feature-matrix.json, including `organ.models-drawbars`, `synth.arp-gate`, `system.integration`, and `hardware.bindings`, maps to that same file.",
+            "There are no injectable platform/audio fakes, deterministic signal assertions, program state-completeness tests, source/routing tests, or cleanup/load tests, so the mappings materially overstate covered behavior."
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "rating": 2,
+          "evidence": [
+            "The sealed artifact passed test, typecheck, lint, and build, and the parent-controlled desktop/narrow capture manifest reports no console messages or page errors.",
+            "Basic input cleanup on blur/unmount and `allNotesOff` is implemented, with a 24-voice cap and master limiter.",
+            "Runtime confidence is limited by the disconnected/partially rebuilt effect graph, no real-audio load or leak tests, and the lack of implemented Organ/Synth time-based workloads."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Phase 3 controls substantially overrepresent behavior: crossfade, morph interpolation, clock sync, most Organ controls, and most Synth controls are state-only; Organ/Synth are mappings into the inherited Piano fallback rather than complete engines.",
+    "Program serialization and dirty state omit supported Organ drawbar/percussion/rotary and other control state, so the required complete round-trip cannot hold. The eight Live slots are in-memory and lack behavioral coverage.",
+    "Every required feature ID maps to a single nine-test DOM suite. No deterministic rendered-audio, routing, source distinction, timing, real MIDI, or cleanup evidence exists.",
+    "Non-excluded generic presentation controls remain no-ops and spec exclusions are not surfaced in a UI unsupported-control audit, failing the hardware-binding honesty contract."
+  ]
+}

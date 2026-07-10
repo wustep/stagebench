@@ -9,6 +9,7 @@ export type StageStatus = 'queued' | 'running' | 'complete' | 'failed'
 
 export type Telemetry = {
   wallTimeSeconds: number | null
+  totalTokens: number | null
   costUsd: number | null
   inputTokens: number | null
   outputTokens: number | null

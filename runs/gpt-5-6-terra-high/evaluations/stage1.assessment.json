@@ -1,0 +1,132 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt-5-6-terra-high",
+  "stage": 1,
+  "evaluator": "independent-phase1-evaluator",
+  "evaluatedAt": "2026-07-09T21:55:26Z",
+  "summary": "A solid, honest Stage 4 73 surface with exact key count, broad geometry, and a working synthesized basic voice. It falls well short of reference-level hardware density and responsive presentation, while the audio/input implementation has important untested lifecycle gaps. All four required technical checks pass.",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "silhouetteGeometry",
+          "rating": 3,
+          "evidence": [
+            "The sealed desktop capture shows one continuous red 73-key chassis that occupies about 94% of the 1440px viewport; the visual audit records the selected 3.095:1 73-key silhouette and 54/46 deck/keybed allocation.",
+            "src/App.tsx defines MIDI 28–100 (E1–E7) and renders 73 keys; its test asserts 73 accessible piano-key buttons and both endpoint names.",
+            "The end cheeks, rails, and deck detailing are materially simplified compared with the assigned product photo."
+          ]
+        },
+        {
+          "id": "hardwareInventory",
+          "rating": 2,
+          "evidence": [
+            "All six ordered surface sections are present, with two primary OLEDs only in Program and Synth; the Organ has nine drawbars and LED ladders.",
+            "The implementation declares only 5 Performance controls, 15 Organ controls, 9 Piano controls, 18 Program controls, 18 Synth controls, and 16 Effects controls. The reference contains substantially denser and more differentiated physical groups, switches, faders, and landmarks.",
+            "The desktop capture visibly uses generic repeated control banks, especially across Piano, Synth, and Layer Effects, rather than closely placed reference-specific hardware."
+          ]
+        },
+        {
+          "id": "materialsTypography",
+          "rating": 2,
+          "evidence": [
+            "The capture has a credible red-metal chassis, dark blue-gray inset panels, black knobs, white/black keys, LED ladders, and blue-green OLED styling that align with the visual palette.",
+            "Much of the label text is extremely small or truncated, and the controls, display layouts, shadows, and panel typography are simplified relative to the product photo."
+          ]
+        },
+        {
+          "id": "responsiveRetention",
+          "rating": 2,
+          "evidence": [
+            "The 390x844 capture keeps the instrument available through a 1060px-wide horizontal inspection canvas and includes an instruction to scroll horizontally.",
+            "At its captured initial position, most of the chassis and keybed are off-screen rather than retained in a responsive complete view; inspection requires horizontal scrolling."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "basicPiano",
+      "criteria": [
+        {
+          "id": "unifiedInputs",
+          "rating": 2,
+          "evidence": [
+            "The implementation routes pointer down/up/cancel, computer keyboard mappings with repeat suppression, Space sustain, and MIDI note/velocity/CC64 to shared play/release/setPedal callbacks; blur performs all-notes-off.",
+            "MIDI permission denial/unavailability and disconnect status are exposed, but only inputs existing when access resolves receive onmidimessage handlers; a subsequently connected input is not bound.",
+            "The only automated input tests cover one pointer key and one keyboard/Space path; they do not exercise independent multitouch, MIDI messages, denial, reconnect, or blur cleanup."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "rating": 2,
+          "evidence": [
+            "PianoAudio supplies velocity-dependent envelopes, 16-voice oldest-first stealing, per-note release envelopes, sustain deferral, all-notes-off, and disposal of its AudioContext.",
+            "noteOff(note) releases every voice instance sharing that MIDI note. Releasing one of two overlapping same-note inputs therefore terminates both, so repeated/overlapping-note ownership is not dependable.",
+            "No test exercises audio output, velocity relationship, sustain duration, stealing, node cleanup, or overlapping same-note behavior."
+          ]
+        },
+        {
+          "id": "honestBasicSource",
+          "rating": 3,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json accurately declares live Web Audio triangle plus sine synthesis and explicitly says it is not a recorded sample set.",
+            "The visible status identifies a synthesized piano and reports MIDI unavailable, enabled, disconnected, or permission denied states.",
+            "AudioContext construction failure is silent: ensure() simply returns when no constructor exists, without an audio error/fallback status."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interaction",
+      "criteria": [
+        {
+          "id": "physicalInteraction",
+          "rating": 3,
+          "evidence": [
+            "Every rendered panel input is created from the stable id/label/kind/value model and renders as either a button with aria-pressed or a named range input; key buttons expose aria-pressed and pointer/keyboard handling.",
+            "Buttons light, knobs rotate visually, and faders/drawbars/wheels use native range controls with visible focus styling."
+          ]
+        },
+        {
+          "id": "decorativeBoundary",
+          "rating": 3,
+          "evidence": [
+            "Panel interactions only update the normalized hardware presentation state. The audio path is only reached by keybed play/release and the dedicated sustain input.",
+            "The Program OLED explicitly says 'Panel controls decorative'; however, fixed Program/Synth screen content can still read as functional state even though no panel control changes it."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "structureTests",
+          "rating": 2,
+          "evidence": [
+            "The section/control model provides stable IDs and a normalized presentation-state record, and PianoAudio separates core voice operations from the rendered controls.",
+            "Browser, audio, MIDI, and timing boundaries are not injectable; the single App.test.tsx has four UI-state tests only, although feature-matrix.json maps all 11 required feature IDs to it.",
+            "The tests do not provide the required behavioral evidence for multi-input lifecycle, audio signal behavior, MIDI failures, cleanup, or complete control inventory."
+          ]
+        },
+        {
+          "id": "runtime",
+          "rating": 3,
+          "evidence": [
+            "I reran pnpm run test, typecheck, lint, and build against the sealed source; all passed (4/4 tests).",
+            "The sealed capture metadata reports no page errors at either canonical viewport. It does report the same nonstandard slider-vertical CSS warning at both viewports.",
+            "Source code installs blur/unmount cleanup and deterministic 16-voice handling, but the missing lifecycle coverage and horizontal narrow layout limit confidence under real stress."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Reference hardware inventory and micro-layout are substantially reduced; several sections rely on generic control grids rather than the product's differentiated hardware.",
+    "Narrow presentation depends on horizontal scrolling, leaving the majority of the chassis outside the initial 390px capture.",
+    "Overlapping inputs for the same MIDI note are not independently owned: noteOff releases all voices for that note.",
+    "New MIDI inputs connected after access is granted do not receive a message handler.",
+    "Feature-matrix coverage is nominal rather than behavioral: four UI tests are mapped to all eleven Phase 1 feature IDs."
+  ]
+}

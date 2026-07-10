@@ -1,34 +1,32 @@
-# Stage 2 visual audit
+# Stage 2 visual and interaction audit
 
-## Evidence provenance
+## Sources and regression baseline
 
-The isolated implementation context had no connected browser backend, so it initially preserved explicitly labeled Stage 1 baseline copies. The browser-enabled parent subsequently replaced both files with fresh Stage 2 renders from `http://127.0.0.1:5175/`: `stage2-desktop.png` at 1440×900 and `stage2-narrow.png` at 390×844. These images include the newly added status/actions below the chassis.
+Audited against `nord-stage-4.visual.json`, `nord-stage-4.piano.json`, `nord-stage-4.effects.json`, the supplied Stage 4 73 reference photograph, and the inherited `stage1-desktop.png` / `stage1-narrow.png`. The Phase 1 continuous 3.0951:1 chassis, 54/46 deck/keybed allocation, 14/20/8.5/12.5/25/20 section widths, 73-key E1–E7 geometry, and exactly two primary OLEDs remain unchanged.
 
-The Stage 2 implementation deliberately leaves the instrument container, six-section grid, control-deck/keybed rows, chassis continuity, keyboard geometry, and responsive scaling rules unchanged. Functional state is threaded into existing controls. The only layout additions are a compact status/action row and keyboard hint below the instrument; no region was added above the instrument.
+The parent capture harness remains responsible for canonical `stage2-desktop.png`, `stage2-narrow.png`, and capture metadata during sealing.
 
-## Measured baseline comparison
+## Functional panel pass
 
-| Measurement | Primary contract | Desktop baseline | Stage 2 CSS/source verification |
-| --- | ---: | ---: | --- |
-| Viewport | 1440 × 900 | 1440 × 900 | Required viewport retained |
-| Instrument bounds | 88–97% viewport width | x = 43.2, y = 209, w = 1353.6, h = 437.3 | `width: 94vw`; aspect ratio unchanged |
-| Width fraction | 0.88–0.97 | ≈ 0.94 | 0.94 |
-| Aspect ratio | 3.0951 | ≈ 3.095 | `3.0951 / 1` |
-| Deck / keybed | 54% / 46% | 54% / 46% | Grid rows remain 4.2 + 49.8 / 43.5 + 2.5 |
-| Section fractions | 13 / 21 / 15 / 9 / 21 / 21% | Matches | Hardware map unchanged |
-| Keys | 73 total; 43 white / 30 black | 73 / 43 / 30 | Model and regression tests pass |
-| Narrow viewport | 390 × 844 | Chassis 374.4×121 at x = 7.8; document width 390 | Instrument remains `96vw`, whole-surface scaling retained |
+- Master Level is now a functional accessible range input connected to master gain before the limiter.
+- Piano A and B expose enable/focus, independent level, octave ±12, SUSTPED, PSTICK, type/model, KB Touch, Dyn Comp, Timbre, Unison, Soft Release, and String Res feedback.
+- The Program OLED truthfully mirrors the focused live Piano model while every Program button remains decorative.
+- Layer Effects exposes Piano A/B focus, group mode, per-unit on/bypass, every required type, parameters, Delay/Compressor/Reverb global toggles, feedback filter, shared Rotary, and all-effects bypass.
+- Organ, Program, and Synth controls retain `data-functional="false"`; Piano, Layer Effects, and Master controls expose `data-functional="true"`.
+- UI sustain, Space, and MIDI CC64 share the same engine pedal lifecycle.
 
-## Interaction and console state
+## Audio graph pass
 
-- Deterministic UI tests exercise pointer/touch note velocity, mapped computer keys, visual pressed state, sustain, panic, contextual status, and inherited control interactions.
-- MIDI tests exercise connected routing, disconnection, permission denial, note velocity, note-on-zero, and sustain CC64 without physical hardware.
-- The parent browser toggled Sustain from off to on, clicked C4, observed `WHITE GRAND · 1 VOICE · SAMPLE PIANO READY`, then released sustain and used Panic. C4, Sustain, and Panic each resolved to one accessible button.
-- Fresh desktop and narrow passes reported no browser warnings or errors and no horizontal overflow. Live physical MIDI remained unavailable, so MIDI behavior is supported by the deterministic fake-device tests.
-- Production build, TypeScript, ESLint, and all deterministic tests pass; those checks reported no compile-time or test-runtime errors.
+The browser graph creates one lazy `AudioContext`. Both Piano sources enter independent ordered chains, converge only after layer level, and then pass through master gain and limiter to one destination. Reverb precedes optional Rotary. Delay repeats traverse the feedback filter on every loop. Audible gain/bypass/parameter changes use 18 ms ramps. Blur, visibility loss, MIDI disconnect, all-notes-off, layer disable, and unmount clean owned handles.
 
-## Three most visible remaining deviations
+Rendered-audio tests use deterministic signals and compare tolerant signal relationships rather than browser-specific exact waveforms. They cross the DSP boundary for all piano families, performance controls, every Mod 1/Mod 2/Amp/Reverb type, Delay filters, Compressor, bypass, dry/wet, order, Rotary routing, layer level, and Master Level.
 
-1. At 390 px, the complete hardware remains visible but legends and most control details are necessarily very small compared with a dedicated scroll/zoom inspection view.
-2. The DOM/CSS panel abstracts several physical legends and irregular control spacings; the Performance and Piano areas remain less mechanically exact than the primary photograph even though the measured silhouette and allocations match.
-3. Browser permission constraints prevent physical MIDI confirmation in automated evidence, although connection, denial, disconnection, note, velocity, and sustain messages are covered with fake-device tests.
+## Responsive and accessibility regression
+
+The inherited desktop width remains 94vw (maximum 1380 px), and narrow width remains 96vw. No new outer layout or fixed-width element was introduced. Functional controls reuse the inherited native button/range focus treatment and maintain unique IDs, accessible names, pressed/value feedback, and keyboard operation.
+
+## Known deviations
+
+- No redistributable acoustic-piano recordings were present in the isolated workspace. Grand, Upright, and Electric use audibly distinct generated multi-root/multi-velocity PCM banks and are explicitly labeled as generated, so the recorded-sample hard gate is not claimed.
+- The small Piano section necessarily compresses legends at the 390 px full-chassis view; keyboard focus and browser zoom remain the practical inspection path, as in Phase 1.
+- Canonical Phase 2 PNG/JSON captures are deferred to the required parent-owned capture harness at seal time.

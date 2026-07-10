@@ -1,0 +1,189 @@
+{
+  "rubricVersion": "3.1.0",
+  "runId": "gpt-5-6-luna-3",
+  "stage": 3,
+  "evaluator": "Claude independent evaluator",
+  "evaluatedAt": "2026-07-09T21:29:16Z",
+  "summary": "Phase 3 turns the whole instrument into one serializable state object (EngineState) driven by a single extended PianoAudioEngine. Verified at runtime (dist on 8753): pressing one key created exactly ONE AudioContext and 15 oscillators = piano A (4 harmonics) + organ A B3 (9 partials) + synth A (1 osc) + 1 LFO, alongside 2 convolvers / 2 delays / 6 waveshapers / 3 compressors, all feeding master -> limiter -> one destination. So all three engines share the single context and master path with no second AudioContext. Organ models use genuinely distinct partial banks (B3/Vox/Farf/Pipe, Farf on square) and drawbars multiply partial weights; key click is a real transient. Synth has real biquad filters, amp envelope, LFO routing (filter/pitch), and unison detune. The Program system implements 32 slots + 8 Live slots with Store/Store As naming, dirty 'E' indicator, load/discard, split zones (zoneAllows routes audio by note), two scenes, Wheel/Control-Pedal morph, transpose +/-6, master-clock tap, and Panic. HOWEVER significant completeness gaps remain: (1) Synth source CATEGORIES are not audibly distinct -- waveType() collapses Sync Saw / Multi Saw / Super Saw all to a plain sawtooth and FM 2-op to a sine, so Sync/Multi/Super/FM-H are renamed copies of one oscillator (fails the distinct-source hard gate for the synth). (2) The arpeggiator/gate is not implemented (no scheduler); voice modes (Mono/Legato), glide, and synth vibrato update state but produce no audio behavior. (3) Organ percussion (soft/fast/3rd), vibrato/chorus, and rotary are non-audible -- the rotary effect is never built in the engine at all. (4) Organ and Synth buses route input->level->master and BYPASS the effect chain entirely (effect units are built only for piano A/B), so inherited effects and rotary do not process organ/synth. (5) The Phase 2 parallel-dry-path gain-staging bug persists. (6) Morph destinations are hardcoded (wheel->piano A level, pedal->synth A filter) rather than assignable; scenes only toggle layer enables; split crossfade value is stored but not applied as an audible gain crossfade. Visually the desktop capture is dense but shows some label/control overlap in the Synth and Program areas, and the 390px narrow capture is noticeably crowded with overlapping controls. Console was clean (favicon 404 only). Honesty is well maintained: spec-excluded controls are disclosed in a UI details panel and no recorded-sample provenance is falsely claimed. Candidate tests remain DOM/aria assertions, not real audio-boundary tests, and App.tsx is written as extremely dense single-line components (maintainability concern).",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 2,
+          "evidence": [
+            "stage3-desktop.png retains the red chassis, six-section order, keybed, and Program/Synth OLEDs, but shows visible label/control overlap in the Synth footer (Puls/Saw/LP24 overlapping) and Program display area.",
+            "stage3-narrow.png (390x844) is heavily crowded: overlapping SUSTPED/drawbar labels, Program dial/buttons, 'STORE AS/SPLIT' and 'Grand Stack' text overflow -- a responsive regression versus the cleaner Phase 1 narrow layout.",
+            "Core geometry and inventory are preserved; the drift is in dense-control legibility."
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "rating": 3,
+          "evidence": [
+            "Programs, splits (SPLIT/points/crossfade), scenes I/II, Wheel/Ctrl-Pedal morph, Organ (models, 9 drawbars w/ LED ladders, perc, key click, vib, rotary), Synth (3 layers, category/waveform, filter, envelopes, LFO, voice/priority/unison/vibrato, arp/direction/range), and Effects all render coherent state from a single EngineState.",
+            "Program and Synth remain the only OLED displays; ON/OFF section chips and focus state shown.",
+            "Rendering is comprehensive but crowded (see referenceRetention)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 3,
+          "evidence": [
+            "createInitialEngineState builds 32 named programs + 8 Live slots; App.tsx load/store/scene handle selection, Store/Store As with NAME input + CONFIRM, dirty 'E' indicator, discard-on-load, and Live auto-store to the selected slot.",
+            "8 program buttons, PAGE left/right, dial, and LIST toggle present; round-trip via cloneProgramState/applyProgramState.",
+            "phase3.test.tsx exercises dirty state, Store toggle, Live Mode, Scene II.",
+            "Browsing is somewhat limited (dial maps within the current page of 8)."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 2,
+          "evidence": [
+            "Splits editable from SPLIT_POSITIONS list and audible via zoneAllows note routing; transpose +/-6 applied in noteOn; Panic clears voices and resets morph values; master clock tap/bpm present.",
+            "Gaps: morph destinations are hardcoded (wheel->layers.A.level, pedal->synthLayers.A.filterFreq), not user-assignable; scenes only toggle layer enable flags (no per-scene parameter state); split crossfade (0/6/12) is stored but not applied as an audible gain crossfade.",
+            "Master clock does not drive any arp (arp unimplemented)."
+          ]
+        },
+        {
+          "id": "organSystem",
+          "rating": 2,
+          "evidence": [
+            "Distinct engines: ORGAN_PARTIALS give B3/Vox/Farf/Pipe distinct partial weights; Farf uses square oscillators; drawbars multiply partial gains (real); keyClick renders a real 2.4kHz transient.",
+            "Two layers with enable/focus/level present.",
+            "Non-audible gaps: percussion + percussionSoft/Fast/Third have no audio effect in createOrgan; vibrato/chorus unused in audio; rotary toggle does nothing (no rotary node in the engine)."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 2,
+          "evidence": [
+            "Real: three layers, biquad filter per type (LP12/LP24/HP/BP), amp attack/release envelope, LFO to Filter Freq / Osc Pitch, unison detune, White Noise via BufferSource.",
+            "Category failure: waveType() maps Sync Saw/Multi Saw/Super Saw all to 'sawtooth' and FM 2-op to 'sine' -- Sync/Multi/Super/FM-H are not distinct synthesis methods (no hard sync, no supersaw stack unless unison>0, no FM).",
+            "Arpeggiator/Gate is not implemented (no scheduling in the engine); voiceMode Mono/Legato, glide, and vibrato update state but have no audio effect.",
+            "Osc/filter envelope stages (oscAttack/filterAttack etc.) are largely unused beyond the amp envelope."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 2,
+          "evidence": [
+            "Organ models verified distinct via ORGAN_PARTIALS arrays (B3 full harmonic set, Vox/Farf hollow/odd emphasis, Pipe rolloff) and Farf square wave.",
+            "Piano PROFILE and organ banks differ meaningfully; runtime showed 9 organ oscillators vs 4 piano.",
+            "Synth source families are NOT distinct: Sync/Multi/Super collapse to sawtooth and FM to sine (waveType), i.e. renamed copies of one oscillator -- fails the synth half of the distinct-source gate."
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "rating": 2,
+          "evidence": [
+            "Verified single AudioContext for piano+organ+synth (runtime probe: ctx=1) with master gain -> limiter -> one destination.",
+            "Per-section/layer buses (piano-A/B, organ-A/B, synth-A/B/C) all connect to master.",
+            "Effects units are built ONLY for piano A/B; organ and synth route input->level->master and bypass the inherited effect chain and rotary entirely -- so shared effects/targeting/Rotary do NOT apply to organ/synth.",
+            "Parallel-dry-path gain bug from Phase 2 persists in the piano chain."
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "rating": 3,
+          "evidence": [
+            "36-voice oldest-first stealing; releaseVoice disconnects with setTimeout; dispose closes context; limiter guards clipping; no console errors at runtime.",
+            "Split/layered play works; envelopes give click-free attacks/releases.",
+            "Quality caveat: default state enables piano+organ+synth layer A simultaneously, so a single key stacks three engines (dense/muddy default), and arp timing is absent."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "rating": 3,
+          "evidence": [
+            "ProgramState (EngineState minus programs/live/dirty/selected/store/liveMode/activeScene/morph/clock/transpose) is cloned on store and re-applied on load, restoring piano/organ/synth/effects/split/scenes/focus/levels/types.",
+            "applyProgramState deep-clones and merges; dirty reset on load.",
+            "Excluded from round-trip: morph assignments, master clock, and transpose are not saved per program."
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "rating": 2,
+          "evidence": [
+            "Most controls are bound to canonical EngineState and update display/state; spec-excluded controls (preset library, Extern/Aux KB, aftertouch morph, Num Pad, pattern editing, MIDI-out, Shift menus, pedal tap) are disclosed in a UI details panel.",
+            "But several non-excluded controls have UI state with NO audible behavior: synth arp/gate, voice modes, glide, synth vibrato; organ percussion, vibrato/chorus, rotary; split crossfade amount.",
+            "These are honest (not fake success) but fall short of the 'meaningful canonical AND audible behavior' requirement for required controls."
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "rating": 3,
+          "evidence": [
+            "Single EngineState + single engine unify layers, zones/splits, scenes, morphs, transpose, clock, focus, and displays; programs serialize the whole system.",
+            "Runtime confirmed one key drives piano+organ+synth together through one context.",
+            "Integration weakened by organ/synth bypassing the effect chain and arp being absent."
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "rating": 3,
+          "evidence": [
+            "Inherited Phase 1/2 behavior retained: keybed inputs, piano library, effect chain on piano, sustain/blur cleanup, single context; phase2.test.tsx and App.test.tsx carried forward.",
+            "Console clean at runtime (favicon 404 only); stage3-capture.json consoleMessages/pageErrors empty.",
+            "Minor regression: narrow (390px) layout is crowded with overlapping controls."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "architecture",
+          "rating": 3,
+          "evidence": [
+            "Canonical state ownership in EngineState; one-context routing; effect composition via UnitRuntime; serialization via clone/applyProgramState; proven extensible from Phase 2.",
+            "Weaknesses: organ/synth not integrated into the effect graph; no rotary node; platform APIs not injectable.",
+            "Engine boundaries (createTone/createOrgan/createSynth) are clear."
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "rating": 2,
+          "evidence": [
+            "phase3.test.tsx (37 lines), phase2.test.tsx, App.test.tsx assert only DOM/aria state; no real audio-boundary tests for engines/routing/bypass/cleanup.",
+            "App.tsx is written as extremely dense single-line components (each section a ~1-line function), which is hard to read/maintain.",
+            "Required-control coverage in tests is partial; many audio behaviors (arp, distinct synth categories) are untested and unimplemented."
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "rating": 3,
+          "evidence": [
+            "Runtime console clean; single AudioContext; 36-voice cap; releaseVoice/dispose cleanup; stable rendering at 1440 and 390.",
+            "Rapid integrated interaction (key + program/scene changes) stable in testing.",
+            "Default triple-engine stacking increases per-note voice/CPU load."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Distinct-source hard gate partially failed: synth Sync/Multi/Super categories all render as a plain sawtooth and FM 2-op as a sine (waveType collapses them) -- renamed copies of one oscillator; organ models are genuinely distinct.",
+    "Arpeggiator/Gate is unimplemented (no scheduler); synth voice modes (Mono/Legato), glide, and vibrato, and organ percussion/vibrato-chorus/rotary update state but produce no audible behavior.",
+    "Organ and Synth buses bypass the inherited effect chain and rotary entirely (effects built only for piano A/B), so shared effects/Rotary do not process organ/synth.",
+    "Performance systems are shallow: morph destinations hardcoded (not assignable), scenes only toggle layer enables, split crossfade stored but not audibly applied; morph/clock/transpose not saved per program.",
+    "Phase 2 parallel-dry-path gain-staging bug persists; narrow (390px) layout is crowded with overlapping controls; candidate tests assert DOM state only, not the audio backend."
+  ]
+}

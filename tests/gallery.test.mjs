@@ -4,7 +4,6 @@ import runs from '../src/data/runs.json' with { type: 'json' }
 import {
   clearViewerUrl,
   createViewerUrl,
-  floorScore,
   getAvailablePhases,
   getLatestPhase,
   getPreviewPath,
@@ -51,17 +50,22 @@ test('every runs.json entry conforms to the generated RunEntry projection', () =
   }
 })
 
-test('pre-v4 runs are frozen as legacy with their scores and static reports', () => {
-  const legacyRuns = runs.filter((run) => run.legacy)
-  assert.ok(legacyRuns.length >= 3, 'pre-v4 runs remain visible as legacy')
-  for (const run of legacyRuns) assert.equal(run.status, 'legacy')
+test('the registry keeps the current GPT-5.6 runs and drops superseded ones', () => {
+  const currentIds = [
+    'gpt-5-6-luna-3',
+    'gpt-5-6-luna-2',
+    'gpt-5-6-sol-high-2',
+    'gpt-5-6-terra-high',
+  ]
+  for (const id of currentIds) {
+    const run = byId(id)
+    assert.match(run.startedAt, /^2026-07-09T/)
+    assert.equal(run.legacy, false)
+  }
 
-  const complete = byId('gpt-5-6-sol-high')
-  assert.equal(complete.legacy, true)
-  assert.equal(complete.score, 58.8)
-  assert.equal(floorScore(complete.score), 58)
-  assert.equal(complete.reportPath, '/reports/gpt-5-6-sol-high/index.html')
-  assert.deepEqual(getAvailablePhases(complete), [1, 2, 3])
+  for (const id of ['gpt-5-6-luna', 'gpt-5-6-luna-high', 'gpt-5-6-sol-high']) {
+    assert.equal(runs.some((run) => run.id === id), false, `${id} should be removed`)
+  }
 
   const fable = byId('claude-fable-5')
   assert.equal(fable.legacy, false)
@@ -70,7 +74,7 @@ test('pre-v4 runs are frozen as legacy with their scores and static reports', ()
 })
 
 test('run metadata separates canonical model identity from display titles', () => {
-  const complete = byId('gpt-5-6-sol-high')
+  const complete = byId('gpt-5-6-sol-high-2')
   assert.equal(complete.model, 'gpt-5.6-sol-high')
   assert.equal(getRunTitle(complete), 'GPT 5.6 Sol High')
   assert.equal(getRunTitle(pianoOnly), 'Piano Only')

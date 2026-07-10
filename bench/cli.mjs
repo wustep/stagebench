@@ -22,6 +22,8 @@ import {
   recordTelemetry,
   registerEvaluation,
   reindexRegistry,
+  promoteRun,
+  renameRun,
   stageDirFor,
   stageState,
   statusSummary,
@@ -38,6 +40,8 @@ import { fetchReference } from './lib/fetch-reference.mjs'
 
 const COMMANDS = {
   new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--reasoning ...] [--notes ...]',
+  promote: 'promote <run-id> --to <clean-id> [--replace] — move a completed run to a canonical id',
+  rename: 'rename <run-id> --title "..." — update a run’s gallery title',
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
   exec: 'exec <run-id> --command "..." — run a command in the workspace inside Docker [--network none|registry] [--image ...]',
   seal: 'seal <run-id> — import, check, capture, verify, and seal the running phase [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N]',
@@ -53,6 +57,7 @@ const COMMANDS = {
 
 const TELEMETRY_FLAGS = {
   'cost-usd': 'costUsd',
+  'total-tokens': 'totalTokens',
   'input-tokens': 'inputTokens',
   'output-tokens': 'outputTokens',
   'reasoning-tokens': 'reasoningTokens',
@@ -237,6 +242,12 @@ try {
       result = createRun(root, options)
       await reindexRegistry(root)
       result = { id: result.id, targetPhase: result.targetPhase, selectedPhases: result.selectedPhases, next: `pnpm bench start ${result.id}` }
+    } else if (command === 'promote') {
+      result = promoteRun(root, id, options.to, { replace: options.replace === 'true' })
+      await reindexRegistry(root)
+    } else if (command === 'rename') {
+      result = renameRun(root, id, options.title)
+      await reindexRegistry(root)
     } else if (command === 'start') {
       result = startPhase(root, id)
       result.next = `Point the implementation agent at ${path.relative(root, result.workspace)}/WORKSPACE.md, then run pnpm bench seal ${id}`

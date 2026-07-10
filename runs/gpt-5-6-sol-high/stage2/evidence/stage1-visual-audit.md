@@ -1,59 +1,51 @@
 # Stage 1 visual audit
 
-## Reference contract
+## Sources and method
 
-| Measurement | Reference | Implemented contract |
-| --- | ---: | ---: |
-| Instrument aspect ratio | 3.0951:1 | 3.0951:1 |
-| Desktop width | 88–97% of 1440px | 94vw = 1353.6px target |
-| Control deck / keybed | 54% / 46% | 54% / 46% grid rows |
-| Performance / Organ / Piano / Program / Synth / Effects | 13 / 21 / 15 / 9 / 21 / 21% | 13 / 21 / 15 / 9 / 21 / 21 normalized fractions |
-| Keyboard | 73 total; 43 white, 30 black; E–E | 73 total; 43 white, 30 black; E1–E7 |
-| Black-key height | 61% | 61% |
+Audited against `nord-stage-4.visual.json`, `nord-stage-4.variants.json` (variant `stage-4-73`), and the normalized DOM/CSS geometry. The optional copyrighted reference image was not present in this isolated workspace, so no claim of pixel-level photo comparison is made. Canonical PNGs and `stage1-capture.json` are intentionally left to the parent-owned capture harness described by the benchmark protocol.
 
-The application renders one `.instrument[data-chassis]` element around the top rail, six inset panels, connected end cheeks, 73-key keyboard, and bottom rail. The supplied photograph is not loaded by the application and is not used as a texture, background, or overlay.
+## Measured geometry
 
-## Control inventory and dominant color check
+| Property | Desktop 1440×900 | Narrow 390×844 | Target |
+| --- | ---: | ---: | --- |
+| Instrument width | 1353.6 px (94.0vw) | 374.4 px (96.0vw) | Desktop 88–97%; narrow unclipped |
+| Instrument height | 437.3 px | 121.0 px | 3.0951:1 variant aspect |
+| Instrument aspect ratio | 3.0951:1 | 3.0951:1 | 3.0951:1 |
+| Deck including top rail | 54% | 54% | 54% ±2.5% |
+| Keybed including front lip | 46% | 46% | 46% ±2.5% |
 
-- Six ordered panels are rendered from the normalized hardware map with 132 stable control IDs.
-- Dominant colors follow the measured reference: mid-red `#79232c`, dark red `#721f29` family, blue-gray panels `#3c424d`, black keys `#0b0b0b`, and warm white keys near `#dcdcdc`.
-- Material accents include black rotary caps with white indices, mixed fader caps, silver/gray switches, red LEDs, green/yellow level meters, blue-green OLEDs, and fine white legends.
-- Density is intentionally asymmetric: sparse wheels and performance area; nine-drawbar Organ bank; selector-heavy Piano; central Program display/keypad; multi-column Synth; dense effects matrix.
+The instrument and utility UI fit inside both required viewports with no horizontal or vertical document overflow. The narrow layout scales the complete chassis to the viewport instead of clipping or hiding sections.
 
-## Screenshot pass 1 — desktop structural comparison
+## Section audit
 
-Parent browser measurement at **1440×900**: chassis **1353.6×437.3px** (**3.095:1**), control deck **215.8px**, keyboard region **186px**, **43 white / 30 black** keys, and no horizontal or vertical overflow. The measured geometry, allocation, and key model match the reference contract.
+The six sections render in required order on one continuous red chassis. Corrected photo-measured fractions from visual spec v1.2 are used: Performance 14%, Organ 20%, Piano 8.5%, Program/Morph 12.5%, Synth 25%, Layer Effects 20%. These sum to 100%.
 
-Preflight corrections already applied before capture:
+- Performance: exposed red deck, Nord Stage 4 branding, master/monitor knobs, pitch stick, and modulation wheel; no OLED.
+- Organ: dark inset, nine physical drawbars with red LED ladders, two layer faders, model/percussion/vibrato/rotary groups; no OLED.
+- Piano: dark inset, two layer faders, six type selectors, model encoder, timbre and piano-detail controls; no OLED.
+- Program/Morph: one blue-green primary OLED, large value dial, eight program buttons, page/live/scene/store/split/morph controls.
+- Synth: one blue-green primary OLED and non-uniform oscillator, filter/LFO, envelope, arp/voice groups with three layer faders.
+- Layer Effects: focus row and distinct Mod 1, Mod 2, Amp/EQ, Delay, Compressor, and Reverb blocks; no OLED.
 
-1. Replaced equal-width generic panel columns with the measured six-section fractions.
-2. Consolidated previously separate-looking frame pieces into one continuous red chassis with inset control plates and connected end cheeks.
-3. Corrected the keyboard to the full 73-key E1–E7 model and tied every black-key position to the 43-white-key geometry.
+Exactly two elements carry `data-primary-oled`: Program and Synth.
 
-## Screenshot pass 2 — corrected desktop
+## Keybed and interaction audit
 
-Required final file: `evidence/stage1-desktop.png` at **1440×900**.
+- 73 keys, MIDI 28–100, E1–E7 inclusive.
+- 43 white keys and 30 black keys; black keys are 61% of white-key height.
+- All 73 key buttons expose note-specific accessible names and pressed state.
+- 129 normalized panel inputs expose stable IDs, accessible names, native button/range keyboard behavior, visible focus, and visual state changes.
+- Panel inputs are marked `data-functional="false"` and remain isolated from the piano engine.
 
-The second-pass code correction keeps the measured geometry fixed and addresses the three largest remaining reference mismatches:
+## Corrections made during audit
 
-1. **Performance material:** removed the full slate-panel treatment from Performance. Its vertical pitch/mod hardware, master controls, and Nord Stage 4 logo now sit directly on exposed muted red chassis metal, as in the photograph.
-2. **Chassis separation:** increased the red reveal between all six control sections and reinforced the surrounding red deck shading so the inset plates no longer read as one continuous charcoal slab.
-3. **Top framing:** strengthened the red top rail with brighter upper metal, a darker lower seam, and more physical highlight/shadow depth while retaining the same 4.2% rail row and overall 54/46 allocation.
+- Used the visual spec's corrected 14/20/8.5/12.5/25/20 section geometry instead of the obsolete coarse fractions repeated in the phase outcome prose.
+- Kept primary OLEDs out of Performance, Organ, Piano, and Effects.
+- Used the exact HA73 silhouette and key range rather than reusing an 88-key or waterfall model.
+- Added explicit status copy for modeled synthesis, audio startup/failure fallback, and MIDI unsupported/denied/disconnected states.
 
-The browser-enabled parent captured the final pass at **1440×900**. The chassis measured **1353.1×437.2px** (**3.095:1**) at `x=43.4`, the control deck measured **215.7px**, and the keyboard region measured **185.9px**. The document remained exactly **1440px** wide with no overflow, all **43 white / 30 black** keys were present, and the browser reported no warnings or errors. Final evidence: `evidence/stage1-desktop.png`. The first comparison pass is retained as `evidence/stage1-desktop-pass1.png`.
+## Known deviations
 
-## Narrow verification
-
-Required final file: `evidence/stage1-narrow.png` at **390×844**.
-
-The browser-enabled parent captured the narrow pass at **390×844**. The chassis measured **374.4×121px** at `x=7.8`, the control deck measured **59.2px**, and the keyboard measured **353.8×51.2px**. The document and viewport both measured **390px** wide, so the complete chassis and all 73 keys remained within the viewport without horizontal overflow. The compact status line remained below the instrument and the browser reported no warnings or errors. Final evidence: `evidence/stage1-narrow.png`.
-
-## Remaining visible deviations
-
-1. Browser text cannot match the manufacturer’s proprietary panel lettering exactly; the recreation uses condensed locally available fallbacks.
-2. Fine jack labels on the rear/top rail are simplified because they are barely visible in the source top-down photograph.
-3. Some tiny legends consolidate multi-line manufacturer copy, while control group, type, relative scale, material, and interaction remain represented.
-
-## Console and interaction state
-
-Automated component tests cover key press/release, button/LED state, knob pointer and keyboard changes, clamping, semantic roles, focusability, stable panel models, exact key counts, and chassis continuity. The parent browser pass confirmed a clean warning/error console at desktop and narrow widths and an accessibility tree containing named buttons and sliders for the hardware surface.
+- The source reference photograph was not supplied in `inputs/reference/`, so typography and sub-control positions are reconstructed from the machine-readable landmarks rather than traced from the photo.
+- The Phase 1 voice is honest live synthesis, not a recorded Nord piano sample. Recorded multi-model sets are Phase 2 scope.
+- At 390 px the complete instrument remains visible and focusable, but legends are necessarily very small; browser zoom or focus navigation is the practical inspection path.
