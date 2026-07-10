@@ -2,23 +2,30 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import test from 'node:test'
-import { readJson, writeJson } from '../bench/lib/shared.mjs'
+import test, { after } from 'node:test'
+import { blindRunCode, hashTree, readJson, workspaceRoot, writeJson } from '../bench/lib/shared.mjs'
 import { createRun, loadRun, markSealed, promoteRun, recordTelemetry, registerEvaluation, registryEntry, reindexRegistry, statusSummary } from '../bench/lib/run/store.mjs'
 import { exportRun, __internals as exportInternals } from '../bench/lib/run/export.mjs'
 import { importWorkspace, startPhase } from '../bench/lib/run/workspace.mjs'
 import { REQUIRED_FEATURES, runChecks, verifyPhase } from '../bench/lib/run/verify.mjs'
 import { loadRubric } from '../bench/lib/eval/evaluate.mjs'
-import { aggregateStageEvaluations, createAssessmentTemplate, scoreAssessment } from '../bench/lib/eval/scoring.mjs'
+import { createEvalWorkspace, removeEvalWorkspace } from '../bench/lib/eval/workspace.mjs'
+import { aggregateStageEvaluations, createAssessmentTemplate, mergeAssessments, scoreAssessment } from '../bench/lib/eval/scoring.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from '../bench/lib/eval/report.mjs'
 import { collectImplementationDetails, validateImplementationManifest } from '../bench/lib/implementation-details.mjs'
 
 const sourceRoot = path.resolve(import.meta.dirname, '..')
 
+// Transient workspaces live outside the repo under STAGEBENCH_HOME; point it at
+// a temp dir so tests never touch the real ~/.stagebench and clean up after.
+const homeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-home-'))
+process.env.STAGEBENCH_HOME = homeRoot
+after(() => fs.rmSync(homeRoot, { recursive: true, force: true }))
+
 function fixtureRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-bench-'))
   for (const relative of [
-    'BENCHMARK.md', 'package.json',
+    'BENCHMARK.md', 'TASK.md', 'package.json',
     'specs/benchmark-phases.json', 'specs/nord-stage-4.variants.json', 'specs/nord-stage-4.visual.json', 'specs/nord-stage-4.piano.json',
     'prompts/stage1.md',
     'bench/schemas/implementation-details.schema.json',
@@ -86,6 +93,21 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     assert.ok(fs.existsSync(path.join(started.inputs, 'prompts/stage1.md')))
     assert.ok(!fs.existsSync(path.join(started.inputs, 'prompts/stage2.md')), 'future prompts must be absent')
     assert.ok(!fs.existsSync(path.join(started.workspace, 'runs')), 'other solutions must be absent')
+    assert.ok(!fs.existsSync(path.join(started.inputs, 'BENCHMARK.md')), 'harness and scoring docs must be absent')
+    const task = fs.readFileSync(path.join(started.inputs, 'TASK.md'), 'utf8')
+    assert.match(task, /`piano\.basic-note-lifecycle`/, 'current-phase feature IDs are present')
+    assert.doesNotMatch(task, /piano\.instrument-library/, 'future-phase feature IDs are filtered out')
+    assert.doesNotMatch(task, /stagebench:phase/, 'filter markers are stripped')
+    const workspaceManifest = readJson(path.join(started.inputs, 'specs/benchmark-phases.json'))
+    assert.deepEqual(workspaceManifest.phases.map((entry) => entry.number), [1], 'future phase contracts are filtered out')
+    assert.equal('selection' in workspaceManifest, false, 'harness bookkeeping is dropped')
+    const workspaceVariants = readJson(path.join(started.inputs, 'specs/nord-stage-4.variants.json'))
+    assert.deepEqual(workspaceVariants.variants.map((entry) => entry.id), ['stage-4-73'], 'only the assigned variant is included')
+    assert.equal(workspaceManifest.defaultVariant, 'stage-4-73', 'projected defaultVariant names a variant the candidate can see')
+    // Workspaces live outside the repo tree so a candidate cannot reach runs/
+    // or other solutions with a relative ../..
+    assert.ok(!started.workspace.startsWith(`${root}${path.sep}`), 'the implementation workspace is outside the repo')
+    assert.ok(started.workspace.startsWith(`${homeRoot}${path.sep}`), 'the workspace lives under STAGEBENCH_HOME')
     assert.equal(loadRun(root, created.id).stages[0].status, 'running')
     assert.match(statusSummary(loadRun(root, created.id)).next, /seal/)
 
@@ -133,9 +155,33 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     assert.throws(() => markSealed(root, created.id, 1, verification), /must be running/)
     fs.rmSync(path.join(stageDir, 'tampered.txt'))
 
-    // score: template → filled assessment → deterministic score, no grades
+    // score: isolated evaluator workspace → filled assessment → deterministic
+    // score, no grades
     const rubric = loadRubric()
-    const assessment = createAssessmentTemplate(rubric, created.id, 1)
+    const evalWorkspace = createEvalWorkspace(root, {
+      id: created.id,
+      phase: 1,
+      variantId: 'stage-4-73',
+      stageDir,
+      verificationPath: path.join(root, 'runs', created.id, 'verifications', 'stage1.json'),
+      expectedDigest: verification.artifactDigest,
+      rubric,
+    })
+    assert.ok(fs.existsSync(path.join(evalWorkspace.artifact, 'package.json')), 'the evaluator gets a copy of the sealed artifact')
+    assert.ok(fs.existsSync(path.join(evalWorkspace.artifact, 'dist', 'index.html')), 'the built app is included')
+    assert.ok(fs.existsSync(path.join(evalWorkspace.workspace, 'EVAL.md')), 'evaluator instructions are included')
+    assert.ok(fs.existsSync(path.join(evalWorkspace.inputs, 'rubric.json')), 'the rubric is scoped to the evaluator, not the candidate')
+    assert.ok(fs.existsSync(path.join(evalWorkspace.inputs, 'verification.json')), 'the sealed verification record is included')
+    assert.doesNotMatch(fs.readFileSync(path.join(evalWorkspace.inputs, 'TASK.md'), 'utf8'), /piano\.instrument-library/, 'the evaluator task is filtered to the scored phase')
+    // Isolation + blinding: the evaluator workspace is outside the repo and its
+    // path carries the blind handle, not the model id.
+    assert.ok(!evalWorkspace.workspace.startsWith(`${root}${path.sep}`), 'the evaluator workspace is outside the repo')
+    assert.equal(evalWorkspace.blindId, blindRunCode(created.id))
+    assert.ok(!evalWorkspace.workspace.includes(created.id), 'the model id is not printed in the evaluator path')
+    assert.ok(fs.readFileSync(path.join(evalWorkspace.workspace, 'EVAL.md'), 'utf8').includes('blind'), 'EVAL.md states the evaluation is blind')
+    assert.equal(readJson(evalWorkspace.assessment).runId, blindRunCode(created.id), 'the template is identified by the blind handle')
+
+    const assessment = readJson(evalWorkspace.assessment)
     assessment.evaluator = 'Fixture evaluator'
     assessment.evaluatedAt = '2026-01-02T00:00:00.000Z'
     assessment.summary = 'Synthetic assessment for the pipeline test.'
@@ -161,6 +207,8 @@ test('a run flows new → start → seal → score with sealed digests and a sco
       path: `runs/${created.id}/evaluations/stage1.json`, reportPath: `${aggregate.reportPath}#stage-1`,
       categoryScores: {},
     }, aggregate)
+    removeEvalWorkspace(root, created.id, 1)
+    assert.ok(!fs.existsSync(evalWorkspace.workspace), 'the evaluator workspace is removed after registration')
 
     // reports render scores without grade labels
     const scoredRun = loadRun(root, created.id)
@@ -267,6 +315,68 @@ test('promote replaces an obsolete run and preserves sealed stage contents', asy
   }
 })
 
+test('the evaluator workspace rejects a sealed artifact whose digest drifted', () => {
+  const root = fixtureRoot()
+  try {
+    const created = createRun(root, { model: 'Digest Fixture', target: '1' })
+    const stageDir = path.join(root, 'runs', created.id, 'stage1')
+    fs.mkdirSync(stageDir, { recursive: true })
+    fs.writeFileSync(path.join(stageDir, 'index.html'), '<h1>sealed</h1>')
+    const rubric = loadRubric()
+    // The wrong digest is caught before any template is written.
+    assert.throws(() => createEvalWorkspace(root, {
+      id: created.id, phase: 1, variantId: 'stage-4-73', stageDir, rubric,
+      expectedDigest: '0'.repeat(64),
+    }), /changed since sealing/)
+    // The matching digest builds the workspace out of the repo under the blind handle.
+    const built = createEvalWorkspace(root, {
+      id: created.id, phase: 1, variantId: 'stage-4-73', stageDir, rubric,
+      expectedDigest: hashTree(stageDir).digest,
+    })
+    assert.ok(built.workspace.startsWith(`${workspaceRoot(root, 'eval')}${path.sep}`))
+    assert.ok(built.workspace.includes(blindRunCode(created.id)))
+    removeEvalWorkspace(root, created.id, 1)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a panel merges to the per-criterion median rating with unioned evidence', () => {
+  const rubric = loadRubric()
+  const make = (evaluator, rating) => {
+    const template = createAssessmentTemplate(rubric, 'run-blind', 1)
+    template.evaluator = evaluator
+    template.evaluatedAt = '2026-01-02T00:00:00.000Z'
+    template.summary = `Summary from ${evaluator}.`
+    for (const category of template.categories) {
+      for (const criterion of category.criteria) {
+        criterion.rating = rating
+        criterion.evidence = [`${evaluator} saw rating ${rating}`]
+      }
+    }
+    return template
+  }
+
+  // A single-evaluator panel is a passthrough.
+  const solo = mergeAssessments(rubric, [make('Solo', 3)])
+  assert.equal(solo.evaluator, 'Solo')
+
+  // Odd panel: median of {1,3,4} is 3.
+  const merged = mergeAssessments(rubric, [make('A', 1), make('B', 3), make('C', 4)])
+  for (const category of merged.categories) {
+    for (const criterion of category.criteria) {
+      assert.equal(criterion.rating, 3, `${category.id}.${criterion.id} takes the median`)
+      assert.equal(criterion.evidence.length, 3, 'evidence from every evaluator is retained')
+      assert.ok(criterion.evidence.every((item) => /^\[(A|B|C)\]/.test(item)), 'evidence is attributed')
+    }
+  }
+  assert.match(merged.evaluator, /Panel median of 3/)
+  assert.equal(merged.panel.length, 3)
+  // The merged assessment scores like any other and is deterministic.
+  const evaluation = scoreAssessment(rubric, { ...merged, runId: 'real-run' }, [{ id: 'build', passed: true }])
+  assert.equal(evaluation.score, 75)
+})
+
 test('implementation manifest validation rejects dishonest or malformed declarations', () => {
   assert.throws(() => validateImplementationManifest({ version: 1, phase: 2, audio: { strategy: 'x', sampleSources: [] } }, 1), /phase must be 1/)
   assert.throws(() => validateImplementationManifest({ version: 1, phase: 1, audio: { strategy: '', sampleSources: [] } }, 1), /strategy/)
@@ -310,7 +420,7 @@ test('export bundles run artifacts into a valid ZIP and never includes reference
     fs.mkdirSync(path.join(runDir, 'evaluations'), { recursive: true })
     writeJson(path.join(runDir, 'run.json'), {
       schemaVersion: 4, id: runId, model: 'export-model', title: 'Export Fixture',
-      protocol: { version: '3.1.0' }, status: 'complete', startedAt: '2026-07-02T00:00:00.000Z',
+      protocol: { version: '1.0.0' }, status: 'complete', startedAt: '2026-07-02T00:00:00.000Z',
       updatedAt: '2026-07-02T00:00:00.000Z', stages: [{ number: 1, status: 'complete' }],
     })
     fs.writeFileSync(path.join(runDir, 'evaluations', 'report.md'), '# Report\n')
@@ -348,7 +458,7 @@ test('export bundles run artifacts into a valid ZIP and never includes reference
     // Manifest records identity and protocol version.
     const manifest = JSON.parse(zip[`${runId}/manifest.json`].data.toString())
     assert.equal(manifest.runId, runId)
-    assert.equal(manifest.protocolVersion, '3.1.0')
+    assert.equal(manifest.protocolVersion, '1.0.0')
     assert.ok(typeof manifest.exportedAt === 'string')
 
     // An unknown run id fails loudly rather than producing an empty archive.

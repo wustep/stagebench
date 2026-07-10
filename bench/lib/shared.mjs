@@ -1,8 +1,36 @@
 // Small utilities shared by the run and eval sides of the bench CLI.
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+
+// Transient workspaces (implementation candidates, evaluator copies, gate
+// scratch) live OUTSIDE the repository tree so a candidate or evaluator agent
+// cannot reach runs/, showcase/, or other solutions with a relative `../..`.
+// The base defaults to ~/.stagebench and is overridable (tests point it at a
+// temp dir). Keyed by the repo's absolute path so multiple checkouts do not
+// collide.
+export function stagebenchHome() {
+  return process.env.STAGEBENCH_HOME || path.join(os.homedir(), '.stagebench')
+}
+
+export function repoKey(root) {
+  const absolute = path.resolve(root)
+  return `${path.basename(absolute)}-${sha256(absolute).slice(0, 8)}`
+}
+
+// Base directory for a class of transient workspace ('work', 'eval', 'gates').
+export function workspaceRoot(root, kind) {
+  return path.join(stagebenchHome(), repoKey(root), kind)
+}
+
+// Stable, non-reversible handle for a run used as its evaluator directory
+// name, so the model identity (the run id) is not printed in the path the
+// evaluator works in. Deterministic so the two `score` calls agree.
+export function blindRunCode(id) {
+  return `run-${sha256(`stagebench-eval:${id}`).slice(0, 12)}`
+}
 
 // Async replacement for spawnSync that streams the child's output as progress
 // while still collecting it, enforces a timeout by sending SIGTERM (then

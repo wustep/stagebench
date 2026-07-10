@@ -1,0 +1,201 @@
+{
+  "rubricVersion": "1.0.0",
+  "runId": "grok-4-5",
+  "stage": 3,
+  "evaluator": "Opus 4.8 evaluator",
+  "evaluatedAt": "2026-07-10T06:56:07Z",
+  "summary": "A genuinely comprehensive Phase 3 that turns the whole instrument on: a full 32-slot + 8-Live program system with store/store-as/dirty/edit-discard/pages/dial/list, splits (11 positions, up to 4 zones, crossfades), scenes I/II, Wheel/Control-Pedal morphs, master clock/tap/transpose/Panic, a four-model organ (B3/Vox/Farf/Pipe1 with per-model harmonic weights, nine drawbars, percussion, key-click, vibrato/chorus, rotary), and a three-layer analog synth (Pure/Sync/Multi/Super/FM-H with category-correct topologies, LP12/LP24/HP/BP filters, amp+filter envelopes, LFO, poly/mono/legato/glide/unison/vibrato, deterministic arp order). All engines share one AudioContext through per-engine buses, ordered effect chains, a shared rotary, and a master gain+limiter into a single destination — structurally verified (contexts.length===1). Nearly every control is bound and the spec-excluded controls are honestly listed as unsupported, and IMPLEMENTATION_DETAILS.json truthfully labels the baked PCM sample sets, live synthesis, and generated impulses. The dominant weakness is test rigor: every audio test runs against a mock AudioContext (jsdom, no OfflineAudioContext), so 'audible' claims are proven only through synthetic signature/energy proxies (organModelSignature hardcoded class offsets, waveformSignature category-id hashes, analytic measureEnergy fallback) rather than rendered spectra at a real Web Audio boundary — exactly the state-only-with-fakes pattern the task deems insufficient for audible behavior. Secondary gaps: the arpeggiator computes deterministic step order but is not actually time-scheduled to play, the oscillator (pitch) envelope is stored but not applied to audio, perf-pitch-stick is classed functional yet has no binding (silent no-op), Store-As shortcuts interactive naming, and the desktop capture shows the Program/Synth sections' bottom controls clipped with some label overlap.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 3,
+          "evidence": [
+            "evidence/stage3-desktop.png (1440x900): continuous red chassis, keybed, all six labeled sections (PERFORMANCE CONTROLS, ORGAN, PIANO, PROGRAM AND MORPH, SYNTH, LAYER EFFECTS), NORD STAGE 4 branding, drawbar LED graphs, Program OLED ('1.1 Concert Grand'), Synth OLED ('Saw'), and an honesty footer listing spec-excluded controls.",
+            "evidence/stage3-narrow.png (390x844): full chassis and all six sections retained (compressed, not reflowed), keybed intact, no horizontal overflow, status line + honesty footer present.",
+            "Fidelity gaps: in the desktop capture the Program section (scene/store row) and Synth section bottom controls are clipped by the deck's lower edge, and some effect knob labels overlap ('Mod 2 Rate Mod 2 Amou...', 'Delay Feedb.. Delay Mix').",
+            "evidence/stage3-visual-audit.md documents 73 keys (E1-E7), 54/46 deck/keybed split, and six sections at documented fractional widths (inherited from Phase 1-2)."
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "rating": 3,
+          "evidence": [
+            "src/state/control-bindings.ts drives hardwareStore.setValue for exclusive LED groups: organ model buttons (b3/vox/farf/pipe), synth voice-mode (poly/mono/legato), FX focus buttons (syncFxFocusButtons), program buttons 1-8, scene 1/2.",
+            "Program OLED shows page.button + name + dirty 'E' (program-store.ts displayLabel); Synth OLED shows waveform name; drawbars present live 0-8 values as LED graphs (visible in stage3-desktop.png).",
+            "Splits/scenes/morphs/rotary/percussion state all flow through engine setters that update section state reflected in the panel; focus state updates layer/FX focus LEDs.",
+            "No live browser run was performed, so LED/OLED updates were confirmed by binding-code and static capture rather than interactive observation."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 3,
+          "evidence": [
+            "src/state/program-store.ts implements 32 slots (4 pages x 8), selectProgram/pageUp/pageDown/dialBrowse, numeric list view (setListView/displayLabel), two-press Store (storePress/confirmStore), Store As with naming (storeAsPress/setStoreName), truthful dirty flag ('E'), edit-discard on program change (loadSlot resets working+baseline), and 8 auto-storing Live slots (markDirty in liveMode).",
+            "tests/programs-roundtrip.test.ts, programs-navigation.test.ts, programs-store-live.test.ts, programs-undo-cancel.test.ts all present and pass (part of 121 passing tests).",
+            "Gap: control-bindings program-store-as immediately confirms with the current name (storeAsPress -> setStoreName(currentName) -> confirmStore) rather than exposing interactive keystroke naming; and most factory slots beyond 0-7 are named placeholders (visual audit)."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 3,
+          "evidence": [
+            "Splits: SPLIT_POSITIONS length 11 (splits-zones.test.ts), resolveZoneBounds yields up to 4 zones from 3 editable points, crossfade Off/6/12 via layerZoneGain; note routing across piano/organ/synth uses layerZoneGain in piano-engine.ts noteOn.",
+            "Scenes I/II toggle only layer-enable masks without cloning sound params (program-store.ts setScene/captureSceneEnables; scenes-switching.test.ts verifies params preserved).",
+            "Morphs: beginMorphAssign/assignMorph/clearMorph for Wheel and Control Pedal, interpolateMorph linear blend, zero-range assignment auto-removed (program-store.ts).",
+            "Master clock (setMasterClock 30-300 + tapTempo), transpose (+/-6, applied as playMidi offset in noteOn), Panic (engine.panic clears voices + sustain).",
+            "Gaps: engine.applyMorphValues only interpolates a limited set of numeric paths (piano/organ/synth levels, synth filterFreq/lfoRate/oscCtrl, organ drawbars); layerZoneGain crossfade logic has redundant/overlapping branches."
+          ]
+        },
+        {
+          "id": "organSystem",
+          "rating": 3,
+          "evidence": [
+            "src/model/organ-types.ts modelHarmonicWeights returns genuinely different vectors per model (B3 [1,0.7,0.9,...] vs Pipe1 [0.85,0.4,1,...] vs Vox [0.9,0.5,0.8,...] vs Farf [1,1,1,0,0.9,0,...]); src/audio/organ-engine.ts sets distinct osc types (Vox square/saw, Farf square, Pipe/B3 sine).",
+            "Nine drawbars via effectiveDrawbars (Farf treated as on/off registers >=0.5; B3 Bass limited to 16'/8'); percussion on/soft/fast/third as single-trigger B3-only (percArmed); key click for B3/Vox; vibrato/chorus C1-C3/V1-V3 via detune LFO (vibratoDepth).",
+            "Two layers share one organ effect chain (chainOrgan) into master; rotary slow/fast/stop with morphable level; focus + octave shift bound.",
+            "tests/organ-engine.test.ts, organ-models-drawbars.test.ts, organ-rotary.test.ts pass; however B3/Vox/Farf/Pipe distinctness is asserted only via organModelSignature (hardcoded per-model class offsets B3=1/Vox=2.5/Farf=4/Pipe=3.2), not rendered audio."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 3,
+          "evidence": [
+            "src/audio/synth-engine.ts builds category-correct topologies: Sync (hard-sync ratio second osc), Multi (detuned saws + octave), Super (5-osc spread), FM-H (2-op FM modG->carrier.frequency), Pure (osc + pulse approximation); three independent layers A/B/C with own buses/chains.",
+            "Filters LP12/LP24/HP/BP with kb tracking (cutoffHz/kbTrackAmount), resonance (Q), drive; amp + filter envelopes applied via real param automation; LFO with 5 waves, 3 destinations (Osc Pitch/Filter Freq/Osc Ctrl), clock sync (lfoRateHz); poly/mono/legato with voice stealing + glide, unison spread, vibrato On/Wheel.",
+            "arpSteps is a genuinely deterministic pure function (Up/Down/Up-Down/seeded-Random, range octaves), tested in synth-arp-gate.test.ts.",
+            "Gaps: the oscillator (pitch) envelope oscEnv is stored and round-tripped but not applied to audio in spawnSynthVoice; the arpeggiator only computes step order and stores run/hold/rate state — there is no real-time note scheduler that actually plays the arp (acknowledged in stage3-visual-audit.md 'live scheduling is state-level')."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 3,
+          "evidence": [
+            "Code inspection confirms genuinely distinct node graphs, not renamed generic oscillators: organ models differ by harmonic-weight vectors and osc waveform (organ-types.ts modelHarmonicWeights, organ-engine.ts), synth categories differ by real FM/hard-sync/multi-detune/super-spread construction (synth-engine.ts spawnSynthVoice).",
+            "Weakness: distinctness is never exercised/measured at a real audio boundary. Tests assert distinctness via synthetic constants — organModelSignature (hardcoded class offsets) and waveformSignature (categoryId + string char/length hashes) — which would pass even if all engines rendered identically (organ-models-drawbars.test.ts asserts only sig[i][0] != sig[j][0]; synth-sources.test.ts likewise).",
+            "measureEnergy's OfflineAudioContext render path is dead in the jsdom test env, so effect/type energy tests run the analytic string-hash proxy instead of real rendering (piano-engine.ts lines 1285-1332)."
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "rating": 4,
+          "evidence": [
+            "src/audio/piano-engine.ts buildGraph creates exactly one AudioContext and wires per-engine buses -> ordered effect chains (createChain: Mod1->Mod2->Delay->Amp/EQ->Comp->Reverb) -> layer levels; organ buses (A/B) share chainOrgan; three synth buses feed chainSynthA/B/C.",
+            "A single shared rotary instance is fed by every chain's toRotary tap; all chains + rotaryMix converge on master -> limiter (DynamicsCompressor, threshold -3, ratio 12) -> ctx.destination (one destination).",
+            "tests/system-integration.test.ts asserts contexts.length===1 after init with all three sections active, and getGraphInfo reports hasMaster/hasLimiter/singleContext true; organ-engine.test.ts asserts a single context and shared organ chain.",
+            "Organ and Synth explicitly route through the inherited Phase-2 graph with no separate AudioContext, satisfying the hard gate."
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "rating": 3,
+          "evidence": [
+            "Voice management: piano maxPolyphony 48 with oldest-voice stealing; mono/legato synth steals prior layer voice; release uses scheduled amp ramps then setTimeout stop/disconnect (organ/synth/piano stop functions disconnect all nodes).",
+            "Cleanup to baseline is proven: allNotesOff/panic clear voices+organVoices+synthVoices maps and held/sustained sets, resetOrganPercussion; system-integration.test.ts confirms getTotalVoiceCount()===0 after panic.",
+            "Gaps: arp is not time-scheduled so rhythmic/latency behavior cannot be exercised; musical quality, clicks, clipping, and CPU stability could not be measured (no live audio render — jsdom mocks only). Per-note piano synthesizeBuffer (1.4s) is moderate but unmeasured under load."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "rating": 4,
+          "evidence": [
+            "captureProgramSound/applyProgramSound + cloneProgramSound serialize and restore piano, organ, synth, effects (chains), split, scenes, morph, masterClockBpm/kbSync, and transpose (piano-engine.ts, program-types.ts).",
+            "tests/programs-roundtrip.test.ts writes custom piano type, organ model+drawbars, synth waveform+filter, reverb mix, split point+crossfade, morph assignment, BPM 140, transpose 3 into a slot, selects away, reloads, and asserts every field restores; a second test round-trips through the engine (applyProgramSound -> captureProgramSound -> store -> reload) for organ model B3.",
+            "Master Level is intentionally excluded from program state and this is truthfully documented in IMPLEMENTATION_DETAILS.json notes.",
+            "Section focus fields (piano.focus/organ.focus/synth.focus/effects.layerFocus) are part of the cloned state and thus restore; display labels derive from restored state."
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "rating": 3,
+          "evidence": [
+            "src/state/control-bindings.ts binds nearly all piano/organ/synth/program/effects/performance controls (continuous applyControlToEngine + button applyButtonToEngine ladders); isFunctionalControl + UNSUPPORTED_CONTROLS (program-morph-aft, perf-hold, perf-mono) enforce the honesty boundary.",
+            "tests/hardware-bindings.test.ts verifies non-excluded piano/organ/synth/program/effects controls are functional and each unsupported id both exists in CONTROLS (src/model/hardware.ts) and returns isFunctionalControl false.",
+            "Honesty gap: perf-pitch-stick is classified functional (isFunctionalControl returns true, in FUNCTIONAL_PREFIXES) but has NO handler in applyControlToEngine — pitch bend is a silent no-op that is not listed as unsupported. program-dial and synth-osc-shape also have partial/proxy handling.",
+            "The bindings audit test checks categorization only, not that each control produces measurable audible change."
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "rating": 3,
+          "evidence": [
+            "tests/system-integration.test.ts exercises a combined flow: select a split factory program, apply to engine, switch Scene II, assign a Wheel morph and interpolate, set master clock 128 + transpose 2 — all against one engine/context.",
+            "noteOn dispatches to piano+organ+synth simultaneously with per-layer layerZoneGain split routing and shared transpose offset (piano-engine.ts), so engines truly play as one system.",
+            "Cross-system state (programs/scenes/zones/morphs/clock/focus) is centralized in ProgramSoundState and applied through applyProgramSound.",
+            "Full cross-system audible interaction was not rendered (mock context), so integration is verified structurally and via state assertions."
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "rating": 3,
+          "evidence": [
+            "tests/feature-matrix.json maps all 38 required Phase 1+2+3 IDs to non-empty test files; verification.json records coveredFeatures 38 / requiredFeatures 38.",
+            "Inherited Phase 1-2 tests retained and green: regression-chassis, regression-phase1, regression-phase2, visual-*, interaction-*, accessibility, piano-* (library/layers/velocity/pedals/fallback), effects-* (graph/routing/processing). Full suite: 39 files, 121 tests pass (re-run confirmed).",
+            "Piano sample library, two layers, full effect chain, and master level preserved (regression-phase2.test.ts + retained buildGraph wiring).",
+            "Note: piano 'sample' sets are offline-baked generated PCM honestly declared as not-recordings (IMPLEMENTATION_DETAILS.json) — a carried-over Phase-2 fidelity limitation, but handled honestly and still functional."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "architecture",
+          "rating": 3,
+          "evidence": [
+            "Clear layering: src/model/ (typed hardware + organ/synth/program types), src/audio/ (piano/organ/synth engines, effects-chain, sample-library), src/state/ (program-store, hardware-store, control-bindings, engine-registry), src/components/, src/input/.",
+            "Canonical serializable state (ProgramSoundState) with cloneProgramSound; one-context routing and effect composition centralized in PianoEngine.buildGraph; injectable boundaries (createContext, requestAccess, fetchImpl, useInlineSamples) documented in IMPLEMENTATION_DETAILS.json.",
+            "Maintainability concerns: PianoEngine is a ~1380-line multi-engine 'god class'; control-bindings.ts is a ~1088-line if/else ladder; measureEnergy duplicates the effect topology as a separate proxy graph; crossfade helpers have redundant/dead branches."
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "rating": 2,
+          "evidence": [
+            "Broad, deterministic coverage (39 files, 121 tests, all mapped feature IDs) and a genuinely rigorous deterministic arpSteps test.",
+            "Core weakness: no test crosses a real Web Audio boundary. vitest env is jsdom with a hand-written MockAudioContext (src/test/mock-audio.ts) whose params only store the last-set value; OfflineAudioContext is unavailable so measureEnergy always runs the analytic string-hash fallback.",
+            "Audible claims are therefore proven by synthetic proxies: organModelSignature/waveformSignature/filterSignature return constructed constants, and 'distinct energy' tests compare analytic-proxy numbers — the task explicitly states a state-only test with fakes is insufficient where behavior is claimed audible.",
+            "Voice-count and state assertions are meaningful for graph/state behavior but do not validate spectra, gain staging, or effect DSP output."
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "rating": 3,
+          "evidence": [
+            "Cleanup verified in tests: stop functions disconnect all oscs/gains/filters/sources; dispose disconnects master/limiter/buses; voice maps return to 0 after allNotesOff/panic.",
+            "Reasonable resource discipline: polyphony cap + stealing, mono voice steal, scheduled release with bounded setTimeout stop.",
+            "Could not verify live console cleanliness, render stability, or CPU/memory under sustained integrated interaction because the app was not driven in a real browser (headless, no audible render); assessment is based on source and the passing deterministic suite."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "All audio tests run against a mock AudioContext (jsdom, no OfflineAudioContext); 'audible' behavior is proven via synthetic signature/energy proxies rather than rendered spectra — organModelSignature uses hardcoded per-model class offsets and waveformSignature uses category-id/string hashes, so the distinctness tests would pass even if engines rendered identically.",
+    "measureEnergy's OfflineAudioContext render path is dead in the test environment, so effect/type 'energy' distinctness tests execute the analytic string-hash fallback (piano-engine.ts ~L1285-1332), not real DSP.",
+    "The arpeggiator computes deterministic step order (arpSteps) and stores run/hold/rate/sync/range/direction state but is never time-scheduled to actually play notes rhythmically (acknowledged in stage3-visual-audit.md).",
+    "The synth oscillator (pitch) envelope oscEnv is stored and round-tripped but not applied to audio in spawnSynthVoice.",
+    "perf-pitch-stick is classified functional (isFunctionalControl true) yet has no binding in applyControlToEngine — pitch bend is a silent no-op that is not listed among unsupported controls.",
+    "control-bindings program-store-as auto-confirms with the current program name rather than exposing interactive keystroke naming.",
+    "stage3-desktop.png shows the Program section (store/scene row) and Synth section bottom controls clipped by the deck edge, with some effect-knob labels overlapping.",
+    "Piano Grand/Upright/Electric 'sample sets' are offline-baked generated PCM, honestly declared as not recordings (satisfies the honesty contract) but a carried-over deviation from the Phase-2 'recorded sample set' intent."
+  ]
+}

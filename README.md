@@ -1,10 +1,11 @@
 # Stagebench
 
-A benchmark that asks coding agents to recreate the Nord Stage 4 as an interactive browser instrument, plus a React gallery for comparing the results. The task, phases, feature IDs, and scoring live in [BENCHMARK.md](./BENCHMARK.md).
+A benchmark that asks coding agents to recreate the Nord Stage 4 as an interactive browser instrument, plus a React gallery for comparing the results. The candidate-facing task lives in [TASK.md](./TASK.md); the protocol, harness, and scoring docs live in [BENCHMARK.md](./BENCHMARK.md).
 
 ## Repository layout
 
-- `BENCHMARK.md` — the task: three phases, feature IDs, evidence, scoring.
+- `TASK.md` — the candidate-facing task: three phases, feature IDs, honesty contract (run workspaces get a phase-filtered copy).
+- `BENCHMARK.md` — the protocol for operators and evaluators: running, sealing, scoring, interpreting.
 - `prompts/`, `specs/` — per-phase instructions and machine-readable specs (the benchmark inputs).
 - `bench/` — all tooling: the `bench` CLI, run/eval libraries, rubric, schemas, and the candidate starter.
 - `runs/` — one directory per run; `runs/<id>/run.json` is authoritative.
@@ -28,7 +29,7 @@ pnpm bench new --model <id> --target <1|2|3>
 pnpm bench start <run-id>                       # per phase: isolated workspace for the implementation agent
 pnpm bench exec <run-id> --command "pnpm test"  # optional: run candidate commands inside Docker
 pnpm bench seal <run-id> [--cost-usd N --input-tokens N --output-tokens N]   # import, check, capture, verify, seal
-pnpm bench score <run-id>                       # per phase: template first, then registers the filled assessment
+pnpm bench score <run-id>                       # per phase: evaluator workspace first, then registers the filled assessment
 ```
 
 `pnpm bench status <run-id>` prints the next command and telemetry. Wall time is recorded automatically per phase; pass cost/token usage at seal time (or later via `pnpm bench telemetry`). Runs recorded before the current schema appear in the gallery as Legacy with their frozen scores and reports.

@@ -9,14 +9,30 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
+// Issues come from evaluators in several shapes: a bare string, {title, detail},
+// {detail}, or {criterion, description}. Pull a readable title and detail from
+// whatever keys exist so an object never renders as "[object Object]".
 function formatIssue(issue) {
   if (issue && typeof issue === 'object') {
-    const title = typeof issue.title === 'string' ? issue.title.trim() : typeof issue.issue === 'string' ? issue.issue.trim() : ''
-    const detail = typeof issue.detail === 'string' ? issue.detail.trim() : typeof issue.evidence === 'string' ? issue.evidence.trim() : ''
+    const str = (value) => (typeof value === 'string' ? value.trim() : '')
+    const title = str(issue.title) || str(issue.issue)
+    const detail = str(issue.detail) || str(issue.evidence) || str(issue.description)
     if (title && detail) return `${title}: ${detail}`
     if (title || detail) return title || detail
   }
   return String(issue ?? '')
+}
+
+// Generated-audio declarations aren't schema-constrained, so runs use varying
+// shapes: {name, kind, notes}, {kind, description}, or a bare string. Pull a
+// display label plus an optional secondary detail from whatever keys exist,
+// so an unexpected shape never stringifies to "[object Object]".
+function describeGeneratedSource(source) {
+  if (!source || typeof source !== 'object') return { label: String(source ?? ''), detail: '' }
+  const label = source.name ?? source.kind ?? source.type ?? source.label ?? source.source ?? 'Generated source'
+  const detail = [source.method, source.description, source.kind, source.notes]
+    .find((value) => typeof value === 'string' && value.trim() && value !== label) ?? ''
+  return { label, detail }
 }
 
 function formatDate(value) {
@@ -46,7 +62,10 @@ function libraryList(libraries) {
 
 function audioDetails(audio) {
   const generated = audio.generatedSources?.length
-    ? `<div><dt>Generated sound sources</dt><dd><ul>${audio.generatedSources.map((source) => `<li><strong>${escapeHtml(source.name ?? source)}</strong>${source.method ? ` — ${escapeHtml(source.method)}` : ''}</li>`).join('')}</ul></dd></div>`
+    ? `<div><dt>Generated sound sources</dt><dd><ul>${audio.generatedSources.map((source) => {
+        const { label, detail } = describeGeneratedSource(source)
+        return `<li><strong>${escapeHtml(label)}</strong>${detail ? ` — ${escapeHtml(detail)}` : ''}</li>`
+      }).join('')}</ul></dd></div>`
     : '<div><dt>Generated sound sources</dt><dd>None declared</dd></div>'
   const samples = audio.sampleSources?.length
     ? `<div><dt>Sample provenance</dt><dd><ul>${audio.sampleSources.map((source) => `<li><strong>${escapeHtml(source.name)}</strong> — ${escapeHtml(source.source)} · ${escapeHtml(source.license)}${source.notes ? `<br><span>${escapeHtml(source.notes)}</span>` : ''}</li>`).join('')}</ul></dd></div>`
@@ -245,7 +264,10 @@ export function renderRunReportMarkdown(run, evaluations, implementationDetails)
     for (const phase of implementationDetails.phases) {
       const application = phase.libraries.application.map((library) => `\`${library.name}\` ${library.version}`).join(', ') || 'None declared'
       const development = phase.libraries.development.map((library) => `\`${library.name}\` ${library.version}`).join(', ') || 'None declared'
-      const generated = phase.audio.generatedSources?.map((source) => `${source.name ?? source}${source.method ? ` — ${source.method}` : ''}`).join('; ') || 'None declared'
+      const generated = phase.audio.generatedSources?.map((source) => {
+        const { label, detail } = describeGeneratedSource(source)
+        return `${label}${detail ? ` — ${detail}` : ''}`
+      }).join('; ') || 'None declared'
       const samples = phase.audio.sampleSources?.map((source) => `${source.name} — ${source.source} (${source.license})`).join('; ') || 'No recorded or external sample sources declared'
       const files = phase.audio.detectedFiles?.map((file) => `\`${file.path}\` (${formatBytes(file.bytes)})`).join(', ') || 'None detected'
       lines.push('', `### Phase ${phase.phase}: ${phase.phaseName}`, '', `- Application libraries: ${application}`, `- Development and test tooling: ${development}`, `- Audio strategy: ${phase.audio.strategy}`, `- Generated sound sources: ${generated}`, `- Recorded sample provenance: ${samples}`, `- Bundled audio files: ${files}`)

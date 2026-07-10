@@ -44,4 +44,4 @@ The remaining sections come alive: **Organ**, **Synth**, and the **Program/perfo
 
 ## Evidence
 
-Preserve all Phase 1–2 tests and mappings; add every Phase 3 ID from `BENCHMARK.md`. Tests must prove program round-trips, split/scene/morph behavior, organ model and drawbar distinctions, synth source/filter/envelope/LFO/voice/arp behavior, one-context routing, and cleanup. Exercise programs, Live Mode, splits, scenes, morphs, representative organ and synth sounds, and Panic in the browser. Update `IMPLEMENTATION_DETAILS.json`, use the parent capture harness, and run all four pnpm gates.
+Preserve all Phase 1–2 tests and mappings; add every Phase 3 ID from `TASK.md`. Tests must prove program round-trips, split/scene/morph behavior, organ model and drawbar distinctions, synth source/filter/envelope/LFO/voice/arp behavior, one-context routing, and cleanup. Exercise programs, Live Mode, splits, scenes, morphs, representative organ and synth sounds, and Panic in the browser. Update `IMPLEMENTATION_DETAILS.json`, use the parent capture harness, and run all four pnpm gates.

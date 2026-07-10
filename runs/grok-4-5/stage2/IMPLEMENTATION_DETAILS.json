@@ -1,0 +1,118 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "Sample playback for Grand/Upright/Electric multi-root multi-velocity PCM sets under public/samples/; live/offline-baked synthesis for Clav/Digital/Misc and labeled fallback. One AudioContext with per-layer buses, ordered effect chains (Mod1→Mod2→Delay→Amp/EQ→Comp→Reverb→optional Rotary), layer levels, master gain + limiter → destination.",
+    "sampleSources": [
+      {
+        "name": "grand-multi-sample",
+        "source": "Stagebench-authored offline-baked PCM multi-samples (scripts/generate-samples.mjs). Not microphone recordings of an acoustic grand; redistributable demo assets for sample-playback paths.",
+        "license": "CC0-1.0 (public domain dedication by Stagebench candidate authoring)",
+        "files": [
+          "public/samples/grand/r36_v0.wav",
+          "public/samples/grand/r36_v1.wav",
+          "public/samples/grand/r42_v0.wav",
+          "public/samples/grand/r42_v1.wav",
+          "public/samples/grand/r48_v0.wav",
+          "public/samples/grand/r48_v1.wav",
+          "public/samples/grand/r54_v0.wav",
+          "public/samples/grand/r54_v1.wav",
+          "public/samples/grand/r60_v0.wav",
+          "public/samples/grand/r60_v1.wav",
+          "public/samples/grand/r66_v0.wav",
+          "public/samples/grand/r66_v1.wav",
+          "public/samples/grand/r72_v0.wav",
+          "public/samples/grand/r72_v1.wav",
+          "public/samples/grand/r78_v0.wav",
+          "public/samples/grand/r78_v1.wav",
+          "public/samples/grand/r84_v0.wav",
+          "public/samples/grand/r84_v1.wav"
+        ],
+        "notes": "9 root notes × 2 velocity layers, 22050 Hz mono PCM. Roots: 36,42,48,54,60,66,72,78,84. Distinct harmonic recipe (bright acoustic partials)."
+      },
+      {
+        "name": "upright-multi-sample",
+        "source": "Stagebench-authored offline-baked PCM multi-samples (scripts/generate-samples.mjs). Not mic recordings; redistributable demo sample assets.",
+        "license": "CC0-1.0",
+        "files": [
+          "public/samples/upright/r36_v0.wav",
+          "public/samples/upright/r36_v1.wav",
+          "public/samples/upright/r42_v0.wav",
+          "public/samples/upright/r42_v1.wav",
+          "public/samples/upright/r48_v0.wav",
+          "public/samples/upright/r48_v1.wav",
+          "public/samples/upright/r54_v0.wav",
+          "public/samples/upright/r54_v1.wav",
+          "public/samples/upright/r60_v0.wav",
+          "public/samples/upright/r60_v1.wav",
+          "public/samples/upright/r66_v0.wav",
+          "public/samples/upright/r66_v1.wav",
+          "public/samples/upright/r72_v0.wav",
+          "public/samples/upright/r72_v1.wav",
+          "public/samples/upright/r78_v0.wav",
+          "public/samples/upright/r78_v1.wav",
+          "public/samples/upright/r84_v0.wav",
+          "public/samples/upright/r84_v1.wav"
+        ],
+        "notes": "Same root/velocity grid as grand; shorter decay, more mid partials, higher body noise — audibly distinct from grand."
+      },
+      {
+        "name": "electric-multi-sample",
+        "source": "Stagebench-authored offline-baked PCM multi-samples (scripts/generate-samples.mjs). Tine-style recipe; not mic recordings of a Rhodes/Wurlitzer.",
+        "license": "CC0-1.0",
+        "files": [
+          "public/samples/electric/r36_v0.wav",
+          "public/samples/electric/r36_v1.wav",
+          "public/samples/electric/r42_v0.wav",
+          "public/samples/electric/r42_v1.wav",
+          "public/samples/electric/r48_v0.wav",
+          "public/samples/electric/r48_v1.wav",
+          "public/samples/electric/r54_v0.wav",
+          "public/samples/electric/r54_v1.wav",
+          "public/samples/electric/r60_v0.wav",
+          "public/samples/electric/r60_v1.wav",
+          "public/samples/electric/r66_v0.wav",
+          "public/samples/electric/r66_v1.wav",
+          "public/samples/electric/r72_v0.wav",
+          "public/samples/electric/r72_v1.wav",
+          "public/samples/electric/r78_v0.wav",
+          "public/samples/electric/r78_v1.wav",
+          "public/samples/electric/r84_v0.wav",
+          "public/samples/electric/r84_v1.wav"
+        ],
+        "notes": "Tine attack transient + odd-partial emphasis; audibly distinct from grand/upright."
+      }
+    ],
+    "generatedSources": [
+      {
+        "name": "clav-digital-misc-synthesis",
+        "kind": "live-synthesis",
+        "description": "Clav, Digital, and Misc types use honest live/offline-buffer synthesis (not sample files). Distinct recipes: clavinet-like clipped harmonics, digital piano partials, mallet/vibes inharmonics."
+      },
+      {
+        "name": "labeled-fallback-synthesis",
+        "kind": "live-synthesis",
+        "description": "When sample assets fail to load, status becomes 'fallback' with a labeled message and playable synthetic voice. Never reported as ready primary library."
+      },
+      {
+        "name": "effects-dsp",
+        "kind": "live-processing",
+        "description": "Mod1/Mod2/Delay/Amp-EQ/Compressor/Reverb/Rotary implemented with Web Audio nodes (LFO, delay lines, waveshaper, dynamics, convolver impulses generated at runtime). Impulses are generated buffers, not recordings."
+      }
+    ],
+    "notes": [
+      "Grand/Upright/Electric use bundled PCM sample playback with multi-root multi-velocity coverage; provenance is honest offline-baked assets (not claimed as acoustic session recordings).",
+      "Clav/Digital/Misc are synthesis and declared as generated.",
+      "Organ, Synth, and Program panel controls remain decorative presentation state in Phase 2.",
+      "Master Level is functional; Panic clears voices."
+    ]
+  },
+  "variant": "stage-4-73",
+  "boundaries": {
+    "audioContext": "injectable via PianoEngine createContext option",
+    "midi": "injectable via MidiInput requestAccess option",
+    "keyboard": "attachKeyboardInput with injectable target",
+    "samples": "SampleLibrary fetchImpl / forceFail / useInlineSamples for tests"
+  }
+}

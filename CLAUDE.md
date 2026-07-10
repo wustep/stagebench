@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Stagebench is a benchmark that asks coding agents to recreate the Nord Stage 4 keyboard as an interactive browser instrument, plus a React gallery for comparing the results. The task definition, phases, feature IDs, and scoring live in `BENCHMARK.md`; design principles in `PRODUCT.md`.
+Stagebench is a benchmark that asks coding agents to recreate the Nord Stage 4 keyboard as an interactive browser instrument, plus a React gallery for comparing the results. The candidate-facing task definition, phases, and feature IDs live in `TASK.md` (run workspaces receive a copy filtered to their phase); the protocol, harness, and evaluation docs live in `BENCHMARK.md`; design principles in `PRODUCT.md`.
 
 Core rule of the benchmark (the "honesty contract"): controls either work canonically or visibly do nothing — never fake success. `IMPLEMENTATION_DETAILS.json` must truthfully declare audio sources.
 
@@ -49,8 +49,9 @@ Prefer the preview servers in `.claude/launch.json` (`dev`, `showcase`) over ad-
 - `start <run-id>` — create the isolated phase workspace (clones `bench/starter/`)
 - `exec <run-id> --command "..."` — run a command inside the run's container
 - `seal <run-id> [--cost-usd N ...]` — import, validate gates, Playwright capture, verify contract, freeze the phase
-- `score <run-id>` — first call writes an assessment template; second call (after the evaluator fills it) registers the evaluation
-- `status <run-id>` / `export <run-id>` / `reindex` / `showcase` (publishes showcase build to `public/previews/showcase/`)
+- `score <run-id>` — first call builds the isolated, blind-handled evaluator workspace (artifact copy + rubric + specs + template); second call (after the evaluator fills `assessment.json`) reruns gates against an out-of-repo copy and registers the evaluation. Panels: extra `assessment.<n>.json` files median-merge. `--sandbox` runs gates in Docker.
+- `status <run-id>` / `clean <run-id> [--all]` / `export <run-id>` / `reindex` / `showcase` (publishes showcase build to `public/previews/showcase/`)
+- **Transient workspaces (work/eval/gates) live under `~/.stagebench/<repo-key>/`, not in the repo tree** — override with `STAGEBENCH_HOME`. Sealed `runs/<id>/stage<N>/` never contains `node_modules` (gates run on a copy).
 
 ## Layout & architecture
 

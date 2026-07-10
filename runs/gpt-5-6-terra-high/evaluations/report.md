@@ -1,4 +1,4 @@
-# GPT 5.6 Terra High — full run — Stagebench evaluation
+# GPT 5.6 Terra High — Stagebench evaluation
 
 - Run: `gpt-5-6-terra-high`
 - Status: complete
@@ -22,7 +22,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: Live Web Audio synthesis: triangle fundamental plus a quiet sine overtone through a per-note ADSR-like gain envelope. This is an honestly labeled piano-like fallback, not a recorded sample set.
-- Generated sound sources: [object Object]
+- Generated sound sources: Web Audio OscillatorNode — Triangle fundamental and sine overtone generated live for each key; no recordings or downloaded assets.
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: Phase 1 exposes one playable synthesized piano-like voice only.
@@ -34,7 +34,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: One lazy Web Audio AudioContext with two owned piano-layer inputs, ordered effect nodes, layer output gains, one master gain, one DynamicsCompressor limiter, and one destination. The current instrument is a labeled live-synthesis fallback; it does not contain recorded sample assets.
-- Generated sound sources: [object Object]; [object Object]
+- Generated sound sources: Web Audio OscillatorNode — Grand, Upright, Electric, Clav, Digital, and Misc use deliberately different live oscillator spectra, filters, envelopes, octave and unison behavior. These are generated sources, not recordings.; Web Audio AudioBuffer — Short randomized impulse buffers are generated at runtime for reverb coloration. They are generated effect buffers, not recordings.
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: The status display explicitly says 'Sample assets unavailable · playable synthesis fallback'; it does not report a primary sample library ready.
@@ -46,7 +46,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: One lazy Web Audio AudioContext owns all keyboard-triggered Piano, Organ, and Synth fallback sources. They enter the inherited effect buses, master gain, limiter, and single destination; Panic and unmount release every owned voice.
-- Generated sound sources: [object Object]; [object Object]
+- Generated sound sources: Web Audio OscillatorNode — Piano fallback types plus Organ B3/Vox/Farf/Pipe and Synth waveform categories are generated oscillator/filter/envelope profiles. They are live synthesis, never recordings.; Web Audio AudioBuffer — Runtime-generated impulse buffers provide reverb coloration and are not recordings.
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: The status display truthfully identifies the unavailable sample assets and the playable synthesis fallback.

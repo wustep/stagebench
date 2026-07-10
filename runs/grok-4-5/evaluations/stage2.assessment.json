@@ -1,0 +1,180 @@
+{
+  "rubricVersion": "1.0.0",
+  "runId": "grok-4-5",
+  "stage": 2,
+  "evaluator": "Opus 4.8 evaluator",
+  "evaluatedAt": "2026-07-10T06:54:14Z",
+  "summary": "A well-architected Phase 2 that turns the Piano and Layer Effects sections into a genuinely connected, single-AudioContext signal graph: per-layer buses, an ordered per-layer chain (Mod1 -> Mod2 -> Delay -> Amp/EQ -> Comp -> Reverb), a shared Rotary placed last, master gain + limiter, and one destination. All panel controls are truly wired to the engine through the hardware store -> engine registry -> control-bindings path, and the panel reflects state (button LEDs, exclusive type selection, OLED shows the selected piano type/model). Two layers, six selectable piano types, the full performance-control set, sustain from UI/keyboard/MIDI with per-layer SUSTPED gating, and a labeled playable fallback are all implemented in the real voice path. The two dominant gaps are: (1) the Grand/Upright/Electric 'sample sets' are honestly-declared offline-baked/synthesized PCM WAVs, not recorded samples, so the phase's explicit 'recorded sample sets' requirement is only partially met (honesty is preserved, avoiding a provenance failure); and (2) no test crosses the real Web Audio rendering boundary. In the jsdom/vitest environment OfflineAudioContext and AudioContext are undefined, so every audio test runs against a MockAudioContext and the engine's measureEnergy()/typeSignature() helpers fall back to an analytic state-formula and a hardcoded per-type lookup table. The 66 passing tests therefore prove engine state/topology/cleanup well but do not measurably prove audible source/effect/distinctness behavior on rendered signal, which the phase's audio-test rules explicitly require. A secondary fidelity defect: the Mod 1 unit permanently sums all five type sub-paths into its wet bus (applyMod1 never mutes inactive paths), so Mod 1 'types' bleed together at runtime rather than switching cleanly.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "rating": 3,
+          "evidence": [
+            "regression-phase1.test.tsx asserts keybed data-key-count=73, all six sections (performance/organ/piano/program/synth/effects), every non-OLED control-id present, and the 'decorative' honesty text; test passes.",
+            "evidence/stage2-desktop.png (1440x900) shows the full continuous red chassis, six ordered sections, Program+Synth OLEDs, and the 73-key bed; evidence/stage2-narrow.png (390x844) retains all six sections and full keybed with no clipping.",
+            "hardware.ts SECTION_LAYOUT and VERTICAL_ALLOCATION (deck 0.54 / keybed 0.46) are inherited unchanged from Phase 1; evidence/stage2-visual-audit.md documents section fractions and primary OLED count.",
+            "Gap: Piano section fraction is only 0.085 (narrowest of the deck) so its ~25 controls are visually cramped vs the real hardware, and the audit notes layout was not re-tuned beyond Phase 1."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "rating": 3,
+          "evidence": [
+            "ControlWidget.tsx renders button is-on class from store value, aria-pressed for toggles, knob rotation from value (-135..135deg), fader cap position, and drawbar LED bank; OLED shows 'Init Program - <Type> <model>' reflecting the selected piano type (ControlDeck.tsx).",
+            "control-bindings.ts drives exclusive piano-type LED sync (TYPE_BUTTONS loop), fx focus button sync (syncFxFocusButtons), and Instrument.tsx exposes data-piano-type / data-layer-focus / data-audio-status on the instrument root.",
+            "Panel changes reach the engine live: hardware-store.setValue/pressButton call notifyControlChange/notifyButtonPress -> engine-registry -> applyControlToEngine/applyButtonToEngine (registerEngine wired in Instrument.tsx).",
+            "Gap: effect parameter values have no dedicated numeric/graphical readout beyond knob angle; Organ/Synth focus buttons update fx focus state that is decorative in Phase 2."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 2,
+          "evidence": [
+            "Six selectable types (PIANO_TYPES) each play a voice; Grand/Upright/Electric route through a real sample-playback path (SampleLibrary.pick + startBufferVoice), Clav/Digital/Misc use synthesizeBuffer synthesis.",
+            "public/samples/{grand,upright,electric}/ each contain 18 WAVs (9 roots x 2 velocity layers) + manifest.json, bundled into dist/samples (offline-capable); r60_v1.wav md5 differs across families (7fb6f3.. / 967cd7.. / 55ecee..), so files are genuinely distinct.",
+            "IMPLEMENTATION_DETAILS.json is honest: the sample sets are 'Stagebench-authored offline-baked PCM multi-samples ... Not microphone recordings', CC0-1.0, with full file/root/velocity provenance -- so it avoids the 'generated buffers presented as recordings score 0' failure.",
+            "Gap vs hard gate: the phase requires 'recorded sample sets' (piano spec required + Phase-2 hard gate); these are generated/baked, not recordings, so the defining requirement is unmet. Audible distinctness is also not proven at the real boundary: typeSignature() returns a hardcoded per-type vector (map[type]) because OfflineAudioContext is undefined in the test env, so the 'distinct signatures' test compares constants."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "rating": 3,
+          "evidence": [
+            "piano-engine.ts noteOn spawns one voice per enabled layer with per-layer bus (layerBusA/B), per-layer level gains (syncLayerLevels ramps to layer.level when sectionOn && enabled), and octave shift (midi + octave*12).",
+            "piano-layers.test.ts verifies independent A/B enable, getLayerVoiceCount per layer, octave shift (60->72), section-off silences (noteOn returns ''), and allNotesOff -> getActiveVoiceCount()===0.",
+            "Voice ownership tracked per noteId with paired-layer release in noteOff; dispose/allNotesOff force-stop all voices and clear held/sustained sets.",
+            "Focus state (piano.focus) tracked and mirrored to fx layerFocus; enabling B via piano-layer-b also raises its level so focus is audible."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 3,
+          "evidence": [
+            "All required controls modify the real voice path: KB Touch (applyKbTouch velocity curve), Dyn Comp (applyDynComp lifts soft strokes), Timbre (timbreFilterHz sets the per-voice lowpass, Q boost for Dyno), Unison (startUnison adds detuned oscillators), Soft Release (releaseVoice uses 0.7s vs 0.32s), String Res (addStringRes adds sympathetic partials when pedal/held), Master Level (setMasterLevel ramps master.gain).",
+            "control-bindings.ts maps piano-kb-touch/dyn-comp/timbre knobs, unison/soft-release/string-res buttons, level faders and octave buttons to setPianoState/updateLayer.",
+            "piano-velocity-controls.test.ts asserts each control moves measured energy in the expected direction and Master Level scales it -- but via the analytic measureEnergy fallback (piano-layers test comment even says 'analytic path uses layer level'), not a rendered signal.",
+            "Timbre knob correctly switches option set by family (timbreFromKnob adds Dyno 1/2 for Electric/Clav)."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "rating": 3,
+          "evidence": [
+            "Phase 1 input paths retained (pointer/touch/keyboard/MIDI) via Keybed + attachKeyboardInput + MidiInput; Instrument.tsx clears notes on blur and on unmount (engine.allNotesOff / dispose).",
+            "Sustain honored from UI, keyboard Space, and MIDI CC64 (piano-pedals.test.ts), with per-layer SUSTPED gating (layerAcceptsSustain -> sustained set only for accepting layers).",
+            "Voice stealing at maxPolyphony 48 (noteOn forceStop of oldest); piano-fallback.test.ts confirms forced sample-load failure enters 'fallback' status (never 'ready'), still playable.",
+            "Soft/sostenuto pedals are not implemented but are optional in the piano spec and are not falsely claimed; only sustain is asserted."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 3,
+          "evidence": [
+            "piano-engine.buildGraph creates exactly one AudioContext (effects-graph.test.ts asserts contexts.length===1), per-layer buses -> per-layer createChain -> layer level gains -> master GainNode -> DynamicsCompressor limiter (threshold -3, ratio 12) -> single ctx.destination.",
+            "Shared Rotary instance fed from both chains' toRotary taps after reverb, mixed back into master (rotaryIsLastInSignalPath honored).",
+            "getGraphInfo exposes topology; effects-graph.test.ts asserts master/limiter/layerA/layerB/chainA/chainB/rotary all present, dispose closes the context and returns voice count to 0.",
+            "Gain staging uses a fixed master.gain = masterLevel*0.45 fudge; correctness of levels/limiting is not verified on rendered signal (mock context only)."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "rating": 2,
+          "evidence": [
+            "effects-chain.ts builds real, connected Web Audio nodes for all six units + Rotary (StereoPanner/tremolo/ring/wah, dual delay+feedback modulation, delay line with feedback filter, waveshaper+3-band EQ, DynamicsCompressor, ConvolverNode with generated impulse, rotary horn/bass LFO split) and wires them into the master path -- not labels or disconnected nodes.",
+            "Runtime fidelity defect: createMod1 permanently connects all five type sub-paths (pan, tremolo, ring, wah, pump) to the wet bus and applyMod1 never mutes the inactive ones, so when Mod 1 is on the paths sum together and 'types' are not cleanly distinct.",
+            "effects-processing.test.ts titles claim types 'change rendered energy' / are 'audibly distinct', but with OfflineAudioContext undefined measureEnergy uses an analytic state-formula that derives distinctness from string hashes (e.g. chain.mod1.type.charCodeAt(0)*0.001) -- distinctness is a formula artifact, not measured audio.",
+            "Reverb rebuilds a per-type impulse (impulseReverb lengths Booth 0.15s .. Cathedral 2.8s) so real spectral difference would exist at runtime, but it is unverified here."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "rating": 3,
+          "evidence": [
+            "Documented signal order matches the effects spec routing (createChain: Mod1->Mod2->Delay->Amp->Comp->Reverb->toRotary/direct; Rotary last).",
+            "resolveChainState implements group mode (PianoB shares PianoA when pianoGroup) and global mode overrides for Delay/Compressor/Reverb (globalCapableUnits per spec); per-unit bypass via setBypass wet/bypass gains and all-effects allBypass.",
+            "Delay feedback path present (delay->filter->feedback->delay) with filter modes; To Rotary routes amp type into shared rotary (applyChain toRotary/directOut crossfade) and reverb precedes rotary as spec requires.",
+            "effects-routing.test.ts exercises focus-follows-layer, manual focus, group, global, per-unit + all bypass, and To Rotary at the state level (energy assertions again use the analytic path)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "rating": 3,
+          "evidence": [
+            "Selections produce immediate coherent feedback: type buttons toggle exclusive is-on LEDs and update the Program OLED text, knobs/faders animate, and the same actions drive engine state via the store->registry binding, so sound follows too.",
+            "Instrument root exposes data-piano-type / data-layer-focus / data-audio-status; status bar is an aria-live=polite region showing audio + MIDI status.",
+            "Gap: audible feedback cannot be confirmed by the test suite (no real render), and effect parameter values lack numeric displays."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "rating": 3,
+          "evidence": [
+            "Denied/empty MIDI handled (MidiInput requestAccess returning no inputs -> midiState; piano-pedals/fallback tests) and asset failure enters labeled 'fallback' status without reporting 'ready' (piano-fallback.test.ts).",
+            "Focus loss (window blur) and unmount call allNotesOff/dispose; DynamicsCompressor limiter guards against clipping; maxPolyphony 48 with oldest-voice stealing handles layered polyphony.",
+            "Rapid effect changes are applied via updateChain/applyAllFx with param ramps (RAMP 0.012) to avoid clicks; effects-graph cleanup test confirms voice count returns to 0 and context closes."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 3,
+          "evidence": [
+            "Clear module boundaries: sample-library (loader/pick), piano-engine (voices/layers/buses/master), effects-chain (per-unit node factories + apply fns), model/piano-types (typed state + defaults), state/control-bindings (panel->engine).",
+            "Injectable boundaries for determinism: createContext, sampleLibraryOptions.fetchImpl/forceFail/useInlineSamples, MidiInput.requestAccess, attachKeyboardInput target -- documented in IMPLEMENTATION_DETAILS.boundaries.",
+            "Phase 3 extensibility present: EffectsSectionState already carries Organ/Synth focus targets and per-layer chains keyed by layer id.",
+            "Smell: piano-engine.measureEnergy re-implements the entire effects chain inline (a second, divergent copy of effects-chain logic) purely for the metric, duplicating DSP intent and creating drift risk."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "rating": 1,
+          "evidence": [
+            "Confirmed empirically: in the vitest/jsdom environment both OfflineAudioContext and AudioContext are undefined (probe test), so no audio test can render a real signal.",
+            "Every audio test injects createMockContextFactory (MockAudioContext only tracks connections/param values) and relies on measureEnergy(), which with no OfflineAudioContext returns the analytic proxy formula (lines ~890-937), and typeSignature(), which returns a hardcoded per-type lookup vector.",
+            "Consequence: 'Mod 1 types each change rendered energy vs bypass', 'types produce distinct signatures', 'KB Touch changes measured energy', etc. assert on state-derived numbers, not rendered audio -- exactly the 'state-only test with fakes' the phase audio-test rules say is insufficient when behavior is claimed audible.",
+            "Structural/state tests are meaningful (single context, graph topology, voice ownership, sustain gating, fallback, dispose -> voice count 0 / context closed), but source/effect/distinctness/bypass audibility is not proven across the real backend boundary."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "rating": 3,
+          "evidence": [
+            "66 tests across 21 files pass; typecheck, lint, and build gates pass (verification.json + local re-run). Phase 1 regression tests retained and green (regression-phase1 asserts feature-matrix Phase 1 ids still map to existing files).",
+            "Cleanup is thorough: forceStop disconnects oscillators/sources/gains, releaseVoice schedules force-stop, dispose closes context and clears the library.",
+            "Naming is consistent and the typed state model is well-normalized; main maintainability debt is the duplicated inline effects re-implementation inside measureEnergy and several 'void x' no-op suppressions in control-bindings.",
+            "feature-matrix.json covers all 20 required Phase 1+2 ids, each mapped to a real non-empty test file."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Grand/Upright/Electric 'sample sets' are Stagebench-authored offline-baked/synthesized PCM WAVs, not recorded samples; the phase requires (and the hard gate names) 'recorded sample sets'. Provenance is honest (declared 'Not microphone recordings', CC0), so it is not a dishonesty failure, but the recorded-sample requirement is unmet.",
+    "No test crosses the real Web Audio rendering boundary: OfflineAudioContext/AudioContext are undefined under jsdom, so measureEnergy() uses an analytic state-formula (distinctness derived from type-string char codes) and typeSignature() returns a hardcoded per-type table. Audible source/effect/distinctness/bypass claims are unproven on rendered signal despite test titles asserting 'rendered energy' and 'audibly distinct'.",
+    "Runtime effect defect: Mod 1 (createMod1/applyMod1) leaves all five type sub-paths (pan, tremolo, ring, wah, pump) connected to the wet bus simultaneously and never mutes inactive ones, so Mod 1 'types' sum/bleed rather than switching cleanly -- undermining 'audibly distinct within its unit'.",
+    "piano-engine.measureEnergy re-implements the effects chain inline as a separate parallel graph, so the metric that tests rely on does not exercise the real effects-chain.ts nodes used at playback and can drift from them.",
+    "Piano section geometry (fraction 0.085) is the narrowest in the deck and cramps its ~25 controls, a visual-fidelity limitation inherited from Phase 1 vs the real hardware where Piano is a substantial section."
+  ]
+}

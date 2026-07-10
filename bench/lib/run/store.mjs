@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { hashTree, loadProtocol, readJson, selectedPhases, writeJson } from '../shared.mjs'
+import { blindRunCode, hashTree, loadProtocol, readJson, selectedPhases, workspaceRoot, writeJson } from '../shared.mjs'
 
 export function pathsFor(root) {
   return {
@@ -189,9 +189,12 @@ export function promoteRun(root, sourceId, targetId, { replace = false } = {}) {
   rewriteRunMetadataTree(path.join(targetRunDir, 'verifications'), sourceId, targetId)
   rewriteRunMetadataTree(path.join(locations.reports, targetId), sourceId, targetId)
 
-  const workRoot = path.join(root, '.stagebench', 'work')
-  fs.rmSync(path.join(workRoot, sourceId), { recursive: true, force: true })
-  fs.rmSync(path.join(workRoot, targetId), { recursive: true, force: true })
+  // Drop transient workspaces for both ids: implementation workspaces are keyed
+  // by run id, evaluator workspaces by the blind handle.
+  for (const runId of [sourceId, targetId]) {
+    fs.rmSync(path.join(workspaceRoot(root, 'work'), runId), { recursive: true, force: true })
+    fs.rmSync(path.join(workspaceRoot(root, 'eval'), blindRunCode(runId)), { recursive: true, force: true })
+  }
   return { id: targetId, replaced: replace, model: run.model, title: run.title }
 }
 
@@ -342,6 +345,7 @@ export function registryEntry(run) {
     variant: run.variant ?? null,
     target: run.target ?? null,
     targetPhase: run.targetPhase ?? null,
+    harness: run.agent?.harness ?? null,
     protocolVersion: run.protocol?.version ?? run.benchmarkVersion ?? null,
     legacy,
     status: legacy ? 'legacy' : run.status,

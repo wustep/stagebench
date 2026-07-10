@@ -2,13 +2,15 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
+import { filterTaskToPhase } from '../bench/lib/materials.mjs'
+import { REQUIRED_FEATURES } from '../bench/lib/run/verify.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'))
 const manifest = readJson('specs/benchmark-phases.json')
 
 test('phase manifest defines a complete three-phase cumulative target contract', () => {
-  assert.equal(manifest.version, '3.1.0')
+  assert.equal(manifest.version, '1.1.0')
   assert.equal(manifest.phaseCount, 3)
   assert.equal(manifest.selectionMode, 'cumulative-target')
   assert.deepEqual(manifest.selection, { '1': [1], '2': [1, 2], '3': [1, 2, 3] })
@@ -80,6 +82,20 @@ test('manual-derived domain specs have page citations and acceptance gates', () 
     assert.ok(spec.scope && Array.isArray(spec.scope.required) && spec.scope.required.length >= 4, `${specPath} needs an explicit required scope`)
     assert.ok(Array.isArray(spec.scope.excluded) && spec.scope.excluded.length >= 2, `${specPath} needs an explicit excluded scope`)
   }
+})
+
+test('TASK.md declares every required feature ID inside its phase-filter markers', () => {
+  const task = fs.readFileSync(path.join(root, 'TASK.md'), 'utf8')
+  for (const [phase, features] of Object.entries(REQUIRED_FEATURES)) {
+    const visible = filterTaskToPhase(task, Number(phase))
+    const earlier = filterTaskToPhase(task, Number(phase) - 1)
+    for (const id of features) {
+      assert.ok(visible.includes(`\`${id}\``), `TASK.md filtered to phase ${phase} must include ${id}`)
+      assert.ok(!earlier.includes(`\`${id}\``), `TASK.md filtered below phase ${phase} must not leak ${id}`)
+    }
+  }
+  assert.doesNotMatch(filterTaskToPhase(task, 3), /stagebench:phase/, 'markers are stripped from filtered output')
+  assert.doesNotMatch(task, /rubric|score cap|aggregate/i, 'the candidate task never describes scoring')
 })
 
 test('active rubric and phase manifest stay aligned', () => {

@@ -11,7 +11,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { findRepoRoot, hashTree, loadProtocol, parseArgs, readJson, writeJson } from './lib/shared.mjs'
+import { findRepoRoot, hashTree, loadProtocol, parseArgs, readJson, workspaceRoot, writeJson } from './lib/shared.mjs'
 import {
   createRun,
   ensureInstalled,
@@ -28,13 +28,14 @@ import {
   stageState,
   statusSummary,
 } from './lib/run/store.mjs'
-import { importWorkspace, removeWorkspace, runInContainer, startPhase } from './lib/run/workspace.mjs'
+import { importWorkspace, removeWorkspace, runInContainer, startPhase, workspaceDir } from './lib/run/workspace.mjs'
+import { createEvalWorkspace, evalAssessmentPath, evalWorkspaceDir, removeEvalWorkspace } from './lib/eval/workspace.mjs'
 import { exportRun } from './lib/run/export.mjs'
 import { runChecks, verifyPhase } from './lib/run/verify.mjs'
 import { captureEvidence, serveDirectory } from './lib/run/capture.mjs'
 import { collectImplementationDetails } from './lib/implementation-details.mjs'
-import { loadRubric, runTechnicalChecks, skippedTechnicalChecks } from './lib/eval/evaluate.mjs'
-import { aggregateStageEvaluations, createAssessmentTemplate, scoreAssessment } from './lib/eval/scoring.mjs'
+import { loadRubric, runGates } from './lib/eval/evaluate.mjs'
+import { aggregateStageEvaluations, mergeAssessments, scoreAssessment } from './lib/eval/scoring.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from './lib/eval/report.mjs'
 import { fetchReference } from './lib/fetch-reference.mjs'
 
@@ -46,8 +47,9 @@ const COMMANDS = {
   exec: 'exec <run-id> --command "..." — run a command in the workspace inside Docker [--network none|registry] [--image ...]',
   seal: 'seal <run-id> — import, check, capture, verify, and seal the running phase [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N]',
   telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal)',
-  score: 'score <run-id> [--phase N] — write the assessment template, or register a filled one',
+  score: 'score <run-id> [--phase N] — build the isolated evaluator workspace, or register its filled assessment',
   status: 'status <run-id> — show run state, telemetry, and the next command',
+  clean: 'clean [<run-id>] — remove transient work/eval/gates workspaces [--all] [--force to remove a running phase]',
   export: 'export <run-id> [--out <path>] — bundle run.json, evaluations, report, and preview into a ZIP',
   showcase: 'Check, build, and publish showcase/ to public/previews/showcase',
   reindex: 'Regenerate src/data/runs.json from runs/*/run.json',
@@ -114,6 +116,12 @@ async function seal(root, id, options) {
     await server.close()
   }
 
+  // Keep the sealed tree pristine: it carries source + dist + evidence, never
+  // installed node_modules. hashTree ignores node_modules regardless, so the
+  // digest is unaffected — this just stops the committed evidence directory
+  // from holding an install tree.
+  fs.rmSync(path.join(stageDir, 'node_modules'), { recursive: true, force: true })
+
   console.error('→ verifying phase contract and evidence')
   const verification = verifyPhase(root, id, phase, { checks })
   writeJson(path.join(root, 'runs', id, 'verifications', `stage${phase}.json`), verification)
@@ -138,7 +146,7 @@ async function seal(root, id, options) {
   }
 }
 
-function assessmentPathFor(root, id, phase) {
+function archivedAssessmentPathFor(root, id, phase) {
   return path.join(root, 'runs', id, 'evaluations', `stage${phase}.assessment.json`)
 }
 
@@ -168,34 +176,64 @@ async function score(root, id, options) {
   const stage = stageState(run, phase)
   if (stage.status !== 'complete') throw new Error(`Phase ${phase} must be sealed before scoring`)
 
-  const assessmentPath = assessmentPathFor(root, id, phase)
+  // Evaluation is an isolated flow: the first call builds an evaluator
+  // workspace (artifact copy + scoring inputs + template) under
+  // .stagebench/eval; the second call registers the filled assessment.
+  const assessmentPath = evalAssessmentPath(root, id, phase)
   if (!fs.existsSync(assessmentPath)) {
-    const template = createAssessmentTemplate(rubric, id, phase)
-    writeJson(assessmentPath, template)
+    const created = createEvalWorkspace(root, {
+      id,
+      phase,
+      variantId: run.variant,
+      stageDir: stageDirFor(root, id, phase),
+      verificationPath: path.join(root, 'runs', id, 'verifications', `stage${phase}.json`),
+      expectedDigest: stage.artifactDigest,
+      rubric,
+    })
     return {
-      action: 'template-created',
-      assessmentPath,
-      artifact: stageDirFor(root, id, phase),
-      next: `Have a fresh evaluator agent inspect the sealed artifact and fill in every rating with evidence, then run: pnpm bench score ${id} --phase ${phase}`,
+      action: 'eval-workspace-created',
+      workspace: created.workspace,
+      assessmentPath: created.assessment,
+      next: `Spawn a fresh evaluator agent whose working directory is ${created.workspace} — it reads EVAL.md, inspects artifact/ against inputs/ (blind to model identity), and fills every rating in assessment.json with evidence. Then run: pnpm bench score ${id} --phase ${phase}`,
     }
   }
 
-  const assessment = readJson(assessmentPath)
-  if (assessment.categories.some((category) => category.criteria.some((criterion) => criterion.rating === null))) {
-    throw new Error(`The assessment at ${assessmentPath} still has unrated criteria. Fill it in, then score again.`)
-  }
+  // A panel: the primary assessment.json plus any assessment.<n>.json filled
+  // by additional independent evaluators. One evaluator is the common case and
+  // merges to itself.
+  const workspace = evalWorkspaceDir(root, id, phase)
+  const panelFiles = fs.readdirSync(workspace)
+    .filter((name) => /^assessment(\.\d+)?\.json$/.test(name))
+    .sort()
+  const panel = panelFiles.map((name) => {
+    const filePath = path.join(workspace, name)
+    const value = readJson(filePath)
+    if (value.categories.some((category) => category.criteria.some((criterion) => criterion.rating === null))) {
+      throw new Error(`The assessment at ${filePath} still has unrated criteria. Have the evaluator fill it in, then score again.`)
+    }
+    return value
+  })
+  const assessment = mergeAssessments(rubric, panel)
+  // Map the blind handle the evaluators saw back to the real run id.
+  assessment.runId = id
 
   const stageDir = stageDirFor(root, id, phase)
   if (stage.artifactDigest) {
     const currentDigest = hashTree(stageDir).digest
     if (currentDigest !== stage.artifactDigest) throw new Error(`Phase ${phase} changed after sealing; run seal again before scoring`)
   }
-  if (options['skip-checks'] !== 'true') ensureInstalled(stageDir)
-  const technicalChecks = options['skip-checks'] === 'true'
-    ? skippedTechnicalChecks(stageDir, rubric)
-    : await runTechnicalChecks(stageDir, rubric)
+  // Gates run against a throwaway copy out of the repo, so the sealed stage
+  // directory is never mutated. --sandbox (or STAGEBENCH_SANDBOX=1) runs them
+  // in Docker.
+  const technicalChecks = await runGates(root, stageDir, rubric, {
+    skip: options['skip-checks'] === 'true',
+    sandbox: options.sandbox === 'true' || process.env.STAGEBENCH_SANDBOX === '1',
+  })
   const evaluation = scoreAssessment(rubric, assessment, technicalChecks)
   const evaluationPath = path.join(root, 'runs', id, 'evaluations', `stage${phase}.json`)
+  // Archive the filled assessment as part of the run record before the
+  // evaluator workspace is removed.
+  writeJson(archivedAssessmentPathFor(root, id, phase), assessment)
   writeJson(evaluationPath, evaluation)
 
   const reportPath = `/reports/${id}/index.html#stage-${phase}`
@@ -217,7 +255,46 @@ async function score(root, id, options) {
   registerEvaluation(root, id, phase, stageSummary, aggregate)
   writeReports(root, loadRun(root, id))
   await reindexRegistry(root)
+  removeEvalWorkspace(root, id, phase)
   return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, evaluationPath, report: aggregate.reportPath }
+}
+
+// Existing transient workspaces for a run: the implementation workspace (any
+// phase) and per-phase evaluator workspaces. Used by `status` (surface
+// leftovers) and `clean` (remove them).
+function runWorkspaces(root, run) {
+  const work = []
+  const evaluations = []
+  for (const stage of run.stages ?? []) {
+    const workDir = workspaceDir(root, run.id, stage.number)
+    if (fs.existsSync(workDir)) work.push({ phase: stage.number, path: workDir })
+    const evalDir = evalWorkspaceDir(root, run.id, stage.number)
+    if (fs.existsSync(evalDir)) evaluations.push({ phase: stage.number, path: evalDir })
+  }
+  return { work, eval: evaluations }
+}
+
+// Remove a run's transient workspaces. Evaluator and gates workspaces are
+// always safe to drop (regenerable). An implementation workspace for a phase
+// that is still `running` holds unsealed work, so it is kept unless --force.
+function cleanWorkspaces(root, run, { force = false } = {}) {
+  const runningPhases = new Set((run.stages ?? []).filter((stage) => stage.status === 'running').map((stage) => stage.number))
+  const removed = []
+  const kept = []
+  const { work, eval: evaluations } = runWorkspaces(root, run)
+  for (const entry of work) {
+    if (runningPhases.has(entry.phase) && !force) {
+      kept.push({ ...entry, kind: 'work', reason: 'phase is running; pass --force to remove unsealed work' })
+      continue
+    }
+    removeWorkspace(root, run.id, entry.phase)
+    removed.push({ ...entry, kind: 'work' })
+  }
+  for (const entry of evaluations) {
+    removeEvalWorkspace(root, run.id, entry.phase)
+    removed.push({ ...entry, kind: 'eval' })
+  }
+  return { id: run.id, removed, kept }
 }
 
 function printHelp() {
@@ -250,7 +327,7 @@ try {
       await reindexRegistry(root)
     } else if (command === 'start') {
       result = startPhase(root, id)
-      result.next = `Point the implementation agent at ${path.relative(root, result.workspace)}/WORKSPACE.md, then run pnpm bench seal ${id}`
+      result.next = `Point the implementation agent at ${result.workspace}/WORKSPACE.md, then run pnpm bench seal ${id}`
     } else if (command === 'exec') {
       const run = loadRun(root, id)
       const stage = nextPhase(run)
@@ -266,10 +343,22 @@ try {
       result = await score(root, id, options)
     } else if (command === 'status') {
       const run = loadRun(root, id)
+      const workspaces = runWorkspaces(root, run)
       result = {
         ...statusSummary(run),
         telemetry: run.telemetry ?? null,
         stages: run.stages.map(({ number, status, evaluation, telemetry }) => ({ number, status, score: evaluation?.score ?? null, telemetry: telemetry ?? null })),
+        workspaces: (workspaces.work.length || workspaces.eval.length) ? workspaces : null,
+      }
+    } else if (command === 'clean') {
+      if (options.all === 'true') {
+        const base = path.dirname(workspaceRoot(root, 'work'))
+        for (const kind of ['work', 'eval', 'gates']) fs.rmSync(workspaceRoot(root, kind), { recursive: true, force: true })
+        result = { cleaned: 'all', base }
+      } else {
+        if (!id) throw new Error('clean requires a run id (or --all)')
+        fs.rmSync(path.join(workspaceRoot(root, 'gates')), { recursive: true, force: true })
+        result = cleanWorkspaces(root, loadRun(root, id), { force: options.force === 'true' })
       }
     } else if (command === 'export') {
       if (!id) throw new Error('export requires a run id')

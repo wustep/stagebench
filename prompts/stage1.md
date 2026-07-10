@@ -1,6 +1,6 @@
 # Phase 1 — Complete surface and basic piano
 
-Work only inside the assigned Phase 1 candidate directory. Read `BENCHMARK.md`, Phase 1 of `specs/benchmark-phases.json`, both assigned specs, the selected variant entry, and the selected product image. The manual is the authority where a spec is ambiguous.
+Work only inside the assigned Phase 1 candidate directory. Read `TASK.md`, Phase 1 of `specs/benchmark-phases.json`, both assigned specs, the selected variant entry, and the selected product image. The manual is the authority where a spec is ambiguous.
 
 Assigned specs: `specs/nord-stage-4.visual.json` and `specs/nord-stage-4.piano.json`.
 
@@ -45,4 +45,4 @@ Every visible physical input has a stable ID and accessible name, responds to po
 
 ## Evidence
 
-Maintain every Phase 1 feature ID from `BENCHMARK.md` in `tests/feature-matrix.json`. Use the parent capture harness for `stage1-desktop.png`, `stage1-narrow.png`, and `stage1-capture.json`; write `stage1-visual-audit.md` with measured bounds, ratios, key counts, corrections, and known deviations. Record the true audio source in `IMPLEMENTATION_DETAILS.json`. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before verification.
+Maintain every Phase 1 feature ID from `TASK.md` in `tests/feature-matrix.json`. Use the parent capture harness for `stage1-desktop.png`, `stage1-narrow.png`, and `stage1-capture.json`; write `stage1-visual-audit.md` with measured bounds, ratios, key counts, corrections, and known deviations. Record the true audio source in `IMPLEMENTATION_DETAILS.json`. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before verification.

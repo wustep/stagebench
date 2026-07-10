@@ -34,6 +34,7 @@ export type RawRunEntry = {
   variant?: string | null
   target?: string | null
   targetPhase?: number | null
+  harness?: string | null
   protocolVersion?: string | null
   legacy: boolean
   status: 'in-progress' | 'complete' | 'legacy'
@@ -57,6 +58,7 @@ export type RunEntry = {
   variant: string | null
   target: string
   targetPhase: number | null
+  harness: string | null
   protocolVersion: string | null
   legacy: boolean
   status: 'in-progress' | 'complete' | 'legacy'

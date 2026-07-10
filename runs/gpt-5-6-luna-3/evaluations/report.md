@@ -22,7 +22,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: Generated Web Audio piano fallback: three deterministic oscillator partials per note (triangle fundamental, sine upper partials), per-note exponential attack/release, a 24-voice oldest-first limit, sustain-held release, and one AudioContext destination. No recording is claimed.
-- Generated sound sources: basic-generated-piano
+- Generated sound sources: basic-generated-piano — Phase 1 intentionally uses an honestly labeled synthesis fallback. The browser status reads generated piano; unavailable Web Audio reports an error while keyboard/presentation input remains usable.
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: No network, sample download, physical MIDI device, or real audio output is required by the tests.
@@ -33,7 +33,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: One lazy Web Audio AudioContext owns two Piano layer buses. Each enabled layer uses an offline-safe deterministic model profile with velocity, touch curve, dyn comp, timbre, unison, soft release, string resonance, octave, level, sustain ownership, and a six-unit wet/dry chain. The chains feed layer level, master gain, a DynamicsCompressor limiter, and exactly one destination. When Web Audio is unavailable, the UI remains playable as a labeled fallback and never reports the library as ready.
-- Generated sound sources: Grand model profile; Upright model profile; Electric model profile; Clav model profile; Digital model profile; Misc model profile
+- Generated sound sources: Grand model profile — Phase 2 fallback/model profile; not a recorded sample and not represented as one.; Upright model profile — Phase 2 fallback/model profile; audibly distinct from Grand.; Electric model profile — Phase 2 fallback/model profile; audibly distinct from acoustic profiles.; Clav model profile — Synthesis is permitted for Clav by the piano spec.; Digital model profile — Synthesis is permitted for Digital by the piano spec.; Misc model profile — Synthesis is permitted for Misc by the piano spec.
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: The phase inputs provide no bundled, redistributable recorded Grand, Upright, or Electric files, so this candidate does not falsely claim recordings or invent licenses.
@@ -46,7 +46,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: One lazy PianoAudioEngine AudioContext owns Piano, Organ, and Synth source buses, inherited ordered effect units, one master gain, one limiter, and one destination. Piano uses deterministic generated model profiles; Organ uses model-specific harmonic banks and drawbar weights; Synth uses live oscillators, filters, envelopes, LFO modulation, and deterministic control state.
-- Generated sound sources: Piano model profiles; Organ model profiles; Synth sources; Reverb impulses
+- Generated sound sources: Piano model profiles — Grand, Upright, Electric, Clav, Digital, and Misc are generated profiles, not recordings.; Organ model profiles — Drawbars multiply model-specific partial weights.; Synth sources — No downloaded samples or third-party audio assets.; Reverb impulses — Generated buffers are not represented as recordings.
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: The supplied Phase 2 artifact contained no redistributable recorded Grand/Upright/Electric files; the candidate truthfully retains generated profiles and labeled fallback behavior.

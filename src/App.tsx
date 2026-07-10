@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import runsData from './data/runs.json'
 import protocol from './data/protocol.json'
 import {
@@ -34,6 +34,7 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
     variant: raw.variant ?? null,
     target: raw.target ?? 'Stage 4 73',
     targetPhase: raw.targetPhase ?? null,
+    harness: raw.harness ?? null,
     protocolVersion: raw.protocolVersion ?? null,
     legacy: raw.legacy,
     status: raw.status,
@@ -150,17 +151,20 @@ function formatDuration(value: number) {
   return hours > 0 ? `${hours}h ${minutes}m ${seconds}s` : `${minutes}m ${seconds}s`
 }
 
-function formatTelemetry(telemetry: RunEntry['telemetry']) {
-  if (!telemetry) return null
-  const parts: string[] = []
-  if (typeof telemetry.costUsd === 'number') parts.push(`$${telemetry.costUsd.toFixed(2)}`)
-  if (typeof telemetry.wallTimeSeconds === 'number') parts.push(formatDuration(telemetry.wallTimeSeconds))
-  if (typeof telemetry.totalTokens === 'number') parts.push(`${formatTokens(telemetry.totalTokens)} total tokens`)
-  if (typeof telemetry.inputTokens === 'number') parts.push(`${formatTokens(telemetry.inputTokens)} tok in`)
-  if (typeof telemetry.outputTokens === 'number') parts.push(`${formatTokens(telemetry.outputTokens)} tok out`)
-  if (typeof telemetry.reasoningTokens === 'number') parts.push(`${formatTokens(telemetry.reasoningTokens)} reasoning`)
-  if (typeof telemetry.toolCalls === 'number') parts.push(`${telemetry.toolCalls} tool calls`)
-  return parts.length > 0 ? parts.join(' · ') : null
+// Ultra-compact wall time for the leaderboard's TIME column ("4h27m",
+// "20m29s"); the expanded details pane shows the full formatDuration string.
+function formatDurationCompact(value: number) {
+  const totalSeconds = Math.round(value)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  if (hours > 0) return `${hours}h${minutes}m`
+  if (minutes > 0) return `${minutes}m${totalSeconds % 60}s`
+  return `${totalSeconds}s`
+}
+
+// CSS modifier slug for a harness pill ("Claude Code" -> "claude-code").
+function harnessSlug(harness: string) {
+  return harness.toLowerCase().replace(/[^a-z0-9]+/g, '-')
 }
 
 // The full phase list for the protocol a run was recorded under. Rendering
@@ -189,6 +193,42 @@ function PlayIcon() {
   return (
     <svg className="play-icon" viewBox="0 0 10 12" width="10" height="12" aria-hidden="true">
       <path d="M0 0l10 6-10 6z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
+      <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M8 7v4.4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="4.6" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+
+function ReportIcon() {
+  return (
+    <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+      <rect x="1" y="6.5" width="2.3" height="4.5" rx=".5" fill="currentColor" />
+      <rect x="4.85" y="3.5" width="2.3" height="7.5" rx=".5" fill="currentColor" />
+      <rect x="8.7" y="1" width="2.3" height="10" rx=".5" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+      <path d="M1 1l10 10M11 1L1 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   )
 }
@@ -407,7 +447,9 @@ function App() {
   )
   const [selectedPhase, setSelectedPhase] = useState<PhaseNumber | null>(initialViewer?.phase ?? null)
   const [selectedReport, setSelectedReport] = useState<RunEntry | null>(null)
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
   const [showcaseOpen, setShowcaseOpen] = useState(false)
+  const [protocolInfoOpen, setProtocolInfoOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [activeNotes, setActiveNotes] = useState<Set<number>>(() => new Set())
   const [lastPlayed, setLastPlayed] = useState<string | null>(null)
@@ -432,11 +474,39 @@ function App() {
   const captureDialogOpener = useCallback(() => {
     dialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
   }, [])
+  // Leaderboard ordering: within each result tier, rank by aggregate score
+  // (highest first) so the gallery's job — comparing model results — is legible
+  // at a glance. Runs still in progress have no score yet, so they sink below
+  // the scored runs of their tier; newest-first breaks any remaining ties.
   const visibleRuns = [...runs]
-    .sort((left, right) => getResultClass(left).rank - getResultClass(right).rank || right.startedAt.localeCompare(left.startedAt))
+    .sort((left, right) =>
+      getResultClass(left).rank - getResultClass(right).rank
+      || (right.score ?? -1) - (left.score ?? -1)
+      || right.startedAt.localeCompare(left.startedAt))
   const activeCount = visibleRuns.filter((run) => run.status === 'in-progress').length
-  const legacyCount = visibleRuns.filter((run) => run.legacy).length
-  const currentCount = visibleRuns.length - legacyCount
+  // Position among the scored runs of each tier, so "#1" always names the top
+  // score of its protocol group. Unscored (in-progress) runs get no rank.
+  const rankByRun = new Map<string, number>()
+  const tierRankCounter = new Map<string, number>()
+  for (const run of visibleRuns) {
+    if (run.score === null) continue
+    const tierId = getResultClass(run).id
+    const next = (tierRankCounter.get(tierId) ?? 0) + 1
+    tierRankCounter.set(tierId, next)
+    rankByRun.set(run.id, next)
+  }
+  // The field's best score per phase within each tier — the timing-tower
+  // "fastest split" highlight, so per-phase winners read independently of
+  // the aggregate ranking.
+  const bestByTierPhase = new Map<string, number>()
+  for (const run of visibleRuns) {
+    const tierId = getResultClass(run).id
+    for (const stage of run.stages) {
+      if (stage.score === null) continue
+      const key = `${tierId}:${stage.number}`
+      bestByTierPhase.set(key, Math.max(bestByTierPhase.get(key) ?? -1, stage.score))
+    }
+  }
   const selectedPreviewPath = selectedRun && selectedPhase
     ? getPreviewPath(selectedRun, selectedPhase)
     : undefined
@@ -582,7 +652,15 @@ function App() {
     setActiveNotes((current) => new Set(current).add(midi))
   }, [ensureAudioContext])
 
-  const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen)
+  const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen || protocolInfoOpen)
+
+  const openProtocolInfo = useCallback(() => {
+    captureDialogOpener()
+    closePreview()
+    setSelectedReport(null)
+    setShowcaseOpen(false)
+    setProtocolInfoOpen(true)
+  }, [captureDialogOpener, closePreview])
 
   // Move focus into a dialog when it mounts; tabIndex={-1} on the container
   // keeps it out of the tab order while still accepting programmatic focus.
@@ -606,12 +684,13 @@ function App() {
       if (event.key !== 'Escape') return
       if (showcaseOpen) setShowcaseOpen(false)
       else if (selectedReport) setSelectedReport(null)
+      else if (protocolInfoOpen) setProtocolInfoOpen(false)
       else if (selectedRun) closePreview()
     }
 
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [overlayOpen, showcaseOpen, selectedReport, selectedRun, closePreview])
+  }, [overlayOpen, showcaseOpen, selectedReport, protocolInfoOpen, selectedRun, closePreview])
 
   useEffect(() => {
     const syncViewerFromUrl = () => {
@@ -742,6 +821,12 @@ function App() {
             <h1>Nord Stage{'\u00A0'}4 benchmark</h1>
             <p>Coding agents rebuild the Nord Stage{' '}4 as a playable browser instrument.</p>
           </div>
+          <a className="github-link" href="https://github.com/wustep/stagebench" rel="noopener" target="_blank">
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" fill="currentColor" />
+            </svg>
+            <span>GitHub</span>
+          </a>
         </div>
 
         <div className="instrument-shell">
@@ -869,13 +954,6 @@ function App() {
       <section className="run-index" id="runs">
         <div className="run-index-heading">
           <h2>Runs</h2>
-          <div className="run-index-meta">
-            <span>
-              {legacyCount > 0
-                ? `${currentCount} current · ${legacyCount} legacy`
-                : `${visibleRuns.length} ${visibleRuns.length === 1 ? 'run' : 'runs'}`}
-            </span>
-          </div>
         </div>
 
         {visibleRuns.length > 0 ? (
@@ -884,62 +962,136 @@ function App() {
               const resultClass = getResultClass(run)
               const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
               const phaseList = getPhaseList(run)
-              const telemetry = formatTelemetry(run.telemetry)
+              const rank = rankByRun.get(run.id) ?? null
+              const playable = Boolean(run.previewPath)
+              const expanded = expandedRunId === run.id
+              // Sector column count rides on a CSS variable so legacy tiers
+              // with a four-phase protocol keep their own aligned grid.
+              const sectorsStyle = { '--sectors': phaseList.length } as CSSProperties
+              const tokens = run.telemetry?.totalTokens ?? run.telemetry?.inputTokens ?? null
               return (
               <Fragment key={run.id}>
               {resultClass.id !== previousClass && (
-                <header className={`result-group-heading result-group-${resultClass.id}`}>
-                  <span>{resultClass.label}</span>
-                  <p>{resultClass.description}</p>
-                </header>
-              )}
-              <article className={`run-row result-${resultClass.id}`}>
-                <div className="run-model">
-                  <div className="run-status-line">
-                    <span className="run-status"><StatusLight status={run.status} />{run.status.replace(/-/g, ' ')}</span>
-                    <span className="model-target">{run.target}</span>
+                <>
+                  <header className={`result-group-heading result-group-${resultClass.id}`}>
+                    <span className="result-group-label">
+                      {resultClass.label}
+                      {resultClass.id === 'current' && (
+                        <button
+                          aria-label={`About protocol ${protocol.version}`}
+                          className="protocol-info-btn"
+                          onClick={openProtocolInfo}
+                          type="button"
+                        >
+                          <InfoIcon />
+                        </button>
+                      )}
+                    </span>
+                    <p>{resultClass.description}</p>
+                  </header>
+                  <div aria-hidden="true" className="tower-head" style={sectorsStyle}>
+                    <span>Pos</span>
+                    <span>Model</span>
+                    <span>Harness</span>
+                    {phaseList.map((name, phaseIndex) => <span key={name}>0{phaseIndex + 1} · {name}</span>)}
+                    <span className="num">Tokens</span>
+                    <span className="num">Time</span>
+                    <span className="num">Score</span>
+                    <span />
                   </div>
-                  <h3>{getRunTitle(run)}</h3>
-                  {run.score !== null && (
-                    <div className="run-score" aria-label={`Aggregate evaluation ${floorScore(run.score)} out of 100`}>
-                      <strong>{floorScore(run.score)}</strong>
-                      <span>/100</span>
-                    </div>
-                  )}
-                  <p>{formatDate(run.startedAt)}{run.model !== getRunTitle(run) && ` · ${run.model}`}</p>
-                  {telemetry && <p className="run-telemetry">{telemetry}</p>}
-                </div>
-
-                <ol className="stage-track" aria-label={`${getRunTitle(run)} phase progress`} style={{ gridTemplateColumns: `repeat(${phaseList.length}, 1fr)` }}>
+                </>
+              )}
+              <article className={`run-row result-${resultClass.id}${rank !== null && rank <= 3 ? ` podium-${rank}` : ''}`}>
+                <div
+                  className={`row-main${playable ? ' is-playable' : ''}`}
+                  onClick={playable ? () => openPreview(run) : undefined}
+                  style={sectorsStyle}
+                >
+                  <span className="pos">
+                    <b aria-hidden="true">{rank ?? '—'}</b>
+                    {playable && (
+                      <button
+                        aria-label={`Play ${getRunTitle(run)}${rank !== null ? `, ranked ${rank}` : ''}`}
+                        className="pos-play"
+                        onClick={(event) => { event.stopPropagation(); openPreview(run) }}
+                        type="button"
+                      >
+                        <PlayIcon />
+                      </button>
+                    )}
+                  </span>
+                  <div className="driver">
+                    <strong>{getRunTitle(run)}</strong>
+                    <span>{formatDate(run.startedAt)}</span>
+                  </div>
+                  {run.harness ? (
+                    <span className={`harness harness-${harnessSlug(run.harness)}`}>{run.harness}</span>
+                  ) : <span />}
                   {phaseList.map((name, phaseIndex) => {
                     const phase = (phaseIndex + 1) as PhaseNumber
                     const stage = run.stages.find((candidate) => candidate.number === phase)
                     const score = stage?.score ?? null
+                    const best = score !== null && score === bestByTierPhase.get(`${resultClass.id}:${phase}`)
+                    const label = score !== null
+                      ? String(floorScore(score))
+                      : stage
+                        ? (stage.status === 'complete' ? 'pending' : stage.status)
+                        : '—'
                     return (
-                      <li className={`stage-${stage?.status ?? 'off'}`} key={phase}>
-                        <span>0{phase}</span>
-                        <div><StatusLight status={stage?.status ?? 'off'} /><strong>{name}</strong></div>
-                        <small>{score !== null ? `${floorScore(score)}/100` : stage ? (stage.status === 'complete' ? 'evaluation pending' : stage.status) : 'not run'}</small>
-                        <span aria-hidden="true" className="stage-meter"><i style={{ width: `${score !== null ? Math.min(100, Math.max(0, score)) : 0}%` }} /></span>
-                      </li>
+                      <div
+                        aria-label={`Phase ${phase}, ${name}: ${score !== null ? `${floorScore(score)} out of 100${best ? ', best of the field' : ''}` : label}`}
+                        className={`sector${best ? ' is-best' : ''}${score === null ? ' is-na' : ''}${stage?.status === 'running' ? ' is-running' : ''}`}
+                        key={phase}
+                      >
+                        <b>{label}</b>
+                        <span aria-hidden="true" className="sector-bar"><i style={{ width: `${score !== null ? Math.min(100, Math.max(0, score)) : 0}%` }} /></span>
+                        <small aria-hidden="true">{name}</small>
+                      </div>
                     )
                   })}
-                </ol>
-
-                <div className="run-actions">
-                  {run.previewPath ? (
-                    <button type="button" className="open-preview" onClick={() => openPreview(run)}>
-                      Play <PlayIcon />
-                    </button>
-                  ) : (
-                    <span className="preview-pending">No preview available</span>
-                  )}
-                  {run.reportPath && (
-                    <button type="button" className="open-report" onClick={() => { captureDialogOpener(); closePreview(); setSelectedReport(run) }}>
-                      Evaluation report <span aria-hidden="true">→</span>
-                    </button>
-                  )}
+                  <span className="cell-num">{tokens !== null ? formatTokens(tokens) : '—'}</span>
+                  <span className="cell-num">{run.telemetry?.wallTimeSeconds != null ? formatDurationCompact(run.telemetry.wallTimeSeconds) : '—'}</span>
+                  <div className="total" aria-label={run.score !== null ? `Score ${floorScore(run.score)} out of 100` : undefined}>
+                    {run.score !== null
+                      ? <><b>{floorScore(run.score)}</b><small>/100</small></>
+                      : <span className={`total-state${run.status === 'in-progress' ? ' is-live' : ''}`}>{run.status === 'in-progress' ? 'Running' : 'Pending'}</span>}
+                  </div>
+                  <button
+                    aria-expanded={expanded}
+                    aria-label={`${getRunTitle(run)} run details`}
+                    className="row-info"
+                    onClick={(event) => { event.stopPropagation(); setExpandedRunId(expanded ? null : run.id) }}
+                    type="button"
+                  >
+                    <ChevronIcon />
+                  </button>
                 </div>
+                {expanded && (
+                  <div className="run-details">
+                    <dl>
+                      <div><dt>Status</dt><dd className="detail-status"><StatusLight status={run.status} />{run.status.replace(/-/g, ' ')}</dd></div>
+                      <div><dt>Run</dt><dd>{run.id}</dd></div>
+                      <div><dt>Model</dt><dd>{run.model}</dd></div>
+                      <div><dt>Target</dt><dd>{run.target}</dd></div>
+                      <div><dt>Protocol</dt><dd>{run.protocolVersion ?? '—'}</dd></div>
+                      <div><dt>Started</dt><dd>{formatDate(run.startedAt)}</dd></div>
+                      <div><dt>Updated</dt><dd>{formatDate(run.updatedAt)}</dd></div>
+                      {run.telemetry?.wallTimeSeconds != null && <div><dt>Wall time</dt><dd>{formatDuration(run.telemetry.wallTimeSeconds)}</dd></div>}
+                      {run.telemetry?.costUsd != null && <div><dt>Cost</dt><dd>${run.telemetry.costUsd.toFixed(2)}</dd></div>}
+                      {run.telemetry?.totalTokens != null && <div><dt>Total tokens</dt><dd>{formatTokens(run.telemetry.totalTokens)}</dd></div>}
+                      {run.telemetry?.inputTokens != null && <div><dt>Tokens in</dt><dd>{formatTokens(run.telemetry.inputTokens)}</dd></div>}
+                      {run.telemetry?.outputTokens != null && <div><dt>Tokens out</dt><dd>{formatTokens(run.telemetry.outputTokens)}</dd></div>}
+                      {run.telemetry?.reasoningTokens != null && <div><dt>Reasoning</dt><dd>{formatTokens(run.telemetry.reasoningTokens)}</dd></div>}
+                      {run.telemetry?.toolCalls != null && <div><dt>Tool calls</dt><dd>{run.telemetry.toolCalls}</dd></div>}
+                    </dl>
+                    {run.reportPath && (
+                      <button type="button" className="open-report" onClick={() => { captureDialogOpener(); closePreview(); setSelectedReport(run) }}>
+                        <ReportIcon />
+                        <span>Evaluation report</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </article>
               </Fragment>
               )
@@ -1049,6 +1201,60 @@ function App() {
           </div>
           <div className="preview-stage">
             <PreviewFrame scrolling="no" src="/previews/showcase/index.html" title="Showcase Nord Stage 4" />
+          </div>
+        </div>
+      )}
+
+      {protocolInfoOpen && (
+        <div className="modal-backdrop" onClick={() => setProtocolInfoOpen(false)}>
+          <div
+            aria-labelledby="protocol-info-heading"
+            aria-modal="true"
+            className="info-modal"
+            onClick={(event) => event.stopPropagation()}
+            ref={focusDialog}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <div className="info-modal-head">
+              <h3 id="protocol-info-heading">Protocol {protocol.version}</h3>
+              <button aria-label="Close" onClick={() => setProtocolInfoOpen(false)} type="button">
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="info-modal-body">
+              <p>
+                Stagebench bumps its protocol version whenever the prompts, specs, rubric, or verifier behavior
+                change — anything that could shift what&rsquo;s being measured. Runs are only closely comparable
+                within the same protocol version.
+              </p>
+              <dl className="protocol-history">
+                <div>
+                  <dt>Protocol 1.1 <span>Current</span></dt>
+                  <dd>
+                    Changed materials packaging: candidates no longer see scoring or harness docs, future-phase
+                    details, or unassigned hardware variants, and evaluators now work in an isolated workspace.
+                    Task content — phases, prompts, rubric weights — is unchanged from 1.0, so 1.0 and 1.1 scores
+                    are directly comparable.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Protocol 1.0</dt>
+                  <dd>
+                    The baseline three-phase protocol: cumulative Surface + Piano, Pianos + FX, and Complete
+                    System phases, each scored against the published rubric.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Legacy</dt>
+                  <dd>
+                    Runs recorded before the current run schema, under earlier prompts, specs, or scoring. Kept
+                    for reference with their frozen scores and evaluation reports — not directly comparable to
+                    current runs.
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </div>
         </div>
       )}

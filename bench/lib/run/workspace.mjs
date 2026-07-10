@@ -1,10 +1,12 @@
 // Isolated per-phase workspaces. A candidate agent works in
 // .stagebench/work/<id>/stage<N>/candidate with read-only-intended inputs
-// beside it, and never sees runs/, other solutions, or future prompts.
+// beside it, and never sees runs/, other solutions, future phase details,
+// unassigned variants, or scoring materials.
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { hashTree, loadProtocol, readJson, writeJson } from '../shared.mjs'
+import { hashTree, loadProtocol, readJson, workspaceRoot, writeJson } from '../shared.mjs'
+import { filterTaskToPhase, projectProtocol, projectVariants } from '../materials.mjs'
 import { loadRun, markRunning, nextPhase, stageDirFor } from './store.mjs'
 
 const COPY_EXCLUDES = new Set(['node_modules', 'dist', '.git', '.vite', 'evaluations', 'verifications'])
@@ -19,7 +21,7 @@ function copyTree(source, destination) {
 }
 
 export function workspaceDir(root, id, phase) {
-  return path.join(root, '.stagebench', 'work', id, `stage${phase}`)
+  return path.join(workspaceRoot(root, 'work'), id, `stage${phase}`)
 }
 
 function copyInput(root, relativePath, inputRoot) {
@@ -62,9 +64,6 @@ export function startPhase(root, id) {
   const variant = variants.variants.find((entry) => entry.id === run.variant)
   if (!variant) throw new Error(`Unknown run variant: ${run.variant}`)
   const files = [
-    'BENCHMARK.md',
-    'specs/benchmark-phases.json',
-    'specs/nord-stage-4.variants.json',
     'bench/schemas/implementation-details.schema.json',
     contract.prompt,
     ...contract.specs,
@@ -73,13 +72,18 @@ export function startPhase(root, id) {
     if (fs.existsSync(path.join(root, reference))) files.push(reference)
   }
   const copied = [...new Set(files)].map((file) => copyInput(root, file, inputs))
+  // Generated projections: the task and phase manifest filtered to phases ≤
+  // the current one, and only the assigned variant.
+  fs.writeFileSync(path.join(inputs, 'TASK.md'), filterTaskToPhase(fs.readFileSync(path.join(root, 'TASK.md'), 'utf8'), phase))
+  writeJson(path.join(inputs, 'specs', 'benchmark-phases.json'), projectProtocol(protocol, phase, run.variant))
+  writeJson(path.join(inputs, 'specs', 'nord-stage-4.variants.json'), projectVariants(variants, run.variant))
   writeJson(path.join(workspace, 'workspace.json'), {
     version: 1,
     runId: id,
     phase,
     variant: run.variant,
     protocolVersion: protocol.version,
-    inputs: copied,
+    inputs: [...copied, 'TASK.md', 'specs/benchmark-phases.json', 'specs/nord-stage-4.variants.json'].sort(),
     createdAt: new Date().toISOString(),
   })
   fs.writeFileSync(path.join(workspace, 'WORKSPACE.md'), [
@@ -88,7 +92,7 @@ export function startPhase(root, id) {
     `Implement Phase ${phase} inside \`candidate/\` only. Everything you need is in \`inputs/\`:`,
     '',
     `1. Read \`inputs/${contract.prompt}\` — the phase instructions.`,
-    `2. Read \`inputs/BENCHMARK.md\` and the assigned specs under \`inputs/specs/\`.`,
+    `2. Read \`inputs/TASK.md\` and the assigned specs under \`inputs/specs/\`.`,
     `3. Variant: **${variant.label}** (\`inputs/${variant.referenceImage}\` if fetched).`,
     '',
     'Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` inside `candidate/` before finishing.',

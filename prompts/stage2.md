@@ -35,4 +35,4 @@ Skip everything the specs list under `excluded` — those controls stay decorati
 
 ## Evidence
 
-Preserve every Phase 1 test and feature mapping; add all Phase 2 IDs from `BENCHMARK.md`. Tests must cross the audio boundary: instrument distinctions, control changes, pedal behavior, layer ownership, effect processing/bypass/order, one context, and cleanup. Update `IMPLEMENTATION_DETAILS.json` with the full sample library and licenses. Use the parent capture harness for canonical Phase 2 evidence and run all four pnpm gates.
+Preserve every Phase 1 test and feature mapping; add all Phase 2 IDs from `TASK.md`. Tests must cross the audio boundary: instrument distinctions, control changes, pedal behavior, layer ownership, effect processing/bypass/order, one context, and cleanup. Update `IMPLEMENTATION_DETAILS.json` with the full sample library and licenses. Use the parent capture harness for canonical Phase 2 evidence and run all four pnpm gates.

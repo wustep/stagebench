@@ -13,6 +13,8 @@
   --green: oklch(82% 0.2 135);
   --amber: oklch(80% 0.17 75);
   --red-led: oklch(65% 0.25 29);
+  /* "Fastest split" highlight on the run leaderboard, F1-timing style. */
+  --sector-best: oklch(50% 0.19 320);
   --z-modal: 20;
 }
 
@@ -110,6 +112,32 @@ a { color: inherit; }
   margin: 0 auto;
   padding: 48px 0 40px;
 }
+
+/* Source link, sharing the eyebrow's pill chrome and sitting opposite the
+   intro copy on the header's baseline. */
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in oklch, var(--white) 30%, transparent);
+  border-radius: 999px;
+  color: color-mix(in oklch, var(--white) 85%, transparent);
+  font: 800 11px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .12em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: border-color .15s, background-color .15s, color .15s;
+}
+
+.github-link:hover {
+  border-color: color-mix(in oklch, var(--white) 65%, transparent);
+  background: color-mix(in oklch, var(--white) 12%, transparent);
+  color: var(--white);
+}
+
+.github-link svg { flex: none; }
 
 .header-eyebrow {
   display: inline-block;
@@ -826,67 +854,198 @@ a { color: inherit; }
   padding: 64px 0 72px;
 }
 
-.run-index-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 24px;
-}
+.run-index-heading { margin-bottom: 24px; }
 
 .run-index-heading h2 {
-  margin: 0 0 6px;
+  margin: 0;
   font: 800 42px/1 'Barlow Condensed', sans-serif;
   letter-spacing: -.025em;
 }
 
-.run-index-meta { display: flex; align-items: center; gap: 12px; }
-.run-index-meta > span { color: var(--muted); font-size: 12px; }
-
 .result-group-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; padding: 18px 4px 9px; border-bottom: 2px solid var(--ink); }
-.result-group-heading span { font: 900 17px/1 'Barlow Condensed', sans-serif; letter-spacing: .03em; text-transform: uppercase; }
+.result-group-label { display: inline-flex; align-items: center; gap: 8px; font: 900 17px/1 'Barlow Condensed', sans-serif; letter-spacing: .03em; text-transform: uppercase; }
 .result-group-heading p { margin: 0; color: var(--muted); font-size: 10px; }
 .result-group-current { border-color: oklch(42% 0.11 145); }
 .result-group-legacy { border-color: var(--muted); }
 
-.run-row {
+/* Bare circled-i affordance that opens the protocol-differences modal — the
+   glyph is its own ring, so no button chrome around it. */
+.protocol-info-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 1px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: color-mix(in oklch, var(--muted) 78%, transparent);
+  cursor: pointer;
+  transition: color .14s ease, transform .14s ease;
+}
+.protocol-info-btn:hover { color: var(--nord-red); transform: translateY(-1px); }
+.protocol-info-btn:active { transform: translateY(0); }
+.protocol-info-btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 50%; }
+
+/* ------------------------------------------------------------------------
+   The run leaderboard: a timing-tower layout. One line per run — position,
+   model, harness livery, phase "sectors" (best split of the field lights up
+   purple), spend columns, and the aggregate score. The whole row plays the
+   run; the chevron expands full run metadata. */
+
+.tower-head, .row-main {
   display: grid;
-  grid-template-columns: minmax(210px, .85fr) minmax(420px, 1.5fr) 170px;
+  grid-template-columns: 40px minmax(150px, 1.25fr) 92px repeat(var(--sectors, 3), minmax(78px, .72fr)) 62px 62px 74px 30px;
+  gap: clamp(10px, 1.5vw, 22px);
   align-items: center;
-  gap: 36px;
-  min-height: 154px;
-  margin: 0 -20px;
-  padding: 24px 20px;
-  border-bottom: 1px solid var(--line);
-  transition: background-color .16s ease, box-shadow .16s ease;
 }
 
-.run-row:hover { background: oklch(97.5% 0.005 29); }
+.tower-head {
+  padding: 12px 12px 9px;
+  border-bottom: 1px solid var(--ink);
+  color: var(--muted);
+  font: 800 9px/1.2 'Barlow Condensed', sans-serif;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.tower-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tower-head .num { text-align: right; }
 
-.run-model h3 {
-  margin: 10px 0 6px;
-  font-size: 20px;
-  line-height: 1.2;
-  text-wrap: balance;
+.run-row { border-bottom: 1px solid var(--line); }
+.run-row.result-legacy .row-main { opacity: .88; }
+
+.row-main {
+  position: relative;
+  min-height: 66px;
+  padding: 10px 12px;
+  transition: background-color .14s ease;
+}
+.row-main.is-playable { cursor: pointer; }
+.row-main.is-playable:hover { background: oklch(96.5% 0.008 29); }
+/* Podium tints, strongest for the leader. */
+.run-row.podium-1 .row-main { background: color-mix(in oklch, oklch(72% 0.13 85) 15%, transparent); }
+.run-row.podium-1 .row-main.is-playable:hover { background: color-mix(in oklch, oklch(72% 0.13 85) 23%, transparent); }
+.run-row.podium-2 .row-main { background: color-mix(in oklch, oklch(72% 0.13 85) 7%, transparent); }
+.run-row.podium-2 .row-main.is-playable:hover { background: color-mix(in oklch, oklch(72% 0.13 85) 13%, transparent); }
+.run-row.podium-3 .row-main { background: color-mix(in oklch, oklch(72% 0.13 85) 3.5%, transparent); }
+.run-row.podium-3 .row-main.is-playable:hover { background: color-mix(in oklch, oklch(72% 0.13 85) 9%, transparent); }
+
+/* Position cell: the rank digit swaps for a play button on hover/focus so
+   the whole row clearly reads as playable. The button scales in rather than
+   just fading, so the swap reads as a deliberate "pop", not a flicker. */
+.pos { position: relative; display: grid; place-items: center; width: 36px; height: 36px; }
+.pos > b { font: 900 18px/1 'Barlow Condensed', sans-serif; font-variant-numeric: tabular-nums; }
+.run-row.podium-1 .pos > b { color: var(--nord-red); }
+.pos-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, oklch(56% 0.19 24), var(--nord-red));
+  color: var(--white);
+  opacity: 0;
+  transform: scale(.78);
+  cursor: pointer;
+  box-shadow: 0 4px 10px -4px oklch(50% 0.2 24 / .8);
+  transition: opacity .14s ease, transform .14s ease, background-color .14s ease;
+}
+.pos-play svg { transform: translateX(1px); }
+.row-main:hover .pos-play, .pos-play:focus-visible { opacity: 1; transform: scale(1); }
+.pos-play:hover { background: linear-gradient(180deg, oklch(59% 0.2 24), oklch(46% 0.17 24)); }
+/* Touch has no hover to reveal the play button, but the whole row is already
+   clickable — suppress the tap-highlight rectangle so a tap feels intentional. */
+.row-main.is-playable { -webkit-tap-highlight-color: transparent; }
+@media (hover: none) {
+  .row-main.is-playable:active { background: oklch(95% 0.008 29); }
 }
 
-.run-model p { margin: 0; color: var(--muted); font: 500 10px/1.4 ui-monospace, monospace; }
-.run-status-line { display: flex; align-items: center; gap: 9px; }
-.run-status { display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
-.run-row.result-legacy { opacity: .88; }
-.model-target { padding: 3px 6px; border: 1px solid var(--line); color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.driver { min-width: 0; }
+.driver strong { display: block; overflow: hidden; font-size: 15px; font-weight: 800; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.driver > span { color: var(--muted); font: 500 9.5px/1.9 ui-monospace, monospace; }
 
-.run-score {
+/* Harness livery pills — one color per coding harness. */
+.harness {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 8px;
+  border-radius: 3px;
+  background: oklch(55% 0.02 270);
+  color: var(--white);
+  font: 800 9px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .1em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.harness-claude-code { background: oklch(60% 0.14 45); }
+.harness-codex { background: oklch(46% 0.13 285); }
+.harness-cursor { background: oklch(28% 0.015 270); }
+.harness-opencode { background: oklch(46% 0.1 160); }
+
+/* Phase sectors: split value + micro bar; the tier's best split lights up. */
+.sector { min-width: 0; }
+.sector > b { display: block; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sector.is-na > b { color: var(--muted); font: 600 10px/1.25 inherit; text-transform: capitalize; }
+.sector.is-running > b { color: oklch(58% 0.13 75); text-transform: capitalize; }
+.sector-bar { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: oklch(89% 0.008 30); overflow: hidden; }
+.sector-bar i { display: block; height: 100%; border-radius: 2px; background: oklch(58% 0.03 30); transition: width .3s ease; }
+.sector.is-best > b { color: var(--sector-best); }
+.sector.is-best .sector-bar i { background: var(--sector-best); }
+/* Phase names live in the tower head on desktop; each sector carries its own
+   label only in the stacked mobile layout. */
+.sector > small { display: none; }
+
+.cell-num { color: var(--muted); font: 600 11px/1 ui-monospace, monospace; font-variant-numeric: tabular-nums; text-align: right; }
+
+.total { text-align: right; white-space: nowrap; }
+.total b { font: 900 24px/1 'Barlow Condensed', sans-serif; font-variant-numeric: tabular-nums; }
+.total small { margin-left: 2px; color: var(--muted); font: 800 9px/1 'Barlow Condensed', sans-serif; letter-spacing: .05em; }
+.total-state { color: var(--muted); font: 800 10px/1 'Barlow Condensed', sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.total-state.is-live { color: oklch(58% 0.13 75); }
+
+/* Details toggle. */
+.row-info {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color .14s ease, color .14s ease, background-color .14s ease;
+}
+.row-info:hover { border-color: var(--ink); color: var(--ink); }
+.row-info svg { transition: transform .16s ease; }
+.row-info[aria-expanded="true"] { border-color: var(--ink); background: var(--ink); color: var(--white); }
+.row-info[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+/* Expanded run metadata. */
+.run-details {
   display: flex;
-  align-items: baseline;
-  gap: 5px;
-  margin: 9px 0;
-  color: var(--nord-red-dark);
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px 28px;
+  margin: 0 12px;
+  padding: 16px 46px 20px;
+  border-top: 1px dashed var(--line);
 }
-
-.run-score > strong { font: 800 27px/1 'Barlow Condensed', sans-serif; }
-.run-score > span { color: var(--ink); font-size: 10px; font-weight: 800; text-transform: uppercase; }
-.run-telemetry { margin: 2px 0 0 !important; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.run-details dl {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 16px 24px;
+  margin: 0;
+  min-width: 0;
+}
+.run-details dt { margin-bottom: 5px; color: var(--muted); font: 800 8.5px/1 'Barlow Condensed', sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+.run-details dd { margin: 0; overflow: hidden; font: 500 11.5px/1.35 ui-monospace, monospace; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
+.detail-status { display: flex; align-items: center; gap: 6px; text-transform: capitalize; }
 
 .status-light { display: inline-block; width: 7px; height: 7px; flex: none; border-radius: 50%; background: oklch(62% 0 0); }
 .status-complete { background: oklch(68% 0.18 145); }
@@ -896,25 +1055,6 @@ a { color: inherit; }
 .status-queued { background: oklch(62% 0 0); }
 /* An unlit LED for protocol phases the run never attempted. */
 .status-off { background: transparent; box-shadow: inset 0 0 0 1px oklch(74% 0.008 30); }
-
-.stage-track {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.stage-track li { min-width: 0; padding: 0 16px; border-left: 1px solid var(--line); }
-.stage-track > li:last-child { border-right: 1px solid var(--line); }
-.stage-track > li > span { color: var(--muted); font: 700 9px/1 'Barlow Condensed', sans-serif; }
-.stage-track > li > div { display: flex; align-items: center; gap: 7px; margin: 13px 0 8px; }
-.stage-track strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.stage-track small { display: block; min-height: 11px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; text-transform: capitalize; }
-.stage-track .stage-off strong { color: var(--muted); }
-.stage-meter { display: block; width: 100%; max-width: 130px; height: 3px; margin-top: 8px; background: oklch(90% 0.008 30); }
-.stage-meter i { display: block; height: 100%; background: var(--nord-red); transition: width .3s ease; }
-.result-legacy .stage-meter i { background: oklch(58% 0.06 250); }
 
 .open-preview {
   min-height: 42px;
@@ -935,22 +1075,29 @@ a { color: inherit; }
 .open-preview:hover { background: var(--nord-red-dark); }
 .play-icon { flex: none; opacity: .85; transition: transform .15s ease; }
 .open-preview:hover .play-icon { transform: translateX(1px); opacity: 1; }
-.run-actions { display: grid; gap: 7px; }
 .open-report {
-  min-height: 36px;
-  display: flex;
+  min-height: 38px;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
+  gap: 9px;
+  padding: 0 16px;
   border: 1px solid var(--ink);
+  border-radius: 8px;
   background: transparent;
   color: var(--ink);
-  font-size: 11px;
-  font-weight: 750;
+  font: 700 11px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .05em;
+  text-transform: uppercase;
   cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.open-report:hover { background: var(--ink); color: var(--white); }
-.preview-pending { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.open-report:hover {
+  background: var(--ink);
+  color: var(--white);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px -10px oklch(20% 0.01 30 / .7);
+}
+.open-report:active { transform: translateY(0); box-shadow: none; }
 
 .empty-state {
   display: flex;
@@ -1027,21 +1174,26 @@ footer p span { display: block; }
   background: var(--nord-red);
 }
 
-.preview-header { min-height: 60px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 0 12px; background: transparent; color: var(--white); font-size: 10px; }
-.preview-identity, .preview-tools { display: flex; align-items: center; gap: 11px; }
-.preview-identity > span:last-child { color: color-mix(in oklch, var(--white) 75%, transparent); }
+.preview-header { min-height: 62px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 0 14px; background: transparent; color: var(--white); font-size: 11px; }
+.preview-identity, .preview-tools { display: flex; align-items: center; gap: 12px; }
+.preview-identity > strong { font: 800 14px/1 'Barlow Condensed', sans-serif; letter-spacing: .01em; }
+.preview-identity > span:last-child { color: color-mix(in oklch, var(--white) 72%, transparent); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
 .report-identity { gap: 10px; }
 .report-kind { color: color-mix(in oklch, var(--white) 78%, transparent); text-transform: uppercase; letter-spacing: .04em; }
 .report-score { color: var(--white); font-variant-numeric: tabular-nums; }
-.preview-header button { min-height: 30px; padding: 0 8px; border: 0; background: transparent; color: var(--white); font: inherit; cursor: pointer; }
+.preview-header button { min-height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--white); font: inherit; cursor: pointer; transition: background-color .14s ease, border-color .14s ease; }
 .preview-header button:hover { background: oklch(38% 0.14 29 / .55); }
-.preview-tools .copy-link { border: 1px solid oklch(100% 0 0 / .35); }
+/* Give the direct tool buttons (Copy link, Close) a consistent bordered chip,
+   leaving the segmented phase switch to its own tighter treatment. */
+.preview-tools > button { border: 1px solid oklch(100% 0 0 / .32); }
+.preview-tools > button:hover { border-color: oklch(100% 0 0 / .55); }
 
 .phase-switch { display: flex; align-items: center; gap: 4px; }
 .phase-switch > span { margin-right: 3px; color: color-mix(in oklch, var(--white) 72%, transparent); font-weight: 700; text-transform: uppercase; }
 .phase-switch button {
   min-width: 34px;
   border: 1px solid oklch(100% 0 0 / .4);
+  border-radius: 6px;
   font: 700 10px/1 ui-monospace, monospace;
 }
 .phase-switch button.is-current { background: var(--white); color: var(--nord-red-dark); }
@@ -1054,6 +1206,79 @@ footer p span { display: block; }
 .report-frame { flex: 1; min-height: 0; width: 100%; display: block; border: 1px solid oklch(25% 0.08 29); background: var(--surface); }
 .preview-overlay:focus { outline: none; }
 .preview-frame-shell { position: relative; flex: 1; min-height: 0; min-width: 0; display: flex; }
+
+/* ------------------------------------------------------------------------
+   Small centered dialog for reference text (the protocol explainer) — a
+   lighter-weight pattern than the full-bleed preview overlay above, since
+   there's no iframe to fill the viewport with. */
+.modal-backdrop {
+  position: fixed;
+  z-index: var(--z-modal);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: oklch(20% 0.01 30 / .58);
+  backdrop-filter: blur(2px);
+}
+
+.info-modal {
+  width: min(480px, 100%);
+  max-height: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: var(--white);
+  box-shadow: 0 30px 60px -24px oklch(15% 0.03 29 / .55);
+}
+.info-modal:focus { outline: none; }
+
+.info-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  padding: 18px 18px 16px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.info-modal-head h3 { margin: 0; font: 800 20px/1 'Barlow Condensed', sans-serif; letter-spacing: -.01em; }
+.info-modal-head button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color .14s ease, color .14s ease, background-color .14s ease;
+}
+.info-modal-head button:hover { border-color: var(--ink); color: var(--ink); background: oklch(95% 0.006 29); }
+
+.info-modal-body { overflow-y: auto; padding: 20px 22px 22px; }
+.info-modal-body > p { margin: 0 0 18px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+
+.protocol-history { display: grid; gap: 16px; margin: 0; }
+.protocol-history dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  font: 800 12.5px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .02em;
+}
+.protocol-history dt span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: oklch(42% 0.11 145);
+  color: var(--white);
+  font-size: 8.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.protocol-history dd { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
 
 /* OLED-style readout shown while a published build loads into the iframe. */
 .preview-loading {
@@ -1108,10 +1333,38 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
       'phases phases';
     grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
   }
-  .run-row { grid-template-columns: 1fr; gap: 24px; }
-  .stage-track { max-width: 620px; }
-  .preview-pending, .run-actions { justify-self: start; }
-  .run-actions { min-width: 190px; }
+  /* Stack a timing row at tablet widths: identity line first, sectors on
+     their own labeled line below. The column header row goes away, so each
+     sector shows its own phase name. */
+  .tower-head { display: none; }
+  .row-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 14px;
+    padding: 16px 12px;
+  }
+  /* The driver cell absorbs all slack on the identity line (so sectors are
+     always pushed to their own line). Wrapping is decided on flex BASIS, so
+     the basis stays small enough that pos + title + pill + score + info
+     always share the first line; long titles then ellipsize. */
+  .driver { flex: 1 1 80px; min-width: 0; }
+  .driver strong { font-size: 14px; }
+  .driver > span { white-space: nowrap; }
+  .cell-num { display: none; }
+  .sector { flex: 1 1 26%; order: 10; }
+  .sector > small {
+    display: block;
+    overflow: hidden;
+    margin-top: 4px;
+    color: var(--muted);
+    font: 800 8px/1.2 'Barlow Condensed', sans-serif;
+    letter-spacing: .12em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .run-details { padding: 16px 0 20px; }
 }
 
 @media (max-width: 640px) {
@@ -1124,6 +1377,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .header-intro { min-height: 0; display: block; padding: 38px 0 28px; }
   .header-intro h1 { font-size: 50px; }
   .header-intro p { font-size: 12px; }
+  .github-link { margin-top: 18px; }
   .instrument-shell { --shell-radius: 12px; }
   .control-deck { gap: 8px; padding: 10px; }
   .toy-top-rail span { display: none; }
@@ -1132,10 +1386,10 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .key-label { display: none; }
   .run-index { padding: 46px 0 56px; }
   .run-index-heading h2 { font-size: 34px; }
-  .run-row { min-height: 0; margin: 0 -16px; padding: 24px 16px; }
-  .stage-track li { padding: 0 8px; }
-  .stage-track > li:first-child { padding-left: 0; border-left: 0; }
-  .stage-track strong { font-size: 10px; }
+  .row-main { padding: 16px 4px; }
+  .sector { flex-basis: 26%; }
+  .run-details { flex-direction: column; }
+  .run-details dl { width: 100%; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
   .benchmark-details ol { grid-template-columns: 1fr; }
   .artifacts { width: calc(100% - 32px); }
   .artifact-list { grid-template-columns: 1fr; }
@@ -1145,6 +1399,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .preview-header { min-height: 84px; align-items: flex-start; flex-direction: column; gap: 4px; padding: 8px; }
   .preview-tools { width: 100%; flex-wrap: wrap; justify-content: space-between; }
   .preview-tools .copy-link { margin-left: auto; }
+  .modal-backdrop { padding: 16px; align-items: flex-end; }
+  .info-modal { max-height: 82vh; }
   .phase-switch > span { display: none; }
 }
 

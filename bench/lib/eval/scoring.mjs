@@ -157,6 +157,52 @@ export function scoreAssessment(rubric, assessment, technicalChecks = []) {
   }
 }
 
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+// Combine independent evaluator assessments of one phase into a single
+// assessment by taking the per-criterion median rating (rounded to the
+// rubric's integer scale) and unioning the evidence with per-evaluator
+// attribution. Reduces single-observation noise; a one-evaluator panel is a
+// no-op passthrough. Each input must independently validate.
+export function mergeAssessments(rubric, assessments) {
+  assert.ok(Array.isArray(assessments) && assessments.length > 0, 'A panel needs at least one assessment')
+  assessments.forEach((assessment) => validateAssessment(rubric, assessment))
+  if (assessments.length === 1) return assessments[0]
+  const stageNumber = assessments[0].stage
+  assert.ok(assessments.every((assessment) => assessment.stage === stageNumber), 'Panel assessments must target one stage')
+  assert.ok(assessments.every((assessment) => assessment.runId === assessments[0].runId), 'Panel assessments must target one run')
+  const stage = rubric.stages[String(stageNumber)]
+  const categories = stage.categories.map((category) => ({
+    id: category.id,
+    criteria: category.criteria.map((criterion) => {
+      const ratings = []
+      const evidence = []
+      for (const assessment of assessments) {
+        const submittedCategory = assessment.categories.find((entry) => entry.id === category.id)
+        const submitted = submittedCategory.criteria.find((entry) => entry.id === criterion.id)
+        ratings.push(submitted.rating)
+        for (const item of submitted.evidence) evidence.push(`[${assessment.evaluator}] ${item}`)
+      }
+      return { id: criterion.id, rating: Math.round(median(ratings)), evidence }
+    }),
+  }))
+  return {
+    rubricVersion: assessments[0].rubricVersion,
+    runId: assessments[0].runId,
+    stage: stageNumber,
+    evaluator: `Panel median of ${assessments.length}: ${assessments.map((assessment) => assessment.evaluator).join('; ')}`,
+    evaluatedAt: assessments.map((assessment) => assessment.evaluatedAt).sort().at(-1),
+    summary: assessments.map((assessment, index) => `(${index + 1}) ${assessment.summary}`).join('\n\n'),
+    categories,
+    issues: assessments.flatMap((assessment) => (Array.isArray(assessment.issues) ? assessment.issues : [])),
+    panel: assessments.map((assessment) => ({ evaluator: assessment.evaluator, evaluatedAt: assessment.evaluatedAt })),
+  }
+}
+
 export function aggregateStageEvaluations(rubric, evaluations) {
   const complete = evaluations.filter((evaluation) => evaluation?.status === 'complete')
   if (complete.length === 0) return null

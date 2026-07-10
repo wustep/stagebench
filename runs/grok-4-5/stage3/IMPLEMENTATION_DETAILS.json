@@ -1,0 +1,133 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 3,
+  "audio": {
+    "strategy": "Sample playback for Grand/Upright/Electric multi-root multi-velocity PCM under public/samples/; live synthesis for Clav/Digital/Misc piano, B3/Vox/Farf/Pipe organ (harmonic drawbar partials), and Analog synth (Pure/Sync/Multi/Super/FM-H). One AudioContext with piano layer buses, shared organ bus, three synth layer buses, ordered effect chains (Mod1→Mod2→Delay→Amp/EQ→Comp→Reverb→optional Rotary), layer levels, master gain + limiter → destination.",
+    "sampleSources": [
+      {
+        "name": "grand-multi-sample",
+        "source": "Stagebench-authored offline-baked PCM multi-samples (scripts/generate-samples.mjs). Not microphone recordings of an acoustic grand; redistributable demo assets for sample-playback paths.",
+        "license": "CC0-1.0 (public domain dedication by Stagebench candidate authoring)",
+        "files": [
+          "public/samples/grand/r36_v0.wav",
+          "public/samples/grand/r36_v1.wav",
+          "public/samples/grand/r42_v0.wav",
+          "public/samples/grand/r42_v1.wav",
+          "public/samples/grand/r48_v0.wav",
+          "public/samples/grand/r48_v1.wav",
+          "public/samples/grand/r54_v0.wav",
+          "public/samples/grand/r54_v1.wav",
+          "public/samples/grand/r60_v0.wav",
+          "public/samples/grand/r60_v1.wav",
+          "public/samples/grand/r66_v0.wav",
+          "public/samples/grand/r66_v1.wav",
+          "public/samples/grand/r72_v0.wav",
+          "public/samples/grand/r72_v1.wav",
+          "public/samples/grand/r78_v0.wav",
+          "public/samples/grand/r78_v1.wav",
+          "public/samples/grand/r84_v0.wav",
+          "public/samples/grand/r84_v1.wav"
+        ],
+        "notes": "9 root notes × 2 velocity layers, 22050 Hz mono PCM."
+      },
+      {
+        "name": "upright-multi-sample",
+        "source": "Stagebench-authored offline-baked PCM multi-samples (scripts/generate-samples.mjs).",
+        "license": "CC0-1.0",
+        "files": [
+          "public/samples/upright/r36_v0.wav",
+          "public/samples/upright/r36_v1.wav",
+          "public/samples/upright/r42_v0.wav",
+          "public/samples/upright/r42_v1.wav",
+          "public/samples/upright/r48_v0.wav",
+          "public/samples/upright/r48_v1.wav",
+          "public/samples/upright/r54_v0.wav",
+          "public/samples/upright/r54_v1.wav",
+          "public/samples/upright/r60_v0.wav",
+          "public/samples/upright/r60_v1.wav",
+          "public/samples/upright/r66_v0.wav",
+          "public/samples/upright/r66_v1.wav",
+          "public/samples/upright/r72_v0.wav",
+          "public/samples/upright/r72_v1.wav",
+          "public/samples/upright/r78_v0.wav",
+          "public/samples/upright/r78_v1.wav",
+          "public/samples/upright/r84_v0.wav",
+          "public/samples/upright/r84_v1.wav"
+        ],
+        "notes": "Distinct recipe from grand."
+      },
+      {
+        "name": "electric-multi-sample",
+        "source": "Stagebench-authored offline-baked PCM multi-samples (scripts/generate-samples.mjs). Tine-style recipe.",
+        "license": "CC0-1.0",
+        "files": [
+          "public/samples/electric/r36_v0.wav",
+          "public/samples/electric/r36_v1.wav",
+          "public/samples/electric/r42_v0.wav",
+          "public/samples/electric/r42_v1.wav",
+          "public/samples/electric/r48_v0.wav",
+          "public/samples/electric/r48_v1.wav",
+          "public/samples/electric/r54_v0.wav",
+          "public/samples/electric/r54_v1.wav",
+          "public/samples/electric/r60_v0.wav",
+          "public/samples/electric/r60_v1.wav",
+          "public/samples/electric/r66_v0.wav",
+          "public/samples/electric/r66_v1.wav",
+          "public/samples/electric/r72_v0.wav",
+          "public/samples/electric/r72_v1.wav",
+          "public/samples/electric/r78_v0.wav",
+          "public/samples/electric/r78_v1.wav",
+          "public/samples/electric/r84_v0.wav",
+          "public/samples/electric/r84_v1.wav"
+        ],
+        "notes": "Tine attack + odd-partial emphasis."
+      }
+    ],
+    "generatedSources": [
+      {
+        "name": "clav-digital-misc-synthesis",
+        "kind": "live-synthesis",
+        "description": "Clav, Digital, and Misc piano types use honest live/offline-buffer synthesis."
+      },
+      {
+        "name": "labeled-fallback-synthesis",
+        "kind": "live-synthesis",
+        "description": "When sample assets fail, status becomes 'fallback' with labeled synthetic voice."
+      },
+      {
+        "name": "organ-synthesis",
+        "kind": "live-synthesis",
+        "description": "B3 tonewheel partials, Vox transistor squares/saws, Farf register switches, Pipe sine ranks with drawbar-driven spectra; percussion, key click, vibrato/chorus."
+      },
+      {
+        "name": "synth-analog-synthesis",
+        "kind": "live-synthesis",
+        "description": "Analog-mode synth: Pure/Sync/Multi/Super/FM-H waveforms with category-correct Osc Ctrl; LP12/LP24/HP/BP filters; osc/filter/amp envelopes; LFO; poly/mono/legato; arp/gate logic."
+      },
+      {
+        "name": "effects-dsp",
+        "kind": "live-processing",
+        "description": "Mod1/Mod2/Delay/Amp-EQ/Compressor/Reverb/Rotary via Web Audio nodes. Impulses are generated buffers, not recordings."
+      }
+    ],
+    "notes": [
+      "Grand/Upright/Electric use bundled PCM sample playback; provenance is honest offline-baked assets.",
+      "Organ and Synth are live synthesis routed through the Phase 2 single AudioContext graph.",
+      "Programs serialize piano/organ/synth/effects/split/scene/morph/clock/transpose (not Master Level).",
+      "Unsupported (spec-excluded): aftertouch morph, preset library, Extern, Aux KB, banks beyond 32, pattern editor, menus."
+    ]
+  },
+  "variant": "stage-4-73",
+  "boundaries": {
+    "audioContext": "injectable via PianoEngine createContext option",
+    "midi": "injectable via MidiInput requestAccess option",
+    "keyboard": "attachKeyboardInput with injectable target",
+    "samples": "SampleLibrary fetchImpl / forceFail / useInlineSamples for tests"
+  },
+  "unsupportedControls": [
+    "program-morph-aft",
+    "perf-hold",
+    "perf-mono"
+  ]
+}

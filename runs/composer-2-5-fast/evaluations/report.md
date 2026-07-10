@@ -22,7 +22,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: Phase 1 basic piano via honest additive synthesis (triangle + sine overtone oscillators with AD envelope). No recorded samples in Phase 1.
-- Generated sound sources: basic-piano-voice
+- Generated sound sources: basic-piano-voice — Dual-oscillator piano-like tone with velocity-scaled gain and exponential decay
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: Phase 1 uses live Web Audio synthesis only; recorded sample sets are Phase 2 scope.
@@ -34,7 +34,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `node-web-audio-api` ^2.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: One AudioContext with Piano A/B layer buses, per-layer effect chains (Mod1→Mod2→Delay→Amp/EQ→Compressor→Reverb), shared Rotary via To Rotary, master gain and limiter. Grand/Upright/Electric/Clav/Digital/Misc use programmatically synthesized offline sample sets (not field recordings).
-- Generated sound sources: piano-sample-sets; synth-fallback-voice; effects-impulse-responses
+- Generated sound sources: piano-sample-sets — Six type-specific sample sets synthesized via OfflineAudioContext at load time: distinct harmonic profiles, decay, and brightness per type. 5 root notes × 2 velocity layers each.; synth-fallback-voice — Triangle + sine overtone used when sample load fails or error state; effects-impulse-responses — Procedural reverb impulses generated at runtime per reverb type
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: Grand, Upright, and Electric are audibly distinct synthesized sample sets — honestly declared as generated, not recordings.
@@ -48,7 +48,7 @@ Generated from package manifests, detected audio assets, and benchmark-authored 
 - Application libraries: `@vitejs/plugin-react` ^6.0.2, `react` ^19.2.7, `react-dom` ^19.2.7, `typescript` ~6.0.2, `vite` ^8.1.0
 - Development and test tooling: `@testing-library/jest-dom` ^6.9.1, `@testing-library/react` ^16.3.2, `@types/react` ^19.2.17, `@types/react-dom` ^19.2.3, `jsdom` ^28.0.0, `node-web-audio-api` ^2.0.0, `oxlint` ^1.69.0, `vitest` ^4.1.0
 - Audio strategy: One AudioContext with Piano A/B layer buses, shared Organ bus + effect chain, Synth A/B/C independent effect chains, inherited Mod1→Mod2→Delay→Amp/EQ→Compressor→Reverb order, shared Rotary, master gain and limiter. Piano Grand/Upright/Electric use programmatically synthesized offline sample sets. Organ uses live additive synthesis (tonewheel/transistor/pipe models). Synth uses live Web Audio oscillators with filters, envelopes, LFO, and deterministic arpeggiator.
-- Generated sound sources: piano-sample-sets; organ-additive-engines; synth-oscillator-engines; effects-impulse-responses
+- Generated sound sources: piano-sample-sets — Six type-specific sample sets synthesized via OfflineAudioContext at load time.; organ-additive-engines — Live B3/Vox/Farf/Pipe additive synthesis with drawbar harmonic weighting, B3 percussion/key click, vibrato/chorus; synth-oscillator-engines — Live Pure/Sync/Multi/Super/FM-H oscillator stacks with LP/HP/BP filters, envelopes, LFO, arpeggiator; effects-impulse-responses — Procedural reverb impulses generated at runtime per reverb type
 - Recorded sample provenance: No recorded or external sample sources declared
 - Bundled audio files: None detected
 - Audio note: Grand, Upright, and Electric are audibly distinct synthesized sample sets — honestly declared as generated, not recordings.

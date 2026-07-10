@@ -70,9 +70,9 @@ A compact, honest, and well-structured Phase 1 submission. The desktop capture i
 
 ### Priority issues
 
-- [object Object]
-- [object Object]
-- [object Object]
+- hardware.ts line 179 contains a dead no-op ternary (black ? whiteIndex : whiteIndex) that always returns whiteIndex regardless of the condition; harmless but a code smell.
+- All tests reside in a single App.test.tsx; the audio engine is asserted through a fake node (state logic only, no measured signal), and multitouch independence plus the live MIDI note-on path are exercised only in-app rather than in dedicated unit tests.
+- At 390x844 the full instrument is retained without clipping but panels are very dense and legends are barely legible, limiting practical per-control inspection.
 
 ### Technical gate
 
