@@ -53,8 +53,7 @@ test('every runs.json entry conforms to the generated RunEntry projection', () =
 test('the registry keeps the current GPT-5.6 runs and drops superseded ones', () => {
   const currentIds = [
     'gpt-5-6-luna-3',
-    'gpt-5-6-luna-2',
-    'gpt-5-6-sol-high-2',
+    'gpt-5-6-sol-high',
     'gpt-5-6-terra-high',
   ]
   for (const id of currentIds) {
@@ -63,7 +62,7 @@ test('the registry keeps the current GPT-5.6 runs and drops superseded ones', ()
     assert.equal(run.legacy, false)
   }
 
-  for (const id of ['gpt-5-6-luna', 'gpt-5-6-luna-high', 'gpt-5-6-sol-high']) {
+  for (const id of ['gpt-5-6-luna', 'gpt-5-6-luna-high', 'gpt-5-6-sol-high-2']) {
     assert.equal(runs.some((run) => run.id === id), false, `${id} should be removed`)
   }
 
@@ -74,7 +73,7 @@ test('the registry keeps the current GPT-5.6 runs and drops superseded ones', ()
 })
 
 test('run metadata separates canonical model identity from display titles', () => {
-  const complete = byId('gpt-5-6-sol-high-2')
+  const complete = byId('gpt-5-6-sol-high')
   assert.equal(complete.model, 'gpt-5.6-sol-high')
   assert.equal(getRunTitle(complete), 'GPT 5.6 Sol High')
   assert.equal(getRunTitle(pianoOnly), 'Piano Only')
