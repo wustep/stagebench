@@ -2,8 +2,10 @@
 // rollups, the runs.json projection, and the CLI usage flags) and the gallery
 // (runs.json normalization). Kept as a dependency-free leaf module — no Node or
 // DOM imports — so both the Node harness and the Vite client bundle can import
-// it directly and can never drift out of sync. Types live in the sibling
-// .d.mts (the same pattern as run-utils-runtime.mjs).
+// it directly and can never drift out of sync. It stays plain JS (with a
+// sibling .d.mts for types) rather than TypeScript because the bench harness
+// imports it under whatever Node the shell provides, which may predate native
+// type stripping.
 
 // The order here is the canonical field order for run.json telemetry totals.
 export const TELEMETRY_FIELDS = [

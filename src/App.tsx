@@ -18,7 +18,7 @@ import './App.css'
 function App() {
   const initialViewer = parseViewerSearch(window.location.search, runs)
   const [selectedRun, setSelectedRun] = useState<RunEntry | null>(
-    initialViewer ? initialViewer.run as RunEntry : null,
+    initialViewer ? initialViewer.run : null,
   )
   const [selectedPhase, setSelectedPhase] = useState<PhaseNumber | null>(initialViewer?.phase ?? null)
   const [selectedReport, setSelectedReport] = useState<RunEntry | null>(null)
@@ -129,7 +129,7 @@ function App() {
   useEffect(() => {
     const syncViewerFromUrl = () => {
       const viewer = parseViewerSearch(window.location.search, runs)
-      setSelectedRun(viewer ? viewer.run as RunEntry : null)
+      setSelectedRun(viewer ? viewer.run : null)
       setSelectedPhase(viewer?.phase ?? null)
       setSelectedReport(null)
       setCopyStatus('idle')

@@ -9,7 +9,7 @@ import {
   getPreviewPath,
   getRunTitle,
   parseViewerSearch,
-} from '../src/run-utils-runtime.mjs'
+} from '../src/run-utils-runtime.ts'
 
 const byId = (id) => {
   const run = runs.find((candidate) => candidate.id === id)
