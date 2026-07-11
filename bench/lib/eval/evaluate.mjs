@@ -77,24 +77,26 @@ function installDependencies(dir) {
   }
 }
 
-// The platform TypeScript types the in-repo evaluation environment made
-// available by directory walk-up to the repo's node_modules. The starter never
-// declared @types/node, so every candidate's typecheck resolved it ambiently;
-// the out-of-repo gate must provide the same or it would silently fail a
-// candidate that (like the starter) relies on it. Returns the source dir, or
-// null when the repo has no @types/node to mirror.
+// Legacy fallback. The starter now declares @types/node, so a current
+// candidate's frozen install provides the platform types itself. Artifacts
+// sealed before that (their frozen lockfiles omit @types/node) still resolved
+// it ambiently from the repo's node_modules, so the out-of-repo gate mirrors
+// the repo's copy for them — otherwise it would silently fail an honest legacy
+// candidate. Returns the repo's @types/node dir, or null when absent.
 function ambientNodeTypes(root) {
   const source = path.join(root, 'node_modules', '@types', 'node')
   return fs.existsSync(source) ? source : null
 }
 
 // Place @types/node into the copy's own node_modules, after install so pnpm's
-// frozen-lockfile pass does not prune it. `pnpm run <script>` never prunes, so
-// it persists through the gates.
+// frozen-lockfile pass does not prune it. Skips when the artifact already
+// installed it (every current run), so only pre-@types/node legacy artifacts
+// fall back to the repo's copy. `pnpm run <script>` never prunes, so it
+// persists through the gates.
 function provisionNodeTypes(scratch, source) {
   if (!source) return
   const destination = path.join(scratch, 'node_modules', '@types', 'node')
-  fs.rmSync(destination, { recursive: true, force: true })
+  if (fs.existsSync(destination)) return // artifact declared @types/node; keep its own
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   fs.cpSync(source, destination, { recursive: true, dereference: true })
 }
@@ -109,8 +111,9 @@ async function runGatesInDocker(scratch, rubric, image, nodeTypes) {
   if (probe.status !== 0) throw new Error('--sandbox requires Docker, but `docker version` failed')
   const program = [
     'pnpm install --prefer-offline || { echo "GATE::install::FAIL"; exit 3; }',
-    // Mirror the ambient platform types after install (see provisionNodeTypes).
-    ...(nodeTypes ? ['mkdir -p node_modules/@types && cp -RL /ambient/node node_modules/@types/node'] : []),
+    // Legacy fallback only: mirror the ambient platform types after install if
+    // the artifact didn't install its own (see provisionNodeTypes).
+    ...(nodeTypes ? ['[ -d node_modules/@types/node ] || { mkdir -p node_modules/@types && cp -RL /ambient/node node_modules/@types/node; }'] : []),
     ...scripts.map((script) => `if pnpm run ${script}; then echo "GATE::${script}::PASS"; else echo "GATE::${script}::FAIL"; fi`),
   ].join('\n')
   const args = [
