@@ -10,8 +10,8 @@ Core rule of the benchmark (the "honesty contract"): controls either work canoni
 
 ## Node & package manager
 
-- **Node 24** (`.nvmrc`). The shell often defaults to Node 18 — commands may fail there. `.claude/launch.json` pins the NVM path; for Bash commands use:
-  `export PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH"`
+- **Node 24** (`.nvmrc`; `engines.node` is `^24`, so `pnpm install` prints a clear "Unsupported engine" warning on an older Node). The shell often defaults to Node 18 — commands may fail there. `.claude/launch.json` selects the newest installed 24.x automatically; for Bash commands prepend the same to PATH (any 24.x works):
+  `export PATH="$(ls -d $HOME/.nvm/versions/node/v24.*/bin | sort -V | tail -1):$PATH"`
 - **pnpm 11** (`packageManager` field). The `showcase/` package has its own lockfile and is NOT a pnpm workspace — install/run there with `pnpm -C showcase <cmd>`.
 
 ## Commands
