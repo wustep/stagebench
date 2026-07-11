@@ -42,6 +42,8 @@ pnpm bench score <run-id>     # per phase: run twice — builds the evaluator wo
 
 **Telemetry.** Wall time per phase is recorded automatically (start → seal). Cost and token usage come from the agent runtime, so the operator or orchestrating agent passes them at seal time — `pnpm bench seal <id> --cost-usd 12.50 --input-tokens 1200000 --output-tokens 300000 --reasoning-tokens 80000 --tool-calls 420` — or afterwards with `pnpm bench telemetry <id> --phase <N> <same flags>`. Per-phase values roll up into run totals shown in the gallery; unrecorded values stay `null`, never zero.
 
+> **Gotcha — don't hand-enter `subagent_tokens`.** The Claude Code run-completion notification reports a `subagent_tokens` figure that is the subagent's *final context size*, not the tokens it generated. Entering it as `--output-tokens` overstates usage (observed ~2.1× on one run). The honest number is the sum of per-turn `output_tokens` across the subagent transcript. Recompute it from the JSONL transcript(s) instead of copying the notification: `pnpm bench telemetry <id> --phase <N> --from-jsonl <transcript.jsonl>`, or preview the numbers first with `pnpm telemetry:from-jsonl <transcript.jsonl>` (which prints the ready-to-paste flags). Reasoning tokens aren't in the transcript — Claude bills thinking as output — so add `--reasoning-tokens` by hand only if you have a separate figure.
+
 `bench status <run-id>` always prints the next command plus recorded telemetry. `pnpm bench help` lists everything.
 
 ## Evaluation

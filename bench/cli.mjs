@@ -39,6 +39,7 @@ import { aggregateStageEvaluations, mergeAssessments, scoreAssessment } from './
 import { renderRunReportHtml, renderRunReportMarkdown } from './lib/eval/report.mjs'
 import { fetchReference } from './lib/fetch-reference.mjs'
 import { TELEMETRY_FLAGS } from '../src/telemetry-fields.mjs'
+import { parseSubagentTelemetryFiles, telemetryValuesFromParse } from './lib/telemetry-jsonl.mjs'
 
 const COMMANDS = {
   new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--reasoning ...] [--notes ...]',
@@ -47,7 +48,7 @@ const COMMANDS = {
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
   exec: 'exec <run-id> --command "..." — run a command in the workspace inside Docker [--network none|registry] [--image ...]',
   seal: 'seal <run-id> — import, check, capture, verify, and seal the running phase [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N]',
-  telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal)',
+  telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal, or --from-jsonl <transcript.jsonl> to recompute tokens/cost from a Claude Code subagent transcript)',
   score: 'score <run-id> [--phase N] — build the isolated evaluator workspace, or register its filled assessment',
   status: 'status <run-id> — show run state, telemetry, and the next command',
   clean: 'clean [<run-id>] — remove transient work/eval/gates workspaces [--all] [--force to remove a running phase]',
@@ -328,7 +329,14 @@ try {
       result = await seal(root, id, options)
     } else if (command === 'telemetry') {
       if (!options.phase) throw new Error('--phase is required')
-      result = recordTelemetry(root, id, options.phase, telemetryFromFlags(options))
+      let usage = telemetryFromFlags(options)
+      if (options['from-jsonl']) {
+        const parsed = parseSubagentTelemetryFiles(options['from-jsonl'])
+        if (!parsed.ok) throw new Error(`--from-jsonl: ${parsed.reason} in ${options['from-jsonl']}`)
+        // Recomputed values first; any explicit flag (e.g. a known cost) wins.
+        usage = { ...telemetryValuesFromParse(parsed), ...usage }
+      }
+      result = recordTelemetry(root, id, options.phase, usage)
       await reindexRegistry(root)
     } else if (command === 'score') {
       result = await score(root, id, options)
