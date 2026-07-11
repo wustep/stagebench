@@ -11,12 +11,6 @@ import {
   parseViewerSearch,
 } from '../src/run-utils-runtime.ts'
 
-const byId = (id) => {
-  const run = runs.find((candidate) => candidate.id === id)
-  assert.ok(run, `expected a run with id "${id}" in runs.json`)
-  return run
-}
-
 // Synthetic phases 1-2 fixture, decoupled from the registry so adding or
 // removing runs can't break the preview/URL behavior exercised below.
 const pianoOnly = {
@@ -50,33 +44,34 @@ test('every runs.json entry conforms to the generated RunEntry projection', () =
   }
 })
 
-test('the registry keeps the current GPT-5.6 runs and drops superseded ones', () => {
-  const currentIds = [
-    'gpt-5-6-luna-3',
-    'gpt-5-6-sol-high',
-    'gpt-5-6-terra-high',
-  ]
-  for (const id of currentIds) {
-    const run = byId(id)
-    assert.match(run.startedAt, /^2026-07-09T/)
-    assert.equal(run.legacy, false)
+// Registry curation (which specific runs are kept vs superseded) is content
+// that churns with every run added or rescored, so it is not snapshotted here.
+// These assertions are invariants that hold for any registry the generator
+// produces, so adding/removing/rescoring a run can't break the suite.
+test('registry entries have unique, well-formed ids and parseable dates', () => {
+  const ids = runs.map((run) => run.id)
+  assert.equal(new Set(ids).size, ids.length, 'run ids must be unique')
+  for (const run of runs) {
+    assert.match(run.id, /^[a-z0-9][a-z0-9-]*$/, `${run.id}: id must be a lowercase slug`)
+    assert.ok(!Number.isNaN(Date.parse(run.startedAt)), `${run.id}: startedAt must parse`)
+    assert.ok(!Number.isNaN(Date.parse(run.updatedAt)), `${run.id}: updatedAt must parse`)
+    // Stage numbers are unique and ascending within a run.
+    const numbers = run.stages.map((stage) => stage.number)
+    assert.deepEqual(numbers, [...numbers].sort((a, b) => a - b), `${run.id}: stages must be ordered`)
+    assert.equal(new Set(numbers).size, numbers.length, `${run.id}: stage numbers must be unique`)
   }
-
-  for (const id of ['gpt-5-6-luna', 'gpt-5-6-luna-high', 'gpt-5-6-sol-high-2']) {
-    assert.equal(runs.some((run) => run.id === id), false, `${id} should be removed`)
-  }
-
-  const fable = byId('claude-fable-5')
-  assert.equal(fable.legacy, false)
-  assert.equal(fable.status, 'complete')
-  assert.equal(fable.score, 96.8)
 })
 
-test('run metadata separates canonical model identity from display titles', () => {
-  const complete = byId('gpt-5-6-sol-high')
-  assert.equal(complete.model, 'gpt-5.6-sol-high')
-  assert.equal(getRunTitle(complete), 'GPT 5.6 Sol High')
+test('run titles fall back to the model id and are always present', () => {
+  // Fixture: an explicit title overrides the model id; without one, the model
+  // id is the display title (canonical identity vs. display name).
   assert.equal(getRunTitle(pianoOnly), 'Piano Only')
+  assert.equal(getRunTitle({ id: 'x', model: 'x-model', previews: {} }), 'x-model')
+  // Registry invariant: every entry resolves to a non-empty display title.
+  for (const run of runs) {
+    assert.equal(typeof run.model, 'string', `${run.id}: model`)
+    assert.ok(getRunTitle(run).length > 0, `${run.id}: title must be non-empty`)
+  }
 })
 
 test('phase previews expose the latest playable build and preserve partial availability', () => {
