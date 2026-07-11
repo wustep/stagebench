@@ -1,0 +1,43 @@
+name: Showcase
+
+# The showcase (the flagship Nord Stage 4 build) is a separate package with its
+# own lockfile — not part of the root pnpm workspace — so the root CI job never
+# exercises it. This workflow runs its full gate set, and only when something
+# under showcase/ actually changes.
+on:
+  push:
+    branches: [main]
+    paths: ['showcase/**', '.github/workflows/showcase.yml']
+  pull_request:
+    paths: ['showcase/**', '.github/workflows/showcase.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: showcase
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version is taken from the "packageManager" field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc # root .nvmrc (resolved from the repo root)
+          cache: pnpm
+          cache-dependency-path: showcase/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # verify:layout drives the built artifact through Chromium via
+      # playwright-core, which needs a cached browser (no bundled download).
+      - run: pnpm exec playwright-core install --with-deps chromium
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      # build must precede verify:layout, which audits computed layout of dist/.
+      - run: pnpm build
+      - run: pnpm verify:layout
