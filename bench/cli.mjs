@@ -38,6 +38,7 @@ import { loadRubric, runGates } from './lib/eval/evaluate.mjs'
 import { aggregateStageEvaluations, mergeAssessments, scoreAssessment } from './lib/eval/scoring.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from './lib/eval/report.mjs'
 import { fetchReference } from './lib/fetch-reference.mjs'
+import { TELEMETRY_FLAGS } from '../src/telemetry-fields.mjs'
 
 const COMMANDS = {
   new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--reasoning ...] [--notes ...]',
@@ -55,16 +56,6 @@ const COMMANDS = {
   reindex: 'Regenerate src/data/runs.json from runs/*/run.json',
   fetch: 'Download the Nord manual and product photos into ./reference [--force] [--timeout <ms>]',
   help: 'Show this help',
-}
-
-const TELEMETRY_FLAGS = {
-  'cost-usd': 'costUsd',
-  'total-tokens': 'totalTokens',
-  'input-tokens': 'inputTokens',
-  'output-tokens': 'outputTokens',
-  'reasoning-tokens': 'reasoningTokens',
-  'tool-calls': 'toolCalls',
-  'wall-time-seconds': 'wallTimeSeconds',
 }
 
 function telemetryFromFlags(options) {

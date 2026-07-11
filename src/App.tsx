@@ -13,11 +13,8 @@ import {
 } from './run-utils'
 import type { PhaseNumber } from './run-utils'
 import type { RawRunEntry, RunEntry, StageStatus, Telemetry } from './types'
+import { TELEMETRY_FIELDS } from './telemetry-fields.mjs'
 import './App.css'
-
-const TELEMETRY_FIELDS: Array<keyof Telemetry> = [
-  'wallTimeSeconds', 'totalTokens', 'costUsd', 'inputTokens', 'outputTokens', 'reasoningTokens', 'toolCalls',
-]
 
 // Project a raw runs.json entry into a complete RunEntry so the render path can
 // assume every field is present. Legacy-schema runs that omitted optional

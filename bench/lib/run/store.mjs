@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { blindRunCode, hashTree, loadProtocol, readJson, selectedPhases, workspaceRoot, writeJson } from '../shared.mjs'
+import { TELEMETRY_FIELDS } from '../../../src/telemetry-fields.mjs'
 
 export function pathsFor(root) {
   return {
@@ -222,8 +223,6 @@ export function markRunning(root, id, phase, now = new Date()) {
   saveRun(root, run)
   return run
 }
-
-export const TELEMETRY_FIELDS = ['wallTimeSeconds', 'totalTokens', 'costUsd', 'inputTokens', 'outputTokens', 'reasoningTokens', 'toolCalls']
 
 // Sum per-stage telemetry into run totals. A total is null until at least one
 // stage reports that field — never silently zero.
