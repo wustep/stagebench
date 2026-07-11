@@ -61,6 +61,13 @@ const computerKeyLabels = new Map(
 // computer keyboard: shift 0 starts at C3, +2 tops out at the rail's B6.
 const OCTAVE_SHIFT_MAX = 2
 const HEADER_MIDI_MAX = 95
+// On narrow/touch viewports the full 4-octave rail crushes each white key to
+// ~12px — below the WCAG 2.5.8 24px target — so we show a 2-octave window
+// (14 white keys, ~24px each on a 375px screen) and page it with the ‹ ›
+// buttons. Windows start at C3/C4/C5 and always end on a B, so no black key
+// overflows the rail edge.
+const RAIL_WINDOW_WHITE = 14
+const RAIL_MAX_START = 2
 const headerNoteNames = Object.fromEntries(
   headerKeys.flatMap(({ white, black }) => black
     ? [[white.midi, white.name], [black.midi, black.name]]
@@ -150,11 +157,13 @@ function ModWheel({ mod, onMod }: { mod: number; onMod: (value: number) => void 
 }
 
 const KeyboardRail = memo(function KeyboardRail({
+  keys,
   activeNotes,
   octaveShift,
   onNoteOn,
   onNoteOff,
 }: {
+  keys: typeof headerKeys
   activeNotes: Set<number>
   octaveShift: number
   onNoteOn: (midi: number, name: string) => void
@@ -185,7 +194,7 @@ const KeyboardRail = memo(function KeyboardRail({
 
   return (
     <div className="keyboard-rail" role="group" aria-label="Playable benchmark keyboard">
-      {headerKeys.map(({ white, black }) => {
+      {keys.map(({ white, black }) => {
         // Key-hint chips follow the octave shift so they always sit on the
         // keys the computer keyboard currently plays.
         const whiteShortcut = computerKeyLabels.get(white.midi - octaveShift * 12)
@@ -236,6 +245,24 @@ export function ToyKeyboard({ overlayOpen }: { overlayOpen: boolean }) {
   // mid-hold octave change still releases the right voice.
   const pressedKeysRef = useRef(new Map<string, number>())
   const octaveShiftRef = useRef(0)
+  // Whether the rail shows a paged 2-octave window (narrow/touch) or all four
+  // octaves at once (desktop). railStart is the window's first octave (0-2).
+  const [isNarrow, setIsNarrow] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches)
+  const [railStart, setRailStart] = useState(0)
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsNarrow(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+
+  const visibleKeys = isNarrow
+    ? headerKeys.slice(railStart * 7, railStart * 7 + RAIL_WINDOW_WHITE)
+    : headerKeys
+  const railRange = `${visibleKeys[0].white.name}–${visibleKeys[visibleKeys.length - 1].white.name}`
 
   const stopHeaderNote = useCallback((midi: number) => {
     const voice = voicesRef.current.get(midi)
@@ -525,9 +552,30 @@ export function ToyKeyboard({ overlayOpen }: { overlayOpen: boolean }) {
         </section>
       </div>
 
+      {isNarrow && (
+        <div className="rail-pager">
+          <button
+            type="button"
+            aria-label="Show lower octaves"
+            disabled={railStart === 0}
+            onClick={() => setRailStart((start) => Math.max(0, start - 1))}
+          >
+            <span aria-hidden="true">‹</span>
+          </button>
+          <span className="rail-range">{railRange}</span>
+          <button
+            type="button"
+            aria-label="Show higher octaves"
+            disabled={railStart === RAIL_MAX_START}
+            onClick={() => setRailStart((start) => Math.min(RAIL_MAX_START, start + 1))}
+          >
+            <span aria-hidden="true">›</span>
+          </button>
+        </div>
+      )}
       <div className="toy-keys">
         <div className="end-cheek left" aria-hidden="true" />
-        <KeyboardRail activeNotes={activeNotes} octaveShift={octaveShift} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
+        <KeyboardRail activeNotes={activeNotes} keys={visibleKeys} octaveShift={octaveShift} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
         <div className="end-cheek right" aria-hidden="true" />
       </div>
       <div className="toy-bottom-rail" aria-hidden="true" />
