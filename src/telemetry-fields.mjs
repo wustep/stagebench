@@ -20,7 +20,16 @@ export const TELEMETRY_FIELDS = [
 
 // Kebab-case CLI flag → telemetry field (e.g. `--cost-usd` → `costUsd`).
 // Derived from TELEMETRY_FIELDS so adding a field automatically exposes a flag
-// with no second list to maintain.
+// with no second list to maintain. The flag names are a public CLI surface —
+// a lock test (tests/telemetry-jsonl.test.mjs) pins the exact strings so a
+// field rename can't silently change them.
 export const TELEMETRY_FLAGS = Object.fromEntries(
   TELEMETRY_FIELDS.map((field) => [field.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`), field]),
 )
+
+// Canonical rounding for telemetry values (4 decimals — sub-cent costs). Used
+// by both the run-store rollup and the JSONL recompute so recorded values and
+// totals always agree in precision.
+export function roundTelemetryValue(value) {
+  return Math.round(value * 10000) / 10000
+}

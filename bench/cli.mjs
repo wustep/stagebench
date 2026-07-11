@@ -48,7 +48,7 @@ const COMMANDS = {
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
   exec: 'exec <run-id> --command "..." — run a command in the workspace inside Docker [--network none|registry] [--image ...]',
   seal: 'seal <run-id> — import, check, capture, verify, and seal the running phase [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N]',
-  telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal, or --from-jsonl <transcript.jsonl> to recompute tokens/cost from a Claude Code subagent transcript)',
+  telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal, or --from-jsonl <a.jsonl[,b.jsonl...]> to recompute tokens/cost from Claude Code subagent transcripts; comma-separate multiple files)',
   score: 'score <run-id> [--phase N] — build the isolated evaluator workspace, or register its filled assessment',
   status: 'status <run-id> — show run state, telemetry, and the next command',
   clean: 'clean [<run-id>] — remove transient work/eval/gates workspaces [--all] [--force to remove a running phase]',
@@ -331,8 +331,12 @@ try {
       if (!options.phase) throw new Error('--phase is required')
       let usage = telemetryFromFlags(options)
       if (options['from-jsonl']) {
-        const parsed = parseSubagentTelemetryFiles(options['from-jsonl'])
-        if (!parsed.ok) throw new Error(`--from-jsonl: ${parsed.reason} in ${options['from-jsonl']}`)
+        // parseArgs is last-wins per flag, so multiple transcripts are passed
+        // as one comma-separated list (repeating the flag would silently drop
+        // all but the last file).
+        const files = String(options['from-jsonl']).split(',').map((file) => file.trim()).filter(Boolean)
+        const parsed = parseSubagentTelemetryFiles(files)
+        if (!parsed.ok) throw new Error(`--from-jsonl: ${parsed.reason} in ${files.join(', ')}`)
         // Recomputed values first; any explicit flag (e.g. a known cost) wins.
         usage = { ...telemetryValuesFromParse(parsed), ...usage }
       }

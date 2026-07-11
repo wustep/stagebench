@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { blindRunCode, hashTree, loadProtocol, readJson, selectedPhases, workspaceRoot, writeJson } from '../shared.mjs'
-import { TELEMETRY_FIELDS } from '../../../src/telemetry-fields.mjs'
+import { TELEMETRY_FIELDS, roundTelemetryValue } from '../../../src/telemetry-fields.mjs'
 
 export function pathsFor(root) {
   return {
@@ -230,7 +230,7 @@ function recomputeTelemetry(run) {
   const totals = {}
   for (const field of TELEMETRY_FIELDS) {
     const values = run.stages.map((stage) => stage.telemetry?.[field]).filter((value) => typeof value === 'number')
-    totals[field] = values.length > 0 ? Math.round(values.reduce((sum, value) => sum + value, 0) * 10000) / 10000 : null
+    totals[field] = values.length > 0 ? roundTelemetryValue(values.reduce((sum, value) => sum + value, 0)) : null
   }
   run.telemetry = totals
 }

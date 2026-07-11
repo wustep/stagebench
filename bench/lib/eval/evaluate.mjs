@@ -92,11 +92,15 @@ function ambientNodeTypes(root) {
 // frozen-lockfile pass does not prune it. Skips when the artifact already
 // installed it (every current run), so only pre-@types/node legacy artifacts
 // fall back to the repo's copy. `pnpm run <script>` never prunes, so it
-// persists through the gates.
+// persists through the gates. The "installed" predicate checks for the
+// package's own package.json — a bare directory (interrupted install, hoist
+// stub) must not count, or an honest legacy candidate would skip the fallback
+// and fail its typecheck on missing platform types.
 function provisionNodeTypes(scratch, source) {
   if (!source) return
   const destination = path.join(scratch, 'node_modules', '@types', 'node')
-  if (fs.existsSync(destination)) return // artifact declared @types/node; keep its own
+  if (fs.existsSync(path.join(destination, 'package.json'))) return // artifact installed its own
+  fs.rmSync(destination, { recursive: true, force: true })
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   fs.cpSync(source, destination, { recursive: true, dereference: true })
 }
@@ -112,8 +116,9 @@ async function runGatesInDocker(scratch, rubric, image, nodeTypes) {
   const program = [
     'pnpm install --prefer-offline || { echo "GATE::install::FAIL"; exit 3; }',
     // Legacy fallback only: mirror the ambient platform types after install if
-    // the artifact didn't install its own (see provisionNodeTypes).
-    ...(nodeTypes ? ['[ -d node_modules/@types/node ] || { mkdir -p node_modules/@types && cp -RL /ambient/node node_modules/@types/node; }'] : []),
+    // the artifact didn't install its own (see provisionNodeTypes — the
+    // package.json check rejects a bare/partial directory).
+    ...(nodeTypes ? ['[ -f node_modules/@types/node/package.json ] || { rm -rf node_modules/@types/node && mkdir -p node_modules/@types && cp -RL /ambient/node node_modules/@types/node; }'] : []),
     ...scripts.map((script) => `if pnpm run ${script}; then echo "GATE::${script}::PASS"; else echo "GATE::${script}::FAIL"; fi`),
   ].join('\n')
   const args = [

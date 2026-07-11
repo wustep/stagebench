@@ -62,12 +62,16 @@ export const phaseNames = protocol.phaseNames
 const v2PhaseNames = protocol.v2PhaseNames
 const legacyPhaseNames = protocol.legacyPhaseNames
 
+// One shared formatter: Intl.DateTimeFormat construction is far more expensive
+// than formatting, and formatDate runs once (or more) per run row per render.
+const dateFormat = new Intl.DateTimeFormat('en', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+})
+
 export function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(value))
+  return dateFormat.format(new Date(value))
 }
 
 export function formatTokens(value: number) {

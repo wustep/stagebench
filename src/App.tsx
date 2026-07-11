@@ -69,28 +69,41 @@ function App() {
     }
   }, [])
 
-  const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen || protocolInfoOpen)
+  // Mirror the render conditions in Dialogs: a run with no preview path (or a
+  // report entry with no report path) must not lock scroll or steal keyboard
+  // handling behind an overlay that never mounts.
+  const overlayOpen = Boolean(
+    (selectedRun && selectedPhase && selectedPreviewPath) ||
+    selectedReport?.reportPath ||
+    showcaseOpen ||
+    protocolInfoOpen,
+  )
 
-  const openProtocolInfo = useCallback(() => {
+  // Capture the trigger, close the preview, and clear every sibling dialog so
+  // exactly one overlay is ever mounted (the protocol modal has no focus trap,
+  // so keyboard focus can reach triggers behind the backdrop).
+  const beginDialog = useCallback(() => {
     captureDialogOpener()
     closePreview()
     setSelectedReport(null)
     setShowcaseOpen(false)
-    setProtocolInfoOpen(true)
+    setProtocolInfoOpen(false)
   }, [captureDialogOpener, closePreview])
+
+  const openProtocolInfo = useCallback(() => {
+    beginDialog()
+    setProtocolInfoOpen(true)
+  }, [beginDialog])
 
   const openReport = useCallback((run: RunEntry) => {
-    captureDialogOpener()
-    closePreview()
+    beginDialog()
     setSelectedReport(run)
-  }, [captureDialogOpener, closePreview])
+  }, [beginDialog])
 
   const openShowcase = useCallback(() => {
-    captureDialogOpener()
-    closePreview()
-    setSelectedReport(null)
+    beginDialog()
     setShowcaseOpen(true)
-  }, [captureDialogOpener, closePreview])
+  }, [beginDialog])
 
   const toggleRunDetails = useCallback((runId: string) => {
     setExpandedRunId((current) => (current === runId ? null : runId))

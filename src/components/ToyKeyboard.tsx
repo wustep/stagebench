@@ -3,7 +3,7 @@
 // Web Audio graph, so playing it re-renders only this subtree — never the run
 // leaderboard. The benchmark readouts it shows (run count, active count,
 // running model) are module-constant, read directly from runs-data.
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { activeCount, phaseNames, runningModel, visibleRuns } from '../runs-data'
 
@@ -252,6 +252,8 @@ export function ToyKeyboard({ overlayOpen }: { overlayOpen: boolean }) {
   const [railStart, setRailStart] = useState(0)
 
   useEffect(() => {
+    // Keep this breakpoint in sync with the `@media (max-width: 640px)` block
+    // in src/App.css, which styles the pager and hides the end-cheeks.
     const query = window.matchMedia('(max-width: 640px)')
     const update = () => setIsNarrow(query.matches)
     update()
@@ -259,9 +261,12 @@ export function ToyKeyboard({ overlayOpen }: { overlayOpen: boolean }) {
     return () => query.removeEventListener('change', update)
   }, [])
 
-  const visibleKeys = isNarrow
-    ? headerKeys.slice(railStart * 7, railStart * 7 + RAIL_WINDOW_WHITE)
-    : headerKeys
+  // Memoized so the memo'd KeyboardRail keeps a stable `keys` reference during
+  // pitch/mod drags (which re-render ToyKeyboard on every pointermove).
+  const visibleKeys = useMemo(
+    () => (isNarrow ? headerKeys.slice(railStart * 7, railStart * 7 + RAIL_WINDOW_WHITE) : headerKeys),
+    [isNarrow, railStart],
+  )
   const railRange = `${visibleKeys[0].white.name}–${visibleKeys[visibleKeys.length - 1].white.name}`
 
   const stopHeaderNote = useCallback((midi: number) => {
@@ -434,7 +439,6 @@ export function ToyKeyboard({ overlayOpen }: { overlayOpen: boolean }) {
 
   useEffect(() => {
     const voices = voicesRef.current
-    const audioContext = audioContextRef
     return () => {
       // A voice may already have ended via its onended callback; calling stop()
       // on a stopped oscillator throws, so skip ended voices and guard the rest.
@@ -447,7 +451,7 @@ export function ToyKeyboard({ overlayOpen }: { overlayOpen: boolean }) {
         }
       }
       voices.clear()
-      if (audioContext.current) void audioContext.current.close()
+      if (audioContextRef.current) void audioContextRef.current.close()
     }
   }, [])
 

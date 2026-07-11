@@ -10,6 +10,7 @@
 // it skips malformed lines, ignores entries without a usage block, and reports
 // a clear failure (ok: false) rather than emitting zeros when it finds nothing.
 import fs from 'node:fs'
+import { roundTelemetryValue } from '../../src/telemetry-fields.mjs'
 
 function finiteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
@@ -25,7 +26,6 @@ export function parseSubagentTelemetry(text) {
   let outputTokens = 0
   let costUsd = 0
   let assistantTurns = 0
-  let sawUsage = false
   let sawCost = false
   let lines = 0
   let skipped = 0
@@ -50,7 +50,6 @@ export function parseSubagentTelemetry(text) {
       cacheRead += finiteNumber(usage.cache_read_input_tokens)
       outputTokens += finiteNumber(usage.output_tokens)
       assistantTurns++
-      sawUsage = true
     }
     // Some transcript versions record a per-turn dollar cost; sum it when
     // present rather than guessing from a model-specific price table.
@@ -61,7 +60,7 @@ export function parseSubagentTelemetry(text) {
     }
   }
 
-  if (!sawUsage) {
+  if (assistantTurns === 0) {
     return { ok: false, reason: 'no usage data found in transcript', lines, skipped }
   }
 
@@ -74,20 +73,50 @@ export function parseSubagentTelemetry(text) {
     inputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
-    // Round to match recordTelemetry's rollup precision; null (not zero) when
-    // no cost was present in the transcript.
-    costUsd: sawCost ? Math.round(costUsd * 10000) / 10000 : null,
+    // Rounded to the canonical telemetry precision; null (not zero) when no
+    // cost was present in the transcript.
+    costUsd: sawCost ? roundTelemetryValue(costUsd) : null,
     breakdown: { promptInput, cacheCreation, cacheRead },
   }
 }
 
+// Combine per-file parse results into one aggregate. ok when ANY file had
+// usage (matching the old concatenate-then-parse behavior); costUsd stays null
+// unless at least one file carried a cost.
+function mergeParses(results) {
+  const usable = results.filter((result) => result.ok)
+  const lines = results.reduce((sum, result) => sum + result.lines, 0)
+  const skipped = results.reduce((sum, result) => sum + result.skipped, 0)
+  if (usable.length === 0) {
+    return { ok: false, reason: results[0]?.reason ?? 'no usage data found in transcript', lines, skipped }
+  }
+  const sum = (pick) => usable.reduce((total, result) => total + pick(result), 0)
+  const costs = usable.map((result) => result.costUsd).filter((cost) => cost !== null)
+  return {
+    ok: true,
+    lines,
+    skipped,
+    assistantTurns: sum((result) => result.assistantTurns),
+    inputTokens: sum((result) => result.inputTokens),
+    outputTokens: sum((result) => result.outputTokens),
+    totalTokens: sum((result) => result.totalTokens),
+    costUsd: costs.length > 0 ? roundTelemetryValue(costs.reduce((total, cost) => total + cost, 0)) : null,
+    breakdown: {
+      promptInput: sum((result) => result.breakdown.promptInput),
+      cacheCreation: sum((result) => result.breakdown.cacheCreation),
+      cacheRead: sum((result) => result.breakdown.cacheRead),
+    },
+  }
+}
+
 // Read and parse one or more JSONL files, aggregating across all of them.
+// Files are parsed one at a time so peak memory is bounded by the largest
+// transcript, not the sum of all of them.
 export function parseSubagentTelemetryFiles(paths) {
   const list = Array.isArray(paths) ? paths : [paths]
   const missing = list.filter((file) => !fs.existsSync(file))
   if (missing.length > 0) throw new Error(`Transcript file(s) not found: ${missing.join(', ')}`)
-  const text = list.map((file) => fs.readFileSync(file, 'utf8')).join('\n')
-  return parseSubagentTelemetry(text)
+  return mergeParses(list.map((file) => parseSubagentTelemetry(fs.readFileSync(file, 'utf8'))))
 }
 
 // Project a parse result onto the telemetry flag fields recordTelemetry accepts.

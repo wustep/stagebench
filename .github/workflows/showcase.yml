@@ -31,8 +31,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Cache the Chromium bundle (~150MB): the browser build is pinned by the
+      # playwright-core version in the lockfile, so re-download only on a bump.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('showcase/pnpm-lock.yaml') }}
+
       # verify:layout drives the built artifact through Chromium via
       # playwright-core, which needs a cached browser (no bundled download).
+      # A cache hit makes this a no-op for the browser; --with-deps still
+      # ensures system libraries are present.
       - run: pnpm exec playwright-core install --with-deps chromium
 
       - run: pnpm typecheck

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseSubagentTelemetry, telemetryValuesFromParse } from '../bench/lib/telemetry-jsonl.mjs'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { parseSubagentTelemetry, parseSubagentTelemetryFiles, telemetryValuesFromParse } from '../bench/lib/telemetry-jsonl.mjs'
+import { TELEMETRY_FLAGS } from '../src/telemetry-fields.mjs'
 
 // A synthetic transcript in the Claude Code JSONL shape: a user turn (no usage),
 // two assistant turns with usage + per-turn cost, and one unparseable line.
@@ -46,4 +50,40 @@ test('a transcript with no usage fails loudly instead of recording zeros', () =>
   const result = parseSubagentTelemetry([JSON.stringify({ type: 'user' }), 'garbage'].join('\n'))
   assert.equal(result.ok, false)
   assert.match(result.reason, /no usage/)
+})
+
+test('multiple transcript files aggregate across all of them', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-jsonl-'))
+  try {
+    const a = path.join(dir, 'a.jsonl')
+    const b = path.join(dir, 'b.jsonl')
+    fs.writeFileSync(a, JSON.stringify({ type: 'assistant', costUSD: 0.1, message: { usage: { input_tokens: 10, output_tokens: 20 } } }))
+    fs.writeFileSync(b, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 5, output_tokens: 7 } } }))
+    const result = parseSubagentTelemetryFiles([a, b])
+    assert.equal(result.ok, true)
+    assert.equal(result.assistantTurns, 2)
+    assert.equal(result.inputTokens, 15)
+    assert.equal(result.outputTokens, 27)
+    assert.equal(result.totalTokens, 42)
+    // Cost sums across files even when only one carries it.
+    assert.equal(result.costUsd, 0.1)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// The CLI flag names are a public surface (typed by operators, printed in
+// help and in the standalone script's output). They are derived from the
+// internal field names, so this lock test makes a field rename that would
+// silently change a flag fail loudly instead.
+test('CLI telemetry flag names are locked', () => {
+  assert.deepEqual(TELEMETRY_FLAGS, {
+    'wall-time-seconds': 'wallTimeSeconds',
+    'total-tokens': 'totalTokens',
+    'cost-usd': 'costUsd',
+    'input-tokens': 'inputTokens',
+    'output-tokens': 'outputTokens',
+    'reasoning-tokens': 'reasoningTokens',
+    'tool-calls': 'toolCalls',
+  })
 })

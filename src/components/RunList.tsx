@@ -1,6 +1,9 @@
 // The run leaderboard: one row per benchmark run, grouped by result tier, with
 // per-phase score sectors, telemetry columns, and an expandable details drawer.
-import { Fragment } from 'react'
+// Memoized: all props are reference-stable, so App's dialog/viewer state
+// changes (open preview, copy link, phase switch) skip re-rendering the
+// largest subtree in the app.
+import { Fragment, memo } from 'react'
 import type { CSSProperties } from 'react'
 import type { PhaseNumber } from '../run-utils'
 import { floorScore, getRunTitle } from '../run-utils'
@@ -20,7 +23,7 @@ import {
 } from '../runs-data'
 import { ChevronIcon, InfoIcon, PlayIcon, ReportIcon, StatusLight } from './icons'
 
-export function RunList({
+export const RunList = memo(function RunList({
   expandedRunId,
   onToggleExpand,
   onOpenPreview,
@@ -184,4 +187,4 @@ export function RunList({
       })}
     </div>
   )
-}
+})
