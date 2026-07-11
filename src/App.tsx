@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import runsData from './data/runs.json'
 import protocol from './data/protocol.json'
@@ -184,6 +184,58 @@ function getResultClass(run: RunEntry) {
   if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 1, description: 'Runs recorded under earlier protocol versions, kept for reference with their frozen evaluation reports.' }
   return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: 'Benchmark evaluation reports are not rigorous and are just for fun.' }
 }
+
+// Leaderboard ordering and per-tier rankings are pure functions of the
+// module-constant `runs`, so they're computed once at module load rather than
+// on every render. This keeps the toy keyboard's high-frequency note/bend
+// updates (now isolated in ToyKeyboard) from re-sorting and re-ranking the
+// whole field.
+//
+// Within each result tier, rank by aggregate score (highest first) so the
+// gallery's job — comparing model results — is legible at a glance. Runs still
+// in progress have no score yet, so they sink below the scored runs of their
+// tier; newest-first breaks any remaining ties.
+const visibleRuns = [...runs]
+  .sort((left, right) =>
+    getResultClass(left).rank - getResultClass(right).rank
+    || (right.score ?? -1) - (left.score ?? -1)
+    || right.startedAt.localeCompare(left.startedAt))
+const activeCount = visibleRuns.filter((run) => run.status === 'in-progress').length
+const runningModel = runs.find((run) => run.status === 'in-progress')?.model
+
+// Position among the scored runs of each tier, so "#1" always names the top
+// score of its protocol group. Unscored (in-progress) runs get no rank.
+function buildRankByRun(orderedRuns: RunEntry[]) {
+  const ranks = new Map<string, number>()
+  const tierRankCounter = new Map<string, number>()
+  for (const run of orderedRuns) {
+    if (run.score === null) continue
+    const tierId = getResultClass(run).id
+    const next = (tierRankCounter.get(tierId) ?? 0) + 1
+    tierRankCounter.set(tierId, next)
+    ranks.set(run.id, next)
+  }
+  return ranks
+}
+
+// The field's best score per phase within each tier — the timing-tower
+// "fastest split" highlight, so per-phase winners read independently of the
+// aggregate ranking.
+function buildBestByTierPhase(orderedRuns: RunEntry[]) {
+  const best = new Map<string, number>()
+  for (const run of orderedRuns) {
+    const tierId = getResultClass(run).id
+    for (const stage of run.stages) {
+      if (stage.score === null) continue
+      const key = `${tierId}:${stage.number}`
+      best.set(key, Math.max(best.get(key) ?? -1, stage.score))
+    }
+  }
+  return best
+}
+
+const rankByRun = buildRankByRun(visibleRuns)
+const bestByTierPhase = buildBestByTierPhase(visibleRuns)
 
 function StatusLight({ status }: { status: StageStatus | RunEntry['status'] | 'off' }) {
   return <span className={`status-light status-${status}`} aria-hidden="true" />
@@ -371,7 +423,7 @@ function ModWheel({ mod, onMod }: { mod: number; onMod: (value: number) => void 
   )
 }
 
-function KeyboardRail({
+const KeyboardRail = memo(function KeyboardRail({
   activeNotes,
   octaveShift,
   onNoteOn,
@@ -438,19 +490,14 @@ function KeyboardRail({
       })}
     </div>
   )
-}
+})
 
-function App() {
-  const initialViewer = parseViewerSearch(window.location.search, runs)
-  const [selectedRun, setSelectedRun] = useState<RunEntry | null>(
-    initialViewer ? initialViewer.run as RunEntry : null,
-  )
-  const [selectedPhase, setSelectedPhase] = useState<PhaseNumber | null>(initialViewer?.phase ?? null)
-  const [selectedReport, setSelectedReport] = useState<RunEntry | null>(null)
-  const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
-  const [showcaseOpen, setShowcaseOpen] = useState(false)
-  const [protocolInfoOpen, setProtocolInfoOpen] = useState(false)
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+// The playable toy instrument in the page header. It owns all high-frequency
+// interaction state (held notes, pitch bend, mod depth, octave shift) plus the
+// Web Audio graph, so playing it re-renders only this subtree — never the run
+// leaderboard rendered by App. The benchmark readouts it shows (run count,
+// active count, running model) are module-constant, read directly.
+function ToyKeyboard({ overlayOpen }: { overlayOpen: boolean }) {
   const [activeNotes, setActiveNotes] = useState<Set<number>>(() => new Set())
   const [lastPlayed, setLastPlayed] = useState<string | null>(null)
   const [bend, setBend] = useState(0)
@@ -468,81 +515,6 @@ function App() {
   // mid-hold octave change still releases the right voice.
   const pressedKeysRef = useRef(new Map<string, number>())
   const octaveShiftRef = useRef(0)
-  // The element that opened the current dialog, so focus can return to it on
-  // close. Captured before the dialog mounts (the dialog steals focus).
-  const dialogOpenerRef = useRef<HTMLElement | null>(null)
-  const captureDialogOpener = useCallback(() => {
-    dialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  }, [])
-  // Leaderboard ordering: within each result tier, rank by aggregate score
-  // (highest first) so the gallery's job — comparing model results — is legible
-  // at a glance. Runs still in progress have no score yet, so they sink below
-  // the scored runs of their tier; newest-first breaks any remaining ties.
-  const visibleRuns = [...runs]
-    .sort((left, right) =>
-      getResultClass(left).rank - getResultClass(right).rank
-      || (right.score ?? -1) - (left.score ?? -1)
-      || right.startedAt.localeCompare(left.startedAt))
-  const activeCount = visibleRuns.filter((run) => run.status === 'in-progress').length
-  // Position among the scored runs of each tier, so "#1" always names the top
-  // score of its protocol group. Unscored (in-progress) runs get no rank.
-  const rankByRun = new Map<string, number>()
-  const tierRankCounter = new Map<string, number>()
-  for (const run of visibleRuns) {
-    if (run.score === null) continue
-    const tierId = getResultClass(run).id
-    const next = (tierRankCounter.get(tierId) ?? 0) + 1
-    tierRankCounter.set(tierId, next)
-    rankByRun.set(run.id, next)
-  }
-  // The field's best score per phase within each tier — the timing-tower
-  // "fastest split" highlight, so per-phase winners read independently of
-  // the aggregate ranking.
-  const bestByTierPhase = new Map<string, number>()
-  for (const run of visibleRuns) {
-    const tierId = getResultClass(run).id
-    for (const stage of run.stages) {
-      if (stage.score === null) continue
-      const key = `${tierId}:${stage.number}`
-      bestByTierPhase.set(key, Math.max(bestByTierPhase.get(key) ?? -1, stage.score))
-    }
-  }
-  const selectedPreviewPath = selectedRun && selectedPhase
-    ? getPreviewPath(selectedRun, selectedPhase)
-    : undefined
-
-  const openPreview = useCallback((run: RunEntry, phase = getLatestPhase(run)) => {
-    if (!phase) return
-    captureDialogOpener()
-    setSelectedReport(null)
-    setSelectedRun(run)
-    setSelectedPhase(phase)
-    setCopyStatus('idle')
-    window.history.pushState({}, '', createViewerUrl(window.location.href, run.id, phase))
-  }, [captureDialogOpener])
-
-  const closePreview = useCallback(() => {
-    setSelectedRun(null)
-    setSelectedPhase(null)
-    setCopyStatus('idle')
-    window.history.replaceState({}, '', clearViewerUrl(window.location.href))
-  }, [])
-
-  const changePreviewPhase = useCallback((phase: PhaseNumber) => {
-    if (!selectedRun || !getPreviewPath(selectedRun, phase)) return
-    setSelectedPhase(phase)
-    setCopyStatus('idle')
-    window.history.replaceState({}, '', createViewerUrl(window.location.href, selectedRun.id, phase))
-  }, [selectedRun])
-
-  const copyPreviewLink = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      setCopyStatus('copied')
-    } catch {
-      setCopyStatus('failed')
-    }
-  }, [])
 
   const stopHeaderNote = useCallback((midi: number) => {
     const voice = voicesRef.current.get(midi)
@@ -652,59 +624,6 @@ function App() {
     setActiveNotes((current) => new Set(current).add(midi))
   }, [ensureAudioContext])
 
-  const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen || protocolInfoOpen)
-
-  const openProtocolInfo = useCallback(() => {
-    captureDialogOpener()
-    closePreview()
-    setSelectedReport(null)
-    setShowcaseOpen(false)
-    setProtocolInfoOpen(true)
-  }, [captureDialogOpener, closePreview])
-
-  // Move focus into a dialog when it mounts; tabIndex={-1} on the container
-  // keeps it out of the tab order while still accepting programmatic focus.
-  const focusDialog = useCallback((node: HTMLDivElement | null) => {
-    node?.focus()
-  }, [])
-
-  // Return focus to whatever opened the dialog once it closes.
-  useEffect(() => {
-    if (!overlayOpen) return
-    return () => {
-      dialogOpenerRef.current?.focus()
-      dialogOpenerRef.current = null
-    }
-  }, [overlayOpen])
-
-  useEffect(() => {
-    if (!overlayOpen) return
-
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (showcaseOpen) setShowcaseOpen(false)
-      else if (selectedReport) setSelectedReport(null)
-      else if (protocolInfoOpen) setProtocolInfoOpen(false)
-      else if (selectedRun) closePreview()
-    }
-
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [overlayOpen, showcaseOpen, selectedReport, protocolInfoOpen, selectedRun, closePreview])
-
-  useEffect(() => {
-    const syncViewerFromUrl = () => {
-      const viewer = parseViewerSearch(window.location.search, runs)
-      setSelectedRun(viewer ? viewer.run as RunEntry : null)
-      setSelectedPhase(viewer?.phase ?? null)
-      setSelectedReport(null)
-      setCopyStatus('idle')
-    }
-
-    window.addEventListener('popstate', syncViewerFromUrl)
-    return () => window.removeEventListener('popstate', syncViewerFromUrl)
-  }, [])
-
   useEffect(() => {
     const pressedKeys = pressedKeysRef.current
     const releasePressedKeys = () => {
@@ -766,6 +685,245 @@ function App() {
   }, [overlayOpen, shiftOctave, startHeaderNote, stopHeaderNote])
 
   useEffect(() => {
+    const voices = voicesRef.current
+    const audioContext = audioContextRef
+    return () => {
+      // A voice may already have ended via its onended callback; calling stop()
+      // on a stopped oscillator throws, so skip ended voices and guard the rest.
+      for (const voice of voices.values()) {
+        if (voice.ended) continue
+        try {
+          voice.oscillator.stop()
+        } catch {
+          // Oscillator already stopped or context torn down; nothing to do.
+        }
+      }
+      voices.clear()
+      if (audioContext.current) void audioContext.current.close()
+    }
+  }, [])
+
+  return (
+    <div className="instrument-shell">
+      <div className="toy-top-rail" aria-hidden="true">
+        <span>PEDALS</span>
+        <span>MIDI</span>
+        <span>USB</span>
+        <span>MONITOR</span>
+        <span>OUTPUT</span>
+      </div>
+
+      <div className="control-deck" aria-label="Benchmark status">
+        <section className="deck-performance" aria-label="Performance controls">
+          <div className="wheel-park">
+            <div className="wheel-well">
+              <PitchStick bend={bend} onBend={applyBend} />
+              <span aria-hidden="true" className="wheel-legend">PITCH</span>
+            </div>
+            <div className="wheel-well">
+              <ModWheel mod={mod} onMod={applyMod} />
+              <span aria-hidden="true" className="wheel-legend">MOD</span>
+            </div>
+            <div className="wheel-well octave-well">
+              <div className="octave-buttons">
+                <button
+                  aria-label="Keyboard octave down, shortcut minus key"
+                  disabled={octaveShift === 0}
+                  onClick={() => shiftOctave(-1)}
+                  type="button"
+                >
+                  &minus;
+                </button>
+                <button
+                  aria-label="Keyboard octave up, shortcut equals key"
+                  disabled={octaveShift === OCTAVE_SHIFT_MAX}
+                  onClick={() => shiftOctave(1)}
+                  type="button"
+                >
+                  +
+                </button>
+              </div>
+              <span
+                aria-label={`Keyboard octave shift ${octaveShift === 0 ? 'off' : `plus ${octaveShift}`}`}
+                className="octave-leds"
+                role="status"
+              >
+                {[0, 1, 2].map((step) => (
+                  <i className={step === octaveShift ? 'is-on' : undefined} key={step} />
+                ))}
+              </span>
+              <span aria-hidden="true" className="wheel-legend">OCTAVE</span>
+            </div>
+          </div>
+          <div className="toy-branding" aria-hidden="true">
+            <span className="brand-line">stagebench</span>
+            <span className="brand-sub">TOY ACTION 48</span>
+          </div>
+        </section>
+
+        <section className="deck-plate plate-benchmark" aria-label="Benchmark counters">
+          <header className="plate-tab" aria-hidden="true">BENCHMARK</header>
+          <div className="plate-body readout-body">
+            <div className="panel-readout">
+              <small>RUNS</small>
+              <strong>{String(visibleRuns.length).padStart(2, '0')}</strong>
+            </div>
+            <div className="panel-readout">
+              <small>ACTIVE</small>
+              <strong>{String(activeCount).padStart(2, '0')}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="deck-plate plate-program" aria-label="Program display">
+          <header className="plate-tab" aria-hidden="true">
+            PROGRAM
+            <span className={`toy-led${activeNotes.size > 0 ? ' is-on' : ''}`} />
+          </header>
+          <div className="plate-body">
+            <div className="oled-display">
+              <span>{activeCount > 0 ? 'BENCHMARK RUNNING' : 'SYSTEM READY'}</span>
+              <strong aria-live="polite">{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runningModel : 'SELECT MODEL'}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="deck-plate plate-phases" aria-label="Benchmark phases">
+          <header className="plate-tab" aria-hidden="true">PHASES</header>
+          <ol className="stage-controls plate-body">
+            {phaseNames.map((name, index) => (
+              <li key={name}>
+                <div className="knob" aria-hidden="true">
+                  <i style={{ transform: `rotate(${knobAngles[index]}deg)` }} />
+                </div>
+                <span>0{index + 1}</span>
+                <strong>{name}</strong>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
+
+      <div className="toy-keys">
+        <div className="end-cheek left" aria-hidden="true" />
+        <KeyboardRail activeNotes={activeNotes} octaveShift={octaveShift} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
+        <div className="end-cheek right" aria-hidden="true" />
+      </div>
+      <div className="toy-bottom-rail" aria-hidden="true" />
+      <span className="toy-foot left" aria-hidden="true" />
+      <span className="toy-foot right" aria-hidden="true" />
+    </div>
+  )
+}
+
+function App() {
+  const initialViewer = parseViewerSearch(window.location.search, runs)
+  const [selectedRun, setSelectedRun] = useState<RunEntry | null>(
+    initialViewer ? initialViewer.run as RunEntry : null,
+  )
+  const [selectedPhase, setSelectedPhase] = useState<PhaseNumber | null>(initialViewer?.phase ?? null)
+  const [selectedReport, setSelectedReport] = useState<RunEntry | null>(null)
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const [showcaseOpen, setShowcaseOpen] = useState(false)
+  const [protocolInfoOpen, setProtocolInfoOpen] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  // The element that opened the current dialog, so focus can return to it on
+  // close. Captured before the dialog mounts (the dialog steals focus).
+  const dialogOpenerRef = useRef<HTMLElement | null>(null)
+  const captureDialogOpener = useCallback(() => {
+    dialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  }, [])
+  const selectedPreviewPath = selectedRun && selectedPhase
+    ? getPreviewPath(selectedRun, selectedPhase)
+    : undefined
+
+  const openPreview = useCallback((run: RunEntry, phase = getLatestPhase(run)) => {
+    if (!phase) return
+    captureDialogOpener()
+    setSelectedReport(null)
+    setSelectedRun(run)
+    setSelectedPhase(phase)
+    setCopyStatus('idle')
+    window.history.pushState({}, '', createViewerUrl(window.location.href, run.id, phase))
+  }, [captureDialogOpener])
+
+  const closePreview = useCallback(() => {
+    setSelectedRun(null)
+    setSelectedPhase(null)
+    setCopyStatus('idle')
+    window.history.replaceState({}, '', clearViewerUrl(window.location.href))
+  }, [])
+
+  const changePreviewPhase = useCallback((phase: PhaseNumber) => {
+    if (!selectedRun || !getPreviewPath(selectedRun, phase)) return
+    setSelectedPhase(phase)
+    setCopyStatus('idle')
+    window.history.replaceState({}, '', createViewerUrl(window.location.href, selectedRun.id, phase))
+  }, [selectedRun])
+
+  const copyPreviewLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('failed')
+    }
+  }, [])
+
+  const overlayOpen = Boolean(selectedRun || selectedReport || showcaseOpen || protocolInfoOpen)
+
+  const openProtocolInfo = useCallback(() => {
+    captureDialogOpener()
+    closePreview()
+    setSelectedReport(null)
+    setShowcaseOpen(false)
+    setProtocolInfoOpen(true)
+  }, [captureDialogOpener, closePreview])
+
+  // Move focus into a dialog when it mounts; tabIndex={-1} on the container
+  // keeps it out of the tab order while still accepting programmatic focus.
+  const focusDialog = useCallback((node: HTMLDivElement | null) => {
+    node?.focus()
+  }, [])
+
+  // Return focus to whatever opened the dialog once it closes.
+  useEffect(() => {
+    if (!overlayOpen) return
+    return () => {
+      dialogOpenerRef.current?.focus()
+      dialogOpenerRef.current = null
+    }
+  }, [overlayOpen])
+
+  useEffect(() => {
+    if (!overlayOpen) return
+
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (showcaseOpen) setShowcaseOpen(false)
+      else if (selectedReport) setSelectedReport(null)
+      else if (protocolInfoOpen) setProtocolInfoOpen(false)
+      else if (selectedRun) closePreview()
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [overlayOpen, showcaseOpen, selectedReport, protocolInfoOpen, selectedRun, closePreview])
+
+  useEffect(() => {
+    const syncViewerFromUrl = () => {
+      const viewer = parseViewerSearch(window.location.search, runs)
+      setSelectedRun(viewer ? viewer.run as RunEntry : null)
+      setSelectedPhase(viewer?.phase ?? null)
+      setSelectedReport(null)
+      setCopyStatus('idle')
+    }
+
+    window.addEventListener('popstate', syncViewerFromUrl)
+    return () => window.removeEventListener('popstate', syncViewerFromUrl)
+  }, [])
+
+  useEffect(() => {
     if (!overlayOpen) return
 
     const scrollY = window.scrollY
@@ -793,24 +951,6 @@ function App() {
     }
   }, [overlayOpen])
 
-  useEffect(() => {
-    const voices = voicesRef.current
-    return () => {
-      // A voice may already have ended via its onended callback; calling stop()
-      // on a stopped oscillator throws, so skip ended voices and guard the rest.
-      for (const voice of voices.values()) {
-        if (voice.ended) continue
-        try {
-          voice.oscillator.stop()
-        } catch {
-          // Oscillator already stopped or context torn down; nothing to do.
-        }
-      }
-      voices.clear()
-      if (audioContextRef.current) void audioContextRef.current.close()
-    }
-  }, [])
-
   return (
     <main>
       <a className="skip-link" href="#runs">Skip to runs</a>
@@ -818,7 +958,7 @@ function App() {
         <div className="header-intro">
           <div>
             <span className="header-eyebrow">Unofficial fan project</span>
-            <h1>Nord Stage{'\u00A0'}4 benchmark</h1>
+            <h1>Nord Stage{' '}4 benchmark</h1>
             <p>Coding agents rebuild the Nord Stage{' '}4 as a playable browser instrument.</p>
           </div>
           <a className="github-link" href="https://github.com/wustep/stagebench" rel="noopener" target="_blank">
@@ -829,115 +969,7 @@ function App() {
           </a>
         </div>
 
-        <div className="instrument-shell">
-          <div className="toy-top-rail" aria-hidden="true">
-            <span>PEDALS</span>
-            <span>MIDI</span>
-            <span>USB</span>
-            <span>MONITOR</span>
-            <span>OUTPUT</span>
-          </div>
-
-          <div className="control-deck" aria-label="Benchmark status">
-            <section className="deck-performance" aria-label="Performance controls">
-              <div className="wheel-park">
-                <div className="wheel-well">
-                  <PitchStick bend={bend} onBend={applyBend} />
-                  <span aria-hidden="true" className="wheel-legend">PITCH</span>
-                </div>
-                <div className="wheel-well">
-                  <ModWheel mod={mod} onMod={applyMod} />
-                  <span aria-hidden="true" className="wheel-legend">MOD</span>
-                </div>
-                <div className="wheel-well octave-well">
-                  <div className="octave-buttons">
-                    <button
-                      aria-label="Keyboard octave down, shortcut minus key"
-                      disabled={octaveShift === 0}
-                      onClick={() => shiftOctave(-1)}
-                      type="button"
-                    >
-                      &minus;
-                    </button>
-                    <button
-                      aria-label="Keyboard octave up, shortcut equals key"
-                      disabled={octaveShift === OCTAVE_SHIFT_MAX}
-                      onClick={() => shiftOctave(1)}
-                      type="button"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <span
-                    aria-label={`Keyboard octave shift ${octaveShift === 0 ? 'off' : `plus ${octaveShift}`}`}
-                    className="octave-leds"
-                    role="status"
-                  >
-                    {[0, 1, 2].map((step) => (
-                      <i className={step === octaveShift ? 'is-on' : undefined} key={step} />
-                    ))}
-                  </span>
-                  <span aria-hidden="true" className="wheel-legend">OCTAVE</span>
-                </div>
-              </div>
-              <div className="toy-branding" aria-hidden="true">
-                <span className="brand-line">stagebench</span>
-                <span className="brand-sub">TOY ACTION 48</span>
-              </div>
-            </section>
-
-            <section className="deck-plate plate-benchmark" aria-label="Benchmark counters">
-              <header className="plate-tab" aria-hidden="true">BENCHMARK</header>
-              <div className="plate-body readout-body">
-                <div className="panel-readout">
-                  <small>RUNS</small>
-                  <strong>{String(visibleRuns.length).padStart(2, '0')}</strong>
-                </div>
-                <div className="panel-readout">
-                  <small>ACTIVE</small>
-                  <strong>{String(activeCount).padStart(2, '0')}</strong>
-                </div>
-              </div>
-            </section>
-
-            <section className="deck-plate plate-program" aria-label="Program display">
-              <header className="plate-tab" aria-hidden="true">
-                PROGRAM
-                <span className={`toy-led${activeNotes.size > 0 ? ' is-on' : ''}`} />
-              </header>
-              <div className="plate-body">
-                <div className="oled-display">
-                  <span>{activeCount > 0 ? 'BENCHMARK RUNNING' : 'SYSTEM READY'}</span>
-                  <strong aria-live="polite">{activeNotes.size > 0 ? `PLAYING ${lastPlayed}` : lastPlayed ? `LAST NOTE ${lastPlayed}` : activeCount > 0 ? runs.find((run) => run.status === 'in-progress')?.model : 'SELECT MODEL'}</strong>
-                </div>
-              </div>
-            </section>
-
-            <section className="deck-plate plate-phases" aria-label="Benchmark phases">
-              <header className="plate-tab" aria-hidden="true">PHASES</header>
-              <ol className="stage-controls plate-body">
-                {phaseNames.map((name, index) => (
-                  <li key={name}>
-                    <div className="knob" aria-hidden="true">
-                      <i style={{ transform: `rotate(${knobAngles[index]}deg)` }} />
-                    </div>
-                    <span>0{index + 1}</span>
-                    <strong>{name}</strong>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          </div>
-
-          <div className="toy-keys">
-            <div className="end-cheek left" aria-hidden="true" />
-            <KeyboardRail activeNotes={activeNotes} octaveShift={octaveShift} onNoteOff={stopHeaderNote} onNoteOn={startHeaderNote} />
-            <div className="end-cheek right" aria-hidden="true" />
-          </div>
-          <div className="toy-bottom-rail" aria-hidden="true" />
-          <span className="toy-foot left" aria-hidden="true" />
-          <span className="toy-foot right" aria-hidden="true" />
-        </div>
+        <ToyKeyboard overlayOpen={overlayOpen} />
       </header>
 
       <section className="showcase-band" aria-labelledby="showcase-heading">
