@@ -12,6 +12,11 @@
   --line: oklch(83% 0.012 30);
   --green: oklch(82% 0.2 135);
   --amber: oklch(80% 0.17 75);
+  /* Focus ring for controls on light surfaces. Amber (80% lightness) fails the
+     WCAG 2.2 3:1 focus-appearance minimum against the 95%+ surface and white
+     rows, so the near-black --ink is used there instead; it also clears 3:1 on
+     the red chassis. Amber is kept only on the dark toy panel. */
+  --focus: var(--ink);
   --red-led: oklch(65% 0.25 29);
   /* "Fastest split" highlight on the run leaderboard, F1-timing style. */
   --sector-best: oklch(50% 0.19 320);
@@ -885,7 +890,7 @@ a { color: inherit; }
 }
 .protocol-info-btn:hover { color: var(--nord-red); transform: translateY(-1px); }
 .protocol-info-btn:active { transform: translateY(0); }
-.protocol-info-btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 50%; }
+.protocol-info-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 50%; }
 
 /* ------------------------------------------------------------------------
    The run leaderboard: a timing-tower layout. One line per run — position,
@@ -1323,7 +1328,15 @@ footer p span { display: block; }
 .preview-error p { margin: 0; color: var(--muted); font-size: 12px; }
 .preview-error code { color: var(--muted); font: 11px/1.5 ui-monospace, monospace; word-break: break-all; }
 
-button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+/* The octave buttons sit on the dark toy chassis, where the dark --focus ring
+   would vanish; keep their focus ring amber like the rest of the toy panel. */
+.octave-buttons button:focus-visible { outline-color: var(--amber); }
+/* Controls on the red chassis — the page hero and the preview/report overlays —
+   get a white ring, which clears 3:1 against the red with more margin than the
+   dark --focus would. */
+.github-link:focus-visible,
+.preview-header button:focus-visible { outline-color: var(--white); }
 
 @media (max-width: 900px) {
   .control-deck {
