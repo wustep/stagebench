@@ -20,6 +20,19 @@ export function evalAssessmentPath(root, id, phase) {
   return path.join(evalWorkspaceDir(root, id, phase), 'assessment.json')
 }
 
+// Blinding: harness-written inputs must not name the run. The verification
+// record carries the real runId (and could embed it in check output or
+// workspace paths), so every string in it is rewritten to the blind handle
+// before it reaches the evaluator.
+function scrubRunIdentity(value, id, blindId) {
+  if (typeof value === 'string') return value.split(id).join(blindId)
+  if (Array.isArray(value)) return value.map((entry) => scrubRunIdentity(entry, id, blindId))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key.split(id).join(blindId), scrubRunIdentity(entry, id, blindId)]))
+  }
+  return value
+}
+
 function copyInput(root, relativePath, inputRoot) {
   const source = path.resolve(root, relativePath)
   if (!source.startsWith(`${path.resolve(root)}${path.sep}`)) throw new Error(`Input escapes repository: ${relativePath}`)
@@ -78,7 +91,7 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   writeJson(path.join(inputs, 'specs', 'nord-stage-4.variants.json'), projectVariants(variants, variantId))
   writeJson(path.join(inputs, 'rubric.json'), rubric)
   if (verificationPath && fs.existsSync(verificationPath)) {
-    fs.copyFileSync(verificationPath, path.join(inputs, 'verification.json'))
+    writeJson(path.join(inputs, 'verification.json'), scrubRunIdentity(readJson(verificationPath), id, blindId))
   }
   // Blind template: identified by the handle, never the model id.
   writeJson(path.join(workspace, 'assessment.json'), createAssessmentTemplate(rubric, blindId, phase))
