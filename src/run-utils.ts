@@ -10,6 +10,7 @@ export {
   getLatestPhase,
   getPreviewPath,
   getRunTitle,
+  getThumbPath,
   parseViewerSearch,
 } from './run-utils-runtime'
 

@@ -51,6 +51,7 @@ Prefer the preview servers in `.claude/launch.json` (`dev`, `showcase`) over ad-
 - `seal <run-id> [--cost-usd N ...]` — import, validate gates, Playwright capture, verify contract, freeze the phase
 - `score <run-id>` — first call builds the isolated, blind-handled evaluator workspace (artifact copy + rubric + specs + template); second call (after the evaluator fills `assessment.json`) reruns gates against an out-of-repo copy and registers the evaluation. Panels: extra `assessment.<n>.json` files median-merge. `--sandbox` runs gates in Docker.
 - `status <run-id>` / `clean <run-id> [--all]` / `export <run-id>` / `reindex` / `showcase` (publishes showcase build to `public/previews/showcase/`)
+- `thumbs [<run-id>]` — regenerate the gallery's hover thumbnails (`public/previews/<id>/stage<N>/thumb.jpg`) by shooting each published preview and cropping to the instrument chassis. Run it after publishing a new preview; the gallery derives the URL from `previewPath`, so a run without one simply shows no hover card.
 - **Transient workspaces (work/eval/gates) live under `~/.stagebench/<repo-key>/`, not in the repo tree** — override with `STAGEBENCH_HOME`. Sealed `runs/<id>/stage<N>/` never contains `node_modules` (gates run on a copy).
 
 ## Layout & architecture

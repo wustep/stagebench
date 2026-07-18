@@ -33,6 +33,7 @@ import { createEvalWorkspace, evalAssessmentPath, evalWorkspaceDir, removeEvalWo
 import { exportRun } from './lib/run/export.mjs'
 import { runChecks, verifyPhase } from './lib/run/verify.mjs'
 import { captureEvidence, serveDirectory } from './lib/run/capture.mjs'
+import { generateThumbnails } from './lib/run/thumbnail.mjs'
 import { collectImplementationDetails } from './lib/implementation-details.mjs'
 import { loadRubric, runGates } from './lib/eval/evaluate.mjs'
 import { aggregateStageEvaluations, mergeAssessments, scoreAssessment } from './lib/eval/scoring.mjs'
@@ -54,6 +55,7 @@ const COMMANDS = {
   clean: 'clean [<run-id>] — remove transient work/eval/gates workspaces [--all] [--force to remove a running phase]',
   export: 'export <run-id> [--out <path>] — bundle run.json, evaluations, report, and preview into a ZIP',
   showcase: 'Check, build, and publish showcase/ to public/previews/showcase',
+  thumbs: 'Regenerate gallery hover thumbnails from the published previews [<run-id>]',
   reindex: 'Regenerate src/data/runs.json from runs/*/run.json',
   fetch: 'Download the Nord manual and product photos into ./reference [--force] [--timeout <ms>]',
   help: 'Show this help',
@@ -380,6 +382,25 @@ try {
       fs.rmSync(destination, { recursive: true, force: true })
       fs.cpSync(path.join(showcaseDir, 'dist'), destination, { recursive: true })
       result = { published: '/previews/showcase/index.html', checks: checks.map(({ id, passed }) => ({ id, passed })) }
+    } else if (command === 'thumbs') {
+      // Hover thumbnails are derived from the published preview build, so the
+      // gallery can address one as previewPath with index.html swapped for
+      // thumb.jpg — no new field in the run record.
+      const locations = pathsFor(root)
+      const ids = id
+        ? [id]
+        : fs.readdirSync(path.join(root, 'runs')).filter((entry) => fs.existsSync(path.join(root, 'runs', entry, 'run.json')))
+      const targets = []
+      for (const runId of ids) {
+        const run = loadRun(root, runId)
+        if (!run.previewPath) continue
+        const stage = `stage${run.previewStage}`
+        const directory = path.join(locations.previews, run.id, stage)
+        if (!fs.existsSync(path.join(directory, 'index.html'))) continue
+        targets.push({ id: `${run.id}/${stage}`, directory, output: path.join(directory, 'thumb.jpg') })
+      }
+      if (targets.length === 0) throw new Error('No published previews found to thumbnail')
+      result = { thumbnails: await generateThumbnails(targets) }
     } else if (command === 'reindex') {
       result = await reindexRegistry(root)
     } else if (command === 'fetch') {

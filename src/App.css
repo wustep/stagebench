@@ -996,6 +996,42 @@ a { color: inherit; }
   .row-main.is-playable:active { background: oklch(95% 0.008 29); }
 }
 
+/* Hover thumbnail: a cropped shot of the run's instrument. It clears the
+   hovered row entirely — that row stays readable while its preview is up — and
+   lines its left edge up with the table's, so it reads as belonging to the
+   leaderboard rather than floating loose in the page margin. Pointer-only:
+   hidden below the 900px breakpoint, where the row stops being one grid line
+   and a floating card would have nowhere to sit. Never intercepts the pointer,
+   so the row underneath stays clickable through it. */
+.row-thumb {
+  display: none;
+  position: absolute;
+  left: 0;
+  z-index: 10;
+  /* Flush left, the width is what is left before the phase-sector columns — so
+     a card only ever covers neighbouring model names, never anyone's scores. */
+  width: 420px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: 0 18px 34px -14px oklch(30% 0.03 29 / .5), 0 3px 8px -3px oklch(30% 0.03 29 / .32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+.row-thumb.is-above { bottom: calc(100% + 6px); transform: translateY(5px); }
+.row-thumb.is-below { top: calc(100% + 6px); transform: translateY(-5px); }
+.row-thumb.is-loaded { opacity: 1; transform: translateY(0); }
+.row-thumb img { display: block; width: 100%; height: auto; border-radius: 4px; }
+
+@media (hover: hover) and (min-width: 901px) {
+  .row-thumb { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row-thumb.is-above, .row-thumb.is-below, .row-thumb.is-loaded { transform: none; }
+}
+
 .driver { min-width: 0; }
 .driver strong { display: block; overflow: hidden; font-size: 15px; font-weight: 800; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
 .driver > span { color: var(--muted); font: 500 9.5px/1.9 ui-monospace, monospace; }
