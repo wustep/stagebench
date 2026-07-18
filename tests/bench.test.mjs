@@ -180,6 +180,24 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     assert.ok(!evalWorkspace.workspace.includes(created.id), 'the model id is not printed in the evaluator path')
     assert.ok(fs.readFileSync(path.join(evalWorkspace.workspace, 'EVAL.md'), 'utf8').includes('blind'), 'EVAL.md states the evaluation is blind')
     assert.equal(readJson(evalWorkspace.assessment).runId, blindRunCode(created.id), 'the template is identified by the blind handle')
+    assert.equal(readJson(path.join(evalWorkspace.inputs, 'verification.json')).runId, evalWorkspace.blindId, 'the verification record is re-identified by the blind handle')
+    // No harness-written file in the evaluator workspace may name the real run.
+    // artifact/ is exempt: it is the candidate's own sealed bytes, pinned by the
+    // digest check, so the harness cannot rewrite it.
+    const harnessFiles = []
+    const collectHarnessFiles = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (full !== evalWorkspace.artifact) collectHarnessFiles(full)
+        } else harnessFiles.push(full)
+      }
+    }
+    collectHarnessFiles(evalWorkspace.workspace)
+    assert.ok(harnessFiles.some((file) => file.endsWith('verification.json')), 'the blinding sweep covers the verification record')
+    for (const file of harnessFiles) {
+      assert.ok(!fs.readFileSync(file).includes(created.id), `${path.relative(evalWorkspace.workspace, file)} leaks the run id`)
+    }
 
     const assessment = readJson(evalWorkspace.assessment)
     assessment.evaluator = 'Fixture evaluator'
