@@ -1,0 +1,190 @@
+{
+  "rubricVersion": "1.1.0",
+  "runId": "kimi-k3",
+  "stage": 3,
+  "evaluator": "stagebench-blind-evaluator",
+  "evaluatedAt": "2026-07-18T02:37:51Z",
+  "summary": "An exceptionally complete and honest Phase 3 artifact. The full Nord Stage 4 73 surface is faithfully retained (73 keys E1-E7, six sections at documented fractions, continuous red chassis, HAMMER ACTION label) with two live-truthful OLEDs (program position/name, BPM/transpose/scene; synth waveform/filter/LFO/arp). Programs (32 slots + 8 Live, page/program/dial/list navigation, Store/Store As, truthful dirty state), splits at the 11 documented positions with Off/±6/±12 crossfade gain math, two scenes, Wheel+Control-Pedal morphs, master clock, transpose, and Panic are all present in a single serializable ProgramState. Organ (distinct B3/Vox/Farf/Pipe additive engines with drawbars+LEDs, percussion, key click, vibrato/chorus) and Synth (three layers, 14 waveforms across Pure/Sync/Multi/Super/FM-H with category-correct Osc Ctrl, LP12/LP24/HP/BP filters, three envelopes, clock-synced LFO, poly/mono/legato+glide+unison, deterministic arp/gate) are genuinely different DSP, not renamed oscillators, proven by 232 real-signal tests (correlation, spectral spread, high-band ratio) across 25 files. One AudioContext feeds six buses -> ordered effects -> master gain + limiter -> one destination. Grand/Upright/Electric ship as 108 bundled WAV takes (18 roots x 2 velocity x 3 types), truthfully declared as locally-rendered CC0 sample sets; 11 generated sources honestly declared. The live app boots with zero console errors and every control writes real canonical state (verified: program load 2.3, organ B3->Vox, synth Saw->Square, filter cutoff 127->125), with the 7 spec-excluded controls surfaced in the status bar and synth OLED. The one real gap: the shipped browser audio path drops the Rotary effect (withoutLiveUnits disables rotary and no live rotary node exists; createRotary runs only in the deterministic render used by tests), so rotary is proven in-engine but silent in the browser, and per-voice buffer pre-rendering means manual knob turns do not re-modulate already-held notes. These bound audioIntegration to strong-but-not-flawless; everything else is exemplary.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "referenceRetention",
+          "rating": 4,
+          "evidence": [
+            "evidence/stage3-desktop.png (1440x900): one continuous red chassis, six ordered sections (Performance/Organ/Piano/Program/Synth/Layer Effects), '73 - HAMMER ACTION' label, 73-key keybed matching the Stage 4 73 variant photo inputs/reference/nord-stage-4-73.jpg.",
+            "evidence/stage3-narrow.png (390x844): chassis scales to ~96vw, sections stay ordered, both OLEDs and the split strip remain visible, no clipping/scroll/detached rails.",
+            "evidence/stage3-visual-audit.md documents section fractions (14/20/8.5/12.5/25/20), 54/46 deck/keybed split, and Phase-1/2 audit continuity; src/__tests__/visual-section-layout.test.tsx + visual-key-count.test.tsx + regression-chassis.test.tsx pass (verified 232/232 tests green).",
+            "get_page_text on the live build confirms full surface render with all six sections and no marketing hero."
+          ]
+        },
+        {
+          "id": "completeHardwareState",
+          "rating": 4,
+          "evidence": [
+            "Program OLED shows live '1.1 Grand Piano / Piano A: Grand Lady D / 120 BPM - TR 0 - SCENE I'; after navigation it read '2.3 Init E' (verified live via pointer-driven Program 3 press).",
+            "Synth OLED shows live 'A - Saw - OSC CTRL 0.0 / LP12 F127 R0 - ENV A 0.0 D 10.0 R 1.9 / LFO Triangle -> Off - ARP —'; updates to waveform changes (Saw->Square verified live).",
+            "visual-control-inventory.test.tsx asserts Program and Synth are the only primary OLEDs; drawbar 8-step LED graphs, morph LEDs, split-strip LOW/MID/HIGH LEDs and Z1-Z4 zone keys present per stage3-visual-audit.md.",
+            "Accessible hardware state: aria-pressed on section/enable buttons (Synth section on/off -> 'true' verified), slider role+aria-valuenow on knobs (Filter cutoff role=slider valuenow tracked 127->125)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "featureCompletion",
+      "criteria": [
+        {
+          "id": "programWorkflows",
+          "rating": 4,
+          "evidence": [
+            "src/state/program-state.ts + program-store.ts implement 32 slots + 8 auto-storing Live slots through an injected StorageLike seam; canonical serializeProgramState drives the dirty check.",
+            "src/__tests__/programs.test.ts (17 tests): roundtrip (serialized snapshot + deep field compare across 32 slots), store-live (Store clears dirty, Store As new name/dest, 8 Live slots auto-store & survive bank reload), navigation (program buttons/page wrap/dial wraparound/numeric list), undo-cancel (edit discard on program change + single-level undo).",
+            "Live verification: page-right + Program 3 pointer press loaded '2.3 Init E' (distinct from starting '1.1 Grand Piano'); aria-labels 'Program 1..8', 'Program dial', 'Store program', 'Page left/right' all present."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 4,
+          "evidence": [
+            "src/state/program-state.ts: SPLIT_POSITIONS lists the 11 documented positions (C2..C7), up to 4 zones from 3 points, CROSSFADE_WIDTHS [0,6,12], zoneGain() implements Off=hard-switch and ±6/±12 linear fades (0.5 at boundary, tails across).",
+            "src/__tests__/splits-morphs.test.ts (20 tests): zone gating audible, crossfade curves in state and rendered audio, scene I/II swaps only per-layer enable (enable memory stashed per scene, sound params untouched), Wheel+Control-Pedal morph from/to interpolation incl. inverse, per-source clear, zero-to-remove, rejection of non-morphable destinations.",
+            "Master clock (30-300 BPM, tap 4+ / dial) drives arp/LFO sync; transpose ±6 shifts every engine; Panic stops all voices — asserted in system-integration.test.tsx (18 tests). aria-label 'Master clock (tap / hold + dial)', PANIC button present."
+          ]
+        },
+        {
+          "id": "organSystem",
+          "rating": 4,
+          "evidence": [
+            "src/audio/organ-models.ts: genuinely distinct additive spectra — B3 nine tonewheel partials w/ taper + key-click transient + percussion envelope (soft/fast/third), Vox seven partials + mix drawbar + even-harmonic transistor enrichment, Farf register switches (>4) gating a buzzy squarish stack, Pipe nine flute ranks (weak evens) slow attack; B3 Bass = B3 limited to 16'+8', Pipe 2 = brighter principal (per spec reuse).",
+            "src/__tests__/organ.test.ts (17 tests): two-layer lifecycle + cleanup to baseline, B3/Vox/Farf/Pipe pairwise distinct (correlation+spectral spread), drawbar changes spectrum, Farf register switching, percussion attack/soft/third, key click, vibrato V1-vs-C1 distinct and depth grows 1->3, Pipe2 brighter than Pipe1.",
+            "Live verification: 'Organ model selector' cycled B3->Vox (OLED 'A: VOX'); all nine drawbars + rotary route/drive + vib/chorus/percussion row + layer A/B + octave + level present with full aria-labels.",
+            "Caveat (see issues): organ Rotary is applied in the deterministic engine (render.ts) and proven by organ.rotary tests but is NOT wired into the live browser audio graph, so rotary is silent in-browser."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 4,
+          "evidence": [
+            "src/audio/synth-models.ts: category-correct DSP — Pure (sine/tri/saw/square/pulse33/pulse10 + seeded noise, Osc Ctrl no-op per manual p.29), Sync (master-reset slave, Osc Ctrl=relative pitch), Multi (3/5-saw stack, Osc Ctrl=detune), Super (5-voice detuned, Osc Ctrl=width), FM-H (2-op FM, Osc Ctrl=index).",
+            "src/audio/synth-engine.ts + synth-render.ts: LP12/LP24/HP/BP biquads w/ tracking+resonance+tanh drive; osc/filter/amp envelopes (decay-at-max=sustain); 5-wave LFO to pitch/oscctrl/filter w/ master-clock sync; poly/mono/legato + constant-rate glide; unison detune stack; On/Wheel vibrato; deterministic arp (up/down/updown/random seeded, 1-4 octave, hold, run) + gate.",
+            "src/__tests__/synth.test.ts (23 tests): all 14 waveforms non-silent, family pairwise distinct, Osc Ctrl per-category behavior, filter shapes (LP24 steeper than LP12), envelope time-domain effects, LFO wobble + clock sync, mono glide portamento (zero-crossing tracked), unison, exact deterministic arp sequences.",
+            "Live: three layer buttons (A/B/C), full oscillator/filter/envelope/LFO/arp control grid with aria-labels; wave selector cycled live (Saw->Square)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "audioIntegration",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 4,
+          "evidence": [
+            "Organ models and synth families use genuinely different additive/subtractive/FM DSP (organ-models.ts partial tables per model; synth-models.ts distinct render() per category), not renamed generic oscillators.",
+            "Distinctions proven on rendered signal, not state-only: organ.test.ts asserts B3/Vox/Farf/Pipe pairwise correlation + spectral-spread separation; synth.test.ts asserts Pure/Sync/Multi/Super/FM-H pairwise distinct and Pure members distinct (sine vs pulse vs noise). All green at 8 kHz offline (fake-backend corr/highBandRatio/rms/windowEnergy)."
+          ]
+        },
+        {
+          "id": "sharedRouting",
+          "rating": 3,
+          "evidence": [
+            "src/audio/render.ts renderGraph: piano A/B + organ (shared 'organ' chain) + synth A/B/C each run one ordered chain (Mod1->Mod2->Delay->Amp/EQ/Filter->Comp->Reverb), then rotary tap post-reverb, layer level, one master gain + tanh limiter — a single mix path; effects-graph.test.ts proves master-zero silences everything and all engines share one stereo graph.",
+            "src/audio/web-audio-backend.ts constructs ONE AudioContext with six layer-gain buses -> master gain -> DynamicsCompressor limiter -> destination, plus a live convolver reverb send/return; no separate context.",
+            "GAP: the browser path drops Rotary. withoutLiveUnits() sets clone.rotary.on=false before per-voice rendering, and the backend creates no live rotary node (grep: createRotary is used only in render.ts, i.e. the deterministic/test path). The code comment 'reverb + rotary stay live nodes' is inaccurate — only reverb is live. Rotary/To-Rotary is therefore inaudible in the shipped instrument though correct in-engine. This bounds the criterion below exceptional."
+          ]
+        },
+        {
+          "id": "qualityLoad",
+          "rating": 3,
+          "evidence": [
+            "Strengths: tanh master limiter bounds peaks; per-layer 16-voice polyphony with deterministic stealing; arp step timing lands in expected windows (synth.test.ts); cleanup returns voice/node/timer counts to baseline (backend.persistentNodeCount + teardown, asserted in effects-graph/organ tests); bufferCache bounded (clears >96). Live app played layered engines with zero console errors.",
+            "Limitation: WebAudioBackend pre-renders each voice into an 8 s buffer through the shared graph, so LFO/vibrato/arp animate over a note's life but MANUAL knob turns (filter cutoff, mod/delay/amp) do not re-modulate an already-held note — only subsequent notes reflect the change. Combined with the browser rotary omission above, live real-time expressive automation on sustained notes is limited, so sound quality/latency/load is strong but not flawless."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "roundTripIntegration",
+          "rating": 4,
+          "evidence": [
+            "src/state/program-state.ts ProgramState captures piano/organ/synth/effects/split/scene/morphs/clock/transpose as JSON-safe integers-on-panel-scale; Master Level deliberately excluded per programs spec.",
+            "programs.test.ts roundtrip: store->recall compares the full serialized snapshot plus deep field spot-checks across the 32 slots; dirty proven truthful (clean->edit->dirty->store->clean); >=8 factory programs ship (verified live: distinct named slots '1.1 Grand Piano', '2.3 Init E')."
+          ]
+        },
+        {
+          "id": "hardwareBindings",
+          "rating": 4,
+          "evidence": [
+            "src/state/panel-bindings.ts + system-integration.test.tsx hardware.bindings: every control is exactly one of functional or spec-excluded; 7 UNSUPPORTED_CONTROLS (program.morphAftertouch, program.panelA/BSelect, organ.panelA/BSelect, piano.modelSelect, synth.oscMix) listed with citations and surfaced live in the status bar AND the synth OLED ('unsupported: oscMix').",
+            "Live DOM audit: rich, correct aria-labels across program/organ/synth/effects (e.g. 'Organ drawbar 3 (8')', 'Filter cutoff' role=slider, 'Oscillator wave selector', 'Master clock (tap / hold + dial)'); functional controls verified to write canonical state (program load, organ model, synth wave, filter cutoff). No generic no-op fallbacks observed.",
+            "interaction-decorative.test.tsx + panel-functional.test.tsx assert the functional set writes engine state and the excluded set stays presentation-only, both directions."
+          ]
+        },
+        {
+          "id": "workflowIntegration",
+          "rating": 4,
+          "evidence": [
+            "system-integration.test.tsx (18 tests): all engines share one render path/master/destination (master-zero silences all), programs capture the whole system, splits route every engine through the same zones, morphs move canonical parameters that reach rendered audio (wheel->vibrato, wheel->filter-cutoff proven), master clock is canonical for arp/LFO sync, Panic works across all engines, organ+synth render through the Phase 2 stereo graph.",
+            "RoutableLayerId spans pianoA/B, organA/B, synthA/B/C uniformly through split zoneGain and the effects chains — one coherent system."
+          ]
+        },
+        {
+          "id": "regressionReliability",
+          "rating": 4,
+          "evidence": [
+            "feature-matrix.json regression.phase1 (11 files) and regression.phase2 (8 files) list all inherited tests; full run: 25 files / 232 tests all pass (verified via pnpm run test).",
+            "Phase 1-2 evidence preserved (evidence/stage1-*, stage2-*); inherited surface, key inputs (pointer/touch/keyboard/MIDI), piano library (108 bundled WAV takes on disk), effects, and cleanup remain functional; narrow retention intact (stage3-narrow.png)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "architecture",
+          "rating": 4,
+          "evidence": [
+            "Clean canonical-state ownership: src/state/program-state.ts is the single serializable schema; per-section state modules (organ-state, synth-state, effects-state, morph, piano-state) compose into it. src/audio/render.ts is one deterministic orchestrator shared by the fake test backend and the web-audio backend, giving a single source of audio truth.",
+            "Clear engine boundaries (organ-models / synth-models+engine+render / piano-models / effects / dsp), injectable seams (StorageLike, MIDI, timing, AudioBackend), single-AudioContext backend. Extensible and well-documented file headers.",
+            "Minor architectural blemish: the web-audio backend diverges from the deterministic engine by omitting the live Rotary node, and a stale comment overstates rotary as live (see sharedRouting)."
+          ]
+        },
+        {
+          "id": "testsMaintainability",
+          "rating": 4,
+          "evidence": [
+            "232 tests across 25 files (3629 lines) with real cross-boundary signal assertions (correlation, spectral spread, high-band ratio, RMS, window energy at 8 kHz), not fakes-only state checks. tests/feature-matrix.json maps all 38 required IDs to non-empty test files.",
+            "Deterministic seams keep tests device/network/audio-free; naming is clear and modular; low duplication (shared dsp + render); documentation via per-module headers and IMPLEMENTATION_DETAILS.json / IMPLEMENTATION_PLAN.md."
+          ]
+        },
+        {
+          "id": "runtimePerformance",
+          "rating": 4,
+          "evidence": [
+            "Live build boots with zero console errors (read_console_messages: none) and stays error-free across an interaction pass (program load, organ/synth toggles, wave/model cycling, slider edits).",
+            "Cleanup: teardown() disconnects source+gain and clears timers; dispose() closes the context; persistentNodeCount baseline asserted; voice stealing bounded at 16/layer; bufferCache clears past 96 entries to bound memory. Verification gates (test/typecheck/lint/build) all passed in inputs/verification.json."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "moderate",
+      "summary": "Rotary effect is inaudible in the shipped browser instrument. src/audio/web-audio-backend.ts withoutLiveUnits() sets clone.rotary.on=false before per-voice rendering and the backend creates no live rotary node; createRotary() is used only in the deterministic src/audio/render.ts (the path the tests exercise). The comment 'reverb + rotary stay live nodes' is inaccurate. Rotary DSP, acceleration, stop, and To-Rotary/ORGAN routing are correct and tested in-engine but produce no audible output in the browser. Controls still write canonical state, so it is not fabricated success, but a claimed audible effect is not connected to the live signal graph."
+    },
+    {
+      "severity": "minor",
+      "summary": "Per-voice buffer pre-rendering (8 s) means manual knob turns (filter cutoff, mod/delay/amp/comp) do not re-modulate an already-held note in the browser; only subsequent notes reflect the change. LFO/vibrato/arp are baked into the buffer so they still animate. A reasonable engineering tradeoff, honestly non-faking, but it limits live expressive real-time automation on sustained notes."
+    },
+    {
+      "severity": "informational",
+      "summary": "Grand/Upright/Electric ship as 108 bundled WAV takes (verified on disk under public/samples/) but are locally rendered from the project's own physical models via scripts/render-samples.mjs rather than acoustic recordings. IMPLEMENTATION_DETAILS.json declares this truthfully (kind: recorded-sample-set, source describes local rendering, CC0) and they are offline-capable and audibly distinct, so this satisfies the honesty contract; noted only for transparency."
+    }
+  ]
+}

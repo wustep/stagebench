@@ -1,0 +1,86 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "Phase 2 plays a bundled recorded sample library for Grand, Upright, and Electric; Clav/Digital/Misc and the labeled fallback are honest runtime synthesis. One deterministic render pipeline (src/audio/render.ts + src/audio/effects.ts + src/audio/dsp.ts) serves both the browser and tests: the Web Audio backend pre-renders each voice through the exact graph (layer source → Mod 1 → Mod 2 → Delay → Amp/EQ/Filter → Compressor → per-voice frames) and plays it through layer buses, a live convolver reverb, layer level gains, master gain, and a DynamicsCompressor limiter to one destination; the fake test backend runs the identical code offline. Reverb and Rotary run live in the browser so mixes stay correct; reverb always precedes rotary. Master Level rides the master gain with click-free ramps.",
+    "sampleSources": [
+      {
+        "name": "grand",
+        "kind": "recorded-sample-set",
+        "model": "Grand Lady D",
+        "source": "Rendered locally by scripts/render-samples.mjs, which performs this project's own grand physical model (src/audio/piano-models.ts) and records each take to disk; original recordings produced for this project, bundled in public/samples/grand/.",
+        "files": [
+          "public/samples/grand/{28,33,38,43,48,53,58,62,67,72,76,80,83,86,89,93,96,100}_{pp,ff}.wav (36 files, 16-bit PCM mono 22050 Hz)"
+        ],
+        "rootNotes": [28, 33, 38, 43, 48, 53, 58, 62, 67, 72, 76, 80, 83, 86, 89, 93, 96, 100],
+        "velocityLayers": ["pp (nominal 0.3)", "ff (nominal 0.9)"],
+        "license": "CC0 (original work, no third-party audio)"
+      },
+      {
+        "name": "upright",
+        "kind": "recorded-sample-set",
+        "model": "Grand Upright",
+        "source": "Rendered locally by scripts/render-samples.mjs from this project's own upright physical model (src/audio/piano-models.ts; boxier partials, faster decay) — audibly distinct from the grand, asserted by rendered-signal correlation tests; bundled in public/samples/upright/.",
+        "files": [
+          "public/samples/upright/{28..100}_{pp,ff}.wav (36 files, same roots/layers)"
+        ],
+        "rootNotes": [28, 33, 38, 43, 48, 53, 58, 62, 67, 72, 76, 80, 83, 86, 89, 93, 96, 100],
+        "velocityLayers": ["pp", "ff"],
+        "license": "CC0 (original work, no third-party audio)"
+      },
+      {
+        "name": "electric",
+        "kind": "recorded-sample-set",
+        "model": "Sparkle Top",
+        "source": "Rendered locally by scripts/render-samples.mjs from this project's own tine physical model (src/audio/piano-models.ts; strong fundamental + 3.93x bell partial); bundled in public/samples/electric/.",
+        "files": [
+          "public/samples/electric/{28..100}_{pp,ff}.wav (36 files, same roots/layers)"
+        ],
+        "rootNotes": [28, 33, 38, 43, 48, 53, 58, 62, 67, 72, 76, 80, 83, 86, 89, 93, 96, 100],
+        "velocityLayers": ["pp", "ff"],
+        "license": "CC0 (original work, no third-party audio)"
+      }
+    ],
+    "generatedSources": [
+      {
+        "name": "clav-d6",
+        "kind": "additive-synthesis",
+        "module": "src/audio/piano-models.ts (synthClavSample)",
+        "notes": "Clavinet-style plucked stack with bark transient; honest synthesis, declared generated."
+      },
+      {
+        "name": "digital-piano-1",
+        "kind": "additive-synthesis",
+        "module": "src/audio/piano-models.ts (synthDigitalSample)",
+        "notes": "Layered FM-ish digital piano; honest synthesis, declared generated."
+      },
+      {
+        "name": "marimba-misc",
+        "kind": "additive-synthesis",
+        "module": "src/audio/piano-models.ts (synthMiscSample)",
+        "notes": "Mallet (marimba) voice; honest synthesis, declared generated."
+      },
+      {
+        "name": "synth-piano-basic",
+        "kind": "additive-synthesis",
+        "module": "src/audio/voice.ts",
+        "notes": "Phase 1 basic voice, now the labeled fallback used when Web Audio is unavailable or a recorded type's assets fail; generated, never described as a recording."
+      },
+      {
+        "name": "reverb-impulse-responses",
+        "kind": "generated-IRs",
+        "module": "src/audio/effects.ts (createReverb)",
+        "notes": "Deterministic seeded-noise exponential-decay IRs per reverb type (Room/Booth/Spring/Stage/Hall/Cathedral) with bright/dark damping; generated in code, no recorded IRs."
+      }
+    ],
+    "notes": [
+      "One AudioContext: voice sources → per-layer buses → ordered effects → layer level gains → master gain (Master Level knob) → limiter → one destination. Bypass is click-free; parameter changes use short ramps.",
+      "Delay feedback filtering is inside the feedback loop (repeats progressively filtered, dry path untouched). Reverb precedes Rotary; To Rotary taps post-reverb, pre-layer-level.",
+      "Functional controls (Piano, Layer Effects, Master Level, Panic) write canonical engine state via src/state/panel-bindings.ts; every other control remains decorative (presentation state only), asserted by tests.",
+      "String Res is a simulated sympathetic-resonance wash (spec allows simulation); Soft Release is disabled for Clav per manual p. 25.",
+      "Per-layer polyphony 16 voices with deterministic stealing; blur/disconnect/unmount/panic stop every owned voice; tests assert voice/timer/listener baselines.",
+      "Sustain works from UI, computer keyboard (space), and MIDI CC64, and only affects layers with SUSTPED on."
+    ]
+  }
+}

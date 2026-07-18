@@ -1,0 +1,22 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "audio": {
+    "strategy": "One piano voice, honestly synthesized: a deterministic additive stack of six sine partials per note with per-partial exponential decay, inharmonic stretch, register-scaled decay, a 2 ms hammer attack, and a damper-down release envelope. Each (note, velocity) pair is rendered to a buffer by src/audio/voice.ts and played through a per-voice gain into a master gain (src/audio/web-audio-backend.ts). Tests render the identical pure function via src/audio/fake-backend.ts. No recorded samples are used in Phase 1; nothing is described as a recording.",
+    "generatedSources": [
+      {
+        "name": "synth-piano-basic",
+        "kind": "additive-synthesis",
+        "module": "src/audio/voice.ts",
+        "notes": "Deterministic function of (MIDI note, velocity); 6 partials, gains 1.0/0.52/0.30/0.18/0.10/0.05, decay 1.4-8.6 s^-1 scaled by register, release envelope 0.35 s. Generated in code at runtime; no audio files shipped."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "Phase 1 honesty contract: every panel control is decorative; only keybed notes and sustain (UI spacebar mapping and MIDI CC64) drive the engine.",
+      "When Web Audio is unavailable the app shows the labeled 'Silent fallback' status and produces no sound rather than pretending to play.",
+      "Voice stealing is deterministic (oldest released voice first, then oldest held), polyphony is 16 voices, and blur/disconnect/unmount stop every owned voice."
+    ]
+  }
+}

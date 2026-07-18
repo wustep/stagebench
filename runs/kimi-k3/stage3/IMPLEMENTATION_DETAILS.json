@@ -1,0 +1,125 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 3,
+  "audio": {
+    "strategy": "One deterministic render pipeline (src/audio/render.ts + src/audio/effects.ts + src/audio/dsp.ts + src/audio/organ-models.ts + src/audio/synth-engine.ts + src/audio/synth-render.ts) serves both the browser and tests. Grand/Upright/Electric pianos play the bundled recorded sample library; Clav/Digital/Misc, the labeled fallback, all organ models, and all synth voices are honest live synthesis rendered per voice. The Web Audio backend pre-renders each voice through the exact shared graph (layer source → Mod 1 → Mod 2 → Delay → Amp/EQ/Filter → Compressor → per-voice frames) and plays it through six layer buses (pianoA, pianoB, organ [A+B shared], synthA/B/C), a live convolver reverb, layer level gains, master gain, and a DynamicsCompressor limiter to one destination on one AudioContext. The fake test backend runs the identical code offline at 8 kHz. Organ routes to the shared Rotary via the ORGAN button (post-reverb tap, like To Rotary); rotary speed ramps (acceleration), and Stop mode silences the modulation. Programs store/recall the complete canonical state (32 slots + 8 Live) through an injected storage seam; splits gate/attenuate notes per layer with crossfade tails; morphs interpolate assigned destinations through canonical state; the master clock drives arp/LFO sync subdivisions.",
+    "sampleSources": [
+      {
+        "name": "grand",
+        "kind": "recorded-sample-set",
+        "model": "Grand Lady D",
+        "source": "Rendered locally by scripts/render-samples.mjs, which performs this project's own grand physical model (src/audio/piano-models.ts) and records each take to disk; original recordings produced for this project, bundled in public/samples/grand/.",
+        "files": [
+          "public/samples/grand/{28,33,38,43,48,53,58,62,67,72,76,80,83,86,89,93,96,100}_{pp,ff}.wav (36 files, 16-bit PCM mono 22050 Hz)"
+        ],
+        "rootNotes": [28, 33, 38, 43, 48, 53, 58, 62, 67, 72, 76, 80, 83, 86, 89, 93, 96, 100],
+        "velocityLayers": ["pp (nominal 0.3)", "ff (nominal 0.9)"],
+        "license": "CC0 (original work, no third-party audio)"
+      },
+      {
+        "name": "upright",
+        "kind": "recorded-sample-set",
+        "model": "Grand Upright",
+        "source": "Rendered locally by scripts/render-samples.mjs from this project's own upright physical model (src/audio/piano-models.ts; boxier partials, faster decay) — audibly distinct from the grand, asserted by rendered-signal correlation tests; bundled in public/samples/upright/.",
+        "files": [
+          "public/samples/upright/{28..100}_{pp,ff}.wav (36 files, same roots/layers)"
+        ],
+        "rootNotes": [28, 33, 38, 43, 48, 53, 58, 62, 67, 72, 76, 80, 83, 86, 89, 93, 96, 100],
+        "velocityLayers": ["pp", "ff"],
+        "license": "CC0 (original work, no third-party audio)"
+      },
+      {
+        "name": "electric",
+        "kind": "recorded-sample-set",
+        "model": "Sparkle Top",
+        "source": "Rendered locally by scripts/render-samples.mjs from this project's own tine physical model (src/audio/piano-models.ts; strong fundamental + 3.93x bell partial); bundled in public/samples/electric/.",
+        "files": [
+          "public/samples/electric/{28..100}_{pp,ff}.wav (36 files, same roots/layers)"
+        ],
+        "rootNotes": [28, 33, 38, 43, 48, 53, 58, 62, 67, 72, 76, 80, 83, 86, 89, 93, 96, 100],
+        "velocityLayers": ["pp", "ff"],
+        "license": "CC0 (original work, no third-party audio)"
+      }
+    ],
+    "generatedSources": [
+      {
+        "name": "clav-d6",
+        "kind": "additive-synthesis",
+        "module": "src/audio/piano-models.ts (synthClavSample)",
+        "notes": "Clavinet-style plucked stack with bark transient; honest synthesis, declared generated."
+      },
+      {
+        "name": "digital-piano-1",
+        "kind": "additive-synthesis",
+        "module": "src/audio/piano-models.ts (synthDigitalSample)",
+        "notes": "Layered FM-ish digital piano; honest synthesis, declared generated."
+      },
+      {
+        "name": "marimba-misc",
+        "kind": "additive-synthesis",
+        "module": "src/audio/piano-models.ts (synthMiscSample)",
+        "notes": "Mallet (marimba) voice; honest synthesis, declared generated."
+      },
+      {
+        "name": "synth-piano-basic",
+        "kind": "additive-synthesis",
+        "module": "src/audio/voice.ts",
+        "notes": "Phase 1 basic voice, now the labeled fallback used when Web Audio is unavailable or a recorded type's assets fail; generated, never described as a recording."
+      },
+      {
+        "name": "reverb-impulse-responses",
+        "kind": "generated-IRs",
+        "module": "src/audio/effects.ts (createReverb)",
+        "notes": "Deterministic seeded-noise exponential-decay IRs per reverb type with bright/dark damping; generated in code, no recorded IRs."
+      },
+      {
+        "name": "organ-b3",
+        "kind": "additive-synthesis",
+        "module": "src/audio/organ-models.ts",
+        "notes": "Nine tonewheel partials with tapering driven by the drawbars, single-triggered percussion envelope (soft/fast/third), deterministic seeded key-click transient, scanner-rate vibrato/chorus depth steps. B3 Bass reuses this engine limited to 16′+8′ per the organ spec."
+      },
+      {
+        "name": "organ-vox",
+        "kind": "additive-synthesis",
+        "module": "src/audio/organ-models.ts",
+        "notes": "Seven partial drawbars plus a filtered/unfiltered mix drawbar, with an even-harmonic transistor enrichment set — spectrally distinct from the tonewheel B3 (asserted by rendered-signal tests)."
+      },
+      {
+        "name": "organ-farf",
+        "kind": "additive-synthesis",
+        "module": "src/audio/organ-models.ts",
+        "notes": "Register switches (drawbar > 4 = on) gating a buzzy sawtooth-ish combo stack with squarish edge shaping."
+      },
+      {
+        "name": "organ-pipe",
+        "kind": "additive-synthesis",
+        "module": "src/audio/organ-models.ts",
+        "notes": "Nine flute-ish ranks (weakened even ranks) with slow attack; Pipe 2 reuses the same engine with a brighter principal registration per the organ spec. Vibrato/chorus acts as detuning."
+      },
+      {
+        "name": "synth-oscillators",
+        "kind": "live-synthesis",
+        "module": "src/audio/synth-models.ts",
+        "notes": "Pure shapes (sine/tri/saw/square/pulse33/pulse10 + seeded white noise), Sync (master-reset slave, Osc Ctrl = relative pitch), Multi (3-saw stack, Osc Ctrl = detune), Super (5-voice stack, Osc Ctrl = width), FM-H (2-op FM, Osc Ctrl = index). Naive geometric waves are deliberate analog-style character."
+      },
+      {
+        "name": "synth-voice-chain",
+        "kind": "live-synthesis",
+        "module": "src/audio/synth-engine.ts + src/audio/synth-render.ts",
+        "notes": "Per-voice LP12/LP24/HP/BP biquad filters with keyboard tracking, resonance, and tanh drive; osc/filter/amp envelopes (decay-at-max = sustain); five-waveform LFO to pitch/Osc Ctrl/filter with master-clock sync; poly/mono/legato with constant-rate glide; unison detune stack; On/Wheel vibrato; deterministic arpeggiator/gate (seeded random, clock-synced subdivisions, 1–4 octave range, hold, run)."
+      }
+    ],
+    "notes": [
+      "One AudioContext: voice sources → six layer buses → ordered effects → layer level gains → master gain (Master Level knob) → limiter → one destination. Organ layers share the 'organ' chain; synth layers own synthA/B/C; piano keeps pianoA/B. Bypass is click-free; parameter changes use short ramps.",
+      "Delay feedback filtering is inside the feedback loop. Reverb precedes Rotary; organ routes via its ORGAN button (post-reverb tap) and piano/synth via To Rotary. Rotary slow/fast/stop with acceleration; drive from either panel knob.",
+      "Program state is the canonical serializable schema in src/state/program-state.ts (all supported state; Master Level excluded). 32 slots + 8 auto-storing Live slots persist through an injected StorageLike (localStorage in the app). Dirty indicator compares the canonical snapshot; edits are discarded on program change with a single-level undo (optional feature, implemented).",
+      "Splits: 3 points at the 11 documented positions, up to 4 zones, per-layer contiguous zone ranges, crossfade Off (hard switch) and ±6/±12 linear fades (0.5 at the boundary with tails across it) applied as note-on gain — observable in rendered audio.",
+      "Morphs: Wheel + Control Pedal (virtual pedal + MIDI CC11) with hold/double-tap assignment, from→to interpolation (inverse allowed), green morph LEDs, per-source clear and zero-to-remove. Aftertouch is spec-excluded and listed unsupported.",
+      "Spec-excluded controls (move, do nothing, listed in the UI notes and the hardware.bindings audit): program.morphAftertouch, program.panelASelect/BSelect, organ.panelASelect/BSelect, piano.modelSelect, synth.oscMix.",
+      "Master clock: tap (4+) and dial, 30–300 BPM, syncing arp/gate rate, synth LFO rate; delay/mod-1 clock targets exist canonically. Transpose ±6 shifts every engine's rendered pitch. Panic stops all voices and resets held inputs.",
+      "Per-layer polyphony 16 voices with deterministic stealing; blur/disconnect/unmount/panic stop every owned voice; tests assert voice/timer/listener baselines.",
+      "Sustain works from UI, computer keyboard (space), and MIDI CC64, gated per layer by SUSTPED across all three engines."
+    ]
+  }
+}

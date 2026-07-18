@@ -1,0 +1,300 @@
+{
+  "rubricVersion": "1.1.0",
+  "runId": "kimi-k3",
+  "stage": 2,
+  "stageName": "Piano library and working effects",
+  "status": "complete",
+  "evaluator": "stagebench-blind-evaluator",
+  "evaluatedAt": "2026-07-18T01:05:00.000Z",
+  "summary": "A strong, honest Phase 2 artifact. All four technical gates pass (typecheck/lint clean, 138 tests across 20 files, build produces dist/index.html). The complete Phase 1 surface is retained (6 ordered sections, 73 keys, 53 sliders, 160 buttons, Program/Synth OLEDs, no horizontal overflow at 390x844) with the Piano and Layer Effects sections made genuinely functional and Organ/Synth/Program honestly decorative. The audio architecture is exemplary: one shared deterministic render pipeline (dsp/effects/render.ts) serves both a single-AudioContext Web Audio backend and an injectable fake backend, with per-layer buses, master gain, a DynamicsCompressor limiter, and one destination. Every effect unit (Mod1 x6, Mod2 x6, Delay, Amp/EQ with Twin/JC/Small + LP24/HP24, Compressor, Reverb x6, Rotary) is implemented as real DSP and proven distinct by rigorous rendered-signal tests (correlation, RMS, window-energy, ZCR, dynamic-range). Piano performance controls (KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, Master Level, two layers with octave/level/focus, SUSTPED-gated sustain from UI/keyboard/MIDI) measurably alter audio. On the honesty contract: Grand/Upright/Electric ship as 108 genuine 16-bit PCM WAV files (verified valid, non-silent, distinct per type and velocity) loaded/decoded as a real offline sample library with nearest-root mapping and full file/root/velocity/CC0 provenance; the declaration truthfully states these are rendered from the project's OWN physical models rather than acoustic recordings, and synth types are labeled '(synth)' in the live display. The 'recorded sample set' framing is therefore honest but generous (self-rendered synthesis baked to disk). Two real gaps: (1) live-browser Rotary is a disconnected node -- nothing feeds rotaryInput and no createRotary runs in the browser, so 'To Rotary' produces no rotary processing in the actual app (Rotary is real only in the tested offline pipeline), and IMPLEMENTATION_DETAILS overstates this by claiming 'Rotary run live in the browser'; (2) the browser pre-renders per-voice buffers, so mod/delay/amp/comp parameter changes affect only newly-triggered notes. Neither undermines the sample-honesty gate, which is honestly satisfied.",
+  "score": 69,
+  "rawScore": 94,
+  "categories": [
+    {
+      "id": "visualRetention",
+      "label": "Visual and interaction retention",
+      "weight": 10,
+      "score": 100,
+      "contribution": 10,
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "label": "Surface fidelity retention",
+          "weight": 60,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Live DOM at localhost dist: 6 sections in order (performance, organ, piano, program, synth, effects), 73 keys, 53 sliders, 160 buttons/role-buttons; Program OLED shows live 'Piano A: Grand Lady D', Synth OLED honestly '-- decorative --'.",
+            "Narrow viewport 390x844: documentElement.scrollWidth === clientWidth (390), no horizontal overflow, maxRight=390 (nothing clips), all 6 sections present.",
+            "Geometry regression tests green: visual-section-layout.test.tsx asserts section fractions 14/20/8.5/12.5/25/20 and 54/46 deck/keybed split; regression-chassis.test.tsx pins 94vw width / 3.0951 aspect. evidence/stage2-desktop.png (1440x900) + stage2-narrow.png + stage2-visual-audit.md present.",
+            "regression.phase1 feature (11 inherited Phase 1 test files) present and green; no marketing hero, keys/rails intact."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "label": "Piano/effect hardware state",
+          "weight": 40,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Real Playwright click on button[aria-label='Piano type selector'] changed Program OLED from 'Piano A: Grand Lady D' to 'Piano B: Clavinet D6 (synth)' -- coherent live display + focus state, with honest '(synth)' suffix on synthesized types.",
+            "Controls expose accessible state: Piano layer A/B enable (aria-pressed), KB Touch / Dyn Comp / Timbre / Unison / Soft Release / String Res buttons, effects on/off, Effects layer focus A/B, group mode, global mode, 'Layer effects on/off (bypass all)', per-unit on/off, sliders with aria-valuenow (Master level=64, Reverb amount, Delay feedback, etc.).",
+            "panel-functional.test.tsx asserts functional controls (Piano/Effects/Master/Panic) write engine state while organ/synth/program remain presentation-only."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "label": "Piano library and performance",
+      "weight": 35,
+      "score": 92.5,
+      "contribution": 32.4,
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "label": "Distinct Piano instruments",
+          "weight": 30,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Six selectable types present (grand, upright, electric, clav, digital, misc) per PIANO_TYPES; Clav/Digital/Misc are honest additive synthesis, declared 'generated'.",
+            "108 real WAV files bundled in public/samples/{grand,upright,electric} and dist/samples: `file` reports 'RIFF WAVE Microsoft PCM 16 bit mono 22050 Hz'; md5 confirms grand/upright/electric 62_ff.wav all differ and pp!=ff. Loaded/decoded at runtime by sample-library.ts (loadRecordedType + createFetchLoader), nearest-root mapping <= minor third, pitch-shift in render.ts.",
+            "piano-instrument-library.test.ts proves files exist + non-silent (rms>0.0005), nearest-root within 3 semitones for all notes 28-100, and pairwise correlation(grand,upright/electric) < 0.9 on rendered audio -- audibly distinct, offline.",
+            "HONESTY: IMPLEMENTATION_DETAILS declares kind 'recorded-sample-set' but source truthfully states 'Rendered locally by scripts/render-samples.mjs ... this project's own grand physical model'; IMPLEMENTATION_PLAN adds 'original synthetic recordings of the project's own models, not recordings of acoustic hardware'. No deception -> does NOT hit the 'generated buffers presented as recordings score 0' anchor. Deduction: 'recorded' is a generous label for self-rendered synthesis baked to disk, and sonic realism is that of a simple partial/physical model, so the recorded-vs-synth distinction is partly packaging."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "label": "Two-layer Piano behavior",
+          "weight": 25,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "piano-layers.test.ts covers focus->voice ownership, disabling a layer stops only its voices, disabled layers do not start notes, level scales the layer in the mix, octave +/-12 transposes rendered audio, two types sound together, per-layer polyphony/stealing, cleanup to baseline.",
+            "render.ts renderGraph iterates params.layers honoring enabled/level/octave per layer; web-audio-backend has independent layerGains and reverbSend for pianoA/pianoB.",
+            "Live: 'Piano layer A enable' pressed=true, 'Piano layer B enable' present and toggles; effects-graph.test.ts drives both layers with independent focus and notes and asserts stereo rms on both channels."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "label": "Detailed Piano controls",
+          "weight": 25,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "piano-velocity-controls.test.ts asserts KB Touch (Light>Medium>Heavy level), Dyn Comp (narrowed range, louder soft), Timbre (Soft darker/Bright brighter; Dyno 1/2 electric-only), Unison (stereo width + detune), Soft Release (longer tail; disabled for Clav), String Res (sympathetic energy while held), Master Level (scales/mutes) each measurably change rendered audio.",
+            "Real DSP confirmed in render.ts (applyKbTouch, applyDynComp, UNISON_DETUNE_CENTS/PAN, addStringResonance, envelopeVoice soft-release tau 0.9 vs 0.32, softRelease disabled for type 'clav') and effects.ts applyTimbre (per-type biquad shaping incl. Dyno 1/2 preamp for electric).",
+            "Live controls exposed with accessible names for all seven performance controls."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "label": "Input and fallback reliability",
+          "weight": 20,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "piano-inputs.test.tsx: pointer, independent multi-touch via pointerId, mapped computer keys with repeat suppression, MIDI note/velocity/CC64, denied and disconnected MIDI states, out-of-range MIDI ignored.",
+            "piano-pedals-fallback.test.tsx: SUSTPED honored per layer on actual voice.releasedAt state and on rendered tail energy (susTail > relTail*3); spacebar sustain; SUSTPED-off does not defer release.",
+            "piano.fallback: markTypeFailed -> status region shows 'Synthesized fallback' (never 'recorded'), Program display reports 'failed', type stays playable (activeVoiceCount=1, rms>0.001). Cleanup returns voices/nodes/timers to baseline (piano-status-cleanup + effects-graph dispose test)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "label": "Effects and signal graph",
+      "weight": 30,
+      "score": 88.8,
+      "contribution": 26.6,
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "label": "Shared graph and gain staging",
+          "weight": 25,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "web-audio-backend.ts constructs exactly one AudioContext: master GainNode -> DynamicsCompressor limiter (threshold -6, ratio 16) -> ctx.destination; per-layer layerGains[pianoA/pianoB] -> master; live convolver reverbSend/reverbReturn -> master.",
+            "effects-graph.test.ts: 'master gain and limiter bound the output; nothing bypasses the master path' -> peak <= 1.0 under hot drive; setMasterLevel(0) silences everything (rms<1e-6); dispose -> activeVoiceCount 0 and render returns to silence (<1e-6).",
+            "render.ts renderGraph applies master gain then tanh limiter as the final shared stage; signal order matches effects spec requiredOrder.",
+            "Caveat: a rotaryInput GainNode is wired to master but never receives a source (see effectCoverage/issues)."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "label": "Audible effect coverage",
+          "weight": 45,
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "effects.ts implements real DSP for every unit: Mod1 (A-Pan/Tremolo/Ring Mod/A-Wah/Wah/Pump), Mod2 (Chorus/Flanger/Phaser/Vibe/Ensemble/Spin), Delay (in-loop feedback filter), Amp/EQ (Twin/JC/Small drive curves + LP24/HP24 cascaded biquads), Compressor (env follower + makeup), Reverb (6 seeded-IR block convolutions), Rotary (horn/rotor Doppler + drive).",
+            "effects-processing.test.ts proves each type is distinct from dry and from siblings on rendered audio: Mod1/Mod2 pairwise corr<0.97/0.99, Delay tempo/feedback energy, amps corr<0.98, LP24 vs HP24 opposite ZCR, compressor dynamic-range<0.85x, Reverb Cathedral tail > 2x Booth, Rotary slow vs fast corr<0.9.",
+            "GAP: In the real browser backend Rotary does not process audio -- grep of web-audio-backend.ts shows no createRotary and nothing connects to rotaryInput; withoutLiveUnits() sets rotary.on=false and amp type 6->0 in the per-voice render. So 'To Rotary' is a disconnected node live (real only in the offline/test pipeline). Six of seven units are exceptional and audible live; one is browser-inaudible -> not a label but a real integration gap."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "label": "Routing and control",
+          "weight": 30,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "effects-routing.test.ts + panel-functional.test.tsx: per-unit bypass, all-effects bypass (allOn=false returns dry input in runChain), dry/wet, focus (edits land on focused chain only), Piano group mode (layers share settings), global mode (Delay/Comp/Reverb apply to all via resolveUnit), tap tempo.",
+            "Delay feedback filter sits inside the loop (effects.ts createDelay: repeats progressively filtered, dry path untouched); documented order enforced in render.ts runChain (Mod1->Mod2->Delay->Amp->Comp->Reverb).",
+            "To Rotary tap is post-reverb, pre-layer-level in renderGraph (effects-graph.test.ts 'reverb precedes rotary' asserts audible reverb tail into the rotary path). Live focus A/B, group, and global toggles present with accessible state.",
+            "Caveat: the To Rotary routing, while correct and tested in the shared pipeline, is not audible in the browser (see effectCoverage)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "label": "System behavior and UX",
+      "weight": 10,
+      "score": 100,
+      "contribution": 10,
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "label": "Audible/visible feedback",
+          "weight": 50,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Immediate visible feedback confirmed live: piano type change instantly updates Program OLED text incl. model name and '(synth)' tag; sliders/buttons expose aria-valuenow/aria-pressed that track canonical state.",
+            "panel-functional.test.tsx asserts panel feedback (LEDs/displays/values) tracks the same canonical state that drives the audio; parameter tests prove the matching audio change.",
+            "IMPLEMENTATION_DETAILS notes click-free ramps (0.03s) on master/layer/reverb params for coherent, glitch-free feedback."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "label": "Failure and stress behavior",
+          "weight": 50,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Denied/disconnected MIDI handled (piano-inputs.test.tsx); failed assets enter labeled playable fallback without reporting the library ready (piano.fallback tests).",
+            "Layered polyphony with 16 voices/layer and deterministic oldest-released-then-oldest-held stealing; blur/disconnect/unmount/dispose stop every owned voice (piano-status-cleanup + effects-graph dispose -> rms<1e-6).",
+            "Clipping bounded: limiter test keeps peak <= 1.0 under 7 loud notes + wet reverb + high delay feedback. Live load produced no console errors (only a harmless favicon 404)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "label": "Engineering quality",
+      "weight": 15,
+      "score": 100,
+      "contribution": 15,
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "label": "Audio architecture",
+          "weight": 45,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Clean boundaries: piano-models.ts (source) / voice + render.ts (voice/layer) / effects-state.ts + effects.ts (effect) / web-audio-backend.ts (bus/master). AudioBackend is injectable with web/fake/silent implementations; one deterministic pipeline (dsp+effects+render) is shared verbatim by browser and tests so assertions cross the real boundary.",
+            "Extensible for Phase 3: typed state modules (piano-state, effects-state, hardware-store, panel-bindings), sample-library seam (SampleLoader), and effect chain runner generalize cleanly.",
+            "Limitations noted: browser pre-renders per-voice buffers (mod/delay/amp/comp changes affect only new notes; reverb live), and the intended live Rotary node is unfed -- design/integration caveats rather than boundary violations."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "label": "Real-boundary tests",
+          "weight": 30,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "138 tests / 20 files pass; audio tests measure rendered signals through the actual render pipeline: normalized cross-correlation, RMS, windowEnergy, ZCR, and dynamic-range ratios prove source distinction, per-control direction, effect on/bypass/wet-dry, routing order, feedback path, and cleanup-to-baseline.",
+            "Examples: instrument distinctness corr<0.9; velocity layer corr<0.98; master=0 -> rms<1e-6; dispose -> silence; sustain tail > release tail*3; reverb decay growth; compressor dynamic-range reduction.",
+            "Minor: the single 'WebAudioBackend one context' test is a structural shape check (no real AudioContext), but the fake backend executes the identical render code."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "label": "Performance and maintainability",
+          "weight": 25,
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Buffer cache is bounded (clears when size>96); voices/timers/listeners return to baseline on teardown/dispose; click-free linear ramps for live params.",
+            "Inherited regression coverage intact: 11 Phase 1 test files + evidence retained; feature-matrix.json maps all 20 required IDs to real non-empty tests (verification: coveredFeatures 20/20).",
+            "Clear module naming and separation; lint + typecheck clean. Minor duplication (applyTimbre duplicates L/R filter setup; commented as intentional for per-channel biquad state)."
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 5285,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 1507,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 896,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 2197,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "high",
+      "title": "Startup freeze from O(n·k) reverb impulse render (manually fixed post-seal)",
+      "detail": "The sealed artifact froze the browser main thread for ~13-16s on every load, and again on any reverb type/bright change. web-audio-backend.ts buildImpulse() rendered the convolution IR by running a unit impulse through createReverb().process(), whose direct-form convolution is O(n·k): at 48kHz that is ~172,800 samples against a ~144,000-sample IR, ~2.5e10 multiply-adds. Measured: 4 rendered frames in 16s (a 16,068ms gap with no frames) and 10/10 fresh loads failed to produce a paint within 6s; CPU profile showed 98.9% of samples in the reverb process() function. Phase 1 was unaffected (no reverb). This was fixed manually after sealing so the artifact could be published and played in the gallery: buildImpulse now assembles the buffer directly from the reverb's cached impulse response in O(n), since convolving a unit impulse with h yields h. The fix is output-identical (verified to <1e-7 across all reverb types x bright/dark) and the artifact's own suites still pass (stage2 138/138, stage3 232/232). Post-fix: 480 frames/4s, no gaps, 10/10 loads paint in 33-45ms. A 25-point deduction is applied to this phase because the delivered artifact was unusable as shipped and required manual repair."
+    },
+    {
+      "severity": "medium",
+      "summary": "Live-browser Rotary is non-functional and the declaration overstates it. web-audio-backend.ts creates a rotaryInput GainNode connected to master but nothing feeds it and no createRotary processor is instantiated; withoutLiveUnits() strips rotary from the per-voice offline render (rotary.on=false, amp type 6->0). So selecting Amp 'To Rotary' yields no rotary processing in the actual app. IMPLEMENTATION_DETAILS.json's claim 'Reverb and Rotary run live in the browser' is inaccurate for Rotary (it is real and tested only in the shared offline renderGraph pipeline)."
+    },
+    {
+      "severity": "low",
+      "summary": "Grand/Upright/Electric 'recorded-sample-set' WAVs are rendered from the project's own physical-model synthesis (scripts/render-samples.mjs), not acoustic recordings. This is disclosed truthfully in IMPLEMENTATION_DETAILS.json and IMPLEMENTATION_PLAN.md ('original synthetic recordings of the project's own models, not recordings of acoustic hardware'), so the honesty contract is satisfied and the 'generated buffers presented as recordings score 0' anchor is not triggered -- but 'recorded' is a generous label and sonic realism is modest."
+    },
+    {
+      "severity": "low",
+      "summary": "The browser backend pre-renders each voice into an AudioBuffer through the shared pipeline, so mod/delay/amp/comp parameter changes only affect subsequently triggered notes (reverb and master/level ride live nodes). Reasonable for percussive piano but a real-time limitation to note for Phase 3."
+    }
+  ],
+  "postSealAdjustment": {
+    "points": -25,
+    "reason": "Startup freeze (O(n·k) reverb IR render) required a manual post-seal code fix to make the artifact viewable.",
+    "appliedAt": "2026-07-17T00:00:00.000Z",
+    "appliedBy": "maintainer",
+    "filesChanged": [
+      "src/audio/web-audio-backend.ts",
+      "src/audio/effects.ts"
+    ]
+  }
+}

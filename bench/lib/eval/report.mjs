@@ -16,7 +16,7 @@ function formatIssue(issue) {
   if (issue && typeof issue === 'object') {
     const str = (value) => (typeof value === 'string' ? value.trim() : '')
     const title = str(issue.title) || str(issue.issue)
-    const detail = str(issue.detail) || str(issue.evidence) || str(issue.description)
+    const detail = str(issue.detail) || str(issue.evidence) || str(issue.description) || str(issue.summary)
     if (title && detail) return `${title}: ${detail}`
     if (title || detail) return title || detail
   }

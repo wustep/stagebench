@@ -1,0 +1,136 @@
+{
+  "rubricVersion": "1.1.0",
+  "runId": "kimi-k3",
+  "stage": 1,
+  "evaluator": "stagebench blind evaluator (fresh agent)",
+  "evaluatedAt": "2026-07-17T23:20:00Z",
+  "summary": "A strong, honest Phase 1 submission. The complete six-section Nord Stage 4 73 surface is rebuilt as one continuous red chassis with an exact 73-key E1-E7 keybed (43 white / 30 black), correct 54/46 deck-keybed split, aspect ratio 3.095, and section widths matching the visual spec to ~0.003. All spec landmarks are present (nine drawbars, organ/piano/synth/effects clusters, program dial + 8 buttons + morph, two OLEDs on Program and Synth only) across 131 controls with stable IDs and full pointer+keyboard accessibility. The basic piano voice is honestly synthesized (declared as generated, never a recording), audible through a real connected Web Audio graph (source->gain->master->destination), with velocity, per-note release, sustain (UI space + MIDI CC64), 16-voice polyphony, deterministic oldest-released-then-oldest-held stealing, and blur/disconnect/unmount cleanup, all funneled through one shared engine from pointer/multi-touch/computer-keyboard/MIDI. The honesty contract is respected: every panel control writes only to a presentation store and never touches audio/system state, and OLEDs show 'decorative' placeholders rather than fake data. All four gates pass (66 tests incl. real signal-level audio assertions, typecheck clean, lint 0, build -> dist/index.html) with a clean console. Notable gaps: on-screen keys do not visually highlight when notes are played via the computer keyboard or MIDI (the key-down class is driven by a ref that never re-renders; only pointer-held keys get :active feedback); narrow-viewport legibility is weak (whole instrument scales to ~121px tall, retention complete but labels rely on zoom); typography is a generic sans and micro-detail/end-cheek modeling is simplified vs the photo.",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "silhouetteGeometry",
+          "rating": 3,
+          "evidence": [
+            "One continuous red chassis: src/App.tsx renders a single .instrument with deck (54%) + keybed-wrap (46%) using VERTICAL_ALLOCATION from src/hardware/variant.ts.",
+            "Exact keybed: src/hardware/keys.ts builds MIDI 28-100 (E1-E7); live DOM confirmed 73 keys, 43 .key-white / 30 .key-black, first white 'Piano key E1', last white 'Piano key E7'.",
+            "evidence/stage1-visual-audit.md measured aspect 1353.6/437.3 = 3.095 (spec 3.0951), deck fraction 0.540, keybed 0.445, instrument 94% of 1440px viewport, no vertical scroll.",
+            "Section widths in src/hardware/variant.ts (0.14/0.20/0.085/0.125/0.25/0.20) match visual spec; audit reports measured within 0.003.",
+            "Deviations: keybed height fraction 0.445 is slightly under 0.46 (within tolerance), and red end-cheeks/molded plastic wheels/pitch-stick from the photo are simplified (self-noted in audit deviations 2 and 5)."
+          ]
+        },
+        {
+          "id": "hardwareInventory",
+          "rating": 4,
+          "evidence": [
+            "All six spec sections present in order (live DOM data-section-slot: performance, organ, piano, program, synth, effects).",
+            "src/hardware/controls.ts declares the full inventory with stable IDs: 9 organ drawbars (16'..1'), organ model/percussion/rotary, piano type/model/timbre/KB-touch/unison/soft-rel/string-res, program dial + 8 buttons + page + live/scene + store/split + 3 morph-assign, synth osc/filter/dual-envelope/LFO/arp groups, effects two groups + amp/EQ + delay + comp + reverb + focus.",
+            "131 [data-control-id] elements rendered (52 role=slider, 79 buttons); OLED_SECTIONS = {program, synth} and live DOM shows exactly 2 primary OLEDs, satisfying 'Program/Synth only'.",
+            "Section landmark 'forbidden' rules respected: performance is exposed red chassis with no inset plate/OLED; no invented primary displays; density is grouped and non-uniform (matches spec 'no uniform repeated knob matrix')."
+          ]
+        },
+        {
+          "id": "materialsTypography",
+          "rating": 3,
+          "evidence": [
+            "src/hardware/variant.ts REFERENCE_COLORS and src/styles.css use the exact spec palette: chassis gradient #851a25 -> #5a0c13, panel #3c424d, key white #dcdcdc, key black #0b0b0b.",
+            "Materials rendered: black indexed knobs with rotating pointer, LED ladders on faders, blue-green OLEDs, red/amber/green LEDs, drawbar caps, shadows and section hierarchy (visible in evidence/stage1-desktop.png).",
+            "Gaps: legend text is a generic small clamp() sans (audit deviation 1 acknowledges kerning/typeface not matched); OLEDs deliberately show 'phase 1: decorative' placeholders rather than the photo's live program text (honest but lower fidelity)."
+          ]
+        },
+        {
+          "id": "responsiveRetention",
+          "rating": 3,
+          "evidence": [
+            "evidence/stage1-narrow.png (390x844) shows the full chassis, all six sections, both OLEDs and all 73 keys with no clipping and no lost controls; stage1-capture.json records verticalScroll:false and 0 console errors.",
+            "Retention is complete but legibility is weak: the whole instrument scales to ~374px wide x ~121px tall so labels are effectively unreadable without zoom; audit states inspection relies on a zoomable/scrollable page rather than reflow."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "basicPiano",
+      "criteria": [
+        {
+          "id": "unifiedInputs",
+          "rating": 4,
+          "evidence": [
+            "All input sources funnel through one PianoEngine (src/audio/engine.ts): pointer + independent multi-touch via pointerId (src/components/keybed.tsx heldByPointer map), mapped computer keyboard with e.repeat suppression (src/input/keyboard-map.ts), and injectable Web MIDI note/velocity/CC64 (src/input/midi.ts).",
+            "Cleanup on focus/MIDI failure: window blur handler calls engine.allNotesOff() and clears sustain; App.tsx MIDI effect detaches listeners and calls allNotesOff on unmount; requestMidiAccess rejection maps to honest 'denied'/'unsupported'.",
+            "Live app confirmed 'MIDI: denied' shown truthfully with no device; src/__tests__/piano-inputs.test.tsx exercises pointer, multi-touch, keyboard repeat suppression, CC64 sustain, denied/disconnected, and out-of-range MIDI rejection."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "rating": 4,
+          "evidence": [
+            "engine.ts implements velocity (pointer Y-position + velGain curve in voice.ts), per-note release envelope, overlapping note-ons via a held-count map, sustain damper logic (holds notes released while pedal down), MAX_VOICES=16, and deterministic pickStealVictim (oldest released, then oldest held with id tiebreak).",
+            "src/__tests__/piano-sustain-polyphony.test.ts proves velocity->louder RMS, sustain tail energy >5x released tail on rendered signal, concurrent chord voices, and the exact steal order; src/__tests__/piano-note-lifecycle.test.ts proves counts return to baseline and all-notes-off.",
+            "Panel controls remain decorative during play (verified in interaction-decorative test: no voices/status change)."
+          ]
+        },
+        {
+          "id": "honestBasicSource",
+          "rating": 4,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares a single generated additive-synthesis source (6 partials, per-partial decay, register scaling, 2ms attack) with sampleSources:[] and explicit 'nothing is described as a recording'.",
+            "Real audible path: src/audio/web-audio-backend.ts renders the deterministic voice buffer (proven non-silent by tests) into an AudioBuffer through per-voice gain -> master(0.9) -> ctx.destination; nothing bypasses master.",
+            "Honest status: App.tsx statusbar shows loading/ready ('Piano voice: ready (synthesized piano)' confirmed live) and, when Web Audio is unavailable, a labeled 'Silent fallback' via SilentBackend with no fake sound (src/audio/silent-backend.ts)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interaction",
+      "criteria": [
+        {
+          "id": "physicalInteraction",
+          "rating": 3,
+          "evidence": [
+            "All decorative controls move/press with accessible state: src/components/controls.tsx gives knobs/faders/drawbars/wheels role=slider + aria-valuemin/max/now + tabIndex, buttons aria-pressed, full keyboard (arrows/PageUp-Down/Home/End/Enter/Space) and pointer drag; live app confirmed masterLevel knob ArrowUp 65->66 and piano.on aria-pressed false->true.",
+            "Keys are real <button>s with aria-label per note, keyboard Enter/Space play, and :active CSS press feedback (src/styles.css .key-white:active / .key-black:active).",
+            "Gap: notes played via computer keyboard or MIDI do NOT highlight the on-screen key. keybed.tsx tracks activeNotes in a useRef, so the .key-down class never re-renders; live pointer press produced keyDownCount 0 and unchanged class. Only pointer-held keys show transient :active feedback, so played-note visual sync is missing."
+          ]
+        },
+        {
+          "id": "decorativeBoundary",
+          "rating": 4,
+          "evidence": [
+            "src/state/hardware-store.ts setControlValue mutates only a presentation store; no control handler in controls.tsx references the audio engine.",
+            "src/__tests__/interaction-decorative.test.tsx asserts that toggling piano.on/synth.on/fx.reverbOn/organ.model/program.split/program.dial produces backend.activeVoiceCount()==0, startCount==0, and no error status.",
+            "OLEDs render 'decorative' placeholder text rather than fake program/synth data (live DOM); IMPLEMENTATION_DETAILS.json note states every panel control is decorative and only keybed notes + sustain drive the engine. No control fakes success."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "structureTests",
+          "rating": 4,
+          "evidence": [
+            "Normalized data with stable IDs: src/hardware/controls.ts (CONTROL_BY_ID), keys.ts (KEY_BY_MIDI), variant.ts; clean input/audio separation via injectable AudioBackend interface (web/fake/silent backends) and injectable MIDI boundary.",
+            "tests/feature-matrix.json maps all 11 required Phase 1 IDs to real non-empty test files; 66 tests pass including signal-level audio assertions rendered through the same pure synthSample function used by production (fake-backend.ts renderMix/renderNote + rms/windowEnergy).",
+            "Maintainable, well-commented React 19 + TypeScript; useSyncExternalStore for the presentation store; test seams (injected engine, midiAccess, disableMidi) on App."
+          ]
+        },
+        {
+          "id": "runtime",
+          "rating": 4,
+          "evidence": [
+            "All four gates pass on Node 24: vitest 66/66, tsc --noEmit clean, oxlint exit 0 with no findings, build produces dist/index.html + assets (~226kB JS).",
+            "Live app: no console errors on load or during key-play / knob / button interaction (read_console_messages onlyErrors returned none); stage1-capture.json also records 0 console errors at both viewports.",
+            "Cleanup verified (blur/unmount allNotesOff + dispose closes AudioContext). Minor smell: App.tsx mirrors engine status with a 250ms setInterval poll rather than event subscription for the non-injected engine, but it is harmless and stable."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "On-screen keys do not visually depress/highlight when notes are played from the computer keyboard or MIDI: keybed.tsx stores activeNotes in a useRef so the .key-down class never triggers a re-render; only pointer-held keys get transient :active feedback.",
+    "Narrow viewport (390x844) retains the full surface without clipping but legibility is poor (~121px tall), so control inspection depends on browser zoom/scroll rather than reflow.",
+    "Micro-typography uses a generic sans and OLEDs show decorative placeholders; end-cheeks and molded wheel/pitch-stick detail are simplified versus the reference photo (self-declared in the visual audit)."
+  ]
+}

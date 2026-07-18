@@ -1,0 +1,107 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 1,
+  "stage": 2,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "tests": ["src/__tests__/visual-key-count.test.tsx"],
+      "notes": "73 keys E1–E7 (MIDI 28–100), 43 white / 30 black, real piano white/black pattern, 0.61 black-key height fraction. Inherited from Phase 1, unchanged."
+    },
+    {
+      "id": "visual.section-layout",
+      "tests": ["src/__tests__/visual-section-layout.test.tsx"],
+      "notes": "Six ordered sections at spec fractions (14/20/8.5/12.5/25/20), 54/46 deck/keybed split, one continuous chassis, no marketing hero. Inherited, unchanged."
+    },
+    {
+      "id": "visual.control-inventory",
+      "tests": ["src/__tests__/visual-control-inventory.test.tsx"],
+      "notes": "Stable control IDs, per-section landmarks and density, Program and Synth as the only primary OLEDs. Phase 2: Program OLED shows the live piano model; Synth stays decorative."
+    },
+    {
+      "id": "interaction.keys",
+      "tests": ["src/__tests__/interaction-keys.test.tsx"],
+      "notes": "Pointer press/release/cancel, keyboard-operated keys, window blur releases all held notes. Inherited, unchanged."
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "tests": ["src/__tests__/interaction-decorative.test.tsx", "src/__tests__/panel-functional.test.tsx"],
+      "notes": "Every visible control moves or presses via pointer and keyboard. Phase 2: the functional set (Piano, Effects, Master Level, Panic) writes engine state; organ/synth/program remain presentation-only — asserted both ways."
+    },
+    {
+      "id": "accessibility.controls",
+      "tests": ["src/__tests__/accessibility.test.tsx"],
+      "notes": "Slider roles with names/values, button pressed states, labeled keys/keybed/OLEDs, live status region, visible focus styling."
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "tests": ["src/__tests__/piano-note-lifecycle.test.ts"],
+      "notes": "Note on/off, repeated/overlapping notes, per-note release audible in signal, all-notes-off, voice counts return to baseline, bounded polyphony. Inherited."
+    },
+    {
+      "id": "piano.basic-inputs",
+      "tests": ["src/__tests__/piano-inputs.test.tsx"],
+      "notes": "Pointer, independent multi-touch via pointerId, mapped computer keys with repeat suppression, MIDI note/velocity/CC64, denied and disconnected states, out-of-range MIDI ignored. Inherited."
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "tests": ["src/__tests__/piano-sustain-polyphony.test.ts"],
+      "notes": "Velocity response and sustain duration proven on rendered signal; concurrent voices; deterministic oldest-released-then-oldest-held stealing. Inherited."
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "tests": ["src/__tests__/piano-status-cleanup.test.tsx"],
+      "notes": "Loading/ready transitions (recorded library), honest labeled silent fallback on error, blur/disconnect/unmount stop every owned voice. Inherited."
+    },
+    {
+      "id": "piano.instrument-library",
+      "tests": ["src/__tests__/piano-instrument-library.test.ts"],
+      "notes": "Six selectable types. Grand/Upright/Electric are bundled recorded sample sets (108 WAV takes on disk: 18 roots × 2 velocity layers × 3 types, verified valid + non-silent, loaded via injectable loader, nearest-root ≤ minor third), audibly distinct on rendered audio (waveform correlation), velocity layers differ, Clav/Digital/Misc honest synthesis."
+    },
+    {
+      "id": "piano.layers",
+      "tests": ["src/__tests__/piano-layers.test.ts"],
+      "notes": "Focus assigns voice ownership; disabling a layer stops only its voices; disabled layers don't start notes; level scales the layer in the rendered mix; octave ±12 transposes rendered audio; two types sound together; per-layer polyphony/stealing; cleanup to baseline."
+    },
+    {
+      "id": "piano.velocity-controls",
+      "tests": ["src/__tests__/piano-velocity-controls.test.ts"],
+      "notes": "KB Touch (Light>Medium>Heavy level), Dyn Comp (narrowed dynamic range, louder soft strokes), Timbre (Soft darker / Bright brighter via >1.5kHz band energy; Dyno 1/2 electric-only), Unison (stereo width + detuned voices), Soft Release (longer tails; disabled for Clav), String Res (sympathetic energy while held), Master Level (scales/mutes final output)."
+    },
+    {
+      "id": "piano.pedals",
+      "tests": ["src/__tests__/piano-pedals-fallback.test.tsx", "src/__tests__/piano-inputs.test.tsx"],
+      "notes": "Sustain from UI lifecycle, computer keyboard (spacebar), and MIDI CC64; per-layer SUSTPED gating proven on voice state and rendered tail energy."
+    },
+    {
+      "id": "piano.fallback",
+      "tests": ["src/__tests__/piano-pedals-fallback.test.tsx"],
+      "notes": "Asset failure marks the type failed, Program display reports it, status shows the labeled 'Synthesized fallback' (never 'recorded'), and the type stays playable with audible rendered output."
+    },
+    {
+      "id": "effects.graph",
+      "tests": ["src/__tests__/effects-graph.test.ts"],
+      "notes": "One render pipeline (shared by browser and tests) produces stereo for both layers; master gain + limiter bound peaks ≤ 1.0 and master zero silences everything; reverb-before-rotary order proven by tail energy; dispose returns to silence."
+    },
+    {
+      "id": "effects.routing",
+      "tests": ["src/__tests__/effects-routing.test.ts", "src/__tests__/panel-functional.test.tsx"],
+      "notes": "Per-unit bypass, all-effects bypass, dry/wet, focus (unit edits land on focused chain only), Piano group mode (layers share settings), global mode (Delay/Comp/Reverb apply to all layers), delay feedback filtering inside the loop (dry path untouched, repeats progressively filtered), To Rotary routing, tap tempo."
+    },
+    {
+      "id": "effects.processing",
+      "tests": ["src/__tests__/effects-processing.test.ts"],
+      "notes": "Every unit and every listed type measurably changes rendered audio and is distinct from the other types in its unit: Mod 1 (6 types), Mod 2 (6), Delay (tempo/feedback), Amp Sim/EQ (Twin/JC/Small distinct, drive, EQ bands, LP24/HP24 opposite spectra), Compressor (dynamic-range reduction, fast recovery), Reverb (Booth→Cathedral decay growth, Spring distinct, bright/dark, fully wet at max), Rotary (slow/fast distinct, drive)."
+    },
+    {
+      "id": "regression.phase1",
+      "tests": ["src/__tests__/visual-key-count.test.tsx", "src/__tests__/visual-section-layout.test.tsx", "src/__tests__/visual-control-inventory.test.tsx", "src/__tests__/interaction-keys.test.tsx", "src/__tests__/interaction-decorative.test.tsx", "src/__tests__/accessibility.test.tsx", "src/__tests__/piano-note-lifecycle.test.ts", "src/__tests__/piano-inputs.test.tsx", "src/__tests__/piano-sustain-polyphony.test.ts", "src/__tests__/piano-status-cleanup.test.tsx", "src/__tests__/regression-chassis.test.tsx"],
+      "notes": "All 11 Phase 1 test files remain present and green (66 inherited assertions), plus the Phase 1 evidence set under evidence/stage1-*."
+    },
+    {
+      "id": "regression.chassis",
+      "tests": ["src/__tests__/regression-chassis.test.tsx"],
+      "notes": "No hero, no detached rails, no missing keys, width pinned to 94vw with 3.0951 aspect ratio, narrow-viewport media query; pixel evidence in stage2-desktop.png / stage2-narrow.png and stage2-visual-audit.md."
+    }
+  ]
+}

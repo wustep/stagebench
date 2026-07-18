@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "runId": "kimi-k3",
+  "stage": 3,
+  "verifiedAt": "2026-07-18T02:28:40.251Z",
+  "passed": true,
+  "artifactDigest": "7100da9c7409f07479f344f45cbf6b6648ac77010b78e0aa4c5c919daade9b86",
+  "artifactFiles": 306,
+  "phaseContract": {
+    "specs": [
+      "specs/nord-stage-4.visual.json",
+      "specs/nord-stage-4.piano.json",
+      "specs/nord-stage-4.effects.json",
+      "specs/nord-stage-4.programs.json",
+      "specs/nord-stage-4.organ.json",
+      "specs/nord-stage-4.synth.json"
+    ],
+    "hardGates": 5
+  },
+  "featureMatrix": {
+    "coveredFeatures": 38,
+    "requiredFeatures": 38
+  },
+  "implementationDetails": {
+    "audioStrategy": "One deterministic render pipeline (src/audio/render.ts + src/audio/effects.ts + src/audio/dsp.ts + src/audio/organ-models.ts + src/audio/synth-engine.ts + src/audio/synth-render.ts) serves both the browser and tests. Grand/Upright/Electric pianos play the bundled recorded sample library; Clav/Digital/Misc, the labeled fallback, all organ models, and all synth voices are honest live synthesis rendered per voice. The Web Audio backend pre-renders each voice through the exact shared graph (layer source → Mod 1 → Mod 2 → Delay → Amp/EQ/Filter → Compressor → per-voice frames) and plays it through six layer buses (pianoA, pianoB, organ [A+B shared], synthA/B/C), a live convolver reverb, layer level gains, master gain, and a DynamicsCompressor limiter to one destination on one AudioContext. The fake test backend runs the identical code offline at 8 kHz. Organ routes to the shared Rotary via the ORGAN button (post-reverb tap, like To Rotary); rotary speed ramps (acceleration), and Stop mode silences the modulation. Programs store/recall the complete canonical state (32 slots + 8 Live) through an injected storage seam; splits gate/attenuate notes per layer with crossfade tails; morphs interpolate assigned destinations through canonical state; the master clock drives arp/LFO sync subdivisions.",
+    "generatedSources": 11,
+    "sampleSources": 3
+  },
+  "checks": [
+    {
+      "id": "test",
+      "command": "pnpm run test",
+      "passed": true,
+      "durationMs": 20967,
+      "detail": "Passed"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm run typecheck",
+      "passed": true,
+      "durationMs": 4217,
+      "detail": "Passed"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm run lint",
+      "passed": true,
+      "durationMs": 1237,
+      "detail": "Passed"
+    },
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "passed": true,
+      "durationMs": 5383,
+      "detail": "Passed"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence/stage3-desktop.png",
+      "passed": true,
+      "detail": "evidence/stage3-desktop.png · 1440x900"
+    },
+    {
+      "id": "evidence/stage3-narrow.png",
+      "passed": true,
+      "detail": "evidence/stage3-narrow.png · 390x844"
+    },
+    {
+      "id": "evidence/stage3-visual-audit.md",
+      "passed": true,
+      "detail": "evidence/stage3-visual-audit.md"
+    },
+    {
+      "id": "evidence/stage3-capture.json",
+      "passed": true,
+      "detail": "evidence/stage3-capture.json"
+    }
+  ]
+}
