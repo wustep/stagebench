@@ -3,10 +3,10 @@
 // Memoized: all props are reference-stable, so App's dialog/viewer state
 // changes (open preview, copy link, phase switch) skip re-rendering the
 // largest subtree in the app.
-import { Fragment, memo } from 'react'
+import { Fragment, memo, useCallback, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { PhaseNumber } from '../run-utils'
-import { floorScore, getRunTitle } from '../run-utils'
+import { floorScore, getRunTitle, getThumbPath } from '../run-utils'
 import type { RunEntry } from '../types'
 import {
   bestByTierPhase,
@@ -23,6 +23,11 @@ import {
 } from '../runs-data'
 import { ChevronIcon, InfoIcon, PlayIcon, ReportIcon, StatusLight } from './icons'
 
+// Tallest a hover card gets (a near-square instrument crop at the card's width,
+// plus its frame). A row closer than this to the top of the viewport shows its
+// card below instead of above.
+const THUMB_MAX_HEIGHT = 300
+
 export const RunList = memo(function RunList({
   expandedRunId,
   onToggleExpand,
@@ -36,6 +41,18 @@ export const RunList = memo(function RunList({
   onOpenProtocolInfo: () => void
   onOpenReport: (run: RunEntry) => void
 }) {
+  // Pointer-only affordance: the hovered row shows a cropped shot of its
+  // instrument. Mounted on hover rather than up front so the leaderboard does
+  // not pull ten screenshots on load; `loaded` keeps the card hidden until its
+  // image has decoded, so it fades in whole instead of flashing an empty frame.
+  // The card normally sits above the row; rows too near the top of the viewport
+  // flip it below so it is never clipped off-screen.
+  const [hovered, setHovered] = useState<{ id: string; placement: 'above' | 'below' } | null>(null)
+  const [loadedThumbs, setLoadedThumbs] = useState<ReadonlySet<string>>(() => new Set())
+  const markThumbLoaded = useCallback((runId: string) => {
+    setLoadedThumbs((current) => (current.has(runId) ? current : new Set(current).add(runId)))
+  }, [])
+
   if (visibleRuns.length === 0) {
     return (
       <div className="empty-state">
@@ -53,6 +70,8 @@ export const RunList = memo(function RunList({
         const phaseList = getPhaseList(run)
         const rank = rankByRun.get(run.id) ?? null
         const playable = Boolean(run.previewPath)
+        const thumbPath = getThumbPath(run)
+        const showThumb = playable && thumbPath !== null && hovered?.id === run.id
         const expanded = expandedRunId === run.id
         // Sector column count rides on a CSS variable so legacy tiers
         // with a four-phase protocol keep their own aligned grid.
@@ -94,8 +113,21 @@ export const RunList = memo(function RunList({
           <div
             className={`row-main${playable ? ' is-playable' : ''}`}
             onClick={playable ? () => onOpenPreview(run) : undefined}
+            onMouseEnter={playable ? (event) => {
+              const { top } = event.currentTarget.getBoundingClientRect()
+              setHovered({ id: run.id, placement: top < THUMB_MAX_HEIGHT ? 'below' : 'above' })
+            } : undefined}
+            onMouseLeave={playable ? () => setHovered((current) => (current?.id === run.id ? null : current)) : undefined}
             style={sectorsStyle}
           >
+            {showThumb && (
+              <div
+                aria-hidden="true"
+                className={`row-thumb is-${hovered.placement}${loadedThumbs.has(run.id) ? ' is-loaded' : ''}`}
+              >
+                <img alt="" decoding="async" onLoad={() => markThumbLoaded(run.id)} src={thumbPath} />
+              </div>
+            )}
             <span className="pos">
               <b aria-hidden="true">{rank ?? '—'}</b>
               {playable && (
