@@ -82,7 +82,9 @@ export function Dialogs({
           </div>
           <div className="preview-stage">
             <PreviewFrame
+              autoFocus
               frameKey={`${selectedRun.id}-${selectedPhase}`}
+              onEscape={onClosePreview}
               scrolling="no"
               src={selectedPreviewPath}
               title={`${getRunTitle(selectedRun)} Phase ${selectedPhase} output`}
@@ -102,7 +104,7 @@ export function Dialogs({
             </div>
           </div>
           <div className="preview-stage">
-            <PreviewFrame scrolling="no" src="/previews/showcase/index.html" title="Showcase Nord Stage 4" />
+            <PreviewFrame autoFocus onEscape={onCloseShowcase} scrolling="no" src="/previews/showcase/index.html" title="Showcase Nord Stage 4" />
           </div>
         </div>
       )}
@@ -174,7 +176,7 @@ export function Dialogs({
               <button type="button" onClick={onCloseReport}>Close</button>
             </div>
           </div>
-          <PreviewFrame className="report-frame" src={selectedReport.reportPath} title={`${getRunTitle(selectedReport)} evaluation report`} />
+          <PreviewFrame className="report-frame" onEscape={onCloseReport} src={selectedReport.reportPath} title={`${getRunTitle(selectedReport)} evaluation report`} />
         </div>
       )}
     </>
