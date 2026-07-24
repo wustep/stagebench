@@ -47,7 +47,22 @@ function pngHeader(width, height) {
   return bytes
 }
 
-function writePassingCandidate(root, candidate) {
+// Hard-wrap a gate across markdown lines the way a candidate reasonably would,
+// without changing a single word of it.
+function wrapText(text, width = 60) {
+  const lines = []
+  let line = ''
+  for (const word of text.split(' ')) {
+    if (line && `${line} ${word}`.length > width) {
+      lines.push(line)
+      line = word
+    } else line = line ? `${line} ${word}` : word
+  }
+  if (line) lines.push(line)
+  return lines.join('\n      ')
+}
+
+function writePassingCandidate(root, candidate, { wrapGates = false } = {}) {
   const manifest = readJson(path.join(root, 'specs', 'benchmark-phases.json'))
   const contract = manifest.phases.find((entry) => entry.number === 1)
   fs.rmSync(candidate, { recursive: true, force: true })
@@ -63,7 +78,7 @@ function writePassingCandidate(root, candidate) {
     '# Plan', '',
     `Specs: ${contract.specs.map((spec) => path.basename(spec)).join(', ')}`, '',
     '## Hard gates', '',
-    ...contract.hardGates.map((gate) => `- [x] ${gate}`), '',
+    ...contract.hardGates.map((gate) => `- [x] ${wrapGates ? wrapText(gate) : gate}`), '',
   ].join('\n'))
   writeJson(path.join(candidate, 'IMPLEMENTATION_DETAILS.json'), {
     version: 1,
@@ -78,6 +93,63 @@ function writePassingCandidate(root, candidate) {
   })
   fs.writeFileSync(path.join(candidate, 'evidence', 'stage1-visual-audit.md'), 'Measured and exercised the fixture candidate.')
 }
+
+test('the phase contract accepts hard gates copied verbatim but hard-wrapped across lines', async () => {
+  const root = fixtureRoot()
+  try {
+    const created = createRun(root, { model: 'wrap-fixture', target: '1' }, new Date('2026-01-01T00:00:00.000Z'))
+    const started = startPhase(root, created.id)
+    writePassingCandidate(root, started.candidate, { wrapGates: true })
+    importWorkspace(root, created.id, 1)
+
+    const stageDir = path.join(root, 'runs', created.id, 'stage1')
+    const plan = fs.readFileSync(path.join(stageDir, 'IMPLEMENTATION_PLAN.md'), 'utf8')
+    const contract = readJson(path.join(root, 'specs', 'benchmark-phases.json')).phases.find((entry) => entry.number === 1)
+    const wrapped = contract.hardGates.filter((gate) => !plan.includes(gate))
+    assert.ok(wrapped.length > 0, 'the fixture actually wraps at least one gate across lines')
+
+    fs.mkdirSync(path.join(stageDir, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(stageDir, 'dist', 'index.html'), '<h1>candidate</h1>')
+    fs.writeFileSync(path.join(stageDir, 'evidence', 'stage1-desktop.png'), pngHeader(1440, 900))
+    fs.writeFileSync(path.join(stageDir, 'evidence', 'stage1-narrow.png'), pngHeader(390, 844))
+    writeJson(path.join(stageDir, 'evidence', 'stage1-capture.json'), { version: 1, phase: 1, captures: [] })
+
+    const checks = await runChecks(stageDir)
+    const verification = verifyPhase(root, created.id, 1, { checks })
+    assert.equal(verification.passed, true, 'a wrapped verbatim checklist is still a verbatim checklist')
+    assert.equal(verification.phaseContract.hardGates, contract.hardGates.length)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('the phase contract still rejects a plan that omits a hard gate', async () => {
+  const root = fixtureRoot()
+  try {
+    const created = createRun(root, { model: 'omit-fixture', target: '1' }, new Date('2026-01-01T00:00:00.000Z'))
+    const started = startPhase(root, created.id)
+    writePassingCandidate(root, started.candidate)
+
+    // drop the last gate from the checklist entirely
+    const planPath = path.join(started.candidate, 'IMPLEMENTATION_PLAN.md')
+    const contract = readJson(path.join(root, 'specs', 'benchmark-phases.json')).phases.find((entry) => entry.number === 1)
+    const dropped = contract.hardGates.at(-1)
+    fs.writeFileSync(planPath, fs.readFileSync(planPath, 'utf8').replace(`- [x] ${dropped}\n`, ''))
+    importWorkspace(root, created.id, 1)
+
+    const stageDir = path.join(root, 'runs', created.id, 'stage1')
+    fs.mkdirSync(path.join(stageDir, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(stageDir, 'dist', 'index.html'), '<h1>candidate</h1>')
+    fs.writeFileSync(path.join(stageDir, 'evidence', 'stage1-desktop.png'), pngHeader(1440, 900))
+    fs.writeFileSync(path.join(stageDir, 'evidence', 'stage1-narrow.png'), pngHeader(390, 844))
+    writeJson(path.join(stageDir, 'evidence', 'stage1-capture.json'), { version: 1, phase: 1, captures: [] })
+
+    const checks = await runChecks(stageDir)
+    assert.throws(() => verifyPhase(root, created.id, 1, { checks }), /must include the hard gate/)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test('a run flows new → start → seal → score with sealed digests and a scored registry entry', async () => {
   const root = fixtureRoot()

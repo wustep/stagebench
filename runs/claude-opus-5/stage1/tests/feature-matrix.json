@@ -1,0 +1,70 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 1,
+  "stage": 1,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "summary": "73 keys, E1–E7, 43 white / 30 black, with the E-to-E black key pattern and measured geometry.",
+      "tests": ["src/model/keyboard.test.ts", "src/components/surface.test.tsx"]
+    },
+    {
+      "id": "visual.section-layout",
+      "summary": "Six ordered sections at the corrected v1.2.0 fractions, the 54/46 deck/keybed split, and one continuous chassis.",
+      "tests": [
+        "src/model/layout.test.ts",
+        "src/components/surface.test.tsx",
+        "src/components/regression.test.tsx"
+      ]
+    },
+    {
+      "id": "visual.control-inventory",
+      "summary": "146 stable control IDs, per-section landmarks and density, and Program and Synth as the only primary OLEDs.",
+      "tests": ["src/model/controls.test.ts", "src/components/surface.test.tsx"]
+    },
+    {
+      "id": "interaction.keys",
+      "summary": "Pointer, independent multi-touch, glissando, cancel, blur and focused-key Space/Enter press and release.",
+      "tests": ["src/components/interaction.test.tsx", "src/state/inputs.test.tsx"]
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "summary": "Every visible control moves or presses, shows its state, and changes presentation state only — the audio graph is untouched and the rendered output stays silent.",
+      "tests": ["src/components/interaction.test.tsx", "src/model/controls.test.ts"]
+    },
+    {
+      "id": "accessibility.controls",
+      "summary": "Roles, accessible names, min/max/value/valuetext, orientation, keyboard operation, labelled regions and visible focus.",
+      "tests": ["src/components/accessibility.test.tsx", "src/components/interaction.test.tsx"]
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "summary": "Note on/off on rendered audio, repeated and overlapping notes, per-note release shortening the tail, all-notes-off, and node cleanup back to baseline.",
+      "tests": ["src/audio/pianoEngine.test.ts"]
+    },
+    {
+      "id": "piano.basic-inputs",
+      "summary": "Pointer, multi-touch, mapped computer keyboard with repeat suppression, MIDI note/velocity/CC64/all-notes-off, and denied, unsupported and disconnected MIDI states.",
+      "tests": ["src/state/inputs.test.tsx", "src/components/interaction.test.tsx"]
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "summary": "Sustain transitions measured on the rendered tail, concurrent voices, deterministic stealing order, polyphony cap, and velocity moving level and filter in the expected direction.",
+      "tests": ["src/audio/pianoEngine.test.ts", "src/state/inputs.test.tsx"]
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "summary": "Truthful ready/idle/unsupported/error status and its display, plus blur, MIDI disconnect and unmount stopping every owned voice and closing the context.",
+      "tests": ["src/state/inputs.test.tsx", "src/components/interaction.test.tsx"]
+    },
+    {
+      "id": "regression.chassis",
+      "summary": "No marketing hero or reference image, rail and keybed attached inside one chassis, instrument at 88–97% of a 1440x900 viewport with no vertical scroll, and full width without clipping at 390x844.",
+      "tests": ["src/components/regression.test.tsx", "src/components/surface.test.tsx"]
+    }
+  ],
+  "notes": [
+    "Audio behaviour is asserted on real rendered signals: src/audio/offline.ts is a deterministic offline Web Audio implementation that evaluates oscillators, buffer playback, parameter automation and the biquad filter sample by sample, because jsdom provides no Web Audio.",
+    "No test requires a physical MIDI device, network access or audio output."
+  ]
+}

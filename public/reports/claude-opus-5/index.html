@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>Claude Opus 5 High · Stagebench evaluation</title>
+  <style>
+    :root { color-scheme: light; --red:#a51f24; --red-dark:#70191e; --ink:#211c1d; --muted:#665d5f; --line:#d6cdcf; --surface:#f5f3f3; --panel:#fff; --green:#2c7a45; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.55 Inter, ui-sans-serif, system-ui, sans-serif; }
+    a { color:var(--red-dark); }
+    .report-header { padding:42px max(24px,calc((100% - 1080px)/2)); background:var(--red); color:#fff; }
+    .report-header small { display:block; margin-bottom:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .report-header h1 { max-width:760px; margin:0; font-size:clamp(34px,6vw,62px); line-height:1; letter-spacing:-.03em; text-wrap:balance; }
+    .report-header p { max-width:70ch; margin:18px 0 0; color:#ffecec; }
+    .aggregate { display:flex; align-items:baseline; gap:9px; margin-top:28px; }
+    .aggregate strong { font-size:48px; line-height:1; }
+    .aggregate span { font-weight:800; text-transform:uppercase; }
+    main { width:min(1080px,calc(100% - 32px)); margin:0 auto; padding:42px 0 72px; }
+    .overview, .stage-report { margin-bottom:34px; padding:26px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+    h2,h3,h4 { text-wrap:balance; } h2 { margin:0; font-size:28px; } h3 { margin:0 0 12px; font-size:15px; } h4 { margin:0 0 10px; color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { color:var(--muted); font-size:11px; text-align:left; text-transform:uppercase; }
+    th,td { padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    .section-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; } .section-intro span,.implementation-phase header span { color:var(--red); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; } .section-intro a { font-size:12px; font-weight:800; }
+    .implementation-details > p { max-width:76ch; color:var(--muted); }
+    .implementation-phase { padding:22px 0; border-top:1px solid var(--line); } .implementation-phase:last-child { padding-bottom:0; } .implementation-phase h3 { margin:2px 0 14px; font-size:18px; }
+    .implementation-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.05fr) minmax(0,1.4fr); gap:24px; }
+    .library-list { margin:0; padding:0; list-style:none; } .library-list li { display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #eee8e9; } .library-list span { color:var(--muted); font-size:11px; }
+    .audio-details { margin:0; } .audio-details > div { display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; padding:5px 0; border-bottom:1px solid #eee8e9; } .audio-details dt { color:var(--muted); font-size:11px; font-weight:800; } .audio-details dd { margin:0; } .audio-details ul { margin:0; padding-left:17px; } .audio-details span { color:var(--muted); font-size:12px; } .empty-detail { color:var(--muted); }
+    .stage-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+    .stage-heading > div:first-child span { color:var(--red); font-size:11px; font-weight:800; text-transform:uppercase; }
+    .stage-score { display:flex; align-items:baseline; gap:5px; color:var(--red-dark); } .stage-score strong { font-size:34px; line-height:1; } .stage-score span { font-size:11px; font-weight:800; text-transform:uppercase; }
+    .summary { max-width:78ch; margin:20px 0 26px; color:#3f383a; }
+    .report-columns { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:28px; }
+    .findings { margin:0; padding:0; list-style:none; } .findings li { padding:0 0 12px; } .findings strong,.findings span { display:block; } .findings span { margin-top:3px; color:var(--muted); font-size:12px; }
+    .issues { margin:28px 0; padding:20px; background:#f8eded; border-radius:8px; } .issues ol { margin:0; padding-left:20px; } .issues li + li { margin-top:8px; }
+    .gate { display:inline-block; margin:0 0 12px; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; } .gate-pass { background:#e3f2e7; color:#225d34; } .gate-fail { background:#f5dfe0; color:#821b20; }
+    details { margin-top:26px; border-top:1px solid var(--line); } summary { padding:18px 0; font-weight:800; cursor:pointer; } .criteria-group + .criteria-group { margin-top:24px; } .criteria-table ul { margin:0; padding-left:18px; } .criteria-table li + li { margin-top:6px; }
+    footer { padding:24px; background:var(--ink); color:#cfc7c9; font-size:11px; text-align:center; }
+    @media (max-width:800px) { .implementation-grid { grid-template-columns:1fr; } }
+    @media (max-width:720px) { .report-columns { grid-template-columns:1fr; } .overview,.stage-report { padding:18px; } .stage-heading { align-items:flex-start; flex-direction:column; } .section-intro { align-items:flex-start; flex-direction:column; } .audio-details > div { grid-template-columns:1fr; gap:2px; } table { display:block; overflow-x:auto; } }
+    @media print { .report-header { background:#fff; color:#000; padding-top:0; } .report-header p { color:#333; } body { background:#fff; } .overview,.stage-report { break-inside:avoid; border-color:#999; } details > * { display:block; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <small>Stagebench evaluation · rubric 1.1.0</small>
+    <h1>Claude Opus 5 High</h1>
+    <p>Evidence-backed evaluation of visual fidelity, feature completion, interaction, audio behavior, and engineering quality. Scores use phase-specific weights and automated technical gates.</p>
+    <div class="aggregate"><strong>91</strong><span>/100</span></div>
+  </header>
+  <main>
+    <section class="overview">
+      <h2>Run overview</h2>
+      <p>Run <code>claude-opus-5</code> · in-progress · 1/3 selected phases evaluated · generated Jul 24, 2026, 9:21 PM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th></tr></thead><tbody><tr><td>Phase 1</td><td>Complete surface and basic piano</td><td><strong>91</strong>/100</td></tr><tr><td>Phase 2</td><td>running</td><td>—</td></tr><tr><td>Phase 3</td><td>queued</td><td>—</td></tr></tbody></table>
+    </section>
+    <section class="overview implementation-details" id="implementation-details">
+      <div class="section-intro">
+        <div><span>Generated inventory</span><h2>Implementation details</h2></div>
+        <a href="implementation-details.json">View JSON</a>
+      </div>
+      <p>Libraries come from each phase's package manifest. Audio files are detected from the artifact, while sound-generation and sample provenance are explicitly declared by the benchmark implementation.</p>
+      <section class="implementation-phase">
+        <header><span>Phase 1</span><h3>Complete surface and basic piano</h3></header>
+        <div class="implementation-grid">
+          <div><h4>Application libraries</h4><ul class="library-list"><li><code>@vitejs/plugin-react</code><span>^6.0.2</span></li><li><code>react</code><span>^19.2.7</span></li><li><code>react-dom</code><span>^19.2.7</span></li><li><code>typescript</code><span>~6.0.2</span></li><li><code>vite</code><span>^8.1.0</span></li></ul></div>
+          <div><h4>Development and test tooling</h4><ul class="library-list"><li><code>@testing-library/jest-dom</code><span>^6.9.1</span></li><li><code>@testing-library/react</code><span>^16.3.2</span></li><li><code>@types/node</code><span>^24.13.2</span></li><li><code>@types/react</code><span>^19.2.17</span></li><li><code>@types/react-dom</code><span>^19.2.3</span></li><li><code>jsdom</code><span>^28.0.0</span></li><li><code>oxlint</code><span>^1.69.0</span></li><li><code>vitest</code><span>^4.1.0</span></li></ul></div>
+          <div class="audio-column"><h4>Audio and sound samples</h4><dl class="audio-details"><div><dt>Audio strategy</dt><dd>Live Web Audio synthesis. There are no recorded samples and no audio files of any kind in this artifact. Each note builds a voice from three OscillatorNodes (a sine fundamental plus two slightly inharmonic partials at 2.0027x and 3.0142x, each with its own exponential decay), summed into a per-voice GainNode set from velocity, through a per-voice lowpass BiquadFilterNode whose cutoff tracks pitch and velocity, into a shared piano-bus GainNode and then a master GainNode connected to the destination. A short hammer transient is played from one AudioBuffer of deterministic pseudo-random noise generated at engine construction time. Nothing bypasses the master gain.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>Piano partials (fundamental plus two inharmonic partials)</strong> — An honest approximation of a struck string: partial ratios are stretched slightly to model inharmonicity, upper partials decay faster than the fundamental, harder strikes put more energy into the upper partials and open the filter further, and low notes ring longer than high ones. It is not derived from, modelled on, or measured against any specific instrument or recording.</li><li><strong>Hammer strike transient</strong> — A 90ms mono buffer of seeded pseudo-random noise (linear congruential generator, fixed seed 0x5eed1234) under a cubic decay envelope, shared by every voice. Deterministic: identical on every load. This is a generated buffer, not a recording of a piano hammer.</li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio files</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>No recorded sample sets are used or claimed in Phase 1, and no audio asset files ship in the artifact. The piano spec lets Phase 1 ship either a declared bundled sample set or honestly described synthesis; this artifact ships synthesis. Recorded, bundled, redistributable sample sets for Grand, Upright and Electric are Phase 2 scope and are deliberately absent here.</li><li>Only the keybed and the sustain input produce sound. All 146 controls on the six panel sections are presentation state only and are connected to no audio node whatsoever. This is asserted, not merely stated: a test operates every control in the inventory and shows the rendered destination output stays at digital silence and the audio graph node count does not change.</li><li>Audio, MIDI and timing are injectable boundaries (src/audio/graph.ts, src/audio/host.ts, src/input/midi.ts). Tests substitute a deterministic offline Web Audio implementation (src/audio/offline.ts) that really evaluates oscillators, buffer playback, parameter automation and the biquad filter sample by sample, so audio claims are asserted on rendered signals rather than on mocks. jsdom ships no Web Audio at all, so that renderer — not a browser audio engine — is what produces the sample data under test.</li><li>Reported audio states are only the ones that can really occur: unsupported (no Web Audio in the browser), idle (context suspended pending a user gesture), starting, ready, error. There is no asset download in Phase 1, so no loading progress is invented.</li><li>Polyphony is capped at 32 voices with deterministic stealing: the longest-running releasing voice first, then the longest-running sustained voice, then the longest-running sounding voice.</li></ul></dd></div></dl></div>
+        </div>
+      </section>
+    </section>
+    
+  <section class="stage-report" id="stage-1">
+    <header class="stage-heading">
+      <div><span>Phase 1</span><h2>Complete surface and basic piano</h2></div>
+      <div class="stage-score"><strong>91</strong><span>/100</span></div>
+    </header>
+
+    <p class="summary">A very strong Phase 1 artifact. The surface is built entirely from hand-written DOM/CSS (0 &lt;img&gt;, 0 background url() in the running page) and hits the assigned geometry numerically: aspect-ratio 3.0951, deck/keybed 0.540/0.460, section fractions exactly 0.14/0.20/0.085/0.125/0.25/0.20, 73 keys (43 white / 30 black, E1-E7), black/white width ratio 0.6500 and height ratio 0.6100, instrument 1368px = 0.950 of a 1440px viewport with no vertical scroll. All 146 panel controls render once each in the right section, with role, accessible name, valuemin/max/now/valuetext, tab focus and a visible focus ring. The basic piano voice is real and dependable: measured on a live analyser tap at the destination, a keybed strike produces rms 0.40-0.50, velocity moves output monotonically (soft strike peak 0.16 vs hard 0.90; MIDI velocity 10 rms 0.017 vs 127 rms 0.483), release drops the tail to 0 within 250ms, sustain (Space, on-screen pedal, MIDI CC64) keeps it at 0.447 at the same delay and damps it on pedal up, and blur/disconnect/CC123/unmount return the graph to digital silence. The honesty contract holds under active testing: operating all 146 controls produced 0 additional AudioNode.connect() calls, and a held note decayed along an rms trajectory identical to four decimal places (0.5165 -&gt; 0.4520, ratio 0.8751) whether or not master level, layer levels, reverb wet, a drawbar and five section On buttons were driven meanwhile. IMPLEMENTATION_DETAILS.json declares live synthesis plus one generated noise buffer and no recordings; the measured spectrum of C4 (partials at 257.8 / 515.6 / 796.9 Hz) matches the declared 1.0 / 2.0027 / 3.0142 ratios exactly. Main weaknesses: the chassis end cheeks are painted over the deck (z-index 6), truncating the right column of Layer Effects and blocking pointer clicks on four controls; ~9% of panel legends are occluded by neighbouring elements; and there is no master limiter, so an 8-note chord peaks at 1.89 and 40 held notes at 3.83 before the destination clamp, i.e. dense chords clip audibly.</p>
+
+    <div class="report-columns">
+      <section>
+        <h3>Category scores</h3>
+        <table>
+          <thead><tr><th>Category</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+          <tbody><tr><td>Complete visual fidelity</td><td>45%</td><td><strong>91</strong></td><td>41</td></tr><tr><td>Basic Piano functionality</td><td>25%</td><td><strong>90</strong></td><td>22</td></tr><tr><td>Surface interaction and honesty</td><td>15%</td><td><strong>86</strong></td><td>12</td></tr><tr><td>Engineering quality</td><td>15%</td><td><strong>100</strong></td><td>15</td></tr></tbody>
+        </table>
+      </section>
+      <section>
+        <h3>What worked</h3>
+        <ul class="findings"><li><strong>Silhouette, chassis, and geometry</strong><span>Measured in the running dist build at 1440x900: instrument rect 1368x442 at x=36,y=14.4, data-aspect-ratio=3.0951 which is exactly the variant&#039;s measuredInstrumentBounds aspect (inputs/specs/nord-stage-4.variants.json). Width fraction 1368/1440 = 0.950, inside the required 0.88-0.97 band; document.scrollHeight === innerHeight === 900, so no vertical scroll.</span></li><li><strong>Complete hardware inventory and placement</strong><span>146 [data-control-id] elements render, one per entry in src/model/controls.ts, each inside its declared section (asserted by src/components/surface.test.tsx and re-verified live). Counts by section from evidence/stage1-visual-audit.md: performance 7, organ 24, piano 14, program 28, synth 40, effects 33.</span></li><li><strong>Unified playable inputs</strong><span>Pointer: mousedown on #key-60 in the served dist build produced rms 0.398 / peak 0.712 at an analyser tapped onto the destination, aria-pressed and data-held flipped, mouseup returned peak to 0. Velocity is taken from strike depth (src/components/Keybed.tsx velocityFromPointer): top-of-key peak 0.160 vs front-lip peak 0.903.</span></li><li><strong>Basic source and status honesty</strong><span>IMPLEMENTATION_DETAILS.json declares &#039;Live Web Audio synthesis. There are no recorded samples and no audio files of any kind in this artifact&#039;, lists two generated sources (three oscillator partials at 1.0 / 2.0027 / 3.0142 with per-partial decay, and a 90ms seeded-noise AudioBuffer hammer transient) and an empty sampleSources array. Verified: the artifact contains no audio asset of any kind, and the live spectrum of C4 shows peaks at 257.8 Hz (-22 dB), 515.6 Hz (-30.6) and 796.9 Hz (-42.9) — exactly the declared ratios — with everything else below -60 dB.</span></li></ul>
+      </section>
+    </div>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <ol><li>The chassis end cheeks (.chassis__cheek--left/--right, z-index 6, 23.3px each at 1440px) are painted over the deck instead of beside it. At the right end this truncates the Layer Effects column in the canonical desktop capture (FEEDBACK, FILTER, PING PONG, VAR|CHORALE, and the Reverb STAGE/HALL/CATH column are cut) and blocks pointer clicks at the centre of fx.delay.feedback, fx.delay.filter, fx.delay.on and fx.reverb.on; a real click on fx.delay.on did not toggle it, though Enter on the focused control did.</li><li>No master limiter or polyphony-aware gain staging. Measured at a destination tap: single hard strike peak 0.903, 8-note chord peak 1.893 with 564/2048 samples at or above 0.999, 40 notes peak 3.832. Dense chords clip audibly at the output.</li><li>25 of 268 panel legends/group titles are occluded at their centre by a neighbouring element (e.g. ON/OFF under a drawbar, PAGE NAME under the program dial, MON/COPY and PASTE under the Shift plate, and the MOD 1 / MOD 2 / AMP SIM/EQ / COMP / REVERB / ARPEGGIATOR-GATE group titles half-hidden behind their group plates), and the Delay MST CLK badge is printed across the TAP/SET button.</li><li>evidence/stage1-visual-audit.md section 2 states &#039;Every section was also checked programmatically for children escaping its own bounding box; all six report zero horizontal overflow.&#039; My measurement found small overflows in piano (4.6px, the DYN COMP cluster) and program (1.0px, SECTION EDIT). The audit also does not mention the end-cheek occlusion. Both are accuracy slips in a write-up that is otherwise unusually candid; neither claims unimplemented behaviour.</li><li>The on-screen key highlight follows held input keys rather than engine voices, so with more than 32 keys held every key lights although only 32 voices sound.</li></ol>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-pass">Passed</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>dist/index.html present</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Complete visual fidelity</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Silhouette, chassis, and geometry</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Measured in the running dist build at 1440x900: instrument rect 1368x442 at x=36,y=14.4, data-aspect-ratio=3.0951 which is exactly the variant&#039;s measuredInstrumentBounds aspect (inputs/specs/nord-stage-4.variants.json). Width fraction 1368/1440 = 0.950, inside the required 0.88-0.97 band; document.scrollHeight === innerHeight === 900, so no vertical scroll.</li><li>Deck 238.7px and keybed 203.3px of 442px total = 0.540 / 0.460, matching verticalAllocation 0.54/0.46 with zero drift (well inside the 0.025 tolerance).</li><li>Section widths measured from the DOM: performance 191.5, organ 273.6, piano 116.3, program 171.0, synth 342.0, effects 273.6 of a 1368px deck = 0.140 / 0.200 / 0.085 / 0.125 / 0.250 / 0.200 — the v1.2.0 horizontalSections table exactly, in the documented order.</li><li>Keybed: 73 keys with ids key-28..key-100 (E1 to E7), 43 white / 30 black; black/white width ratio 0.6500, black/white height ratio 0.6100 (spec blackKeyHeightFraction 0.61); maximum inter-white gap 0.008px; black-key centres sit within 0.004px of the white-key boundaries.</li><li>One continuous chassis: .chassis contains the top rail (17 rear-panel jack legends in reference order), the deck and the keybed; container has no &lt;img&gt; and no background url() anywhere (checked over every element), so the reference photo is not used as a rendered texture.</li><li>Defect: .chassis__cheek--right (z-index 6, 23.3px wide at x=1380.8) paints over the Layer Effects section rather than sitting beside the deck. In evidence/stage1-desktop.png this truncates &#039;FEEDBACK&#039;-&gt;&#039;FEED&#039;, &#039;FILTER&#039;-&gt;&#039;FILT&#039;, &#039;PING PONG&#039;-&gt;&#039;PING P&#039;, &#039;VAR | CHORALE&#039;-&gt;&#039;VAR|CHOR&#039; and the Reverb type column (STAGE / HALL / CATH) at the right end of the deck.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Complete hardware inventory and placement</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>146 [data-control-id] elements render, one per entry in src/model/controls.ts, each inside its declared section (asserted by src/components/surface.test.tsx and re-verified live). Counts by section from evidence/stage1-visual-audit.md: performance 7, organ 24, piano 14, program 28, synth 40, effects 33.</li><li>Exactly two [data-oled] elements exist, data-oled=&quot;program&quot; (79x39.4 at x=668.5) and data-oled=&quot;synth&quot; (82.1x42.3 at x=893.1); performance, organ, piano and effects contain none — matching the &#039;Program/Synth are the only primary OLEDs&#039; gate and the per-section forbidden lists.</li><li>Landmark check against the cropped reference (inputs/reference/nord-stage-4-73.jpg, deck crop) and specs/nord-stage-4.visual.json sectionLandmarks: performance sits on bare red with Master Level knob, pitch stick, mod wheel, &#039;nord stage 4 / HAMMER ACTION 73&#039; branding and the Rotary Speaker column (DRIVE, ORGAN/CLOSE MIC, STOP MODE, ANGLE, SLOW/FAST, MORPH) and has no inset plate; organ has 9 drawbars each with its own numbered 8-step LED ladder and footage legend (16&#039; 5 1/3&#039; 8&#039; 4&#039; 2 2/3&#039; 2&#039; 1 3/5&#039; 1 1/3&#039; 1&#039;), two fader ladders, ORGAN MODEL 6-way, VIB/CHORUS with the C2 V3 C3 / V2 C1 V1 cluster and B3 PERCUSSION volume/decay/harmonic/On; piano has two faders, PIANO SELECT 6-way, MODEL dial, TIMBRE, ACOUSTICS, UNISON, KB TOUCH, DYN COMP and no drawbars or OLED; program has the OLED, the large dial, 8 program buttons, PAGE/CAT, BANK, LIVE MODE, LAYER SCENE, STORE, SPLIT and the three MORPH ASSIGN buttons; synth has one OLED, three layer faders, MODE, three encoders, LFO, OSCILLATORS, FILTER, AMP, UNISON, ARPEGGIATOR/GATE, VOICE, VIBRATO; effects has MOD 1, MOD 2, AMP SIM/EQ, DELAY, COMP, REVERB plus the FX FOCUS column (Organ A/B, ALL FX OFF, Piano A/B, Synth A/B/C, SHIFT/EXIT) and no OLED.</li><li>Density and grouping in the desktop capture read as the reference does, including second-function silk-screen labels (MST CLK, GLOBAL, TO ROTARY, LP/HP FILTER, VARIATION, SET KEY, PANIC, PASTE) drawn as unlit-LED printed text rather than invented extra controls.</li><li>Gap: 25 of 268 .legend/.group__title nodes are occluded at their centre by a neighbouring element (elementFromPoint check), e.g. &#039;ON/OFF&#039; under a drawbar, &#039;PAGE NAME&#039; under the program dial, &#039;MON/COPY&#039; and &#039;PASTE&#039; under the Shift plate, and the MOD 1 / MOD 2 / AMP SIM/EQ / COMP / REVERB / ARPEGGIATOR-GATE group titles half-hidden behind their group plates.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Materials, color, typography, and displays</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Material read is convincing and matches referenceColors: deep red chassis with darker bevels and drop shadow (styles.css line 77 drop-shadow, no CSS animations anywhere), blue-grey inset plates with red perimeter gutters, light header tabs whose widths reproduce the measured partial-width tabs (organ 0.42, synth 0.42, effects 0.48, piano 0.96 of section width), machined knob caps with pointer lines, white/dark drawbar grips, red/green/amber LEDs with glow (styles.css 403-413) and cyan monospace OLED text.</li><li>Hierarchy is right: section titles &gt; group titles &gt; silk-screen legends &gt; LED labels, and the two OLEDs are the visual focus of their sections as on the reference.</li><li>Weakness acknowledged in evidence/stage1-visual-audit.md section 6: legends are drawn at true proportional scale (~0.30% of instrument width, ~4px at 1368px wide) so panel text reads as correct-density grey micro-text rather than readable words, and the Nord condensed grotesque is replaced by a system sans stack.</li><li>Weakness: overlap defects visible in the capture — 25/268 legends occluded (see hardwareInventory), the &#039;MST CLK&#039; badge printed across the Delay TAP/SET button, and group titles clipped by their own plates. The reference sets those titles into a break in the group border.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Narrow retention</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>At 390x844 the whole chassis renders at 377.2x121.9 with document.scrollWidth === clientWidth === 390 (no horizontal page overflow), all 73 keys present (white key width 8.2px) and all 146 controls still rendered with zero zero-sized elements.</li><li>Nothing is clipped or dropped: the same six sections, both OLEDs and the full drawbar/fader inventory are in the DOM at 390px, and evidence/stage1-narrow.png shows the complete instrument with the status strip below it.</li><li>Inspection affordance: a Zoom 1x-4x range input appears at &lt;=720px (src/App.tsx 92-105); at 3x the .stage__viewport scrolls internally (scrollWidth 754 vs clientWidth 377, overflow-x auto) so the page itself never overflows. Status strip text (audio state, MIDI state, key mapping, sustain button) stays full size and legible.</li><li>Gap: at 1x the panel legends and LED states are sub-pixel and effectively illegible; readable inspection depends entirely on the zoom control. The candidate declares this honestly (visual audit deviation 11).</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Basic Piano functionality</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Unified playable inputs</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Pointer: mousedown on #key-60 in the served dist build produced rms 0.398 / peak 0.712 at an analyser tapped onto the destination, aria-pressed and data-held flipped, mouseup returned peak to 0. Velocity is taken from strike depth (src/components/Keybed.tsx velocityFromPointer): top-of-key peak 0.160 vs front-lip peak 0.903.</li><li>Multi-touch: pointerdown with pointerId 11 on key-60 and 12 on key-64 gave 2 held keys simultaneously; releasing pointer 11 left exactly 1 held, confirming per-pointer ownership (pointers Map in Keybed.tsx).</li><li>Computer keyboard: holding a s d f g h j k gave 8 held keys and rms 0.857; releasing all returned to 0 held and digital silence. event.repeat plus a pressedCodes set suppress key repeat (src/state/useInstrument.ts 169-194); Z/X shift the mapped octave, Space is the sustain key and is deliberately not stolen from a focused control (shouldHandleSustainKey).</li><li>Web MIDI exercised against a real MIDIAccess object captured from navigator.requestMIDIAccess in this browser (device &#039;ROLI Airwave Expression&#039;): 0x90 note-on produced rms 0.153 and lit the matching key; velocity 10 vs 127 gave rms 0.017 vs 0.483; CC64 held a released note (rms 0.278 at 250ms after key-up) and pedal-up damped it to 0.0003; CC123 all-notes-off took rms 0.347 -&gt; 0 with 0 held keys.</li><li>Failure cleanup: window blur while a touch was still down cleared every held key and returned output to 0; the MIDI effect clears onmidimessage handlers, nulls onstatechange and calls allNotesOff on teardown, and onstatechange (device connect/disconnect) also fires allNotesOff (useInstrument.ts 268-289). Denied and unsupported MIDI produce distinct truthful messages (I observed the denied message in the sealed capture and the granted message live).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Voice lifecycle and performance</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Velocity, release and sustain all verified on rendered signal rather than state: soft/hard strike peak 0.160 vs 0.903; note released without pedal measured 0 at 250ms after key-up while the identical note with the pedal down measured 0.447 at the same delay, then 0.0025 250ms after pedal-up.</li><li>Repeat and overlap: the same note id retriggers instead of stacking (PianoEngine.noteOn tears down an existing voice with the same id); different sources own separate voices via noteId(source, key), so pointer and keyboard C4 coexist.</li><li>Polyphony and stealing: maxVoices 32 with a documented deterministic order (releasing, then sustained, then oldest sounding — pianoEngine.ts stealVoice 259-267, asserted in pianoEngine.test.ts 198-220). 40 simultaneous MIDI notes did not throw or leak; after note-off the analyser returned to exactly 0 and 0 keys were held.</li><li>Cleanup: a held voice is reaped by a scheduled timeout once its partials decay even with no note-off; a 300-note rapid stress (with interleaved note-offs) followed by CC123 settled to residual peak 0.0000, 0 held keys, JS heap 14MB, and no console errors. Unmount disposes the engine and closes the context (useInstrument.ts 294-306, asserted in inputs.test.tsx 290-305).</li><li>Panel controls stay decorative throughout (see decorativeBoundary).</li><li>Gap: there is no limiter or polyphony-aware gain staging — master gain is a fixed 0.7 and voices sum unbounded. Measured pre-destination peaks: single hard strike 0.903, 8-note chord 1.893 (564 of 2048 samples at or above 0.999), 40 notes 3.832. Dense chords therefore hard-clip at the output.</li><li>Minor: the on-screen key highlight is driven by held input keys, not by engine voices, so with 40 keys held 40 keys light although only 32 voices sound.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Basic source and status honesty</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>IMPLEMENTATION_DETAILS.json declares &#039;Live Web Audio synthesis. There are no recorded samples and no audio files of any kind in this artifact&#039;, lists two generated sources (three oscillator partials at 1.0 / 2.0027 / 3.0142 with per-partial decay, and a 90ms seeded-noise AudioBuffer hammer transient) and an empty sampleSources array. Verified: the artifact contains no audio asset of any kind, and the live spectrum of C4 shows peaks at 257.8 Hz (-22 dB), 515.6 Hz (-30.6) and 796.9 Hz (-42.9) — exactly the declared ratios — with everything else below -60 dB.</li><li>The declaration explicitly states the noise burst &#039;is a generated buffer, not a recording of a piano hammer&#039;, and notes that recorded Grand/Upright/Electric sets are Phase 2 scope and deliberately absent. That is a correct, non-overclaiming statement for Phase 1 (specs/nord-stage-4.piano.json scope note: Phase 1 needs only one dependable basic piano voice).</li><li>Status honesty: only states that can really occur are reported (unsupported / idle / starting / ready / error) and no fake loading progress is invented since there is no asset download. Live observation: data-audio-status went idle -&gt; ready on first gesture with the status line &#039;Audio ready - generated piano voice&#039;, and the Program OLED text tracked it (&#039;AUDIO SUSPENDED&#039; in the sealed capture, &#039;AUDIO READY ... PIANO: GENERATED VOICE&#039; once running). The voice counter is live: it read VOICES 00, then VOICES 03 with a three-note chord held, then VOICES 00 after CC123.</li><li>MIDI state is equally truthful: the sealed capture shows &#039;MIDI access was denied&#039;, my session shows &#039;MIDI connected. (ROLI Airwave Expression)&#039;. Absent-Web-Audio and failing-context paths report &#039;Web Audio is not available&#039; / the real error text while keeping the keybed pressable (src/state/inputs.test.tsx 267-280).</li><li>Sound quality caveat, not honesty: three near-sine partials give a thin, bell-like tone with a piano-shaped envelope (peak 0.696 decaying to 0.203 over 1.35s) rather than a rich piano timbre. The write-up describes it as &#039;an honest approximation of a struck string ... not derived from, modelled on, or measured against any specific instrument&#039;, which matches what it is.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Surface interaction and honesty</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Control movement and feedback</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>All 146 controls expose deliberate accessible state: 97 native &lt;button&gt;, 44 role=slider, 5 role=spinbutton; every one has a non-empty aria-label, every slider/spinbutton has aria-valuemin/max/now plus aria-valuetext, and all are tabbable (audit script over the live DOM found 0 problems). Focus is visible: outline 2px solid rgb(63,169,255).</li><li>Pointer drags verified live: knob fx.mod1.rate 3.6 -&gt; 6.5 with --knob-angle 40.5deg; fader organ.a.level 7.5 -&gt; 9.6; drawbar organ.drawbar.4 6 -&gt; 8 when dragged down (correct real-drawbar direction, inverted in useSliderBehaviour); mod wheel 0 -&gt; 0.36; pitch stick 0 -&gt; 0.65 while dragged and springs back to 0 on release; momentary program.store shows data-pressed true on pointerdown and false on pointerup.</li><li>Keyboard operation verified: dispatching one ArrowUp/click at every control changed the reported value on 116 of 146. The 30 unchanged are all explicable and correct — 26 momentary buttons that legitimately hold no latched state, drawbars 1-3 already at their max of 8, and the pitch stick which uses ArrowLeft/ArrowRight (confirmed working). Sliders also support PageUp/PageDown/Home/End.</li><li>Defect: four controls are unreachable by pointer at their centre because .chassis__cheek--right paints over them — fx.delay.feedback, fx.delay.filter, fx.delay.on and fx.reverb.on. A real mouse click at the centre of fx.delay.on left aria-pressed unchanged at &#039;false&#039;; the same control toggled to &#039;true&#039; when focused and activated with Enter. Keyboard access saves these controls but they do not respond to the obvious pointer gesture.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Decorative-control boundary</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Signal-level proof: with a note held under the sustain pedal, an identical measurement run was performed twice. Baseline (no controls touched) rms 0.5165 -&gt; 0.4520, ratio 0.8751. Twiddled run (40 ArrowDown steps each on perf.master-level, piano.a.level, fx.reverb.dry-wet and organ.drawbar.5, plus toggling piano.section-on, fx.section-on and piano.a.on) gave rms 0.5165 -&gt; 0.4520, ratio 0.8751 — byte-identical to four decimal places, so the panel provably does not touch the audio path.</li><li>Graph-level proof: an instrumented AudioNode.prototype.connect counter stood at 1672 both before and after operating all 146 controls, so no panel control creates or rewires any audio node.</li><li>DOM-level proof: every control carries data-functional=&quot;false&quot; (0 elements with data-functional=&quot;true&quot;), and the keys deliberately carry no such attribute. src/model/controls.ts types the field as literal false so a functional control cannot be added without a type change.</li><li>Nothing fakes success anywhere I could find. The Program OLED prints &#039;PANEL CONTROLS: DECORATIVE&#039; and &#039;PIANO: GENERATED VOICE&#039;; the Synth OLED prints &#039;SYNTH ENGINE: NOT IMPLEMENTED (PHASE 1)&#039; instead of an oscillator name nothing would play; the status strip states &#039;Every panel control moves, lights and reports its value but is otherwise inert - nothing on the deck is connected to audio yet.&#039; Controls do update their own indicator LEDs and printed values, which is exactly the required presentation-only behaviour.</li><li>evidence/stage1-visual-audit.md section 7 lists all 146 controls as decorative with per-section counts and enumerates by name everything deliberately not implemented (piano types/models, KB Touch, Dyn Comp, Timbre, Unison, layers, octave shift, master level, organ, synth, all six effects, programs, splits, scenes, morphs, clock, transpose, panic). Nothing in the write-up claims behaviour the artifact lacks.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Engineering quality</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Data structure and tests</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Clean layering: src/model (variant, keyboard, layout, controls) holds normalised data with stable string IDs; src/state holds an inert reducer store (hardware.ts documents that nothing but the renderers reads it); src/audio holds graph interfaces, engine and voice maths; src/input holds keymap and MIDI parsing; src/components holds presentation only. No cross-imports from audio into panel components.</li><li>Boundaries are genuinely injectable: AudioContextFactory, Scheduler and RequestMidiAccess are all options on useInstrument (src/state/useInstrument.ts 32-42), and App accepts them as props, so tests drive the real component tree with no devices, network or audio output.</li><li>src/audio/offline.ts is a real 438-line block-based Web Audio renderer (param automation with set/linear/exponential interpolation, oscillators, buffer playback, biquad) — not a mock. Audio claims are asserted on its rendered samples: output above silence, master and piano-bus muting each silencing everything, harder strike &gt;2x softer, low notes ringing longer than high, sustain lengthening the tail, deterministic stealing order, and node counts returning to a baseline of 2.</li><li>tests/feature-matrix.json maps all 11 required Phase 1 feature IDs to non-empty existing test files, and every mapped file exists in the artifact. Test files carry &#039;/** Feature: ... */&#039; markers tying suites back to the matrix. The visual audit reports 113 passing tests; inputs/verification.json records test/typecheck/lint/build all passing at seal.</li><li>Code is readable and commented where it matters (why the offline renderer exists, why boundaries live in refs, why the status strip sits below the instrument, what the stealing order is). Control specs are declarative with a small builder rather than 146 hand-written JSX blobs.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Runtime quality</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>All four technical checks passed at seal (inputs/verification.json: test 10.9s, typecheck 4.3s, lint 1.2s, build 3.3s), artifact digest recorded over 56 files, and the built dist/index.html served and ran without modification.</li><li>Console state clean: across the full interaction pass (pointer, keyboard, MIDI, 146-control sweep, 300-note stress) the only console entry was a 404 for /favicon.ico from my own static server; zero page errors and zero warnings from the app.</li><li>Cleanup and stability: 300 rapid MIDI note-ons with interleaved offs followed by CC123 settled to residual peak 0.0000 with 0 held keys and a 14MB JS heap; repeated pointer/keyboard/MIDI passes produced no stuck notes or drifting state. Voices are reaped by scheduled timeouts even when never released.</li><li>Loading is instantaneous and honest: no assets to fetch, audio starts on first gesture (idle -&gt; starting -&gt; ready) and the status strip plus Program OLED report the real state throughout.</li><li>Responsiveness: layout held with no overflow at 390, 600, 900, 1440 and 2560px wide; 2491 DOM nodes with no CSS animations or transitions, so repeated interaction stays smooth. (Playwright screenshot capture timed out at 390px in this environment, but about:blank timed out identically, so that is a harness limitation, not the artifact.)</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  </main>
+  <footer>Academic UI/audio reconstruction benchmark · Not affiliated with Nord Keyboards.</footer>
+</body>
+</html>

@@ -125,13 +125,16 @@ function verifyPhaseContract(root, stageDir, phase) {
   assert.ok(contract, `Missing Phase ${phase} contract in specs/benchmark-phases.json`)
   const planPath = path.join(stageDir, 'IMPLEMENTATION_PLAN.md')
   assert.ok(fs.existsSync(planPath) && fs.statSync(planPath).size > 0, 'Missing IMPLEMENTATION_PLAN.md')
-  const plan = fs.readFileSync(planPath, 'utf8').toLowerCase()
+  // Collapse whitespace on both sides: a gate copied verbatim but hard-wrapped
+  // across markdown lines is still a verbatim copy.
+  const flatten = (text) => text.replace(/\s+/g, ' ').toLowerCase()
+  const plan = flatten(fs.readFileSync(planPath, 'utf8'))
   assert.ok(plan.includes('hard gate'), 'IMPLEMENTATION_PLAN.md must acknowledge the phase hard gates')
   for (const specPath of contract.specs) {
     assert.ok(plan.includes(path.basename(specPath).toLowerCase()), `IMPLEMENTATION_PLAN.md must cite ${path.basename(specPath)}`)
   }
   for (const gate of contract.hardGates ?? []) {
-    assert.ok(plan.includes(gate.toLowerCase()), `IMPLEMENTATION_PLAN.md must include the hard gate: ${gate}`)
+    assert.ok(plan.includes(flatten(gate)), `IMPLEMENTATION_PLAN.md must include the hard gate: ${gate}`)
   }
   return { specs: contract.specs, hardGates: contract.hardGates?.length ?? 0 }
 }

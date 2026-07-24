@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "runId": "claude-opus-5",
+  "generatedAt": "2026-07-24T21:21:30.849Z",
+  "description": "Generated from phase package manifests, detected audio assets, and benchmark-authored audio provenance.",
+  "phases": [
+    {
+      "phase": 1,
+      "phaseName": "Complete surface and basic piano",
+      "status": "complete",
+      "artifactPath": "runs/claude-opus-5/stage1",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Live Web Audio synthesis. There are no recorded samples and no audio files of any kind in this artifact. Each note builds a voice from three OscillatorNodes (a sine fundamental plus two slightly inharmonic partials at 2.0027x and 3.0142x, each with its own exponential decay), summed into a per-voice GainNode set from velocity, through a per-voice lowpass BiquadFilterNode whose cutoff tracks pitch and velocity, into a shared piano-bus GainNode and then a master GainNode connected to the destination. A short hammer transient is played from one AudioBuffer of deterministic pseudo-random noise generated at engine construction time. Nothing bypasses the master gain.",
+        "generatedSources": [
+          {
+            "name": "Piano partials (fundamental plus two inharmonic partials)",
+            "type": "live synthesis",
+            "nodes": [
+              "OscillatorNode (sine, 1.0x)",
+              "OscillatorNode (sine, 2.0027x)",
+              "OscillatorNode (triangle, 3.0142x)",
+              "GainNode per partial, exponential decay envelopes",
+              "BiquadFilterNode (lowpass) per voice"
+            ],
+            "implementation": "src/audio/pianoVoice.ts (partialsFor, fundamentalDecay, velocityGain, toneCutoff), scheduled in src/audio/pianoEngine.ts",
+            "notes": "An honest approximation of a struck string: partial ratios are stretched slightly to model inharmonicity, upper partials decay faster than the fundamental, harder strikes put more energy into the upper partials and open the filter further, and low notes ring longer than high ones. It is not derived from, modelled on, or measured against any specific instrument or recording."
+          },
+          {
+            "name": "Hammer strike transient",
+            "type": "generated AudioBuffer",
+            "nodes": [
+              "AudioBufferSourceNode",
+              "GainNode"
+            ],
+            "implementation": "src/audio/pianoVoice.ts (fillHammerNoise); the buffer is created in the PianoEngine constructor",
+            "lengthSeconds": 0.09,
+            "notes": "A 90ms mono buffer of seeded pseudo-random noise (linear congruential generator, fixed seed 0x5eed1234) under a cubic decay envelope, shared by every voice. Deterministic: identical on every load. This is a generated buffer, not a recording of a piano hammer."
+          }
+        ],
+        "sampleSources": [],
+        "detectedFiles": [],
+        "notes": [
+          "No recorded sample sets are used or claimed in Phase 1, and no audio asset files ship in the artifact. The piano spec lets Phase 1 ship either a declared bundled sample set or honestly described synthesis; this artifact ships synthesis. Recorded, bundled, redistributable sample sets for Grand, Upright and Electric are Phase 2 scope and are deliberately absent here.",
+          "Only the keybed and the sustain input produce sound. All 146 controls on the six panel sections are presentation state only and are connected to no audio node whatsoever. This is asserted, not merely stated: a test operates every control in the inventory and shows the rendered destination output stays at digital silence and the audio graph node count does not change.",
+          "Audio, MIDI and timing are injectable boundaries (src/audio/graph.ts, src/audio/host.ts, src/input/midi.ts). Tests substitute a deterministic offline Web Audio implementation (src/audio/offline.ts) that really evaluates oscillators, buffer playback, parameter automation and the biquad filter sample by sample, so audio claims are asserted on rendered signals rather than on mocks. jsdom ships no Web Audio at all, so that renderer — not a browser audio engine — is what produces the sample data under test.",
+          "Reported audio states are only the ones that can really occur: unsupported (no Web Audio in the browser), idle (context suspended pending a user gesture), starting, ready, error. There is no asset download in Phase 1, so no loading progress is invented.",
+          "Polyphony is capped at 32 voices with deterministic stealing: the longest-running releasing voice first, then the longest-running sustained voice, then the longest-running sounding voice."
+        ]
+      }
+    }
+  ]
+}
