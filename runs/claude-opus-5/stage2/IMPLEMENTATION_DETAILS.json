@@ -1,0 +1,183 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "One AudioContext, one destination connection. Grand, Upright and Electric play bundled recordings (71 mono 16-bit PCM WAV files, 24 kHz, 9.26 MB, under public/samples/); Clav, Digital and Misc are live oscillator synthesis, as is the labelled fallback voice used when a recorded set cannot be loaded. Each note builds a voice per enabled piano layer: sample player or oscillator stack -> per-voice lowpass tone filter -> velocity gain -> stereo panner (unison spread) -> the layer's voice bus. Each layer runs voice bus -> timbre stage (two biquads) -> Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ or 24 dB filter -> Compressor -> Reverb -> layer level, then into the piano bus, or into the shared Rotary when To Rotary is selected. Both paths meet at the master gain, which feeds a wave-shaper limiter and then the single destination. Nothing bypasses the master path.",
+    "generatedSources": [
+      {
+        "name": "Synthesised piano voices (Clav, Digital, Misc, and the asset-failure fallback)",
+        "type": "live synthesis",
+        "nodes": [
+          "OscillatorNode per partial (sine / triangle / square / sawtooth)",
+          "GainNode per partial with attack and exponential decay envelopes",
+          "BiquadFilterNode (lowpass) per voice",
+          "StereoPannerNode per unison copy"
+        ],
+        "implementation": "src/audio/pianoVoice.ts (partialsFor with the recipes 'clav', 'digital', 'misc' and 'fallback'), built in src/audio/layer.ts",
+        "notes": "Honest approximations built from oscillators: a plucked wiry stack for Clav, an FM-style bell stack for Digital, a fourth-harmonic mallet stack for Misc, and the Phase 1 three-partial piano approximation as the fallback. None of these is derived from, modelled on, or measured against any specific instrument or recording, and none is described anywhere in the UI as a recording."
+      },
+      {
+        "name": "Hammer strike transient",
+        "type": "generated AudioBuffer",
+        "nodes": [
+          "AudioBufferSourceNode",
+          "GainNode"
+        ],
+        "implementation": "src/audio/pianoVoice.ts (fillHammerNoise); the buffer is created once in the PianoEngine constructor",
+        "lengthSeconds": 0.09,
+        "notes": "A 90 ms mono buffer of seeded pseudo-random noise (linear congruential generator, fixed seed 0x5eed1234) under a cubic decay envelope, shared by every synthesised voice. Deterministic: identical on every load. This is a generated buffer, not a recording of a piano hammer. Sample-playing voices do not use it."
+      },
+      {
+        "name": "Effect wave-shaper curves",
+        "type": "generated curve tables",
+        "nodes": [
+          "WaveShaperNode"
+        ],
+        "implementation": "src/audio/effects.ts (driveCurve, rectifierCurve, compressionCurve) and src/audio/pianoEngine.ts (limiterCurve)",
+        "notes": "Computed tanh saturation curves for the amp models and the rotary drive, an absolute-value rectifier for the A-Wah and compressor envelope followers, a gain-reduction curve for the compressor, and a soft-knee curve for the master limiter. No audio content, just transfer functions."
+      }
+    ],
+    "sampleSources": [
+      {
+        "name": "Grand — Concert Grand YDP (Yamaha Disklavier Pro)",
+        "type": "recorded samples",
+        "source": "FreePats YDP-GrandPiano release 2016-08-04, built from the Zenph Studios Yamaha Disklavier Pro Piano Multisamples for OLPC; soundfont and sample edits by roberto@zenvoid.org. https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html",
+        "license": "CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)",
+        "attribution": "Zenph Studios Yamaha Disklavier Pro multisamples for OLPC, performed by Dr. Mikhail Krishtal and team; FreePats soundfont by roberto@zenvoid.org.",
+        "directory": "public/samples/grand/",
+        "fileCount": 28,
+        "bytes": 4058332,
+        "rootNotes": [
+          27,
+          33,
+          39,
+          45,
+          51,
+          57,
+          63,
+          69,
+          75,
+          81,
+          87,
+          93,
+          99,
+          105
+        ],
+        "velocityLayers": 2,
+        "velocitySplit": "1-80 (soft take) and 81-127 (hard take), each an independently recorded stroke",
+        "maxPitchShiftSemitones": 3.0,
+        "format": "16-bit PCM mono WAV at 24 kHz",
+        "notes": "Extracted from the upstream soundfont by tools/build-samples.py: mono downmix, windowed-sinc band limit, resample to 24 kHz, onset trim, length that scales with pitch (1.25-3.4 s), 0.28 s fade-out, one normalising gain for the whole set. Root notes and velocity windows are recorded per file in src/audio/sampleManifest.json; 20 of the 28 files also carry an autocorrelation pitch-class measurement (the estimator is not dependable outside MIDI 30-84, so those roots rest on the upstream metadata and are reported as unverified rather than checked badly)."
+      },
+      {
+        "name": "Upright — Upright KW (Kawai upright)",
+        "type": "recorded samples",
+        "source": "FreePats UprightPianoKW release 2022-02-21, recorded by Gonzalo and Roberto on a Kawai upright with a Zoom H1. https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html#UprightKW",
+        "license": "CC0 1.0 public domain dedication (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "attribution": "Recorded and edited by Gonzalo <humanogonzalo@gmail.com> and Roberto <roberto@zenvoid.org> for the FreePats project.",
+        "directory": "public/samples/upright/",
+        "fileCount": 30,
+        "bytes": 3802250,
+        "rootNotes": [
+          27,
+          33,
+          36,
+          42,
+          47,
+          51,
+          57,
+          60,
+          66,
+          71,
+          75,
+          81,
+          84,
+          90,
+          95,
+          99,
+          105
+        ],
+        "velocityLayers": 2,
+        "velocitySplit": "1-80 (vL take) and 81-127 (vH take) as mapped by the upstream SFZ",
+        "maxPitchShiftSemitones": 3.0,
+        "format": "16-bit PCM mono WAV at 24 kHz",
+        "notes": "Same pipeline as the grand, starting from the upstream WAV files and their SFZ key mapping. Every other recorded root is kept, which leaves at most a 3 semitone stretch anywhere on the 73-key bed."
+      },
+      {
+        "name": "Electric — Tine EP (Rhodes-style tine electric piano)",
+        "type": "recorded samples",
+        "source": "FluidR3_GM.sf2 'Rhodes' samples, from the Debian package fluid-soundfont-gm 3.1-6. https://packages.debian.org/sid/fluid-soundfont-gm",
+        "license": "MIT (Copyright (c) 2000-2002, 2008 Frank Wen; 2008 Toby Smithe)",
+        "attribution": "FluidR3 soundfont by Frank Wen <getfrank@gmail.com>, MIT licence as shipped in Debian's fluid-soundfont-gm copyright file.",
+        "directory": "public/samples/electric/",
+        "fileCount": 13,
+        "bytes": 1402428,
+        "rootNotes": [
+          24,
+          31,
+          36,
+          40,
+          48,
+          55,
+          60,
+          67,
+          72,
+          79,
+          84,
+          91,
+          96
+        ],
+        "velocityLayers": 1,
+        "velocitySplit": "One recorded take per root; velocity moves the voice's gain and tone-filter cutoff rather than selecting a different recording",
+        "maxPitchShiftSemitones": 4.0,
+        "format": "16-bit PCM mono WAV at 24 kHz (the upstream stereo pair is summed to mono)",
+        "notes": "The upstream sample names carry no dependable octave, so tools/build-samples.py measures the pitch of the lowest sample by autocorrelation and derives the octave offset for the whole set from it. Single velocity layer is a deliberate, declared limitation: this set has no second recorded stroke."
+      }
+    ],
+    "notes": [
+      "Recorded versus generated: Grand, Upright and Electric are recordings of real instruments and are the only things called recordings anywhere in this artifact. Clav, Digital and Misc are oscillator synthesis and both the UI (the Program display prints SYNTHESISED) and this file say so. The piano spec permits synthesis for those three types.",
+      "The fallback is labelled, not silent and not disguised: if a recorded set fails to load or no assets are present, the engine reports the failure on the status strip and in the Program display (FALLBACK VOICE), keeps the keybed playable with the synthesised voice, and never reports the recorded library as ready. src/audio/pianoLayers.test.ts asserts all of that on a failing asset boundary.",
+      "Everything ships in the build: the sample files are static assets under public/samples/ and are fetched from the same origin at runtime. There is no network dependency, no CDN and no download step for the user. tools/build-samples.py, which produced them from the named upstream releases, is included as the provenance record.",
+      "Functional controls in this phase: the Piano section, the Layer Effects section, Master Level, and the Rotary Speaker's speed and drive. All 147 controls carry data-functional in the DOM taken from one declared list (FUNCTIONAL_CONTROL_IDS in src/model/controls.ts); 48 are true and 99 are false. Still decorative and listed as unsupported: every Organ, Synth and Program control, plus fx.delay.effects (spec-excluded delay feedback-loop effects), fx.focus.organ and fx.focus.synth (no engine until Phase 3), perf.rotary.source and perf.rotary.stop-mode (organ routing, close mic, stop angle), the pitch stick and the PSTICK indicator (no section is bent yet), the modulation wheel, and the Comp FAST indicator, for which this panel carries no button.",
+      "Audio, MIDI, timing and asset loading are injectable boundaries (src/audio/graph.ts, src/audio/host.ts, src/audio/sampleLibrary.ts, src/input/midi.ts). Tests substitute a deterministic offline Web Audio implementation (src/audio/offline.ts) that really evaluates oscillators, buffer playback, parameter automation, audio-rate modulation, biquads, delay lines, wave shapers and stereo panning sample by sample, and a disk-backed asset fetcher that reads the very files that ship. jsdom has no Web Audio at all, so that renderer — not a browser audio engine — produces the sample data under test.",
+      "Reported audio states are only the ones that can really occur: unsupported (no Web Audio), idle (context suspended pending a user gesture), starting, ready, error, and separately per sample set idle / loading / ready / failed / unavailable.",
+      "Polyphony is capped at 32 voices with deterministic stealing: the longest-running releasing voice first, then the longest-running sustained voice, then the longest-running sounding voice. With both layers enabled one key builds two voices, one per layer, each owned and released separately.",
+      "Approximations, declared rather than hidden: the effects are built from standard Web Audio nodes, not modelled on Clavia's DSP — the reverbs are comb/all-pass tanks whose decay grows Booth < Room < Stage < Hall < Cathedral, the amp models are drive plus voicing filters that are audibly distinct but not measured against real cabinets, String Res is a bank of damped comb resonators tuned to the held notes rather than pedal-down recordings, and the compressor is a rectifier/low-pass envelope follower driving a gain node."
+    ]
+  },
+  "surface": {
+    "reference": "reference/nord-stage-4-73.jpg",
+    "renderingMethod": "Hand-built DOM and CSS. The reference photograph is never used as a rendered background, texture or sprite, and no image files ship in the artifact.",
+    "sectionFractions": {
+      "source": "specs/nord-stage-4.visual.json v1.2.0 horizontalSections (the corrected 2026-07-04 values, not the stale ones quoted in prompts/stage1.md)",
+      "performance": 0.14,
+      "organ": 0.2,
+      "piano": 0.085,
+      "program": 0.125,
+      "synth": 0.25,
+      "effects": 0.2
+    },
+    "verticalAllocation": {
+      "deckIncludingTopRail": 0.54,
+      "keybedIncludingBottomRail": 0.46
+    },
+    "primaryOleds": [
+      "program",
+      "synth"
+    ],
+    "controlCount": 147,
+    "functionalPanelControlCount": 48,
+    "controlsAddedInPhase2": [
+      "piano.sustped"
+    ],
+    "keys": {
+      "total": 73,
+      "white": 43,
+      "black": 30,
+      "lowest": "E1",
+      "highest": "E7"
+    }
+  }
+}

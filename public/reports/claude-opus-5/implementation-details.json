@@ -1,7 +1,7 @@
 {
   "version": 1,
   "runId": "claude-opus-5",
-  "generatedAt": "2026-07-24T21:21:30.849Z",
+  "generatedAt": "2026-07-25T02:31:31.152Z",
   "description": "Generated from phase package manifests, detected audio assets, and benchmark-authored audio provenance.",
   "phases": [
     {
@@ -103,6 +103,1037 @@
           "Audio, MIDI and timing are injectable boundaries (src/audio/graph.ts, src/audio/host.ts, src/input/midi.ts). Tests substitute a deterministic offline Web Audio implementation (src/audio/offline.ts) that really evaluates oscillators, buffer playback, parameter automation and the biquad filter sample by sample, so audio claims are asserted on rendered signals rather than on mocks. jsdom ships no Web Audio at all, so that renderer — not a browser audio engine — is what produces the sample data under test.",
           "Reported audio states are only the ones that can really occur: unsupported (no Web Audio in the browser), idle (context suspended pending a user gesture), starting, ready, error. There is no asset download in Phase 1, so no loading progress is invented.",
           "Polyphony is capped at 32 voices with deterministic stealing: the longest-running releasing voice first, then the longest-running sustained voice, then the longest-running sounding voice."
+        ]
+      }
+    },
+    {
+      "phase": 2,
+      "phaseName": "Piano library and working effects",
+      "status": "complete",
+      "artifactPath": "runs/claude-opus-5/stage2",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "One AudioContext, one destination connection. Grand, Upright and Electric play bundled recordings (71 mono 16-bit PCM WAV files, 24 kHz, 9.26 MB, under public/samples/); Clav, Digital and Misc are live oscillator synthesis, as is the labelled fallback voice used when a recorded set cannot be loaded. Each note builds a voice per enabled piano layer: sample player or oscillator stack -> per-voice lowpass tone filter -> velocity gain -> stereo panner (unison spread) -> the layer's voice bus. Each layer runs voice bus -> timbre stage (two biquads) -> Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ or 24 dB filter -> Compressor -> Reverb -> layer level, then into the piano bus, or into the shared Rotary when To Rotary is selected. Both paths meet at the master gain, which feeds a wave-shaper limiter and then the single destination. Nothing bypasses the master path.",
+        "generatedSources": [
+          {
+            "name": "Synthesised piano voices (Clav, Digital, Misc, and the asset-failure fallback)",
+            "type": "live synthesis",
+            "nodes": [
+              "OscillatorNode per partial (sine / triangle / square / sawtooth)",
+              "GainNode per partial with attack and exponential decay envelopes",
+              "BiquadFilterNode (lowpass) per voice",
+              "StereoPannerNode per unison copy"
+            ],
+            "implementation": "src/audio/pianoVoice.ts (partialsFor with the recipes 'clav', 'digital', 'misc' and 'fallback'), built in src/audio/layer.ts",
+            "notes": "Honest approximations built from oscillators: a plucked wiry stack for Clav, an FM-style bell stack for Digital, a fourth-harmonic mallet stack for Misc, and the Phase 1 three-partial piano approximation as the fallback. None of these is derived from, modelled on, or measured against any specific instrument or recording, and none is described anywhere in the UI as a recording."
+          },
+          {
+            "name": "Hammer strike transient",
+            "type": "generated AudioBuffer",
+            "nodes": [
+              "AudioBufferSourceNode",
+              "GainNode"
+            ],
+            "implementation": "src/audio/pianoVoice.ts (fillHammerNoise); the buffer is created once in the PianoEngine constructor",
+            "lengthSeconds": 0.09,
+            "notes": "A 90 ms mono buffer of seeded pseudo-random noise (linear congruential generator, fixed seed 0x5eed1234) under a cubic decay envelope, shared by every synthesised voice. Deterministic: identical on every load. This is a generated buffer, not a recording of a piano hammer. Sample-playing voices do not use it."
+          },
+          {
+            "name": "Effect wave-shaper curves",
+            "type": "generated curve tables",
+            "nodes": [
+              "WaveShaperNode"
+            ],
+            "implementation": "src/audio/effects.ts (driveCurve, rectifierCurve, compressionCurve) and src/audio/pianoEngine.ts (limiterCurve)",
+            "notes": "Computed tanh saturation curves for the amp models and the rotary drive, an absolute-value rectifier for the A-Wah and compressor envelope followers, a gain-reduction curve for the compressor, and a soft-knee curve for the master limiter. No audio content, just transfer functions."
+          }
+        ],
+        "sampleSources": [
+          {
+            "name": "Grand — Concert Grand YDP (Yamaha Disklavier Pro)",
+            "type": "recorded samples",
+            "source": "FreePats YDP-GrandPiano release 2016-08-04, built from the Zenph Studios Yamaha Disklavier Pro Piano Multisamples for OLPC; soundfont and sample edits by roberto@zenvoid.org. https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html",
+            "license": "CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)",
+            "attribution": "Zenph Studios Yamaha Disklavier Pro multisamples for OLPC, performed by Dr. Mikhail Krishtal and team; FreePats soundfont by roberto@zenvoid.org.",
+            "directory": "public/samples/grand/",
+            "fileCount": 28,
+            "bytes": 4058332,
+            "rootNotes": [
+              27,
+              33,
+              39,
+              45,
+              51,
+              57,
+              63,
+              69,
+              75,
+              81,
+              87,
+              93,
+              99,
+              105
+            ],
+            "velocityLayers": 2,
+            "velocitySplit": "1-80 (soft take) and 81-127 (hard take), each an independently recorded stroke",
+            "maxPitchShiftSemitones": 3,
+            "format": "16-bit PCM mono WAV at 24 kHz",
+            "notes": "Extracted from the upstream soundfont by tools/build-samples.py: mono downmix, windowed-sinc band limit, resample to 24 kHz, onset trim, length that scales with pitch (1.25-3.4 s), 0.28 s fade-out, one normalising gain for the whole set. Root notes and velocity windows are recorded per file in src/audio/sampleManifest.json; 20 of the 28 files also carry an autocorrelation pitch-class measurement (the estimator is not dependable outside MIDI 30-84, so those roots rest on the upstream metadata and are reported as unverified rather than checked badly)."
+          },
+          {
+            "name": "Upright — Upright KW (Kawai upright)",
+            "type": "recorded samples",
+            "source": "FreePats UprightPianoKW release 2022-02-21, recorded by Gonzalo and Roberto on a Kawai upright with a Zoom H1. https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html#UprightKW",
+            "license": "CC0 1.0 public domain dedication (https://creativecommons.org/publicdomain/zero/1.0/)",
+            "attribution": "Recorded and edited by Gonzalo <humanogonzalo@gmail.com> and Roberto <roberto@zenvoid.org> for the FreePats project.",
+            "directory": "public/samples/upright/",
+            "fileCount": 30,
+            "bytes": 3802250,
+            "rootNotes": [
+              27,
+              33,
+              36,
+              42,
+              47,
+              51,
+              57,
+              60,
+              66,
+              71,
+              75,
+              81,
+              84,
+              90,
+              95,
+              99,
+              105
+            ],
+            "velocityLayers": 2,
+            "velocitySplit": "1-80 (vL take) and 81-127 (vH take) as mapped by the upstream SFZ",
+            "maxPitchShiftSemitones": 3,
+            "format": "16-bit PCM mono WAV at 24 kHz",
+            "notes": "Same pipeline as the grand, starting from the upstream WAV files and their SFZ key mapping. Every other recorded root is kept, which leaves at most a 3 semitone stretch anywhere on the 73-key bed."
+          },
+          {
+            "name": "Electric — Tine EP (Rhodes-style tine electric piano)",
+            "type": "recorded samples",
+            "source": "FluidR3_GM.sf2 'Rhodes' samples, from the Debian package fluid-soundfont-gm 3.1-6. https://packages.debian.org/sid/fluid-soundfont-gm",
+            "license": "MIT (Copyright (c) 2000-2002, 2008 Frank Wen; 2008 Toby Smithe)",
+            "attribution": "FluidR3 soundfont by Frank Wen <getfrank@gmail.com>, MIT licence as shipped in Debian's fluid-soundfont-gm copyright file.",
+            "directory": "public/samples/electric/",
+            "fileCount": 13,
+            "bytes": 1402428,
+            "rootNotes": [
+              24,
+              31,
+              36,
+              40,
+              48,
+              55,
+              60,
+              67,
+              72,
+              79,
+              84,
+              91,
+              96
+            ],
+            "velocityLayers": 1,
+            "velocitySplit": "One recorded take per root; velocity moves the voice's gain and tone-filter cutoff rather than selecting a different recording",
+            "maxPitchShiftSemitones": 4,
+            "format": "16-bit PCM mono WAV at 24 kHz (the upstream stereo pair is summed to mono)",
+            "notes": "The upstream sample names carry no dependable octave, so tools/build-samples.py measures the pitch of the lowest sample by autocorrelation and derives the octave offset for the whole set from it. Single velocity layer is a deliberate, declared limitation: this set has no second recorded stroke."
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/C1_24_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/C2_36_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/C3_48_v127.wav",
+            "bytes": 156864
+          },
+          {
+            "path": "public/samples/electric/C4_60_v127.wav",
+            "bytes": 69842
+          },
+          {
+            "path": "public/samples/electric/C5_72_v127.wav",
+            "bytes": 84766
+          },
+          {
+            "path": "public/samples/electric/C6_84_v127.wav",
+            "bytes": 101660
+          },
+          {
+            "path": "public/samples/electric/C7_96_v127.wav",
+            "bytes": 43128
+          },
+          {
+            "path": "public/samples/electric/E2_40_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/G1_31_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/G3_55_v127.wav",
+            "bytes": 98054
+          },
+          {
+            "path": "public/samples/electric/G4_67_v127.wav",
+            "bytes": 86422
+          },
+          {
+            "path": "public/samples/electric/G5_79_v127.wav",
+            "bytes": 66054
+          },
+          {
+            "path": "public/samples/electric/G6_91_v127.wav",
+            "bytes": 42662
+          },
+          {
+            "path": "public/samples/grand/A1_33_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A1_33_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A2_45_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A2_45_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A3_57_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A3_57_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A4_69_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A4_69_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A5_81_v127.wav",
+            "bytes": 148008
+          },
+          {
+            "path": "public/samples/grand/A5_81_v80.wav",
+            "bytes": 146050
+          },
+          {
+            "path": "public/samples/grand/A6_93_v127.wav",
+            "bytes": 117754
+          },
+          {
+            "path": "public/samples/grand/A6_93_v80.wav",
+            "bytes": 117754
+          },
+          {
+            "path": "public/samples/grand/A7_105_v127.wav",
+            "bytes": 93686
+          },
+          {
+            "path": "public/samples/grand/A7_105_v80.wav",
+            "bytes": 39740
+          },
+          {
+            "path": "public/samples/grand/Ds1_27_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds1_27_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds2_39_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds2_39_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds3_51_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds3_51_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds4_63_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds4_63_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds5_75_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds5_75_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds6_87_v127.wav",
+            "bytes": 132016
+          },
+          {
+            "path": "public/samples/grand/Ds6_87_v80.wav",
+            "bytes": 132016
+          },
+          {
+            "path": "public/samples/grand/Ds7_99_v127.wav",
+            "bytes": 105032
+          },
+          {
+            "path": "public/samples/grand/Ds7_99_v80.wav",
+            "bytes": 87884
+          },
+          {
+            "path": "public/samples/upright/A1_33_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A1_33_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A3_57_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A3_57_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A5_81_v127.wav",
+            "bytes": 136324
+          },
+          {
+            "path": "public/samples/upright/A5_81_v80.wav",
+            "bytes": 77040
+          },
+          {
+            "path": "public/samples/upright/A7_105_v127.wav",
+            "bytes": 43626
+          },
+          {
+            "path": "public/samples/upright/A7_105_v80.wav",
+            "bytes": 35314
+          },
+          {
+            "path": "public/samples/upright/B2_47_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/B4_71_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/B6_95_v127.wav",
+            "bytes": 49720
+          },
+          {
+            "path": "public/samples/upright/C2_36_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/C2_36_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/C4_60_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/C6_84_v127.wav",
+            "bytes": 106134
+          },
+          {
+            "path": "public/samples/upright/C6_84_v80.wav",
+            "bytes": 106104
+          },
+          {
+            "path": "public/samples/upright/Ds1_27_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds1_27_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds3_51_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds3_51_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds5_75_v127.wav",
+            "bytes": 151608
+          },
+          {
+            "path": "public/samples/upright/Ds5_75_v80.wav",
+            "bytes": 136358
+          },
+          {
+            "path": "public/samples/upright/Ds7_99_v127.wav",
+            "bytes": 34030
+          },
+          {
+            "path": "public/samples/upright/Ds7_99_v80.wav",
+            "bytes": 38028
+          },
+          {
+            "path": "public/samples/upright/Fs2_42_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs2_42_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs4_66_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs4_66_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs6_90_v127.wav",
+            "bytes": 60310
+          },
+          {
+            "path": "public/samples/upright/Fs6_90_v80.wav",
+            "bytes": 52506
+          }
+        ],
+        "notes": [
+          "Recorded versus generated: Grand, Upright and Electric are recordings of real instruments and are the only things called recordings anywhere in this artifact. Clav, Digital and Misc are oscillator synthesis and both the UI (the Program display prints SYNTHESISED) and this file say so. The piano spec permits synthesis for those three types.",
+          "The fallback is labelled, not silent and not disguised: if a recorded set fails to load or no assets are present, the engine reports the failure on the status strip and in the Program display (FALLBACK VOICE), keeps the keybed playable with the synthesised voice, and never reports the recorded library as ready. src/audio/pianoLayers.test.ts asserts all of that on a failing asset boundary.",
+          "Everything ships in the build: the sample files are static assets under public/samples/ and are fetched from the same origin at runtime. There is no network dependency, no CDN and no download step for the user. tools/build-samples.py, which produced them from the named upstream releases, is included as the provenance record.",
+          "Functional controls in this phase: the Piano section, the Layer Effects section, Master Level, and the Rotary Speaker's speed and drive. All 147 controls carry data-functional in the DOM taken from one declared list (FUNCTIONAL_CONTROL_IDS in src/model/controls.ts); 48 are true and 99 are false. Still decorative and listed as unsupported: every Organ, Synth and Program control, plus fx.delay.effects (spec-excluded delay feedback-loop effects), fx.focus.organ and fx.focus.synth (no engine until Phase 3), perf.rotary.source and perf.rotary.stop-mode (organ routing, close mic, stop angle), the pitch stick and the PSTICK indicator (no section is bent yet), the modulation wheel, and the Comp FAST indicator, for which this panel carries no button.",
+          "Audio, MIDI, timing and asset loading are injectable boundaries (src/audio/graph.ts, src/audio/host.ts, src/audio/sampleLibrary.ts, src/input/midi.ts). Tests substitute a deterministic offline Web Audio implementation (src/audio/offline.ts) that really evaluates oscillators, buffer playback, parameter automation, audio-rate modulation, biquads, delay lines, wave shapers and stereo panning sample by sample, and a disk-backed asset fetcher that reads the very files that ship. jsdom has no Web Audio at all, so that renderer — not a browser audio engine — produces the sample data under test.",
+          "Reported audio states are only the ones that can really occur: unsupported (no Web Audio), idle (context suspended pending a user gesture), starting, ready, error, and separately per sample set idle / loading / ready / failed / unavailable.",
+          "Polyphony is capped at 32 voices with deterministic stealing: the longest-running releasing voice first, then the longest-running sustained voice, then the longest-running sounding voice. With both layers enabled one key builds two voices, one per layer, each owned and released separately.",
+          "Approximations, declared rather than hidden: the effects are built from standard Web Audio nodes, not modelled on Clavia's DSP — the reverbs are comb/all-pass tanks whose decay grows Booth < Room < Stage < Hall < Cathedral, the amp models are drive plus voicing filters that are audibly distinct but not measured against real cabinets, String Res is a bank of damped comb resonators tuned to the held notes rather than pedal-down recordings, and the compressor is a rectifier/low-pass envelope follower driving a gain node."
+        ]
+      }
+    },
+    {
+      "phase": 3,
+      "phaseName": "Complete Stage 4 system",
+      "status": "complete",
+      "artifactPath": "runs/claude-opus-5/stage3",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "One AudioContext, one destination connection, for the whole instrument. Seven playable layers — Organ A/B, Piano A/B, Synth A/B/C — each build voices into a layer voice bus that runs through the documented six-unit chain (Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ -> Compressor -> Reverb) and a level fader, then into that section's bus or into the one shared Rotary Speaker. The three section buses and the rotary all meet at the master gain, which feeds a wave-shaper limiter and then the single destination; nothing bypasses that path. Piano: Grand, Upright and Electric play bundled recordings (71 mono 16-bit PCM WAV files, 24 kHz, 9.26 MB, under public/samples/); Clav, Digital and Misc are live oscillator synthesis, as is the labelled fallback voice. Organ: live additive synthesis — one oscillator per drawbar the model reads, plus generated noise-buffer transients for key click and pipe chiff, a delay-line vibrato/chorus stage, and one shared chain for both layers. Synth: live synthesis — oscillator stacks (single oscillator, sawtooth-through-shaper pulses, looped generated noise, looped generated single-cycle sync wavetables, detuned stacks, and a 2-operator FM pair), a biquad filter stack with an optional wave-shaper drive, three envelopes, an LFO and a vibrato LFO per layer, and an independent chain per layer. Organ and Synth layers are built the first time their section is switched on, so a piano-only program costs exactly the nodes Phase 2 cost. A keyboard-zone gain per note routes splits and applies crossfades before the voice is built.",
+        "generatedSources": [
+          {
+            "name": "Synthesised piano voices (Clav, Digital, Misc, and the asset-failure fallback)",
+            "type": "live synthesis",
+            "nodes": [
+              "OscillatorNode per partial (sine / triangle / square / sawtooth)",
+              "GainNode per partial with attack and exponential decay envelopes",
+              "BiquadFilterNode (lowpass) per voice",
+              "StereoPannerNode per unison copy"
+            ],
+            "implementation": "src/audio/pianoVoice.ts (partialsFor with the recipes 'clav', 'digital', 'misc' and 'fallback'), built in src/audio/layer.ts",
+            "notes": "Honest approximations built from oscillators: a plucked wiry stack for Clav, an FM-style bell stack for Digital, a fourth-harmonic mallet stack for Misc, and the Phase 1 three-partial piano approximation as the fallback. None of these is derived from, modelled on, or measured against any specific instrument or recording, and none is described anywhere in the UI as a recording."
+          },
+          {
+            "name": "Hammer strike transient",
+            "type": "generated AudioBuffer",
+            "nodes": [
+              "AudioBufferSourceNode",
+              "GainNode"
+            ],
+            "implementation": "src/audio/pianoVoice.ts (fillHammerNoise); the buffer is created once in the PianoEngine constructor",
+            "lengthSeconds": 0.09,
+            "notes": "A 90 ms mono buffer of seeded pseudo-random noise (linear congruential generator, fixed seed 0x5eed1234) under a cubic decay envelope, shared by every synthesised voice. Deterministic: identical on every load. This is a generated buffer, not a recording of a piano hammer. Sample-playing voices do not use it."
+          },
+          {
+            "name": "Effect wave-shaper curves",
+            "type": "generated curve tables",
+            "nodes": [
+              "WaveShaperNode"
+            ],
+            "implementation": "src/audio/effects.ts (driveCurve, rectifierCurve, compressionCurve) and src/audio/pianoEngine.ts (limiterCurve)",
+            "notes": "Computed tanh saturation curves for the amp models and the rotary drive, an absolute-value rectifier for the A-Wah and compressor envelope followers, a gain-reduction curve for the compressor, and a soft-knee curve for the master limiter. No audio content, just transfer functions."
+          },
+          {
+            "name": "Organ tone generation (B3, B3 Bass, Vox, Farf, Pipe 1, Pipe 2)",
+            "type": "live synthesis",
+            "nodes": [
+              "OscillatorNode per drawbar the model reads (sine / triangle / sawtooth / square)",
+              "GainNode per partial, set from the drawbar taper and updated live while a note sounds",
+              "GainNode envelope per voice (linear attack, exponential release)",
+              "AudioBufferSourceNode + BiquadFilterNode (bandpass) for the B3 key click and the pipe chiff",
+              "OscillatorNode + GainNode for the single-triggered B3 percussion partial",
+              "DelayNode modulated by an OscillatorNode for the vibrato/chorus stage"
+            ],
+            "implementation": "src/audio/organVoice.ts (partial recipes, drawbar taper, percussion and vib/chorus shapes) built in src/audio/organLayer.ts",
+            "notes": "Four genuinely different generators, not one oscillator renamed: B3 is nine pure sines on the printed tonewheel footages with fixed per-wheel detune and two quiet mistuned neighbours as tonewheel leakage; Vox is triangle flutes plus sawtooth mixtures and a filtered/unfiltered mix drawbar pair; Farf is fixed-level square and sawtooth registers that switch on past half travel; Pipe 1 is detuned sine ranks with a slow attack and a noise chiff. B3 Bass reuses the B3 engine limited to the 16 foot and 8 foot drawbars, and Pipe 2 reuses Pipe 1 with a brighter principal registration — both are documented reuse models in the organ spec. Nothing here is derived from, modelled on, or measured against any recording of any organ, and nothing in the UI calls it a recording."
+          },
+          {
+            "name": "Synth oscillator sources (Pure, Sync, Multi, Super, FM-H)",
+            "type": "live synthesis",
+            "nodes": [
+              "OscillatorNode (sine / triangle / sawtooth / square) for Pure, Multi and Super",
+              "OscillatorNode -> WaveShaperNode for the Pulse 33 and Pulse 10 duty cycles",
+              "AudioBufferSourceNode (loop) over a generated noise buffer for White Noise",
+              "AudioBufferSourceNode (loop) over a generated single-cycle wavetable for Sync Saw and Sync Square",
+              "OscillatorNode -> GainNode -> carrier frequency AudioParam for the 2-operator FM algorithm",
+              "BiquadFilterNode stack, optional WaveShaperNode drive, GainNode envelopes, StereoPannerNode per unison copy"
+            ],
+            "implementation": "src/audio/synthVoice.ts (waveform list, wavetable and curve generation, envelope/filter/LFO/arp mapping) built in src/audio/synthLayer.ts",
+            "notes": "Declared approximation: hard sync cannot be built from an OscillatorNode because there is no phase reset, so Sync Saw and Sync Square are naive, deliberately non-band-limited single-cycle wavetables generated at note-on and looped, which alias at the top of the keybed. The pulse waveforms are a sawtooth through a thresholding transfer curve with the DC component removed. All generated buffers (noise, sample-and-hold, wavetables) come from a seeded linear congruential generator or from closed-form arithmetic, so two renders of the same patch are identical. None of this is a recording and none of it is described as one."
+          },
+          {
+            "name": "Synth LFO Sample & Hold and vibrato buffers",
+            "type": "generated AudioBuffer",
+            "nodes": [
+              "AudioBufferSourceNode (loop)",
+              "GainNode"
+            ],
+            "implementation": "src/audio/synthVoice.ts (fillSampleHold, fillNoise); the buffers are created once per synth layer",
+            "lengthSeconds": 1,
+            "notes": "A one-second stepped pseudo-random buffer, seeded (0x5f3a), looped as the Sample & Hold LFO shape, and a half-second seeded noise buffer for the White Noise waveform. Deterministic on every load; generated, not recorded."
+          }
+        ],
+        "sampleSources": [
+          {
+            "name": "Grand — Concert Grand YDP (Yamaha Disklavier Pro)",
+            "type": "recorded samples",
+            "source": "FreePats YDP-GrandPiano release 2016-08-04, built from the Zenph Studios Yamaha Disklavier Pro Piano Multisamples for OLPC; soundfont and sample edits by roberto@zenvoid.org. https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html",
+            "license": "CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)",
+            "attribution": "Zenph Studios Yamaha Disklavier Pro multisamples for OLPC, performed by Dr. Mikhail Krishtal and team; FreePats soundfont by roberto@zenvoid.org.",
+            "directory": "public/samples/grand/",
+            "fileCount": 28,
+            "bytes": 4058332,
+            "rootNotes": [
+              27,
+              33,
+              39,
+              45,
+              51,
+              57,
+              63,
+              69,
+              75,
+              81,
+              87,
+              93,
+              99,
+              105
+            ],
+            "velocityLayers": 2,
+            "velocitySplit": "1-80 (soft take) and 81-127 (hard take), each an independently recorded stroke",
+            "maxPitchShiftSemitones": 3,
+            "format": "16-bit PCM mono WAV at 24 kHz",
+            "notes": "Extracted from the upstream soundfont by tools/build-samples.py: mono downmix, windowed-sinc band limit, resample to 24 kHz, onset trim, length that scales with pitch (1.25-3.4 s), 0.28 s fade-out, one normalising gain for the whole set. Root notes and velocity windows are recorded per file in src/audio/sampleManifest.json; 20 of the 28 files also carry an autocorrelation pitch-class measurement (the estimator is not dependable outside MIDI 30-84, so those roots rest on the upstream metadata and are reported as unverified rather than checked badly)."
+          },
+          {
+            "name": "Upright — Upright KW (Kawai upright)",
+            "type": "recorded samples",
+            "source": "FreePats UprightPianoKW release 2022-02-21, recorded by Gonzalo and Roberto on a Kawai upright with a Zoom H1. https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html#UprightKW",
+            "license": "CC0 1.0 public domain dedication (https://creativecommons.org/publicdomain/zero/1.0/)",
+            "attribution": "Recorded and edited by Gonzalo <humanogonzalo@gmail.com> and Roberto <roberto@zenvoid.org> for the FreePats project.",
+            "directory": "public/samples/upright/",
+            "fileCount": 30,
+            "bytes": 3802250,
+            "rootNotes": [
+              27,
+              33,
+              36,
+              42,
+              47,
+              51,
+              57,
+              60,
+              66,
+              71,
+              75,
+              81,
+              84,
+              90,
+              95,
+              99,
+              105
+            ],
+            "velocityLayers": 2,
+            "velocitySplit": "1-80 (vL take) and 81-127 (vH take) as mapped by the upstream SFZ",
+            "maxPitchShiftSemitones": 3,
+            "format": "16-bit PCM mono WAV at 24 kHz",
+            "notes": "Same pipeline as the grand, starting from the upstream WAV files and their SFZ key mapping. Every other recorded root is kept, which leaves at most a 3 semitone stretch anywhere on the 73-key bed."
+          },
+          {
+            "name": "Electric — Tine EP (Rhodes-style tine electric piano)",
+            "type": "recorded samples",
+            "source": "FluidR3_GM.sf2 'Rhodes' samples, from the Debian package fluid-soundfont-gm 3.1-6. https://packages.debian.org/sid/fluid-soundfont-gm",
+            "license": "MIT (Copyright (c) 2000-2002, 2008 Frank Wen; 2008 Toby Smithe)",
+            "attribution": "FluidR3 soundfont by Frank Wen <getfrank@gmail.com>, MIT licence as shipped in Debian's fluid-soundfont-gm copyright file.",
+            "directory": "public/samples/electric/",
+            "fileCount": 13,
+            "bytes": 1402428,
+            "rootNotes": [
+              24,
+              31,
+              36,
+              40,
+              48,
+              55,
+              60,
+              67,
+              72,
+              79,
+              84,
+              91,
+              96
+            ],
+            "velocityLayers": 1,
+            "velocitySplit": "One recorded take per root; velocity moves the voice's gain and tone-filter cutoff rather than selecting a different recording",
+            "maxPitchShiftSemitones": 4,
+            "format": "16-bit PCM mono WAV at 24 kHz (the upstream stereo pair is summed to mono)",
+            "notes": "The upstream sample names carry no dependable octave, so tools/build-samples.py measures the pitch of the lowest sample by autocorrelation and derives the octave offset for the whole set from it. Single velocity layer is a deliberate, declared limitation: this set has no second recorded stroke."
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/C1_24_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/C2_36_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/C3_48_v127.wav",
+            "bytes": 156864
+          },
+          {
+            "path": "public/samples/electric/C4_60_v127.wav",
+            "bytes": 69842
+          },
+          {
+            "path": "public/samples/electric/C5_72_v127.wav",
+            "bytes": 84766
+          },
+          {
+            "path": "public/samples/electric/C6_84_v127.wav",
+            "bytes": 101660
+          },
+          {
+            "path": "public/samples/electric/C7_96_v127.wav",
+            "bytes": 43128
+          },
+          {
+            "path": "public/samples/electric/E2_40_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/G1_31_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/electric/G3_55_v127.wav",
+            "bytes": 98054
+          },
+          {
+            "path": "public/samples/electric/G4_67_v127.wav",
+            "bytes": 86422
+          },
+          {
+            "path": "public/samples/electric/G5_79_v127.wav",
+            "bytes": 66054
+          },
+          {
+            "path": "public/samples/electric/G6_91_v127.wav",
+            "bytes": 42662
+          },
+          {
+            "path": "public/samples/grand/A1_33_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A1_33_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A2_45_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A2_45_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A3_57_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A3_57_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A4_69_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A4_69_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/A5_81_v127.wav",
+            "bytes": 148008
+          },
+          {
+            "path": "public/samples/grand/A5_81_v80.wav",
+            "bytes": 146050
+          },
+          {
+            "path": "public/samples/grand/A6_93_v127.wav",
+            "bytes": 117754
+          },
+          {
+            "path": "public/samples/grand/A6_93_v80.wav",
+            "bytes": 117754
+          },
+          {
+            "path": "public/samples/grand/A7_105_v127.wav",
+            "bytes": 93686
+          },
+          {
+            "path": "public/samples/grand/A7_105_v80.wav",
+            "bytes": 39740
+          },
+          {
+            "path": "public/samples/grand/Ds1_27_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds1_27_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds2_39_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds2_39_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds3_51_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds3_51_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds4_63_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds4_63_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds5_75_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds5_75_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/grand/Ds6_87_v127.wav",
+            "bytes": 132016
+          },
+          {
+            "path": "public/samples/grand/Ds6_87_v80.wav",
+            "bytes": 132016
+          },
+          {
+            "path": "public/samples/grand/Ds7_99_v127.wav",
+            "bytes": 105032
+          },
+          {
+            "path": "public/samples/grand/Ds7_99_v80.wav",
+            "bytes": 87884
+          },
+          {
+            "path": "public/samples/upright/A1_33_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A1_33_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A3_57_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A3_57_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/A5_81_v127.wav",
+            "bytes": 136324
+          },
+          {
+            "path": "public/samples/upright/A5_81_v80.wav",
+            "bytes": 77040
+          },
+          {
+            "path": "public/samples/upright/A7_105_v127.wav",
+            "bytes": 43626
+          },
+          {
+            "path": "public/samples/upright/A7_105_v80.wav",
+            "bytes": 35314
+          },
+          {
+            "path": "public/samples/upright/B2_47_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/B4_71_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/B6_95_v127.wav",
+            "bytes": 49720
+          },
+          {
+            "path": "public/samples/upright/C2_36_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/C2_36_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/C4_60_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/C6_84_v127.wav",
+            "bytes": 106134
+          },
+          {
+            "path": "public/samples/upright/C6_84_v80.wav",
+            "bytes": 106104
+          },
+          {
+            "path": "public/samples/upright/Ds1_27_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds1_27_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds3_51_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds3_51_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Ds5_75_v127.wav",
+            "bytes": 151608
+          },
+          {
+            "path": "public/samples/upright/Ds5_75_v80.wav",
+            "bytes": 136358
+          },
+          {
+            "path": "public/samples/upright/Ds7_99_v127.wav",
+            "bytes": 34030
+          },
+          {
+            "path": "public/samples/upright/Ds7_99_v80.wav",
+            "bytes": 38028
+          },
+          {
+            "path": "public/samples/upright/Fs2_42_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs2_42_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs4_66_v127.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs4_66_v80.wav",
+            "bytes": 163244
+          },
+          {
+            "path": "public/samples/upright/Fs6_90_v127.wav",
+            "bytes": 60310
+          },
+          {
+            "path": "public/samples/upright/Fs6_90_v80.wav",
+            "bytes": 52506
+          }
+        ],
+        "notes": [
+          "Recorded versus generated: Grand, Upright and Electric are recordings of real instruments and are the only things called recordings anywhere in this artifact. Clav, Digital and Misc are oscillator synthesis and both the UI (the Program display prints SYNTHESISED) and this file say so. The piano spec permits synthesis for those three types.",
+          "The fallback is labelled, not silent and not disguised: if a recorded set fails to load or no assets are present, the engine reports the failure on the status strip and in the Program display (FALLBACK VOICE), keeps the keybed playable with the synthesised voice, and never reports the recorded library as ready. src/audio/pianoLayers.test.ts asserts all of that on a failing asset boundary.",
+          "Everything ships in the build: the sample files are static assets under public/samples/ and are fetched from the same origin at runtime. There is no network dependency, no CDN and no download step for the user. tools/build-samples.py, which produced them from the named upstream releases, is included as the provenance record.",
+          "Functional controls in this phase: every control except the nine listed below. All 147 controls carry data-functional in the DOM taken from one declared list (UNSUPPORTED_CONTROL_IDS in src/model/controls.ts, which records the spec clause that excludes each one); 138 are true and 9 are false. Still decorative, each because an assigned spec excludes its behaviour: fx.delay.effects (delay feedback-loop effects), organ.preset (Preset/Drawbar Live modes), program.morph.aftertouch (browser keyboards have no aftertouch), program.preset.organ/piano/synth (the preset library), program.solo (Solo/Undo, spec-optional and not implemented), program.section-edit (Section Edit / Layer Init) and program.mon-copy (Monitor/Copy/Paste/Swap). Behaviour that is deliberately absent is listed in full in evidence/stage3-visual-audit.md, including organ sustain-pedal routing, pitch bend on the Organ and Piano sections, the Samples and Extern synth modes (which silence the layer and say so rather than pretending), and Master Clock keyboard sync.",
+          "Audio, MIDI, timing and asset loading are injectable boundaries (src/audio/graph.ts, src/audio/host.ts, src/audio/sampleLibrary.ts, src/input/midi.ts). Tests substitute a deterministic offline Web Audio implementation (src/audio/offline.ts) that really evaluates oscillators, buffer playback, parameter automation, audio-rate modulation, biquads, delay lines, wave shapers and stereo panning sample by sample, and a disk-backed asset fetcher that reads the very files that ship. jsdom has no Web Audio at all, so that renderer — not a browser audio engine — produces the sample data under test.",
+          "Reported audio states are only the ones that can really occur: unsupported (no Web Audio), idle (context suspended pending a user gesture), starting, ready, error, and separately per sample set idle / loading / ready / failed / unavailable.",
+          "Polyphony is capped at 32 voices with deterministic stealing: the longest-running releasing voice first, then the longest-running sustained voice, then the longest-running sounding voice. With both layers enabled one key builds two voices, one per layer, each owned and released separately.",
+          "Approximations, declared rather than hidden: the effects are built from standard Web Audio nodes, not modelled on Clavia's DSP — the reverbs are comb/all-pass tanks whose decay grows Booth < Room < Stage < Hall < Cathedral, the amp models are drive plus voicing filters that are audibly distinct but not measured against real cabinets, String Res is a bank of damped comb resonators tuned to the held notes rather than pedal-down recordings, and the compressor is a rectifier/low-pass envelope follower driving a gain node.",
+          "Program state is one serializable object (ProgramSnapshot in src/state/program.ts) covering every control except Master Level, the wheel, the pitch stick, the panel-mode selectors and the momentary buttons, plus per-layer banks, octaves, focus, splits, zones, scenes, morph assignments, the master clock and transpose. 32 program slots and 8 Live slots hold one each; ten factory programs ship, and slot 1.1 is exactly the panel's printed power-up state. The dirty \"E\" indicator is computed as !snapshotsEqual(current, stored) rather than tracked, so it cannot be wrong in either direction. Live slots auto-store every edit and persist through an injectable Storage boundary (localStorage in the browser, a fake in tests).",
+          "Morphs are applied in the pure panel-to-engine mapping: morphedValues interpolates every assignment at its source position, so a Wheel or Control Pedal morph reaches the engine through exactly the path a hand on the knob would, and the panel shows the morphed value with a green morph LED on the assigned control. The Control Pedal source is driven by an on-screen pedal in the status strip and by MIDI CC 11.",
+          "The arpeggiator and gate are driven by the same injectable Scheduler the voice reaper uses, and the step order (including Random, which is seeded from the held note set) is a pure function, so a test with the manual scheduler asserts the exact sequence and timing rather than sampling a real clock.",
+          "Approximations added in this phase, declared rather than hidden: the sync waveforms are non-band-limited wavetables; LP M is a two-section resonant lowpass rather than a modelled ladder; the vibrato menu offers four documented rate/amount pairs instead of two continuous parameters; the split editor and the morph assign flow use SHIFT presses and a latch instead of the hardware's press-and-hold; and the organ always feeds the shared rotary, with the source button choosing the microphone perspective."
         ]
       }
     }

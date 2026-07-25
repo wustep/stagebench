@@ -1,0 +1,131 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 1,
+  "stage": 2,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "summary": "73 keys, E1–E7, 43 white / 30 black, with the E-to-E black key pattern and measured geometry.",
+      "tests": ["src/model/keyboard.test.ts", "src/components/surface.test.tsx"]
+    },
+    {
+      "id": "visual.section-layout",
+      "summary": "Six ordered sections at the corrected v1.2.0 fractions, the 54/46 deck/keybed split, and one continuous chassis.",
+      "tests": [
+        "src/model/layout.test.ts",
+        "src/components/surface.test.tsx",
+        "src/components/regression.test.tsx"
+      ]
+    },
+    {
+      "id": "visual.control-inventory",
+      "summary": "147 stable control IDs, per-section landmarks and density, and Program and Synth as the only primary OLEDs.",
+      "tests": ["src/model/controls.test.ts", "src/components/surface.test.tsx"]
+    },
+    {
+      "id": "interaction.keys",
+      "summary": "Pointer, independent multi-touch, glissando, cancel, blur and focused-key Space/Enter press and release.",
+      "tests": ["src/components/interaction.test.tsx", "src/state/inputs.test.tsx"]
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "summary": "Every visible control moves or presses and reports its declared functional state; operating every decorative control leaves the audio graph untouched and the rendered output silent.",
+      "tests": [
+        "src/components/interaction.test.tsx",
+        "src/model/controls.test.ts",
+        "src/state/deck.test.tsx"
+      ]
+    },
+    {
+      "id": "accessibility.controls",
+      "summary": "Roles, accessible names, min/max/value/valuetext, orientation, keyboard operation, labelled regions and visible focus.",
+      "tests": ["src/components/accessibility.test.tsx", "src/components/interaction.test.tsx"]
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "summary": "Note on/off on rendered audio, repeated and overlapping notes, per-note release shortening the tail, all-notes-off, and node cleanup back to baseline.",
+      "tests": ["src/audio/pianoEngine.test.ts", "src/audio/effectsGraph.test.ts"]
+    },
+    {
+      "id": "piano.basic-inputs",
+      "summary": "Pointer, multi-touch, mapped computer keyboard with repeat suppression, MIDI note/velocity/CC64/all-notes-off, and denied, unsupported and disconnected MIDI states.",
+      "tests": ["src/state/inputs.test.tsx", "src/components/interaction.test.tsx"]
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "summary": "Sustain transitions measured on the rendered tail, concurrent voices, deterministic stealing order, polyphony cap, and velocity moving level and filter in the expected direction.",
+      "tests": ["src/audio/pianoEngine.test.ts", "src/state/inputs.test.tsx"]
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "summary": "Truthful ready/idle/unsupported/error status and its display, plus blur, MIDI disconnect and unmount stopping every owned voice and closing the context.",
+      "tests": ["src/state/inputs.test.tsx", "src/components/interaction.test.tsx"]
+    },
+    {
+      "id": "regression.chassis",
+      "summary": "No marketing hero or reference image, rail and keybed attached inside one chassis, instrument at 88–97% of a 1440x900 viewport with no vertical scroll, and full width without clipping at 390x844.",
+      "tests": ["src/components/regression.test.tsx", "src/components/surface.test.tsx"]
+    },
+    {
+      "id": "piano.instrument-library",
+      "summary": "Six selectable types with a playable model each; Grand, Upright and Electric are the bundled recordings in public/samples/, loaded through the asset boundary from disk with no network, decoded, played, and shown to be audibly distinct from each other and from the three synthesised types; the manifest's provenance, licences, root coverage and file list are asserted against the files that actually ship.",
+      "tests": ["src/audio/sampleLibrary.test.ts", "src/audio/pianoLayers.test.ts"]
+    },
+    {
+      "id": "piano.layers",
+      "summary": "Two layers with independent enable, level, octave shift, piano type and effect chain; one voice per enabled layer with separate ownership, release and cleanup; focus follows the layer and swaps the panel's banked values.",
+      "tests": ["src/audio/pianoLayers.test.ts", "src/state/deck.test.tsx", "src/audio/effectsGraph.test.ts"]
+    },
+    {
+      "id": "piano.velocity-controls",
+      "summary": "KB Touch, Dyn Comp, Timbre (including the electric-only Dyno settings), Unison, Soft Release, String Res, Section On and Master Level each measurably change rendered audio in the documented direction, and agree with the panel's own state.",
+      "tests": ["src/audio/pianoControls.test.ts", "src/state/deck.test.tsx"]
+    },
+    {
+      "id": "piano.pedals",
+      "summary": "Sustain from the UI button, the computer keyboard and MIDI CC64, measured on the rendered tail; SUSTPED routes the pedal per layer; pedal-up releases with the longer damper. Soft and sostenuto pedals are not implemented and are declared unsupported rather than approximated.",
+      "tests": ["src/audio/pianoLayers.test.ts", "src/state/inputs.test.tsx", "src/audio/pianoEngine.test.ts"]
+    },
+    {
+      "id": "piano.fallback",
+      "summary": "A failing or absent asset boundary reports the failure, keeps the keybed playable on the labelled synthesised fallback, and never reports the recorded library as ready; synthesised types are not reported as a fallback at all.",
+      "tests": ["src/audio/pianoLayers.test.ts", "src/state/deck.test.tsx"]
+    },
+    {
+      "id": "effects.graph",
+      "summary": "One AudioContext with per-layer buses and chains in the documented order, a shared rotary, master gain, wave-shaper limiter and exactly one destination connection; silence before the first note, master mute silencing every configuration, and every node returned to baseline after cleanup and to zero after dispose.",
+      "tests": ["src/audio/effectsGraph.test.ts", "src/audio/pianoEngine.test.ts"]
+    },
+    {
+      "id": "effects.routing",
+      "summary": "FX focus follows layer focus and the manual focus button, per-layer banks, Piano group mode, Delay/Comp/Reverb global mode, per-unit bypass, the all-effects bypass being identical to no unit on, To Rotary moving a layer off the piano bus, and Reverb preceding the Rotary.",
+      "tests": ["src/state/deck.test.tsx", "src/audio/effectsGraph.test.ts", "src/audio/effectsUnits.test.ts"]
+    },
+    {
+      "id": "effects.processing",
+      "summary": "Every unit and every listed type processes real audio: Mod 1 and Mod 2 (six types each, pairwise distinct), Delay with tempo, feedback, dry/wet and a feedback filter that dulls successive repeats without touching the dry path, Amp Sim/EQ (three amps, two 24 dB filters, three EQ bands, drive), Compressor, Reverb (six types, decay growing Booth to Cathedral, tone, fully wet at max) and the shared Rotary (slow/fast, drive, smooth acceleration).",
+      "tests": ["src/audio/effectsUnits.test.ts"]
+    },
+    {
+      "id": "regression.phase1",
+      "summary": "Every Phase 1 test file is still present and green against the Phase 2 engine; the surface, keybed geometry, input behaviour and decorative-control contract are unchanged for the sections this phase does not touch.",
+      "tests": [
+        "src/model/keyboard.test.ts",
+        "src/model/layout.test.ts",
+        "src/model/controls.test.ts",
+        "src/components/surface.test.tsx",
+        "src/components/interaction.test.tsx",
+        "src/components/accessibility.test.tsx",
+        "src/components/regression.test.tsx",
+        "src/state/inputs.test.tsx",
+        "src/audio/pianoEngine.test.ts"
+      ]
+    }
+  ],
+  "notes": [
+    "Audio behaviour is asserted on real rendered signals: src/audio/offline.ts is a deterministic offline Web Audio implementation that evaluates oscillators, buffer playback, parameter automation, audio-rate modulation, biquads, delay lines, wave shapers and stereo panning sample by sample, because jsdom provides no Web Audio.",
+    "The recorded-sample tests read the very files that ship in public/samples/ through the same loader boundary the browser uses (src/test/engineRig.ts), so 'these three instruments sound different' is measured on the shipped assets rather than on fixtures.",
+    "Three groups of Phase 1 assertions were updated in place, and none was weakened: the engine's resting node count is now measured from the graph instead of hard-coded at 2 (the graph is bigger, the invariant is the same), the decorative-control assertions now check each control against its declared functional state and still require every Organ, Synth and Program control to be inert, and two status-text assertions follow the status strings that changed because what is true changed.",
+    "No test requires a physical MIDI device, network access or audio output."
+  ]
+}

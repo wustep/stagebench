@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "runId": "claude-opus-5",
+  "stage": 3,
+  "verifiedAt": "2026-07-25T02:02:47.380Z",
+  "passed": true,
+  "artifactDigest": "e8d28c03c3b5deec3418f726a4c70da55fd3a520523862e7c673ef684e2aa084",
+  "artifactFiles": 235,
+  "phaseContract": {
+    "specs": [
+      "specs/nord-stage-4.visual.json",
+      "specs/nord-stage-4.piano.json",
+      "specs/nord-stage-4.effects.json",
+      "specs/nord-stage-4.programs.json",
+      "specs/nord-stage-4.organ.json",
+      "specs/nord-stage-4.synth.json"
+    ],
+    "hardGates": 5
+  },
+  "featureMatrix": {
+    "coveredFeatures": 38,
+    "requiredFeatures": 38
+  },
+  "implementationDetails": {
+    "audioStrategy": "One AudioContext, one destination connection, for the whole instrument. Seven playable layers — Organ A/B, Piano A/B, Synth A/B/C — each build voices into a layer voice bus that runs through the documented six-unit chain (Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ -> Compressor -> Reverb) and a level fader, then into that section's bus or into the one shared Rotary Speaker. The three section buses and the rotary all meet at the master gain, which feeds a wave-shaper limiter and then the single destination; nothing bypasses that path. Piano: Grand, Upright and Electric play bundled recordings (71 mono 16-bit PCM WAV files, 24 kHz, 9.26 MB, under public/samples/); Clav, Digital and Misc are live oscillator synthesis, as is the labelled fallback voice. Organ: live additive synthesis — one oscillator per drawbar the model reads, plus generated noise-buffer transients for key click and pipe chiff, a delay-line vibrato/chorus stage, and one shared chain for both layers. Synth: live synthesis — oscillator stacks (single oscillator, sawtooth-through-shaper pulses, looped generated noise, looped generated single-cycle sync wavetables, detuned stacks, and a 2-operator FM pair), a biquad filter stack with an optional wave-shaper drive, three envelopes, an LFO and a vibrato LFO per layer, and an independent chain per layer. Organ and Synth layers are built the first time their section is switched on, so a piano-only program costs exactly the nodes Phase 2 cost. A keyboard-zone gain per note routes splits and applies crossfades before the voice is built.",
+    "generatedSources": 6,
+    "sampleSources": 3
+  },
+  "checks": [
+    {
+      "id": "test",
+      "command": "pnpm run test",
+      "passed": true,
+      "durationMs": 11753,
+      "detail": "Passed"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm run typecheck",
+      "passed": true,
+      "durationMs": 2069,
+      "detail": "Passed"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm run lint",
+      "passed": true,
+      "durationMs": 947,
+      "detail": "Passed"
+    },
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "passed": true,
+      "durationMs": 2685,
+      "detail": "Passed"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence/stage3-desktop.png",
+      "passed": true,
+      "detail": "evidence/stage3-desktop.png · 1440x900"
+    },
+    {
+      "id": "evidence/stage3-narrow.png",
+      "passed": true,
+      "detail": "evidence/stage3-narrow.png · 390x844"
+    },
+    {
+      "id": "evidence/stage3-visual-audit.md",
+      "passed": true,
+      "detail": "evidence/stage3-visual-audit.md"
+    },
+    {
+      "id": "evidence/stage3-capture.json",
+      "passed": true,
+      "detail": "evidence/stage3-capture.json"
+    }
+  ]
+}
