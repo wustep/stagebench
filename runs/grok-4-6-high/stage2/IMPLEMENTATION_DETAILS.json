@@ -1,0 +1,61 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "Recorded sample playback for Grand, Upright, and Electric; live synthesis for Clav, Digital, and Misc; one AudioContext with per-layer effect chains, master gain, and limiter.",
+    "generatedSources": [
+      {
+        "name": "clav-digital-misc-and-fallback",
+        "method": "live-oscillators",
+        "description": "Clav uses a square oscillator through a band-pass; Digital is additive sines; Misc is FM mallet. The same additive path is the labeled fallback if recorded banks fail to load. None of these are recordings."
+      }
+    ],
+    "sampleSources": [
+      {
+        "name": "Grand — FluidR3 GM acoustic grand",
+        "source": "FluidR3 GM acoustic_grand_piano notes packaged by midi-js-soundfonts (Frank Wen / Michael Deal). Recorded piano, not generated.",
+        "license": "MIT",
+        "files": [
+          "public/samples/grand/36v1.wav",
+          "public/samples/grand/60v1.wav",
+          "public/samples/grand/84v1.wav",
+          "src/audio/recorded-pcm.json"
+        ],
+        "rootNotes": [36, 39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84],
+        "velocityLayers": 1,
+        "notes": "17 recorded roots, one velocity layer. Additional dynamics via gain/filter, not extra recordings."
+      },
+      {
+        "name": "Upright — Upright piano KW (Kawai)",
+        "source": "FreePats Upright piano KW, recorded from a Kawai upright in a living room by Gonzalo and Roberto (2017).",
+        "license": "CC0 1.0",
+        "files": [
+          "public/samples/upright/",
+          "src/audio/recorded-pcm.json"
+        ],
+        "rootNotes": [36, 39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84],
+        "velocityLayers": 2,
+        "notes": "Recorded vL and vH layers where the source bank provides them."
+      },
+      {
+        "name": "Electric — FluidR3 GM electric piano 1",
+        "source": "FluidR3 GM electric_piano_1 (recorded tine EP) packaged by midi-js-soundfonts.",
+        "license": "MIT",
+        "files": [
+          "public/samples/electric/",
+          "src/audio/recorded-pcm.json"
+        ],
+        "rootNotes": [36, 39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84],
+        "velocityLayers": 1,
+        "notes": "Recorded tine electric piano, audibly distinct from the acoustic banks."
+      }
+    ],
+    "notes": [
+      "Generated buffers are never described as recordings.",
+      "Master Level, Piano section, and Layer Effects are functional. Organ, Synth, and Program remain decorative.",
+      "Sustain honors per-layer SUSTPED from the UI pedal, Space key, and MIDI CC64.",
+      "Asset failure sets status to fallback (not ready), flashes the type LED, and reports LOAD FAIL on the Program display."
+    ]
+  }
+}

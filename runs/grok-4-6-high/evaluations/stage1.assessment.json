@@ -1,0 +1,199 @@
+{
+  "rubricVersion": "1.1.0",
+  "runId": "grok-4-6-high",
+  "stage": 1,
+  "evaluator": "blind-evaluator-agent",
+  "evaluatedAt": "2026-08-14T00:58:00.000Z",
+  "summary": "A structurally sound Phase 1 artifact with a genuinely working, honest piano voice, undermined by a deck layout that does not fit its own geometry. The chassis, 54/46 split, six section widths, and the exact 73-key E1-E7 keybed (43 white / 30 black) all match the variant spec, and the full control inventory (151 controls, stable IDs, Program and Synth as the only OLEDs) exists in the DOM. However, measured in a real browser at 1440x900, 50 controls are laid out below the deck and covered by the keybed, 4 (piano-soft-release, piano-string-res, piano-sustped, piano-pstick) fall outside the chassis and are clipped away entirely, and 56 of 151 controls are not pointer-hittable; the Layer FX and Synth groups also overlap and truncate their legends. At 390x844 the failure is severe: 94 controls are clipped outside the chassis and only 26 remain hittable. Audio is the strongest part: real Web Audio measurement through an injected analyser shows RMS 0.126 while a key is held and 0 after release, velocity tracking pointer position (0.027 soft vs 0.126 hard), computer keyboard and independent two-finger multitouch working, MIDI note/velocity/CC64 with denied and disconnected cleanup, sustain holding a released note and dropping it on pedal up, and full silence after blur and after a 24-note burst. The decorative boundary is honest and verified: Master Level driven to 0 left output unchanged, panel button clicks produced no audio, the status line and OLEDs say the panel is decorative, and IMPLEMENTATION_DETAILS.json correctly declares additive synthesis with no sample claims.",
+  "categories": [
+    {
+      "id": "visualFidelity",
+      "criteria": [
+        {
+          "id": "silhouetteGeometry",
+          "rating": 3,
+          "evidence": [
+            "Live measurement at 1440x900 (artifact/dist served locally): chassis 1353.6x451.3 at x=43.2 -> instrument width fraction 0.940, inside the spec range 0.88-0.97 (inputs/specs/nord-stage-4.visual.json presentation.desktopInstrumentWidthFraction).",
+            "Deck 242.6px / chassis 451.3px = 0.538 and keybed 206.7px = 0.458, both inside the 0.54/0.46 +/-0.025 verticalAllocation tolerance.",
+            "Section widths measured against deck width 1351.6: performance 0.137, organ 0.196, piano 0.083, program 0.122, synth 0.245, effects 0.196 versus spec 0.14/0.20/0.085/0.125/0.25/0.20 - all within ~0.005.",
+            "Keybed exact for the assigned variant: 73 [data-key] elements, 43 white, 30 black, first key E1, MIDI 28-100, black-key height fraction 0.61 (artifact/src/model/keys.ts, artifact/src/model/variant.ts) matching inputs/specs/nord-stage-4.variants.json.",
+            "One continuous chassis with two end cheeks and no marketing hero; document.scrollHeight equals 900 at desktop, so no vertical scroll (artifact/src/components/Stage.tsx, artifact/src/styles.css).",
+            "Deviations: rendered aspect 1353.6/451.3 = 3.00 versus the spec 3.0951; cheeks are simplified flat orange blocks rather than the reference wood ends; no distinct top rail band above the deck."
+          ]
+        },
+        {
+          "id": "hardwareInventory",
+          "rating": 2,
+          "evidence": [
+            "All six sections exist with the required landmarks and stable IDs: 151 [data-control-id] nodes, nine organ drawbars with LED ladders, piano type selectors and detail knobs, program dial + 8 program pads + page/live/scene/store/split + 3 morph assigns, synth OSC/FILTER/AMP ENV/MOD-LFO/VOICE groups, and FX1/FX2/AMP-EQ/COMP/DELAY/REVERB/ROTARY groups (artifact/src/model/controls.ts, artifact/src/components/sections.tsx).",
+            "Exactly two OLEDs, program-oled and synth-oled, and no .oled node inside performance, organ, piano, or effects - the forbidden-display rule is respected.",
+            "Placement fails badly: measured at 1440x900, 50 controls have their top below the deck bottom (y=452) and sit behind the keybed, including all five organ model switches, all four percussion buttons, the organ rotary group, piano-type-upright through piano-type-misc, piano-model, KB Touch / Dyn Comp / Timbre / Unison, and the synth LFO/arp/voice knobs.",
+            "4 controls (piano-soft-release, piano-string-res, piano-sustped, piano-pstick) render below the chassis bottom (y=659) and are removed by overflow:hidden on .chassis - they are not visible anywhere.",
+            "document.elementFromPoint at each control centre shows 56 of 151 controls are covered by keys or other elements and cannot be reached by pointer.",
+            "Section content overflows its box: piano scrollHeight 501 vs clientHeight 214, organ 395 vs 214, synth 329 vs 214 and scrollWidth 356 vs 328, effects scrollWidth 311 vs 262 - the ROTARY column collides with the REVERB column at the right chassis edge (scratch crops of the live render).",
+            "Net effect versus inputs/reference/nord-stage-4-73.jpg: the reference deck is dense and fully contained, while this deck shows only its top rows and hides roughly a third of the inventory behind the keys."
+          ]
+        },
+        {
+          "id": "materialsTypography",
+          "rating": 2,
+          "evidence": [
+            "Palette follows the spec tokens: chassis #851a25/#5a0c13, inset panels #3c424d, keys #dcdcdc/#0b0b0b, amber-red LEDs, green-on-black OLEDs (artifact/src/styles.css lines 1-60).",
+            "Nord branding, red section headers, per-control legends, drawbar/fader LED ladders, knob pointer rotation, and a focus-visible outline (styles.css :focus-visible, 2px solid #f3d27a) are all present.",
+            "Typography diverges from the reference: legends are long spelled-out phrases (LAYER A ENABLE, OSCILLATOR WAVEFORM, ROTARY SPEAKER DRIVE) instead of the compact hardware legends, and they collide - the Layer FX crop shows REVERB and ROTARY labels overlapping, and Synth group legends are cut mid-word by the keybed edge.",
+            "Because the lower half of each dark inset plate is occluded by the keybed, the panel reads as a truncated strip rather than the reference's balanced plates; hierarchy and micro-detail below the fold are simply not visible."
+          ]
+        },
+        {
+          "id": "responsiveRetention",
+          "rating": 1,
+          "evidence": [
+            "Measured live at 390x844: chassis renders as a 367x122 strip; 94 of 151 controls fall outside the chassis rect and are clipped by overflow:hidden, and only 26 are pointer-hittable.",
+            "118 controls sit below the deck bottom; median control height is 9.4px and white keys are 7.95px wide, so state and legends are not legible - the sealed evidence/stage1-narrow.png shows the same result, with only a handful of labels per section and PROGRAM text overlapping the piano plate.",
+            "There is no alternate narrow layout, scaling, scroll, or zoom affordance: the CSS uses one width: min(94vw, 96vh * aspect) rule for all viewports (artifact/src/styles.css), so narrow inspection is impossible.",
+            "artifact/evidence/stage1-visual-audit.md acknowledges only that narrow 'type is very small', which understates the loss of 94 clipped controls."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "basicPiano",
+      "criteria": [
+        {
+          "id": "unifiedInputs",
+          "rating": 3,
+          "evidence": [
+            "Pointer: real mouse press on C4 in the served build set aria-pressed=true and class is-down, and released cleanly on mouse up.",
+            "Multitouch: two CDP touch points on C4 and G4 gave ['true','true'], releasing the first gave ['false','true'], releasing both gave ['false','false'] - independent per-pointer ownership via the pointerId map in artifact/src/components/Keybed.tsx and artifact/src/state/instrument-context.tsx.",
+            "Computer keyboard: holding 'q' produced measured output RMS 0.081 and release returned to 0; keydown repeat is suppressed by a held-code set (instrument-context.tsx onKeyDown, event.repeat guard).",
+            "MIDI: MidiController parses 0x90/0x80 with velocity/127 and CC64 sustain, and maps SecurityError/NotAllowedError to 'denied', a missing navigator.requestMIDIAccess to 'unavailable', and port statechange to 'disconnected', each firing allNotesOff (artifact/src/input/midi.ts, instrument-context.tsx lines 196-214); exercised by src/piano-inputs.test.tsx including the wired end-to-end disconnect case.",
+            "All four paths converge on one noteOn/noteOff/setSustain lifecycle in the provider; blur, pagehide, and visibilitychange all call allNotesOff (verified live: a held three-note chord measured 0.134 and dropped to 0 after a window blur event).",
+            "Gap: the computer keymap double-assigns MIDI 60-64 to both rows (KeyQ and Comma both map to 60, KeyL and Digit2 both to 61, artifact/src/input/keymap.ts), so releasing either key kills a note still held by the other.",
+            "Gap: no MIDI all-notes-off (CC123) or pitch-bend handling."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "rating": 3,
+          "evidence": [
+            "Real Web Audio measurement through an analyser injected into the page's AudioContext: pressing C4 gave RMS 0.127 / peak 0.269 while held and exactly 0 after release.",
+            "Velocity is pointer-position based and moves in the expected direction: pressing near the key top gave RMS 0.027, near the key bottom 0.126 (velocityFromPointer in artifact/src/components/Keybed.tsx; peak = 0.045 + vel^1.45 * 0.22 with a velocity-tracking lowpass in artifact/src/audio/piano-engine.ts).",
+            "Sustain verified live: holding 'w', pressing Space, then releasing 'w' left the note sounding at RMS 0.033, and releasing Space returned output to 0. Sustain is driven identically from the UI pedal, Space, and MIDI CC64.",
+            "Repeat/overlap: a repeated note releases the prior voice over 0.02s before restarting, and heldNotes is keyed by note so counts stay correct (piano-engine.ts noteOn, src/piano-lifecycle.test.ts).",
+            "Polyphony 32 with deterministic stealing of the oldest voice (released voices first, ties broken by voice id) - src/piano-sustain-polyphony.test.ts asserts the cap holds at MAX_VOICES and at maxVoices=8.",
+            "Cleanup: 24 rapid notes returned to RMS 0 with no stuck voices and no console errors; dispose() clears voices and closes the context; the provider disposes the engine on unmount.",
+            "Realism gaps: the envelope holds a flat 28% sustain plateau instead of decaying like a piano, and every oscillator is hard-stopped at MAX_NOTE_SEC = 8s, so a long sustained note is cut off rather than decaying."
+          ]
+        },
+        {
+          "id": "honestBasicSource",
+          "rating": 3,
+          "evidence": [
+            "artifact/IMPLEMENTATION_DETAILS.json declares one generated source (additive-sine-partials, six inharmonic partials, velocity-sensitive lowpass, ADSR), sampleSources: [], and states explicitly 'This is synthesized audio, not a recording of a piano' - consistent with artifact/src/audio/piano-engine.ts. No recording or sample claim anywhere.",
+            "Status is truthful and observable: the status line carries data-audio-status and moved from 'loading' ('Initializing audio. MIDI idle.') to 'ready' ('Audio ready.') only after the first user gesture resumed the context.",
+            "Error path is real, not cosmetic: a throwing context factory sets status 'error' with 'Audio error - labeled fallback is playable (keys still track)', and note calls remain safe no-ops (piano-engine.ts init/noteOn guards, src/piano-status.test.tsx).",
+            "The voice is dependable and audibly piano-like in character (six partials plus brightness tracking) though thin, with no true string decay; the phase only requires one basic voice."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interaction",
+      "criteria": [
+        {
+          "id": "physicalInteraction",
+          "rating": 2,
+          "evidence": [
+            "Every control type is implemented as a real focusable widget with deliberate accessible state: knobs/faders/drawbars/wheel/stick use role=slider with aria-valuemin/max/now/valuetext, buttons use aria-pressed, keys use aria-pressed plus aria-label note names (artifact/src/components/widgets.tsx, Keybed.tsx).",
+            "Keyboard operation is complete: arrows step, PageUp/PageDown page, Home/End jump, Space/Enter toggle buttons (applyKeyDelta in widgets.tsx), and :focus-visible draws a 2px amber outline.",
+            "Pointer drag verified live: dragging fx1-rate up 40px moved aria-valuenow from 0.40 to 0.76; the knob cap rotates via --knob-angle and the pitch stick springs back to 0 on release and blur.",
+            "Major gap: 56 of 151 controls fail an elementFromPoint hit test at 1440x900 because they are rendered underneath the keybed, and 4 are clipped outside the chassis entirely - those inputs cannot be moved or pressed by pointer at all, and their focus ring is invisible when reached by Tab.",
+            "At 390x844 only 26 of 151 controls remain pointer-operable."
+          ]
+        },
+        {
+          "id": "decorativeBoundary",
+          "rating": 4,
+          "evidence": [
+            "Measured non-interference: focusing perf-master-level and pressing Home drove aria-valuenow to 0, after which a held C4 still measured RMS 0.117 - identical to the 0.126 baseline, so Master Level truly does not touch the audio path.",
+            "Clicking decorative panel buttons (organ-on) produced no audio at all (RMS 0 before and after) and only flipped aria-pressed and the LED.",
+            "The audio graph has no panel bindings whatsoever: setControl only writes presentation state (artifact/src/state/instrument-context.tsx lines 126-130) and PianoEngine reads no control values.",
+            "Claims match behavior: the visible status line reads 'Panel controls are decorative', the OLEDs display '- - - / decorative' and 'OSC idle / decorative' rather than faking a loaded program, and IMPLEMENTATION_DETAILS.json notes 'Panel controls including Master Level are decorative and do not change the audible signal'.",
+            "src/interaction.test.tsx walks every interactive control and asserts presentation-only movement."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "structureTests",
+          "rating": 3,
+          "evidence": [
+            "Clean normalized model: a single CONTROLS table with stable IDs, kinds, ranges, defaults and groups (artifact/src/model/controls.ts), variant/geometry constants in model/variant.ts, and a derived keybed in model/keys.ts; components render from that data rather than hand-written markup.",
+            "Clear boundaries: audio/ (engine, context factory, types), input/ (midi, keymap), state/ (provider), components/ (widgets, sections, keybed) with roughly 3.2k lines total; both the AudioContext factory and requestMIDIAccess are injectable via InstrumentDeps so tests run without devices.",
+            "tests/feature-matrix.json maps all 11 required Phase 1 IDs to 8 non-empty test files, and the audio tests assert real signal relationships (silence vs output, velocity direction, sustain tail length via lastAudibleIndex, voice-count return to baseline) rather than pure mocks.",
+            "Weakness: those signal tests run against a hand-written SoftwareAudioContext simulator (artifact/src/audio/software-context.ts), not a real or offline Web Audio backend - createAudioContext({offline:true}) always returns the simulator, so the assertions prove engine scheduling rather than browser audio behavior.",
+            "Weakness: src/regression-chassis.test.tsx contains assertions that cannot fail - line 19's overflow expression collapses to 'hidden' regardless, and line 28 is expect(x || true).toBe(true) - and the whole 'no overflow or clipped chassis at 1440x900 and 390x844' claim is asserted in jsdom, which has no layout; the real browser shows exactly the clipping the test claims to guard.",
+            "Similarly src/interaction.test.tsx asserts every control moves, but in a laid-out browser 56 of them cannot be reached by pointer, so the suite reports coverage the artifact does not have."
+          ]
+        },
+        {
+          "id": "runtime",
+          "rating": 3,
+          "evidence": [
+            "inputs/verification.json records all four required checks passing at seal: test 3076ms, typecheck 1404ms, lint 728ms, build 2032ms; package.json exposes non-interactive test/typecheck/lint/build with pnpm@11.7.0 declared and a committed pnpm-lock.yaml.",
+            "The served artifact/dist build loads and runs; the only console output across the whole interaction pass was the expected Chrome autoplay warning about resuming the AudioContext (also the only message in artifact/evidence/stage1-capture.json) - no page errors.",
+            "Loading and cleanup behave: status advances loading -> ready on first gesture, blur/pagehide/visibilitychange stop every voice, and the provider disposes the engine and MIDI controller on unmount.",
+            "Stability: 24 rapid presses across three octaves left no stuck notes (RMS returned to 0) and no errors; repeated knob drags and button toggles stayed responsive.",
+            "Minor: the engine constructs its AudioContext during mount rather than on first gesture, which is what triggers the autoplay warning; setPointerCapture is called unguarded in Keybed.down, so a pointerdown without a live pointer throws NotFoundError and aborts that note (observed with a synthetic PointerEvent).",
+            "Responsiveness at 390x844 is poor (see responsiveRetention), which is a runtime-quality drag as well."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "id": "deck-overflow-desktop",
+      "severity": "major",
+      "detail": "At 1440x900, 50 controls render below the deck and are covered by the keybed, 4 (piano-soft-release, piano-string-res, piano-sustped, piano-pstick) render below the chassis and are clipped away by overflow:hidden, and 56 of 151 controls fail an elementFromPoint hit test. Section content exceeds its box (piano scrollHeight 501 vs client 214, organ 395 vs 214, synth 329 vs 214)."
+    },
+    {
+      "id": "narrow-viewport-loss",
+      "severity": "major",
+      "detail": "At 390x844 the chassis collapses to a 367x122 strip; 94 of 151 controls are clipped outside the chassis and only 26 are hittable, with 9px controls and 8px white keys. There is no narrow-specific layout, scroll, or zoom affordance."
+    },
+    {
+      "id": "fx-synth-label-collisions",
+      "severity": "moderate",
+      "detail": "Layer FX groups overflow horizontally (scrollWidth 311 vs clientWidth 262) so the ROTARY column collides with REVERB at the chassis edge, and Synth group legends are truncated mid-word by the keybed boundary."
+    },
+    {
+      "id": "non-falsifiable-regression-assertions",
+      "severity": "moderate",
+      "detail": "src/regression-chassis.test.tsx lines 19 and 28 contain assertions that cannot fail (an expression that always evaluates to 'hidden', and expect(... || true).toBe(true)), and the no-clipping/no-overflow claim is asserted in jsdom where layout does not exist - the real build violates it."
+    },
+    {
+      "id": "simulated-audio-backend-in-tests",
+      "severity": "minor",
+      "detail": "createAudioContext({offline:true}) always returns the hand-written SoftwareAudioContext, so every rendered-signal assertion crosses a simulator rather than a real Web Audio boundary. Live browser measurement confirms the app itself uses real Web Audio."
+    },
+    {
+      "id": "duplicate-computer-key-mappings",
+      "severity": "minor",
+      "detail": "artifact/src/input/keymap.ts maps MIDI 60-64 twice (KeyQ and Comma both to 60, KeyL and Digit2 both to 61, etc.), so releasing one key silences a note the other key is still holding."
+    },
+    {
+      "id": "voice-hard-stop-and-flat-sustain",
+      "severity": "minor",
+      "detail": "The envelope holds a constant 28% sustain plateau rather than decaying like a piano, and MAX_NOTE_SEC hard-stops every oscillator 8 seconds after note-on, cutting off long sustained notes."
+    },
+    {
+      "id": "unguarded-set-pointer-capture",
+      "severity": "minor",
+      "detail": "Keybed.down calls setPointerCapture without a try/catch; a pointerdown whose pointerId is not active throws NotFoundError and aborts the note-on for that event."
+    }
+  ]
+}
