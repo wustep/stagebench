@@ -67,6 +67,23 @@ export function isLegacyRun(run) {
   return run.schemaVersion !== 4
 }
 
+
+// Human-friendly harness label for a run, derived from the driving agent's
+// provider string. The gallery shows this as the harness livery pill. A run
+// may also record an explicit --harness override (highest precedence).
+const HARNESS_BY_PROVIDER = {
+  anthropic: 'Claude Code',
+  claude: 'Claude Code',
+  opencode: 'opencode',
+  cursor: 'Cursor',
+  codex: 'Codex',
+  omp: 'Omp',
+  orca: 'Omp',
+}
+function deriveHarness(provider, explicit) {
+  if (explicit && String(explicit).trim()) return String(explicit).trim()
+  return HARNESS_BY_PROVIDER[String(provider ?? '').toLowerCase()] ?? null
+}
 export function createRun(root, metadata = {}, now = new Date()) {
   if (!metadata.model?.trim()) throw new Error('--model is required')
   const { value: protocol, digest } = loadProtocol(root)
@@ -99,6 +116,7 @@ export function createRun(root, metadata = {}, now = new Date()) {
     ...(metadata.notes ? { notes: String(metadata.notes) } : {}),
     agent: {
       provider: metadata.provider ?? 'unknown',
+      harness: deriveHarness(metadata.provider, metadata.harness),
       model: metadata.model.trim(),
       reasoning: metadata.reasoning ?? 'unspecified',
     },

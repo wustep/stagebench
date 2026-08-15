@@ -43,7 +43,7 @@ import { TELEMETRY_FLAGS } from '../src/telemetry-fields.mjs'
 import { parseSubagentTelemetryFiles, telemetryValuesFromParse } from './lib/telemetry-jsonl.mjs'
 
 const COMMANDS = {
-  new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--reasoning ...] [--notes ...]',
+  new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--harness ...] [--reasoning ...] [--notes ...]',
   promote: 'promote <run-id> --to <clean-id> [--replace] — move a completed run to a canonical id',
   rename: 'rename <run-id> --title "..." — update a run’s gallery title',
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
