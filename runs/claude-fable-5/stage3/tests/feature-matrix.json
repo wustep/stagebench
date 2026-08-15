@@ -1,0 +1,222 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 1,
+  "stage": 3,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "tests": ["src/model/keys.test.ts", "src/components/keybed.test.tsx", "src/components/surface.test.tsx"],
+      "notes": "73 keys E1–E7 (MIDI 28–100), 43 white / 30 black, standard octave pattern, uniform white grid and offset black keys, 0.61 black-key height fraction."
+    },
+    {
+      "id": "visual.section-layout",
+      "tests": ["src/components/surface.test.tsx", "src/model/hardware.test.ts"],
+      "notes": "Six ordered sections at 13/21/15/9/21/21% widths, 54/46 deck/keybed split via inline styles, continuous single-chassis DOM with rails and end cheeks."
+    },
+    {
+      "id": "visual.control-inventory",
+      "tests": ["src/model/hardware.test.ts", "src/components/surface.test.tsx"],
+      "notes": "Normalized hardware model with unique stable IDs; nine organ drawbars; primary OLEDs only in Program and Synth; truthful Phase 3 functional/unsupported split (everything functional except the spec-excluded aftertouch morph, preset libraries, menu-only utilities and Samples/Extern synth modes)."
+    },
+    {
+      "id": "interaction.keys",
+      "tests": ["src/components/keybed.test.tsx"],
+      "notes": "Pointer down/up/cancel/lost-capture, independent multi-touch pointer ownership, focused-key Enter operation with repeat suppression, window-blur release, visible depression via data-pressed/aria-pressed."
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "tests": ["src/components/decorative-controls.test.tsx"],
+      "notes": "Panel controls move by pointer and keyboard without creating an AudioContext before the first note and without touching playing voices; the truly unsupported controls (preset libraries, synth mode, aftertouch morph) stay visual-only; functional controls are marked data-decorative=false and their canonical writes are audited in src/state/bindings-audit.test.ts."
+    },
+    {
+      "id": "accessibility.controls",
+      "tests": ["src/components/accessibility.test.tsx"],
+      "notes": "Every control exposes the modeled accessible name, correct role, value min/max/now, toggle state (including truthful power-on state of functional controls), focusability, and end-to-end keyboard operation."
+    },
+    {
+      "id": "regression.chassis",
+      "tests": ["src/components/chassis.test.tsx"],
+      "notes": "No marketing hero or headings, no rendered reference photograph, keybed inside chassis, all 73 keys within bounds, six sections summing to 100%, 54+46 partition."
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "tests": ["src/audio/note-lifecycle.test.ts"],
+      "notes": "Lazy start, ready state with a real path to the destination, repeated/overlapping notes, release, all-notes-off, node/timer cleanup back to the standing graph (now sampler voices)."
+    },
+    {
+      "id": "piano.basic-inputs",
+      "tests": ["src/input/inputs.test.tsx", "src/input/midi.test.ts"],
+      "notes": "Pointer, independent multi-touch, mapped computer keys with repeat suppression and blur cleanup, space-bar sustain, MIDI note/velocity/CC64 (continuous)/CC66/CC67/hot-plug/disconnect/denied/unsupported."
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "tests": ["src/audio/sustain-polyphony.test.ts"],
+      "notes": "Sustain transitions, 24-voice-per-layer polyphony, deterministic oldest-first stealing, monotonic velocity-to-level response, cleanup of stolen and released voices."
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "tests": ["src/audio/status-cleanup.test.ts", "src/input/inputs.test.tsx"],
+      "notes": "Truthful idle/loading/ready/fallback/error status (including recorded-samples truth and reduced-path honesty), blur/MIDI-disconnect/unmount cleanup through internal paths; Panic is now a real panel control tested under piano.velocity-controls."
+    },
+    {
+      "id": "piano.instrument-library",
+      "tests": ["src/audio/library.test.ts", "src/audio/render-library.test.ts"],
+      "notes": "Three bundled recorded sample sets (Salamander Grand CC BY 3.0; GM Honky-tonk tack-upright and GM Electric Piano 1 from the MIT MIDI-JS Soundfonts collection), all files on disk and offline, 30/19/19 roots, 3 recorded velocity layers on the grand; rendered-audio tests prove the three are audibly distinct and the fallback is synthesized and labeled."
+    },
+    {
+      "id": "piano.layers",
+      "tests": ["src/audio/layers.test.ts", "src/audio/graph.test.ts"],
+      "notes": "Two layers with enable/focus/selection/level/octave, per-layer voice ownership into per-layer buses, octave shifts select different recorded zones, section on/off, cleanup across layers."
+    },
+    {
+      "id": "piano.velocity-controls",
+      "tests": ["src/audio/piano-controls.test.ts", "src/audio/render-piano-controls.test.ts"],
+      "notes": "KB Touch curves, timbre voicings (acoustic + electric Dyno), dynamic compression, unison, soft release, string resonance, master volume, pitch-stick bend and Panic all write canonical state, update panel LEDs/displays, and measurably change real offline-rendered audio."
+    },
+    {
+      "id": "piano.pedals",
+      "tests": ["src/audio/pedals.test.ts", "src/audio/render-piano-controls.test.ts", "src/input/midi.test.ts"],
+      "notes": "Full sustain, continuous CC64 half-pedaling (longer damping, truthful approximation), sostenuto capture semantics (CC66/KeyX), soft pedal level/timbre reduction (CC67/KeyZ), pedal-noise thump (declared generated), pedal reset on Panic."
+    },
+    {
+      "id": "piano.fallback",
+      "tests": ["src/audio/fallback.test.ts", "src/audio/render-library.test.ts"],
+      "notes": "Total and partial sample failure enter a labeled synthesized fallback that stays playable and never reports ready; unpopulated types report 'Piano not found' with flashing type LED and play nothing rather than pretending."
+    },
+    {
+      "id": "effects.graph",
+      "tests": ["src/audio/graph.test.ts"],
+      "notes": "One AudioContext, per-layer voice buses, documented unit order asserted through real node connectivity, single master gain → limiter → one destination, ramped (click-free) automation, full dispose teardown."
+    },
+    {
+      "id": "effects.routing",
+      "tests": ["src/audio/effects-routing.test.ts"],
+      "notes": "Focus follows layer, panel A/B/Group cycling with LEDs, Group copy-on-entry, Shift+On Global for Delay/Comp/Reverb, on/bypass crossfades, dry/wet, All FX Off, delay feedback loop (repeats only) with selectable filter, To Rotary routing post-reverb into the single rotary instance, rotary speed/stop inertia, tap tempo."
+    },
+    {
+      "id": "effects.processing",
+      "tests": ["src/audio/render-effects.test.ts"],
+      "notes": "Mod 1 (tremolo depth, auto-pan width), Mod 2 (phaser/chorus), Delay (repeats, feedback length, loop filtering), Amp/EQ (mid band ±15 dB, drive saturation, LP24), Compressor (dynamic range), Reverb (tail, dry/wet), Rotary (slow/fast rate, routing) all measurably change real offline-rendered audio; All FX Off matches dry; limiter bounds full-polyphony peaks."
+    },
+    {
+      "id": "programs.roundtrip",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "32 program slots + 8 Live slots; serializeProgram/applyProgram round-trip every supported parameter (piano, organ, synth, all 6 chains, routing, splits, zones, scenes, morphs, clock, transpose); the dirty indicator derives from a real diff against the stored slot."
+    },
+    {
+      "id": "programs.store-live",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "STORE destination step with audition + confirm; STORE AS naming flow (dial edits characters, ◂▸ cursor, Store As inserts a space); Live Mode auto-stores every edit into the active Live slot and persists via the injectable storage boundary (localStorage in the browser)."
+    },
+    {
+      "id": "programs.undo-cancel",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "Loading another slot discards unsaved edits with single-level Undo restoring the prior slot and its edits; Shift cancels a pending store and returns to the origin with the edit buffer intact."
+    },
+    {
+      "id": "programs.navigation",
+      "tests": ["src/state/programs.test.ts", "src/components/decorative-controls.test.tsx"],
+      "notes": "Eight program buttons × four pages address all 32 slots (page-clamped), the dial browses and auditions store destinations, Shift+dial / Prog View opens the numeric list view (loads only on close), Live Mode switches banks."
+    },
+    {
+      "id": "layers.routing",
+      "tests": ["src/audio/layers.test.ts", "src/audio/stage3-engine.test.ts", "src/audio/effects-routing.test.ts"],
+      "notes": "Seven layers (Piano A/B, Organ A/B, Synth A/B/C) with enable/focus/level/octave; piano layers own per-layer chains, organ layers pre-mix through strips into the shared organ chain, each synth layer has its own chain; FX focus/group/global editing targets the right chains."
+    },
+    {
+      "id": "splits.zones",
+      "tests": ["src/state/programs.test.ts", "src/audio/stage3-engine.test.ts"],
+      "notes": "Three split points at the 11 documented positions (up to 4 zones), latched split editing (dial = position, ◂▸ = point, Split = crossfade width), per-layer contiguous zone ranges, hard-split gating and Off/±6/±12 linear crossfade gains applied at note-on."
+    },
+    {
+      "id": "morph.assignments",
+      "tests": ["src/state/programs.test.ts", "src/audio/stage3-engine.test.ts", "src/audio/render-stage3.test.ts"],
+      "notes": "Wheel and Control Pedal capture from→to assignments (layer levels, drawbars, synth params, effect params, rotary speed); the engine renders the interpolated effective state (base values untouched); zeroing onto the base clears one assignment, Shift+source clears all; MIDI CC1/CC11 drive the live positions; morph audibility proven in rendered audio."
+    },
+    {
+      "id": "scenes.switching",
+      "tests": ["src/state/programs.test.ts"],
+      "notes": "Layer Scene I/II swap only the per-layer enable sets; sound parameters are shared between scenes and survive switching."
+    },
+    {
+      "id": "organ.engine",
+      "tests": ["src/audio/stage3-engine.test.ts", "src/audio/render-stage3.test.ts"],
+      "notes": "Two organ layers with independent models/drawbars/levels/octaves through per-layer strips (entry → scanner vibrato → level) into the shared organ chain; no release tail; the damper is ignored (canonical B3 behavior); voices clean up through the engine lifecycle."
+    },
+    {
+      "id": "organ.models-drawbars",
+      "tests": ["src/audio/render-stage3.test.ts", "src/audio/stage3-engine.test.ts"],
+      "notes": "B3/Vox/Farf/Pipe rendered audio is pairwise dissimilar with distinct oscillator recipes (sine tonewheels vs filtered registers vs buzzy saw/square vs pipe ranks); drawbars follow the 3dB-per-step law, retarget sounding voices and add measurable harmonic energy; single-triggered percussion, generated key click, vibrato/chorus modes."
+    },
+    {
+      "id": "organ.rotary",
+      "tests": ["src/audio/stage3-engine.test.ts", "src/audio/effects-routing.test.ts", "src/audio/render-effects.test.ts"],
+      "notes": "Organ-to-rotary routing feeds the single rotary instance; slow/fast/stop with inertial ramps (Phase 2 rendered proof); rotary speed is morphable as a continuous slow↔fast interpolation."
+    },
+    {
+      "id": "synth.sources",
+      "tests": ["src/audio/render-stage3.test.ts", "src/audio/stage3-engine.test.ts"],
+      "notes": "Three synth layers; Pure/Sync/Multi/Super/FM-H are distinct oscillator recipes with category-correct Osc Ctrl (pulse width fixed per wave, sync sweep, detune spread, FM index) and rendered-audio pairwise dissimilarity."
+    },
+    {
+      "id": "synth.filter-envelopes",
+      "tests": ["src/audio/render-stage3.test.ts"],
+      "notes": "LP12/LP24/HP/BP with tracking, resonance and drive; the filter frequency audibly darkens rendered audio, the dedicated filter envelope audibly brightens the attack, and the amp envelope attack audibly delays the bloom; sweeps are clamped to Nyquist headroom."
+    },
+    {
+      "id": "synth.voice-modes",
+      "tests": ["src/audio/stage3-engine.test.ts"],
+      "notes": "Poly allocates per key; Mono/Legato hold a single voice with Low/High/last priority and glide; unison adds real detuned oscillators; vibrato and LFO (five waveforms, three destinations) are wired per voice with live depth updates."
+    },
+    {
+      "id": "synth.arp-gate",
+      "tests": ["src/audio/stage3-engine.test.ts"],
+      "notes": "Pure deterministic arpSequence (Up/Down/Up-Down/seeded Random, ranges 1–4 in octaves); the engine schedules stepped voices ahead on the audio clock with KB-sync phase reset, hold latching and clock-synced rate; gate mode chops the layer strip."
+    },
+    {
+      "id": "system.integration",
+      "tests": ["src/audio/stage3-engine.test.ts", "src/audio/graph.test.ts", "src/state/programs.test.ts"],
+      "notes": "Piano, organ and synth voices share ONE AudioContext, the 6-chain effect graph, one master gain → limiter → destination; programs round-trip all engines; splits/scenes/morphs/clock/transpose apply across engines; Panic silences held voices and latched arp state."
+    },
+    {
+      "id": "hardware.bindings",
+      "tests": ["src/state/bindings-audit.test.ts", "src/model/hardware.test.ts"],
+      "notes": "A systematic audit operates every functional control through the panel front door and asserts a canonical state or truthful display change; the unsupported set is exactly the spec-excluded features and is asserted as such."
+    },
+    {
+      "id": "regression.phase2",
+      "tests": [
+        "src/audio/library.test.ts",
+        "src/audio/render-library.test.ts",
+        "src/audio/layers.test.ts",
+        "src/audio/piano-controls.test.ts",
+        "src/audio/render-piano-controls.test.ts",
+        "src/audio/pedals.test.ts",
+        "src/audio/fallback.test.ts",
+        "src/audio/graph.test.ts",
+        "src/audio/effects-routing.test.ts",
+        "src/audio/render-effects.test.ts"
+      ],
+      "notes": "Every Phase 2 test file is retained and green; node-count assertions evolved with the 6-chain architecture (documented in each file) and piano-only assertions now also verify the other chains stay neutral."
+    },
+    {
+      "id": "regression.phase1",
+      "tests": [
+        "src/model/keys.test.ts",
+        "src/components/keybed.test.tsx",
+        "src/components/surface.test.tsx",
+        "src/model/hardware.test.ts",
+        "src/components/decorative-controls.test.tsx",
+        "src/components/accessibility.test.tsx",
+        "src/components/chassis.test.tsx",
+        "src/audio/note-lifecycle.test.ts",
+        "src/input/inputs.test.tsx",
+        "src/input/midi.test.ts",
+        "src/audio/sustain-polyphony.test.ts",
+        "src/audio/status-cleanup.test.ts",
+        "src/App.test.tsx"
+      ],
+      "notes": "Every Phase 1 test file is retained and green; assertions evolved only where later phases make controls truthfully functional (documented in each file), never by deleting a behavior check."
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test, { after } from 'node:test'
 import { blindRunCode, hashTree, readJson, workspaceRoot, writeJson } from '../bench/lib/shared.mjs'
-import { createRun, loadRun, markSealed, promoteRun, recordTelemetry, registerEvaluation, registryEntry, reindexRegistry, statusSummary } from '../bench/lib/run/store.mjs'
+import { createRun, loadRun, markSealed, promoteRun, recordTelemetry, registerEvaluation, registryEntry, reindexRegistry, retargetRun, statusSummary } from '../bench/lib/run/store.mjs'
 import { exportRun, __internals as exportInternals } from '../bench/lib/run/export.mjs'
 import { importWorkspace, startPhase } from '../bench/lib/run/workspace.mjs'
 import { REQUIRED_FEATURES, runChecks, verifyPhase } from '../bench/lib/run/verify.mjs'
@@ -400,6 +400,33 @@ test('promote replaces an obsolete run and preserves sealed stage contents', asy
 
     await reindexRegistry(root)
     assert.deepEqual(readJson(path.join(root, 'src', 'data', 'runs.json')).map((run) => run.id), [obsolete.id])
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('retarget appends later phases as queued without touching sealed stages', () => {
+  const root = fixtureRoot()
+  try {
+    const created = createRun(root, { model: 'retarget-fixture', target: '1' }, new Date('2026-01-01T00:00:00.000Z'))
+    // Simulate a completed target-1 run without running the whole pipeline.
+    const run = loadRun(root, created.id)
+    run.status = 'complete'
+    run.stages[0].status = 'complete'
+    run.stages[0].artifactDigest = 'a'.repeat(64)
+    writeJson(path.join(root, 'runs', created.id, 'run.json'), run)
+
+    assert.throws(() => retargetRun(root, created.id, 1), /must extend/)
+
+    const result = retargetRun(root, created.id, 3)
+    assert.deepEqual(result.addedPhases, [2, 3])
+    const extended = loadRun(root, created.id)
+    assert.equal(extended.targetPhase, 3)
+    assert.deepEqual(extended.selectedPhases, [1, 2, 3])
+    assert.equal(extended.status, 'in-progress')
+    assert.deepEqual(extended.stages.map((stage) => [stage.number, stage.status]), [[1, 'complete'], [2, 'queued'], [3, 'queued']])
+    assert.equal(extended.stages[0].artifactDigest, 'a'.repeat(64), 'the sealed stage record is untouched')
+    assert.match(statusSummary(extended).next, /start/)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

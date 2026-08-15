@@ -24,6 +24,7 @@ import {
   reindexRegistry,
   promoteRun,
   renameRun,
+  retargetRun,
   stageDirFor,
   stageState,
   statusSummary,
@@ -45,6 +46,7 @@ import { parseSubagentTelemetryFiles, telemetryValuesFromParse } from './lib/tel
 const COMMANDS = {
   new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--reasoning ...] [--notes ...]',
   promote: 'promote <run-id> --to <clean-id> [--replace] — move a completed run to a canonical id',
+  retarget: 'retarget <run-id> --to <2|3> — extend a run to a later target phase; sealed phases are untouched',
   rename: 'rename <run-id> --title "..." — update a run’s gallery title',
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
   exec: 'exec <run-id> --command "..." — run a command in the workspace inside Docker [--network none|registry] [--image ...]',
@@ -315,6 +317,10 @@ try {
       result = { id: result.id, targetPhase: result.targetPhase, selectedPhases: result.selectedPhases, next: `pnpm bench start ${result.id}` }
     } else if (command === 'promote') {
       result = promoteRun(root, id, options.to, { replace: options.replace === 'true' })
+      await reindexRegistry(root)
+    } else if (command === 'retarget') {
+      preflight(root, loadRun(root, id).variant)
+      result = retargetRun(root, id, options.to)
       await reindexRegistry(root)
     } else if (command === 'rename') {
       result = renameRun(root, id, options.title)

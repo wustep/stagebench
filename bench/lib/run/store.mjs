@@ -114,6 +114,27 @@ export function createRun(root, metadata = {}, now = new Date()) {
   return { id, targetPhase, selectedPhases: selected, runDir: path.join(locations.runs, id), run }
 }
 
+// Extend a run to a later target phase. Sealed stages, their digests, and
+// their evaluations are untouched; the newly selected phases are appended as
+// queued and the run returns to in-progress. The recorded protocol keeps its
+// creation provenance — the added phases run under the current materials.
+export function retargetRun(root, id, target) {
+  const run = loadRun(root, id)
+  if (isLegacyRun(run)) throw new Error(`${id} is a legacy run; create a new run instead`)
+  const { value: protocol } = loadProtocol(root)
+  const targetPhase = Number(target)
+  const selected = selectedPhases(protocol, targetPhase)
+  if (!(targetPhase > Number(run.targetPhase))) throw new Error(`--to must extend the run beyond its current target (${run.targetPhase})`)
+  const existing = new Set(run.stages.map((entry) => entry.number))
+  const added = selected.filter((number) => !existing.has(number))
+  run.targetPhase = targetPhase
+  run.selectedPhases = selected
+  run.stages.push(...added.map((number) => ({ number, status: 'queued', startedAt: null, completedAt: null })))
+  if (run.status === 'complete') run.status = 'in-progress'
+  saveRun(root, run)
+  return { id, targetPhase, addedPhases: added, next: `pnpm bench start ${id}` }
+}
+
 // Update the human-facing run label without changing its model identity,
 // artifacts, evaluations, or telemetry.
 export function renameRun(root, id, title) {
