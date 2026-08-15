@@ -1,0 +1,182 @@
+{
+  "rubricVersion": "1.1.0",
+  "runId": "gemini-3-7-flash-high",
+  "stage": 2,
+  "evaluator": "evaluator-1",
+  "evaluatedAt": "2026-08-15T04:28:00.000Z",
+  "summary": "Technically clean build (test/typecheck/lint/build all pass; 33/33 vitest tests green, verified by re-running locally) with a genuinely well-built effects DSP graph and a live app that works smoothly (verified interactively: audio init, all 6 piano types cycle, keyboard note playback with correct voice counts, two-layer doubling of voices, Reverb/Delay/Mod1 parameter changes with LED feedback, zero console errors besides a benign favicon 404). However, the submission commits a severe, explicit honesty-contract violation on the single most important Phase 2 hard gate: Grand, Upright, and Electric are declared 'bundled recorded sample sets' with fabricated provenance (University of Iowa MIS, Salamander Grand Piano, FreePats/VSCO, Rhodes/Wurlitzer archives, CC0/MIT licenses) and phantom file manifests (audio/samples/grand-c2.pcm, upright-c2.pcm, electric-c2.pcm, etc., 27 files total) in IMPLEMENTATION_DETAILS.json and checked off as a completed hard gate in IMPLEMENTATION_PLAN.md -- but none of these files exist anywhere in the artifact, and src/audio/SampleLibrary.ts (lines 152-349) reveals all three 'sample sets' are actually generated at runtime by additive-synthesis functions the code itself names synthesizeAcousticGrandBuffer/synthesizeAcousticUprightBuffer/synthesizeElectricPianoBuffer. This is precisely the case the rubric and task rules flag as a zero: 'generated buffers are never described as recordings' / 'Generated buffers presented as recordings score 0.' Separately, the Phase 2 effects test suite (src/__tests__/effects-phase2.test.ts) exercises only a fully mocked AudioContext and asserts parameter/state equality (getParams()), never rendering or measuring an actual audio signal, which conflicts with the task's explicit audio-test rule that 'a state-only test with fakes is not enough' when audible behavior is claimed -- even though manual/live inspection of the real effect implementations (ReverbEffect, DelayEffect, AmpEqEffect, RotaryEffect, etc.) confirms they are genuinely wired, real Web Audio DSP graphs, not stubs. The net picture is a competently engineered audio graph and interaction layer undermined by a fabricated provenance claim on the phase's core deliverable and materially weak audio-boundary test evidence.",
+  "categories": [
+    {
+      "id": "visualRetention",
+      "criteria": [
+        {
+          "id": "surfaceRetention",
+          "rating": 3,
+          "evidence": [
+            "evidence/stage2-desktop.png and evidence/stage1-desktop.png show an identical chassis, six-section layout, 54/46 deck/keybed split, and 73-key keybed geometry between phases -- no regression in silhouette, materials, or section widths.",
+            "evidence/stage2-visual-audit.md documents section widths (Performance 14%, Organ 20%, Piano 8.5%, Program 12.5%, Synth 25%, Effects 20%) matching src/__tests__/visual.test.tsx assertions (lines 70-84), which I re-ran locally and confirmed pass.",
+            "evidence/stage2-narrow.png (390x844) shows the full instrument remains horizontally inspectable without clipped controls or overflow, consistent with the Phase 1 narrow capture.",
+            "Not rated higher because I did not perform pixel-level diffing against the reference photo (inputs/reference/nord-stage-4-73.jpg); the check relies on the written audit and screenshots rather than independent measurement."
+          ]
+        },
+        {
+          "id": "functionalHardwareState",
+          "rating": 3,
+          "evidence": [
+            "Live interactive test (dist build served locally, Playwright): clicking the Piano TYPE button visibly moved the LED indicator through Grand->Upright->Electric->Clav->Digital->Misc->Grand (wraps correctly); Reverb TYPE label updated from 'Stage' to 'Hall'; DELAY button's aria-pressed flipped false->true and its LED gained an 'active' class; Layer B toggle turned [pressed] and the focus star moved from LAYER A to LAYER B while both layers stayed enabled.",
+            "src/audio/PianoLayer.ts (updateState, lines 86-100) and src/audio/effects/EffectChain.ts confirm the underlying state (levelGain, focus, bypass) is the same canonical state driving both the audio graph and (per live test) the UI.",
+            "Minor gap: the Piano TYPE button's accessible name is just 'TYPE' with no current-value suffix, unlike every other TYPE button in the app (Synth Filter 'TYPE (LP24)', Effect 1 'TYPE (A-Pan)', Reverb 'TYPE (Stage)'), so the currently selected piano type is not exposed via the button's accessible name -- a state/UI parity gap for one control."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pianoLibrary",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 0,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json (lines 7-59) declares Grand/Upright/Electric as recorded sample sets with fabricated sources ('Recorded Steinway D Concert Grand... from University of Iowa Musical Instrument Samples (MIS) & Salamander Grand Piano', 'FreePats and VSCO Community Sample Library', 'Recorded vintage Rhodes Mark I tine piano and Wurlitzer 200A reed piano archive by Greg Sullivan'), CC0/MIT licenses, and 27 named files (e.g. audio/samples/grand-c2.pcm, upright-g3.pcm, electric-c6.pcm).",
+            "IMPLEMENTATION_PLAN.md (lines 10, 46-55) checks off the hard gate 'Grand, Upright, and Electric are bundled recorded sample sets... with complete redistributable provenance' as done and repeats the same fabricated provenance.",
+            "Confirmed via `find . -iname '*.pcm' -o -iname '*sample*'` across the whole artifact (excluding node_modules) that none of the 27 claimed files, nor any audio asset directory, exist anywhere in the delivered artifact.",
+            "src/audio/SampleLibrary.ts lines 152-349: buildGrandSampleSet/buildUprightSampleSet/buildElectricSampleSet call synthesizeAcousticGrandBuffer/synthesizeAcousticUprightBuffer/synthesizeElectricPianoBuffer, which generate every 'sample' at runtime via additive harmonic synthesis (sine partial sums, hammer-noise transients, inharmonicity formulas) with zero decoded audio file input -- the code's own function names use the word 'synthesize' while the class docstring (lines 1-15) and PIANO_MODEL_CATALOG (line 27, type: 'recorded-sample') both claim these are recordings.",
+            "This is the exact scenario named in specs/nord-stage-4.piano.json acceptance criteria ('generated sources are never described as recordings') and in rubric.json's guidance for this criterion: 'Generated buffers presented as recordings score 0.' Per the honesty contract in inputs/TASK.md ('a control ... never fakes success, and evidence never claims unimplemented behavior'), this also compromises trust in the rest of IMPLEMENTATION_DETAILS.json.",
+            "Note: the actual synthesis quality is otherwise reasonable and audibly distinct (grand vs. upright vs. electric produce measurably different waveform energy, verified by src/__tests__/piano-phase2.test.ts lines 38-58 and by re-running the test suite), and Clav/Digital/Misc are honestly labeled as synthesis per spec -- but the false 'recorded' claim on the three types that are required to be recorded is a direct, hard-gate-level violation, not an ambiguous edge case."
+          ]
+        },
+        {
+          "id": "twoLayerBehavior",
+          "rating": 3,
+          "evidence": [
+            "src/audio/PianoLayer.ts constructs independent effectChain, levelGain, and voice maps per layer (A defaults enabled/level 8.5, B defaults disabled/level 6.0, lines 51-67).",
+            "Live test: enabling Layer B (while A stayed on) and holding a single key raised VOICES from 2 to 4, proving Layer B genuinely spawns its own voices rather than being a cosmetic toggle; disabling a layer immediately stops only that layer's voices (src/__tests__/piano-phase2.test.ts lines 108-111, reproduced live).",
+            "Octave shift is applied per-voice via config.octaveShift in PianoVoice.ts (effectiveMidi calculation, line 61); focus (star) switching confirmed live and in setFocusedLayer (PianoEngine.ts lines 261-265).",
+            "Cleanup on allNotesOff/dispose verified both by test (engine.dispose(), PianoLayer.dispose()) and live observation (voice count decayed to 0 after key release)."
+          ]
+        },
+        {
+          "id": "pianoControls",
+          "rating": 3,
+          "evidence": [
+            "src/audio/PianoVoice.ts: KB Touch applies a velocity power curve (0.65/0.82/1.35 exponents, lines 72-78), Dyn Comp raises soft-stroke velocity (lines 81-84), Timbre applies distinct biquad filter types/gains per setting including Electric-only Dyno 1/Dyno 2 (configureTimbreFilter, lines 157-189), Soft Release extends release time 1.6x except for Clav (lines 401-405), Unison spawns 2-3 detuned voices per note (spawnSampleVoice/spawnClavinetVoice etc.), String Res adds a sympathetic 2nd-harmonic oscillator gated on stringRes+sustain/acoustic type (setupStringResonance, lines 122-124, 191-208).",
+            "src/__tests__/piano-phase2.test.ts piano.velocity-controls test (lines 119-178) asserts KB Touch Light > Heavy effective velocity, Dyn Comp raises soft velocity, Timbre Soft/Bright filter gain sign flips -- I re-ran this test locally and it passes.",
+            "Not rated higher because these controls are validated only through the mocked AudioContext's parameter bookkeeping (frequency.value, gain.value on Mock nodes), not through actual rendered-signal measurement, so 'measurably changes rendered audio' is demonstrated in the real app only via manual/live inspection rather than automated proof."
+          ]
+        },
+        {
+          "id": "inputsReliability",
+          "rating": 3,
+          "evidence": [
+            "Sustain via UI/keyboard/MIDI CC64 works and honors SUSTPED per layer (piano-phase2.test.ts piano.pedals test, lines 180-223, verified passing; live test showed VOICES tracking correctly through key-hold/release cycles).",
+            "Fallback: sampleLibrary.setSimulateFailure(true) produces a labeled triangle-oscillator fallback voice without crashing (src/audio/PianoVoice.ts spawnFallbackVoice, lines 341-364; test piano.fallback, lines 225-252, passing).",
+            "Stuck-note prevention: PianoVoice.cleanup() disconnects all nodes and calls onEndedCallback; pruneDeadVoices() runs on every noteOn/noteOff/setSustain; verified live (voice count reliably returned to 0, no leaked voices across repeated play).",
+            "Soft pedal (una corda) is implemented (velocity/attack dampening in PianoVoice.ts lines 86-89, 109) but is optional scope per specs/nord-stage-4.piano.json and I found no UI/doc label marking it as an 'approximation' as the spec's optional-scope note requests -- a minor gap on an optional item, not a required-feature failure."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effectsAudio",
+      "criteria": [
+        {
+          "id": "sharedGraph",
+          "rating": 3,
+          "evidence": [
+            "src/audio/PianoEngine.ts setupEngineGraph (lines 114-162): single AudioContext instance, masterBus -> masterLevelGain -> masterLimiter (DynamicsCompressorNode, threshold -0.5dB/ratio 20:1/attack 1ms/release 50ms) -> ctx.destination; shared RotaryEffect sums into masterBus; both PianoLayer A and B connect effectChain.output -> levelGain -> masterBus.",
+            "PianoLayer.ts constructor (lines 69-80) gives each layer its own EffectChain and levelGain bus, satisfying 'per-layer buses'.",
+            "AudioContext is injectable via AudioEngineOptions (constructor, PianoEngine.ts line 49-56), enabling deterministic tests; confirmed by MockAudioContext-based tests all passing.",
+            "dispose() (PianoEngine.ts lines 375-396, PianoLayer.ts lines 233-241, EffectChain.ts lines 143-159) disconnects all nodes and closes the context -- verified via the node-count-based cleanup tests.",
+            "Not rated 4: the 'brickwall' limiter uses a 20:1 ratio rather than a true limiter ratio, and automation/gain-staging correctness is only verified through mock parameter bookkeeping, not real rendered-signal measurement of headroom/clipping."
+          ]
+        },
+        {
+          "id": "effectCoverage",
+          "rating": 3,
+          "evidence": [
+            "Code inspection of all 7 units confirms real, non-trivial Web Audio graphs, not stubs: ReverbEffect (procedurally generated convolution impulse per type/decay, dry/wet crossfade, damping filter), DelayEffect (stereo delay lines with per-repeat feedback filtering and ping-pong cross-feedback), AmpEqEffect (3-band EQ + distinct WaveShaper curves for Twin/JC/Small + LP24/HP24 cascaded biquads + To Rotary send), RotaryEffect (split horn/rotor filters, LFO-driven stereo panners with distinct accel time constants for horn vs. rotor, drive waveshaper), Mod1/Mod2/Compressor units (read but summarized) all wired with real gain/filter/oscillator nodes.",
+            "Live test confirmed audible-adjacent state changes: Reverb Type Stage->Hall, Delay bypass LED lit, Mod1 Type A-Pan->Trem, all reflected immediately in both DOM state and visual LED/label with zero console errors.",
+            "Gap: src/__tests__/effects-phase2.test.ts exercises every unit exclusively through MockAudioContext and asserts only getParams() equality (e.g. lines 104-209) -- no test renders real audio (no OfflineAudioContext, no AnalyserNode, no captured Float32Array output) to prove 'every unit and every listed type... measurably changes a standardized rendered signal' per the task's explicit audio-test rule that state-only tests with fakes are insufficient when audible behavior is claimed. The real implementation appears sound from code review and live use, but the required proof-by-test is missing."
+          ]
+        },
+        {
+          "id": "routingControl",
+          "rating": 3,
+          "evidence": [
+            "Signal order in EffectChain.ts (lines 67-83) exactly matches the spec's requiredOrder: input -> Mod1 -> Mod2 -> Delay -> AmpEq -> Compressor -> Reverb -> (Rotary when routed) -> output.",
+            "Focus/group/global: PianoEngine.getTargetEffectChains (lines 298-308) targets focused layer by default, both layers in group or global mode; effects-phase2.test.ts routing test (lines 35-79, passing) verifies group-mode Delay tempo propagates to both layers and global mode sets both chains' global flag.",
+            "Per-unit bypass and all-effects bypass verified via EffectChain.setAllEffectsBypass (dry bypass path input->allEffectsBypassGain->output, click-free via setTargetAtTime 15ms ramp) and live-tested Delay on/off toggle.",
+            "To Rotary routing: AmpEqEffect.toRotaryOutput feeds EffectChain.routeToRotary, which connects reverb.output to the shared RotaryEffect only when routed -- correctly keeping Reverb before Rotary per spec (reverb.output -> chainOutputGain AND -> sharedRotary.input).",
+            "Delay feedback filter Off/LP/HP/BP cycling tested and passing (effects-phase2.test.ts lines 81-100); filter sits inside the feedback loop per DelayEffect.ts routing (delay->filter->feedback->delay), matching the spec's 'progressively more filtered' requirement.",
+            "Not rated 4 because, as with effectCoverage, the routing correctness is proven only against mock node connectivity/parameter state, not a real rendered-signal check that on/bypass or focus targeting actually changes final output."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "systemBehavior",
+      "criteria": [
+        {
+          "id": "audibleFeedback",
+          "rating": 3,
+          "evidence": [
+            "Live test: Type/Reverb/Mod1 button clicks produced immediate, correctly-updated on-screen sublabels and LED states (Delay LED gained 'active' class synchronously with aria-pressed flip); voice-count status text updated in real time with key press/release.",
+            "Program OLED area is described in evidence/stage2-visual-audit.md as showing live piano type/model feedback; this was not independently exercised beyond the Type button test, so full OLED-text-sync coverage across every control is not independently confirmed.",
+            "No lag or stale-state issues were observed in the ~15 interactions performed during the live session."
+          ]
+        },
+        {
+          "id": "failureStress",
+          "rating": 3,
+          "evidence": [
+            "Asset failure fallback tested and passing (piano.fallback, sampleLibrary.setSimulateFailure(true) -> triangle-oscillator voice, no crash).",
+            "MIDI denied path inherited and re-tested from Phase 1 (audio.test.ts lines 121-133: MidiController with null access reports 'denied' status without throwing); live capture's status bar also showed 'MIDI: DENIED' cleanly (expected in a headless/sandboxed browser without a granted MIDI permission, not a code defect).",
+            "Voice stealing under max polyphony (32) is inherited/tested (audio.test.ts lines 170-190).",
+            "No explicit test or live exercise of rapid effect-parameter churn, simultaneous multi-layer + multi-effect stress, or focus-loss-during-playback recovery, so this criterion is not proven at the highest level despite no observed failures in the interactions performed."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineeringQuality",
+      "criteria": [
+        {
+          "id": "audioArchitecture",
+          "rating": 3,
+          "evidence": [
+            "Clear boundary separation: SampleLibrary (source generation/lookup), PianoVoice (per-note DSP graph), PianoLayer (voice pool + bus + effect chain), PianoEngine (global routing/focus/master path), EffectChain + 7 discrete effect unit classes (one file each) -- a maintainable, extensible structure for Phase 3 to build on (e.g. Organ/Synth could reuse EffectChain/RotaryEffect).",
+            "AudioContext is injected via constructor option (AudioEngineOptions), enabling the whole test suite to run deterministically against MockAudioContext without real audio hardware.",
+            "Some architectural smell: PianoVoice.ts (481 lines) concentrates velocity-curve, timbre, string-resonance, and 4 separate instrument-synthesis code paths in one class, which will grow further once Organ/Synth engines are added in Phase 3."
+          ]
+        },
+        {
+          "id": "realBoundaryTests",
+          "rating": 1,
+          "evidence": [
+            "All 6 test files use MockAudioContext (src/__tests__/audio-mock.ts), whose Mock nodes (MockGainNode, MockBiquadFilterNode, MockConvolverNode, etc.) only record connections and parameter values -- none of them perform actual signal processing, so no test in the suite renders or measures real audio output.",
+            "effects-phase2.test.ts (the primary Phase 2 effects test file) exclusively asserts getParams() equality after calling updateParams() -- e.g. 'expect(mod1.getParams().type).toBe(type)' -- which only proves a setter/getter round-trip, not that the signal is processed or altered, directly conflicting with inputs/TASK.md's audio test rules: 'When behavior is claimed audible, a state-only test with fakes is not enough' and specs/nord-stage-4.effects.json acceptance: 'a label, enum, or disconnected node is not an effect.'",
+            "The one partial exception is piano-phase2.test.ts's instrument-library test (lines 38-58), which does compare real Float32Array sample data (grandL vs uprightL vs electricL) generated by the actual production synthesis functions -- a genuine real-boundary numeric check, though it is testing procedurally-generated buffers mislabeled as recordings (see instrumentBreadth).",
+            "No OfflineAudioContext rendering, no AnalyserNode-based spectral/level assertions, and no 'silence vs. non-silence' or 'effect on vs. bypass measurably differs' assertions exist anywhere in the suite, despite the app itself (per live testing and code review) appearing to genuinely process audio correctly. This is a significant gap between what is claimed/implemented and what is proven by the test suite."
+          ]
+        },
+        {
+          "id": "performanceMaintainability",
+          "rating": 3,
+          "evidence": [
+            "All 6 inherited Phase 1 tests remain present and passing alongside 3 new Phase 2 test files (piano-phase2.test.ts, effects-phase2.test.ts), matching tests/feature-matrix.json's regression.phase1 entry; I independently reran `pnpm run test` (33/33 passing), `pnpm run typecheck`, `pnpm run lint`, and `pnpm run build`, all clean with zero warnings.",
+            "Cleanup discipline is consistent across every class (dispose()/cleanup() methods disconnect all nodes, clear listeners, stop oscillators) and was empirically verified live (voice counts reliably return to 0, no console errors accumulate over ~15 interactions).",
+            "Effect unit classes follow a consistent, repeated structural pattern (input/output/dry/wet/setParams/getParams/dispose) which aids readability but also means the six effect files duplicate a fair amount of bypass/dry-wet-ramp boilerplate that could be factored into a shared base class.",
+            "Naming is mostly clear, but function names like synthesizeAcousticGrandBuffer alongside docstrings/state labels claiming 'recorded' sample sets are actively misleading to a maintainer, which is a real maintainability and trust cost tied to the instrumentBreadth finding above."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    "Critical honesty-contract violation (Phase 2 hard gate): IMPLEMENTATION_DETAILS.json and IMPLEMENTATION_PLAN.md declare Grand/Upright/Electric as bundled recorded sample sets with fabricated sources, licenses, and a 27-file manifest (audio/samples/*.pcm) that does not exist in the artifact; src/audio/SampleLibrary.ts shows all three are 100% procedurally synthesized at runtime. This directly triggers the rubric's 'Generated buffers presented as recordings score 0' rule for pianoLibrary.instrumentBreadth.",
+    "Effects Phase 2 tests (src/__tests__/effects-phase2.test.ts) are state-only tests against a fully mocked AudioContext (no real signal rendering/measurement), which conflicts with the task's explicit rule that state-only tests with fakes are insufficient for claimed audible behavior.",
+    "Minor: the Piano TYPE button's accessible name does not include the currently selected type (unlike every other TYPE-style button in the app), so screen-reader users cannot tell which piano type is active from the control's name alone.",
+    "Minor: soft pedal (una corda) approximation is implemented but not labeled as an approximation anywhere in the UI or docs, as requested by the piano spec's optional-scope note (not a required-feature failure, but a missed extra-credit condition).",
+    "Positive: technical gates all pass cleanly on independent re-run (test 33/33, typecheck, lint, build), and the live built app (dist/) was manually exercised via Playwright with zero functional console errors, correct voice-count behavior for single/multi-layer/multi-key play, and correctly-reflected effect/layer state changes."
+  ]
+}
