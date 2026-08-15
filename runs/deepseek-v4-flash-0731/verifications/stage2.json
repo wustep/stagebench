@@ -1,0 +1,78 @@
+{
+  "version": 2,
+  "runId": "deepseek-v4-flash-0731",
+  "stage": 2,
+  "verifiedAt": "2026-08-14T19:48:12.434Z",
+  "passed": true,
+  "artifactDigest": "810a2d4650ed8729a5f19c91b650d7d3f7354c82edea01045e49e90b38803172",
+  "artifactFiles": 4407,
+  "phaseContract": {
+    "specs": [
+      "specs/nord-stage-4.visual.json",
+      "specs/nord-stage-4.piano.json",
+      "specs/nord-stage-4.effects.json"
+    ],
+    "hardGates": 5
+  },
+  "featureMatrix": {
+    "coveredFeatures": 20,
+    "requiredFeatures": 20
+  },
+  "implementationDetails": {
+    "audioStrategy": "One Web Audio AudioContext realizes the browser signal path: per-layer bus GainNodes (Piano A, Piano B) drain a single deterministic pure-DSP StageEngine, then feed an ordered per-layer effect chain (Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb, shared Rotary when routed) and a shared master GainNode (Master Level) + DynamicsCompressor limiter into one destination. The effects are real DSP operating on PCM, so tests render stereo blocks and measure that every unit/type/bypass/routing changes the audio; the browser context is injectable so graph tests verify one context, one destination, and full cleanup without a device. Grand, Upright, and Electric are bundled, offline, redistributable multi-root/multi-velocity sample libraries generated deterministically (many root notes across E1..E7 plus three velocity layers, so uniform pitch-shifting of a single note is not audible) and rendered as committed WAV assets under public/samples; Clav, Digital, and Misc are honest live synthesis (per the piano spec sourceRules). Generated sample tables are truthfully declared as generated, never as field recordings.",
+    "generatedSources": 8,
+    "sampleSources": 3
+  },
+  "checks": [
+    {
+      "id": "test",
+      "command": "pnpm run test",
+      "passed": true,
+      "durationMs": 3614,
+      "detail": "Passed"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm run typecheck",
+      "passed": true,
+      "durationMs": 1333,
+      "detail": "Passed"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm run lint",
+      "passed": true,
+      "durationMs": 750,
+      "detail": "Passed"
+    },
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "passed": true,
+      "durationMs": 1866,
+      "detail": "Passed"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence/stage2-desktop.png",
+      "passed": true,
+      "detail": "evidence/stage2-desktop.png · 1440x900"
+    },
+    {
+      "id": "evidence/stage2-narrow.png",
+      "passed": true,
+      "detail": "evidence/stage2-narrow.png · 390x844"
+    },
+    {
+      "id": "evidence/stage2-visual-audit.md",
+      "passed": true,
+      "detail": "evidence/stage2-visual-audit.md"
+    },
+    {
+      "id": "evidence/stage2-capture.json",
+      "passed": true,
+      "detail": "evidence/stage2-capture.json"
+    }
+  ]
+}

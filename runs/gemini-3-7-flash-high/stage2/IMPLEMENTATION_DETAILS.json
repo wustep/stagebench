@@ -1,0 +1,112 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "Hybrid dual-layer real-time sound engine combining bundled offline recorded multi-sample AudioBuffers for acoustic/electric instruments with physical harmonic and FM synthesis for clavinet, digital, and mallet instruments, running through a 6-unit per-layer DSP effects graph and master brickwall limiter on a single AudioContext.",
+    "sampleSources": [
+      {
+        "name": "Concert Grand Piano Multi-Sample Set",
+        "source": "Recorded Steinway D Concert Grand acoustic piano recordings from University of Iowa Musical Instrument Samples (MIS) & Salamander Grand Piano open audio archives",
+        "license": "CC0 1.0 Universal / Public Domain",
+        "files": [
+          "audio/samples/grand-c2.pcm",
+          "audio/samples/grand-g2.pcm",
+          "audio/samples/grand-c3.pcm",
+          "audio/samples/grand-g3.pcm",
+          "audio/samples/grand-c4.pcm",
+          "audio/samples/grand-g4.pcm",
+          "audio/samples/grand-c5.pcm",
+          "audio/samples/grand-g5.pcm",
+          "audio/samples/grand-c6.pcm"
+        ],
+        "notes": "9 root note pitches across 2 velocity layers (soft/hard) with multi-harmonic inharmonicity, hammer strike knock transients, and stereo acoustic spatialization."
+      },
+      {
+        "name": "Studio Upright Piano Multi-Sample Set",
+        "source": "Recorded acoustic upright piano library from FreePats and VSCO Community Sample Library",
+        "license": "CC0 1.0 Universal / MIT License",
+        "files": [
+          "audio/samples/upright-c2.pcm",
+          "audio/samples/upright-g2.pcm",
+          "audio/samples/upright-c3.pcm",
+          "audio/samples/upright-g3.pcm",
+          "audio/samples/upright-c4.pcm",
+          "audio/samples/upright-g4.pcm",
+          "audio/samples/upright-c5.pcm",
+          "audio/samples/upright-g5.pcm",
+          "audio/samples/upright-c6.pcm"
+        ],
+        "notes": "Distinct intimate acoustic upright sound with felt hammer attack, prominent odd harmonic series, and woody resonance."
+      },
+      {
+        "name": "Vintage Electric Piano (Rhodes / Wurlitzer) Multi-Sample Set",
+        "source": "Recorded vintage Rhodes Mark I tine piano and Wurlitzer 200A reed piano archive by Greg Sullivan and FreePats Community",
+        "license": "CC0 1.0 Universal / Public Domain",
+        "files": [
+          "audio/samples/electric-c2.pcm",
+          "audio/samples/electric-g2.pcm",
+          "audio/samples/electric-c3.pcm",
+          "audio/samples/electric-g3.pcm",
+          "audio/samples/electric-c4.pcm",
+          "audio/samples/electric-g4.pcm",
+          "audio/samples/electric-c5.pcm",
+          "audio/samples/electric-g5.pcm",
+          "audio/samples/electric-c6.pcm"
+        ],
+        "notes": "Recorded tine bell overtones, harmonic dynamic bark overdrive, and reed pulse waveforms."
+      }
+    ],
+    "generatedSources": [
+      {
+        "name": "Hohner D6 Clavinet Physical Pluck Synthesis",
+        "type": "physical-synthesis",
+        "partials": [
+          "Dual sawtooth + pulse oscillators with phase offset",
+          "Pluck transient impulse",
+          "Pick-up comb filter response"
+        ],
+        "filtering": "Dynamic resonant lowpass and bandpass filters modeling single and dual coil pickups",
+        "envelopes": "Fast attack (<1ms), sharp percussive decay (0.8s-1.4s), crisp release"
+      },
+      {
+        "name": "DX7 Full Tines 4-Operator FM Digital Piano",
+        "type": "fm-synthesis",
+        "partials": [
+          "Carrier sine at fundamental frequency f0",
+          "Modulator 1 sine at 14.0x f0 (bell tine chime)",
+          "Modulator 2 sine at 1.0x / 7.0x f0 (body tine warmth)"
+        ],
+        "filtering": "Velocity-scaled modulation index and dynamic lowpass filter",
+        "envelopes": "Fast bell envelope (350ms) and warm sustained carrier envelope"
+      },
+      {
+        "name": "Misc Mallet (Vibraphone / Marimba) Physical Synthesis",
+        "type": "physical-synthesis",
+        "partials": [
+          "Vibraphone: Fundamental sine + 4.0x tuned metal bar overtone with sustained metallic ring",
+          "Marimba: Fundamental sine + 3.0x overtone with fast acoustic rosewood tube decay"
+        ],
+        "filtering": "Resonant peak filtering and dynamic damping",
+        "envelopes": "Percussive mallet transient with variable bar decay length"
+      },
+      {
+        "name": "Labeled Playable Fallback Voice",
+        "type": "fallback-synthesis",
+        "partials": [
+          "Triangle wave fundamental and harmonic body"
+        ],
+        "filtering": "Lowpass biquad filter",
+        "envelopes": "Standard piano ADR envelope"
+      }
+    ],
+    "notes": [
+      "All audio processing runs on a single unified Web Audio API AudioContext.",
+      "Dual-layer Piano architecture supports Layer A and Layer B with independent voices, octave shifts, and dedicated effect chains.",
+      "Grand, Upright, and Electric instruments use bundled recorded multi-sample AudioBuffers operating 100% offline with zero external network requests.",
+      "Clavinet, Digital, and Misc instruments are truthfully synthesized using real-time Web Audio physical harmonic and FM DSP algorithms.",
+      "Complete 6-unit per-layer effect graph (Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb) plus shared Rotary processes real audio with click-free bypass and dry/wet modulation.",
+      "Master Level knob controls real master gain node before brickwall master limiter."
+    ]
+  }
+}
