@@ -67,14 +67,33 @@ world. Every agent needs:
   belongs in a scratch copy.
 - **Exactly one port, with `--strictPort`.** Assign a distinct port per
   concurrent agent and say the number. Tell it to verify the served JS bundle
-  filename matches its own `dist/` before trusting a measurement — a previous
+  filename matches `build/assets` before trusting a measurement — a previous
   evaluator was silently served another agent's build after a port fell back.
+- **A uniquely-named scratch file.** One evaluator had its harness script
+  overwritten mid-session by another agent writing the same path.
 - **Incremental writes.** Tell it to save ratings into `assessment.json` as it
   goes; a batch of evaluations once lost all its work to a transient API error.
 - **Timeouts on every browser wait.** One agent stalled for 600s on an
   indefinite wait and was killed.
+- **Playwright directly, not the Chrome MCP tools** — those have timed out in
+  three separate evaluations.
 
-Cap concurrency at **5**. Six caused a stall; five have run clean.
+Cap concurrency at **5**. Six caused a stall; five have run clean. **Count the
+agents you actually launched** — describing one as "queued" when the tool call
+carried five leaves an evaluation silently unstarted.
+
+### Measurement traps to name in the prompt
+
+Each of these produces a confidently wrong number rather than an error, so an
+evaluator that hits one reports a clean result that happens to be false. All
+were found the hard way:
+
+| Trap | What it does | Fix to state |
+|---|---|---|
+| First note after page load | Starts the `AudioContext` and triggers sample loading, so it plays the labelled fallback voice — every instrument measurement is really the fallback | Play a warm-up note first |
+| `PageUp` repeated inside one `evaluate()` | Collapses to a single step through stale React closures, silently understating any knob-range test | One event per animation frame |
+| Space appearing not to sustain | May be deliberately swallowed while a panel control holds focus | Clear focus before concluding it is broken |
+| `Playwright.click()` for reachability | Scrolls an `overflow:hidden` container and reports success for a control nobody can reach | The rubric's 5×5 `elementFromPoint` grid |
 
 ### What the agent is told about scoring
 
