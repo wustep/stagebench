@@ -54,7 +54,7 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   const workspace = evalWorkspaceDir(root, id, phase)
   const artifact = path.join(workspace, 'artifact')
   const inputs = path.join(workspace, 'inputs')
-  fs.rmSync(workspace, { recursive: true, force: true })
+  removeWorkspaceTree(workspace)
   fs.mkdirSync(artifact, { recursive: true })
   fs.mkdirSync(inputs, { recursive: true })
 
@@ -202,27 +202,34 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   ].join('\n'))
 
   // Sealed evidence is read-only: a failed evaluator once ran its build
-  // directly inside artifact/ and mutated the copy it was rating.
-  fs.chmodSync(artifact, 0o555)
-  for (const entry of fs.readdirSync(artifact, { recursive: true, withFileTypes: true })) {
+  // directly inside artifact/ and mutated the copy it was rating. Directories
+  // keep +x so the tree stays traversable.
+  for (const entry of fs.readdirSync(artifact, { recursive: true, withFileTypes: true }).reverse()) {
     const target = path.join(entry.parentPath ?? entry.path, entry.name)
     fs.chmodSync(target, entry.isDirectory() ? 0o555 : 0o444)
   }
+  fs.chmodSync(artifact, 0o555)
 
   return { id, blindId, phase: Number(phase), workspace, artifact, inputs, build, assessment: path.join(workspace, 'assessment.json') }
 }
 
-export function removeEvalWorkspace(root, id, phase) {
-  const workspace = evalWorkspaceDir(root, id, phase)
-  // artifact/ is chmod'd read-only while the evaluator works; a read-only
-  // directory cannot have its contents unlinked, so restore write first.
-  const artifact = path.join(workspace, 'artifact')
-  if (fs.existsSync(artifact)) {
-    fs.chmodSync(artifact, 0o755)
-    for (const entry of fs.readdirSync(artifact, { recursive: true, withFileTypes: true })) {
-      const target = path.join(entry.parentPath ?? entry.path, entry.name)
-      fs.chmodSync(target, entry.isDirectory() ? 0o755 : 0o644)
-    }
+// artifact/ is chmod'd read-only while the evaluator works, and a read-only
+// directory cannot have its contents unlinked — so both removing a workspace
+// and rebuilding over one have to restore write first.
+function restoreWritable(directory) {
+  if (!fs.existsSync(directory)) return
+  fs.chmodSync(directory, 0o755)
+  for (const entry of fs.readdirSync(directory, { recursive: true, withFileTypes: true })) {
+    const target = path.join(entry.parentPath ?? entry.path, entry.name)
+    fs.chmodSync(target, entry.isDirectory() ? 0o755 : 0o644)
   }
+}
+
+function removeWorkspaceTree(workspace) {
+  restoreWritable(path.join(workspace, 'artifact'))
   fs.rmSync(workspace, { recursive: true, force: true })
+}
+
+export function removeEvalWorkspace(root, id, phase) {
+  removeWorkspaceTree(evalWorkspaceDir(root, id, phase))
 }
