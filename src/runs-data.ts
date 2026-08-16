@@ -28,6 +28,7 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
     targetPhase: raw.targetPhase ?? null,
     harness: raw.harness ?? null,
     protocolVersion: raw.protocolVersion ?? null,
+    rubricVersion: raw.rubricVersion ?? null,
     legacy: raw.legacy,
     status: raw.status,
     startedAt: raw.startedAt,
@@ -117,8 +118,22 @@ export function getPhaseName(run: RunEntry, phase: PhaseNumber) {
   return getPhaseList(run)[phase - 1]
 }
 
+// Runs are tiered by the rubric that produced their score, because scores from
+// different rubrics are not comparable — different weights, different criteria,
+// and (before the model was pinned) different judges. Ranking them in one list
+// would put a 93.8 scored under an older rubric above a 91 scored under the
+// current one and imply a result neither number supports.
 export function getResultClass(run: RunEntry) {
-  if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 1, description: 'Runs recorded under earlier protocol versions, kept for reference with their frozen evaluation reports.' }
+  if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 2, description: 'Runs recorded under earlier protocol versions, kept for reference with their frozen evaluation reports.' }
+  const scoredUnder = run.rubricVersion ?? null
+  if (scoredUnder && scoredUnder !== protocol.version) {
+    return {
+      id: `rubric-${scoredUnder}`,
+      label: `Rubric ${scoredUnder}`,
+      rank: 1,
+      description: `Scored under rubric ${scoredUnder}, before the current rubric changed the weights, the criteria, and the evaluator. Not comparable with Protocol ${protocol.version} scores — ranked separately rather than merged into one leaderboard.`,
+    }
+  }
   return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: 'Benchmark evaluation reports are not rigorous and are just for fun.' }
 }
 
@@ -131,9 +146,13 @@ export function getResultClass(run: RunEntry) {
 // gallery's job — comparing model results — is legible at a glance. Runs still
 // in progress have no score yet, so they sink below the scored runs of their
 // tier; newest-first breaks any remaining ties.
+// Tier id breaks ties within a rank so tiers stay contiguous: several older
+// rubrics share rank 1, and sorting them by score alone would interleave them
+// back into the single mixed leaderboard the tiers exist to prevent.
 export const visibleRuns = [...runs]
   .sort((left, right) =>
     getResultClass(left).rank - getResultClass(right).rank
+    || getResultClass(right).id.localeCompare(getResultClass(left).id)
     || (right.score ?? -1) - (left.score ?? -1)
     || right.startedAt.localeCompare(left.startedAt))
 export const activeCount = visibleRuns.filter((run) => run.status === 'in-progress').length

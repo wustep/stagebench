@@ -390,6 +390,10 @@ export function registryEntry(run) {
     startedAt: run.startedAt,
     updatedAt: run.updatedAt,
     score: run.evaluation?.score ?? null,
+    // The rubric that produced the score, not the one current when the run was
+    // created. Scores from different rubrics are not comparable, so the gallery
+    // ranks them in separate tiers rather than in one list.
+    rubricVersion: run.evaluation?.rubricVersion ?? null,
     reportPath: run.evaluation?.reportPath ?? null,
     telemetry: telemetrySummary(run),
     previewPath: run.previewPath ?? null,
@@ -412,11 +416,19 @@ function reindexCachePath(root) {
   return path.join(root, 'node_modules', '.cache', 'stagebench-reindex.json')
 }
 
+// The cache is keyed on each run.json's mtime, which catches content changes
+// but not changes to the projection itself — a new field silently kept its old
+// shape until something touched the run. Bump this whenever registryEntry's
+// output shape changes.
+const REGISTRY_PROJECTION_VERSION = 2
+
 function readReindexCache(root) {
   try {
-    return JSON.parse(fs.readFileSync(reindexCachePath(root), 'utf8'))
+    const cache = JSON.parse(fs.readFileSync(reindexCachePath(root), 'utf8'))
+    if (cache.__projection !== REGISTRY_PROJECTION_VERSION) return { __projection: REGISTRY_PROJECTION_VERSION }
+    return cache
   } catch {
-    return {}
+    return { __projection: REGISTRY_PROJECTION_VERSION }
   }
 }
 
@@ -433,7 +445,7 @@ function writeReindexCache(root, cache) {
 export async function reindexRegistry(root) {
   const locations = pathsFor(root)
   const cache = readReindexCache(root)
-  const nextCache = {}
+  const nextCache = { __projection: REGISTRY_PROJECTION_VERSION }
   let entries = []
 
   if (fs.existsSync(locations.runs)) {

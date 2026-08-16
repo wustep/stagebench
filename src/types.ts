@@ -36,6 +36,8 @@ export type RawRunEntry = {
   targetPhase?: number | null
   harness?: string | null
   protocolVersion?: string | null
+  /** The rubric that produced `score`. Scores from different rubrics are not comparable. */
+  rubricVersion?: string | null
   legacy: boolean
   status: 'in-progress' | 'complete' | 'legacy'
   startedAt: string
@@ -60,6 +62,8 @@ export type RunEntry = {
   targetPhase: number | null
   harness: string | null
   protocolVersion: string | null
+  /** The rubric that produced `score`. Scores from different rubrics are not comparable. */
+  rubricVersion: string | null
   legacy: boolean
   status: 'in-progress' | 'complete' | 'legacy'
   startedAt: string
