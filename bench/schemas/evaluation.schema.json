@@ -12,6 +12,10 @@
     "stageName": { "type": "string" },
     "status": { "const": "complete" },
     "evaluator": { "type": "string" },
+    "evaluatorModel": {
+      "type": ["string", "null"],
+      "description": "The model that produced the assessment. Pinned in bench/rubric.json under evaluator.model and enforced at registration."
+    },
     "evaluatedAt": { "type": "string" },
     "summary": { "type": "string" },
     "score": { "type": "number", "minimum": 0, "maximum": 100 },
@@ -25,12 +29,80 @@
         "additionalProperties": true
       }
     },
+    "runAxis": {
+      "type": ["object", "null"],
+      "description": "The run-level axis (panel fidelity), scored once against the highest sealed phase and carried on that phase's evaluation. Null on runs evaluated before the axis existed.",
+      "required": ["id", "weight", "score", "criteria"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "weight": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 100 },
+        "scoredAgainst": { "type": ["string", "null"] },
+        "rawScore": { "type": "number" },
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "hardGate": {
+          "type": "object",
+          "description": "Gates key on individual measurements rather than the criterion score: averaging dilutes one catastrophic failure into a passing number.",
+          "properties": {
+            "tripped": { "type": "array", "items": { "type": "string" } },
+            "scoreCap": { "type": ["number", "null"] }
+          }
+        },
+        "criteria": { "type": "array", "items": { "$ref": "#/$defs/criterion" } }
+      },
+      "additionalProperties": true
+    },
     "technicalGate": {
       "type": "object",
       "required": ["passed", "checks"],
       "additionalProperties": true
     },
-    "issues": { "type": "array" }
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "title", "detail"],
+        "properties": {
+          "severity": { "enum": ["critical", "major", "minor"] },
+          "title": { "type": "string", "minLength": 1 },
+          "detail": { "type": "string", "minLength": 1 },
+          "criterion": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "criterion": {
+      "type": "object",
+      "required": ["id", "weight", "score"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "weight": { "type": "number" },
+        "scoring": { "enum": ["judged", "computed"] },
+        "rating": { "type": "integer", "description": "Judged criteria only." },
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "measurements": {
+          "type": "array",
+          "description": "Computed criteria only: the values the evaluator reported and the score each produced.",
+          "items": {
+            "type": "object",
+            "required": ["id", "weight", "value", "score"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "weight": { "type": "number" },
+              "value": { "type": ["number", "null"] },
+              "score": { "type": ["number", "null"] }
+            },
+            "additionalProperties": true
+          }
+        },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  }
 }

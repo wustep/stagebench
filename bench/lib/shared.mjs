@@ -161,10 +161,33 @@ export function hashFile(filePath) {
   return sha256(fs.readFileSync(filePath))
 }
 
+// Directories that are never part of a candidate's artifact: dependency trees,
+// package manager content stores, build caches, and VCS metadata. One list, so
+// the seal digest, the gate copy, and the evaluator's `artifact/` all agree on
+// what "the artifact" is. Without the package stores here a run that commits
+// its pnpm store seals a 139 MB dependency cache and hands the evaluator an
+// artifact/ that is almost entirely vendor source, while every other run's
+// evaluator sees only candidate code.
+// `dist` is here deliberately. The artifact is the candidate's source; the
+// build is derived from it by a documented command, and the built app is
+// already committed per phase under public/previews/, which is what the
+// evaluator is handed. Including dist in the seal made every digest
+// unverifiable — .gitignore matches `dist` at any depth, so the built output
+// was never committed while the digest covered it.
+export const NON_ARTIFACT_DIRS = Object.freeze([
+  'node_modules', '.git', '.vite', 'dist', 'dist-ssr',
+  '.pnpm-store', '.yarn', '.npm', '.turbo', '.next', '.cache', '.parcel-cache',
+])
+
+// Bumped when the definition above changes, so a stale digest is a recorded
+// fact rather than a mystery. Stages sealed under an older definition are
+// re-recorded by `bench redigest`.
+export const ARTIFACT_DIGEST_VERSION = 2
+
 // Deterministic digest of a directory tree (paths + contents), ignoring
 // regenerable directories. Used to seal verified phase artifacts.
 export function hashTree(directory, options = {}) {
-  const ignored = new Set(options.ignored ?? ['node_modules', '.git', '.vite'])
+  const ignored = new Set(options.ignored ?? NON_ARTIFACT_DIRS)
   const files = []
   const visit = (current) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {

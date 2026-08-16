@@ -6,11 +6,13 @@
 // module never reads or writes run.json.
 import fs from 'node:fs'
 import path from 'node:path'
-import { blindRunCode, hashTree, loadProtocol, readJson, workspaceRoot, writeJson } from '../shared.mjs'
+import { NON_ARTIFACT_DIRS, blindRunCode, hashTree, loadProtocol, readJson, workspaceRoot, writeJson } from '../shared.mjs'
 import { filterTaskToPhase, projectProtocol, projectVariants } from '../materials.mjs'
-import { createAssessmentTemplate } from './scoring.mjs'
+import { createAssessmentTemplate, isTopPhase } from './scoring.mjs'
 
-const ARTIFACT_EXCLUDES = new Set(['node_modules', '.git', '.vite'])
+// Must stay identical to what hashTree ignores, or the copy's digest can never
+// match the digest recorded at seal.
+const ARTIFACT_EXCLUDES = new Set(NON_ARTIFACT_DIRS)
 
 export function evalWorkspaceDir(root, id, phase) {
   return path.join(workspaceRoot(root, 'eval'), blindRunCode(id), `stage${phase}`)
@@ -47,7 +49,7 @@ function copyInput(root, relativePath, inputRoot) {
 // inputs, a blind-coded assessment template, and EVAL.md instructions. The
 // template's runId is the blind handle, not the model identity; the CLI maps
 // it back to the real run at registration.
-export function createEvalWorkspace(root, { id, phase, variantId, stageDir, verificationPath, rubric, expectedDigest }) {
+export function createEvalWorkspace(root, { id, phase, variantId, stageDir, verificationPath, rubric, expectedDigest, sealedPhases = [phase] }) {
   const blindId = blindRunCode(id)
   const workspace = evalWorkspaceDir(root, id, phase)
   const artifact = path.join(workspace, 'artifact')
@@ -74,6 +76,18 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     }
   }
 
+  // The built app the operator captured and the gallery serves, copied in as
+  // `build/`. Every evaluator then exercises identical bits instead of each
+  // building its own at whatever versions resolve that day — which was an
+  // uncontrolled variable underneath every measurement. Copied by content, so
+  // the run id never appears in a path the evaluator can read.
+  const previewSource = path.join(root, 'public', 'previews', id, `stage${phase}`)
+  let build = null
+  if (fs.existsSync(path.join(previewSource, 'index.html'))) {
+    build = path.join(workspace, 'build')
+    fs.cpSync(previewSource, build, { recursive: true, dereference: false })
+  }
+
   const { value: protocol } = loadProtocol(root)
   const contract = protocol.phases.find((entry) => entry.number === Number(phase))
   if (!contract) throw new Error(`Unknown phase: ${phase}`)
@@ -93,9 +107,12 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   if (verificationPath && fs.existsSync(verificationPath)) {
     writeJson(path.join(inputs, 'verification.json'), scrubRunIdentity(readJson(verificationPath), id, blindId))
   }
-  // Blind template: identified by the handle, never the model id.
-  writeJson(path.join(workspace, 'assessment.json'), createAssessmentTemplate(rubric, blindId, phase))
+  // Blind template: identified by the handle, never the model id. The
+  // run-level panel axis rides on the highest sealed phase only.
+  const carriesRunAxis = isTopPhase(rubric, phase, sealedPhases)
+  writeJson(path.join(workspace, 'assessment.json'), createAssessmentTemplate(rubric, blindId, phase, { includeRunAxis: carriesRunAxis }))
 
+  const pinnedModel = rubric.evaluator?.model
   fs.writeFileSync(path.join(workspace, 'EVAL.md'), [
     `# Stagebench evaluation — Phase ${phase} (${blindId})`,
     '',
@@ -106,25 +123,106 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     'Work only inside this directory: never read the parent repository, other runs,',
     'other scores, or any other solution.',
     '',
+    ...(pinnedModel ? [
+      `**Required model.** This evaluation must be produced by \`${pinnedModel}\`. Set`,
+      `\`evaluatorModel\` in \`assessment.json\` to exactly \`${pinnedModel}\`; registration`,
+      'rejects any other value. If you are not running that model, stop and say so',
+      'rather than filling the assessment in.',
+      '',
+    ] : []),
     `1. Read \`inputs/rubric.json\` — rate Phase ${phase} on its 0–4 anchors.`,
-    '2. Inspect `artifact/` — the sealed candidate: source, tests, `evidence/`, and the',
-    '   built app in `artifact/dist/` (serve it with any static file server to exercise',
-    '   it). Treat `artifact/` as read-only evidence.',
+    '2. Inspect `artifact/` — the sealed candidate: source, tests and `evidence/`.',
+    '   Treat it as read-only evidence; it is chmod-protected on purpose. Build in a',
+    '   scratch copy if you need to run the suite.',
+    ...(build ? [
+      '   **Measure against `build/`**, not a build of your own. That is the published',
+      '   build of this artifact — the exact bits the operator captured — so every',
+      '   evaluator exercises the same thing. Serve it with any static file server.',
+    ] : [
+      '   No published build is available for this phase, so build `artifact/` in a',
+      '   scratch copy and say so in your notes: your measurements come from a build',
+      '   nobody else will reproduce exactly.',
+    ]),
     '3. Compare against `inputs/TASK.md`, the phase contract in',
     `   \`inputs/specs/benchmark-phases.json\`, the assigned specs, the variant entry`,
     `   (**${variant.label}**, \`inputs/${variant.referenceImage}\` if fetched), and the manual.`,
     '4. `inputs/verification.json` records the checks and digest from sealing.',
     '5. Fill in `assessment.json` completely: keep its `runId` handle as-is; set every',
-    '   rating with concrete evidence (file paths, measurements, observed behavior), plus',
-    '   `evaluator`, `evaluatedAt`, `summary`, and any `issues`.',
+    '   rating with concrete evidence, plus `evaluator`, `evaluatorModel`, `evaluatedAt`,',
+    '   `summary`, and any `issues`.',
     '',
+    'Evidence and issues are constrained, because they varied by 5–9× between past',
+    'evaluations of the same rubric:',
+    '',
+    '- Every criterion needs **at least two evidence items**, and at least one must carry',
+    '  a measurement, a file path, or a behavior you observed running the build — not an',
+    '  impression. "Geometry looks close" is not evidence; "aspect-ratio 3.0951 vs 3.09',
+    '  specified" is.',
+    '- Keep `summary` under 1200 characters. It is a verdict, not a transcript.',
+    '- Each entry in `issues` is an object with `severity` (`critical`, `major`, or',
+    '  `minor`), `title`, and `detail`. Optionally `criterion`.',
+    '',
+    '## Two kinds of criterion',
+    '',
+    'A criterion with `"scoring": "judged"` takes a 0–4 `rating`. A criterion with',
+    '`"scoring": "computed"` takes **no rating at all** — fill in every number in its',
+    '`measurements` object and the score is derived, so no judgment enters where the',
+    'specs already give ground truth. Leave a measurement `null` only if you genuinely',
+    'could not take it: nulls are dropped and the rest re-normalised, so a guess is',
+    'worse than a null. Every number you report must be one you actually measured.',
+    '',
+    ...(carriesRunAxis ? [
+      `## ${rubric.runAxis.category.label} — scored once, here`,
+      '',
+      `This is the highest sealed phase, so your assessment also carries the run-level`,
+      `\`${rubric.runAxis.category.id}\` block — **${rubric.runAxis.weight}% of the whole run**, rated once`,
+      'against this final artifact. The phases are cumulative, so a regression introduced',
+      'in a later phase is caught here: this artifact is the regressed one.',
+      '',
+      ...rubric.runAxis.category.criteria.flatMap((criterion) => [
+        `- **${criterion.label}** (\`${criterion.id}\`, weight ${criterion.weight}, ${criterion.scoring})`,
+        `    ${criterion.guidance}`,
+        ...(criterion.measurements ?? []).map((spec) => {
+          const shape = spec.kind === 'band' ? `target ${spec.target} ±${spec.tolerance}`
+            : spec.kind === 'range' ? `in [${spec.minimum}, ${spec.maximum}]`
+            : spec.kind === 'ratio' ? `a count, scored as a fraction of \`${spec.denominator}\` (report that too)`
+            : `count of occurrences; each costs ${spec.penaltyEach ?? 25}`
+          return `      - \`${spec.id}\` — ${spec.label}; ${shape}`
+        }),
+        '',
+      ]),
+      ...(rubric.runAxis.hardGate?.measurements ?? []).map((rule) =>
+        `A ${rule.kind === 'ratioBelow' ? `\`${rule.criterion}.${rule.measurement}\` ratio below ${rule.threshold}` : `\`${rule.criterion}.${rule.measurement}\` score below ${rule.threshold}`} caps this axis at ${rubric.runAxis.hardGate.scoreCap}.`),
+      '',
+      'Measure in the rendered page at 1440×900. That is the entire point of this axis.',
+      '',
+    ] : []),
     'When done, the operator registers this evaluation from the repository.',
     '',
   ].join('\n'))
 
-  return { id, blindId, phase: Number(phase), workspace, artifact, inputs, assessment: path.join(workspace, 'assessment.json') }
+  // Sealed evidence is read-only: a failed evaluator once ran its build
+  // directly inside artifact/ and mutated the copy it was rating.
+  fs.chmodSync(artifact, 0o555)
+  for (const entry of fs.readdirSync(artifact, { recursive: true, withFileTypes: true })) {
+    const target = path.join(entry.parentPath ?? entry.path, entry.name)
+    fs.chmodSync(target, entry.isDirectory() ? 0o555 : 0o444)
+  }
+
+  return { id, blindId, phase: Number(phase), workspace, artifact, inputs, build, assessment: path.join(workspace, 'assessment.json') }
 }
 
 export function removeEvalWorkspace(root, id, phase) {
-  fs.rmSync(evalWorkspaceDir(root, id, phase), { recursive: true, force: true })
+  const workspace = evalWorkspaceDir(root, id, phase)
+  // artifact/ is chmod'd read-only while the evaluator works; a read-only
+  // directory cannot have its contents unlinked, so restore write first.
+  const artifact = path.join(workspace, 'artifact')
+  if (fs.existsSync(artifact)) {
+    fs.chmodSync(artifact, 0o755)
+    for (const entry of fs.readdirSync(artifact, { recursive: true, withFileTypes: true })) {
+      const target = path.join(entry.parentPath ?? entry.path, entry.name)
+      fs.chmodSync(target, entry.isDirectory() ? 0o755 : 0o644)
+    }
+  }
+  fs.rmSync(workspace, { recursive: true, force: true })
 }

@@ -11,7 +11,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { findRepoRoot, hashTree, loadProtocol, parseArgs, readJson, workspaceRoot, writeJson } from './lib/shared.mjs'
+import { ARTIFACT_DIGEST_VERSION, findRepoRoot, hashTree, loadProtocol, parseArgs, readJson, workspaceRoot, writeJson } from './lib/shared.mjs'
 import {
   createRun,
   ensureInstalled,
@@ -58,6 +58,7 @@ const COMMANDS = {
   export: 'export <run-id> [--out <path>] — bundle run.json, evaluations, report, and preview into a ZIP',
   showcase: 'Check, build, and publish showcase/ to public/previews/showcase',
   thumbs: 'Regenerate gallery hover thumbnails from the published previews [<run-id>]',
+  redigest: 'redigest [<run-id>] — re-record sealed artifact digests under the current artifact definition [--apply] (dry run by default)',
   reindex: 'Regenerate src/data/runs.json from runs/*/run.json',
   fetch: 'Download the Nord manual and product photos into ./reference [--force] [--timeout <ms>]',
   help: 'Show this help',
@@ -175,6 +176,9 @@ async function score(root, id, options) {
   // Evaluation is an isolated flow: the first call builds an evaluator
   // workspace (artifact copy + scoring inputs + template) under
   // .stagebench/eval; the second call registers the filled assessment.
+  // The run-level panel axis is carried by the highest sealed phase, so the
+  // workspace builder needs to know which phases are sealed, not just this one.
+  const sealedPhases = run.stages.filter((entry) => entry.status === 'complete').map((entry) => entry.number)
   const assessmentPath = evalAssessmentPath(root, id, phase)
   if (!fs.existsSync(assessmentPath)) {
     const created = createEvalWorkspace(root, {
@@ -185,6 +189,7 @@ async function score(root, id, options) {
       verificationPath: path.join(root, 'runs', id, 'verifications', `stage${phase}.json`),
       expectedDigest: stage.artifactDigest,
       rubric,
+      sealedPhases,
     })
     return {
       action: 'eval-workspace-created',
@@ -209,7 +214,8 @@ async function score(root, id, options) {
     }
     return value
   })
-  const assessment = mergeAssessments(rubric, panel)
+  const evaluatorOptions = { allowEvaluatorModel: options['allow-evaluator-model'] === 'true' }
+  const assessment = mergeAssessments(rubric, panel, evaluatorOptions)
   // Map the blind handle the evaluators saw back to the real run id.
   assessment.runId = id
 
@@ -225,7 +231,7 @@ async function score(root, id, options) {
     skip: options['skip-checks'] === 'true',
     sandbox: options.sandbox === 'true' || process.env.STAGEBENCH_SANDBOX === '1',
   })
-  const evaluation = scoreAssessment(rubric, assessment, technicalChecks)
+  const evaluation = scoreAssessment(rubric, assessment, technicalChecks, evaluatorOptions)
   const evaluationPath = path.join(root, 'runs', id, 'evaluations', `stage${phase}.json`)
   // Archive the filled assessment as part of the run record before the
   // evaluator workspace is removed.
@@ -238,21 +244,70 @@ async function score(root, id, options) {
     score: evaluation.score,
     rawScore: evaluation.rawScore,
     evaluatedAt: evaluation.evaluatedAt,
+    evaluatorModel: evaluation.evaluatorModel,
     rubricVersion: evaluation.rubricVersion,
     path: path.relative(root, evaluationPath).split(path.sep).join('/'),
     reportPath,
     categoryScores: Object.fromEntries(evaluation.categories.map((category) => [category.id, category.score])),
+    ...(evaluation.runAxis ? { runAxis: { id: evaluation.runAxis.id, label: evaluation.runAxis.label, score: evaluation.runAxis.score, rawScore: evaluation.runAxis.rawScore, hardGate: evaluation.runAxis.hardGate } } : {}),
   }
   const updated = loadRun(root, id)
   const summaries = updated.stages.map((entry) => entry.number === phase
     ? { stage: phase, status: 'complete', score: evaluation.score }
     : entry.evaluation ? { stage: entry.number, status: 'complete', score: entry.evaluation.score } : null).filter(Boolean)
-  const aggregate = { ...aggregateStageEvaluations(rubric, summaries), reportPath: `/reports/${id}/index.html` }
+  // The panel axis is scored once, on the top phase. Reuse the freshly scored
+  // one when this call is that phase; otherwise recover it from the record so
+  // scoring an earlier phase doesn't silently drop 40% of the aggregate.
+  const runAxis = evaluation.runAxis
+    ?? updated.stages.map((entry) => entry.evaluation?.runAxis).filter(Boolean).at(-1)
+    ?? null
+  const aggregate = { ...aggregateStageEvaluations(rubric, summaries, runAxis), reportPath: `/reports/${id}/index.html` }
   registerEvaluation(root, id, phase, stageSummary, aggregate)
   writeReports(root, loadRun(root, id))
   await reindexRegistry(root)
   removeEvalWorkspace(root, id, phase)
   return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, evaluationPath, report: aggregate.reportPath }
+}
+
+// Sealed digests recorded under an older artifact definition can never
+// validate — `dist/` was inside the digest but matched .gitignore at every
+// depth, so it was never committed. Re-record them against the current
+// definition and stamp the version, so a stale digest stays an auditable fact
+// rather than a check everyone learns to skip. Dry run unless --apply.
+function redigest(root, id, { apply = false } = {}) {
+  const ids = id ? [id] : fs.readdirSync(path.join(root, 'runs')).filter((entry) => fs.existsSync(path.join(root, 'runs', entry, 'run.json')))
+  const stages = []
+  for (const runId of ids) {
+    const runPath = path.join(root, 'runs', runId, 'run.json')
+    const run = readJson(runPath)
+    if (run.schemaVersion !== 4) continue
+    let changed = false
+    for (const stage of run.stages) {
+      if (stage.status !== 'complete') continue
+      const stageDir = path.join(root, 'runs', runId, `stage${stage.number}`)
+      if (!fs.existsSync(stageDir)) continue
+      const current = hashTree(stageDir).digest
+      const matches = current === stage.artifactDigest
+      const alreadyStamped = stage.artifactDigestVersion === ARTIFACT_DIGEST_VERSION
+      stages.push({ run: runId, phase: stage.number, matches, alreadyStamped, recorded: stage.artifactDigest?.slice(0, 12) ?? null, current: current.slice(0, 12) })
+      if (matches && alreadyStamped) continue
+      if (apply) {
+        stage.artifactDigest = current
+        stage.artifactDigestVersion = ARTIFACT_DIGEST_VERSION
+        changed = true
+      }
+    }
+    if (changed) writeJson(runPath, run)
+  }
+  const stale = stages.filter((entry) => !entry.matches)
+  return {
+    action: apply ? 'redigested' : 'redigest-dry-run',
+    digestVersion: ARTIFACT_DIGEST_VERSION,
+    checked: stages.length,
+    stale: stale.length,
+    ...(apply ? {} : { next: 'Re-run with --apply to record these digests' }),
+    stages: stale,
+  }
 }
 
 // Existing transient workspaces for a run: the implementation workspace (any
@@ -407,6 +462,8 @@ try {
       }
       if (targets.length === 0) throw new Error('No published previews found to thumbnail')
       result = { thumbnails: await generateThumbnails(targets) }
+    } else if (command === 'redigest') {
+      result = redigest(root, id, { apply: options.apply === 'true' })
     } else if (command === 'reindex') {
       result = await reindexRegistry(root)
     } else if (command === 'fetch') {

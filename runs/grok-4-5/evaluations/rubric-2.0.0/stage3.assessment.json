@@ -1,0 +1,260 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "grok-4-5",
+  "stage": 3,
+  "evaluator": "Blind Stagebench phase-3 evaluator; built the sealed artifact in an isolated scratch copy, served the dist on 127.0.0.1:5404 (bundle index-BSpxIJH3.js verified against my own build), measured the rendered panel with Playwright/Chromium at 1440x900 and 390x844, drove controls in the live page, and rendered real Web Audio through OfflineAudioContext to measure engine and effect output.",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-15T20:15:00Z",
+  "summary": "A structurally faithful Stage 4 with real, measurably distinct Organ/Piano/Synth engines and a working shared effects graph, undermined by two systemic defects. Layout: .deck-section uses overflow:hidden over taller content, so 84 of 161 deck controls render outside their section and are invisible and unclickable - piano type/model/detail switches, organ percussion and rotary, compressor/reverb/bypass, synth filter/envelopes/LFO/arp. Several land in the keybed's band (#piano-model at y 600-637, over key-53). Deck/keybed split measures 0.478/0.522 against 0.54/0.46 +/-0.025. State: LEDs are one-way. Clicking Piano Clav lights the button but leaves data-piano-type=Grand, the dirty flag never lights, Store does not persist the edit, and after recall the Clav LED stays lit while the engine plays Grand. Separately, all 54 bundled WAVs are malformed (generate-samples.mjs:29 writes numChannels at byte 21), so Chrome throws EncodingError and the declared Grand/Upright/Electric library never loads - honestly reported as 'fallback', never delivered.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "rating": 3,
+          "evidence": [
+            "Rendered real PCM through OfflineAudioContext(2, 48000*1.2, 48000) driving the production engine via its createContext injection: spectral centroid Piano Grand 379.8 Hz / Electric 454.1 Hz / Clav 634.5 Hz; Organ B3 258.2 Hz / Vox 448.2 Hz / Farf 553.7 Hz; Synth Saw 709.9 Hz / Sine 450.6 Hz / Super Saw 1596.9 Hz. Three separate engine families, not one engine relabelled.",
+            "Three distinct implementations exist: artifact/src/audio/piano-engine.ts (buffer playback plus per-type synthesis recipes, 1389 lines), artifact/src/audio/organ-engine.ts:126-158 (nine additive drawbar partials with per-model oscillator types), artifact/src/audio/synth-engine.ts (oscillators, biquad filter and three envelopes, 473 lines).",
+            "All three sound simultaneously through one context: the 'all-three' render reported voice counts {piano:1, organ:1, synth:1} and rms 0.1986 in a single buffer.",
+            "Simplifications a knowledgeable player would notice: artifact/src/audio/organ-engine.ts:124 gives Pipe 1/Pipe 2 the same B3_HARMONICS table as B3 (only a sine waveform and a 1.002 detune differ), and my render put FM 2-op at centroid 452.8 Hz against Sine's 450.6 Hz.",
+            "The candidate's own distinctness tests are tautological rather than signal-based: artifact/src/audio/organ-engine.ts:269-277 (organModelSignature) adds a hardcoded per-model constant to band 0, and artifact/src/audio/piano-engine.ts:1347-1355 (typeSignature fallback) returns a hardcoded vector per piano type; no file under tests/ references OfflineAudioContext or startRendering."
+          ]
+        },
+        {
+          "id": "routingIntegration",
+          "rating": 3,
+          "evidence": [
+            "Every engine measurably inherits the shared chain in rendered audio: Organ dry rms 0.097219 -> Organ + Cathedral reverb 0.020518; Synth dry 0.094410 -> Synth + delay (feedback 0.7, mix 0.9) 0.040110; Piano dry 0.070631 -> reverb 0.020343, delay 0.039580, tremolo 0.151556 with peak 0.8238.",
+            "All-effects bypass verified: the same reverb configuration with allBypass=true rendered rms 0.064533 against 0.020343 unbypassed, so the chain is genuinely removed rather than merely flagged.",
+            "Rotary is correctly gated on ampEq.type === 'To Rotary' (artifact/src/audio/effects-chain.ts:695) and slow/fast/stop are distinct in the rendered envelope: slow sweeps at about 0.9 Hz [0.374, 0.290, 0.317, 0.461, 0.589, 0.511, 0.359, 0.292, 0.381, 0.537], fast gives a shallow fast ripple, stop is flat at 0.1944-0.1949.",
+            "getGraphInfo() from the running engine reports singleContext true with hasMaster, hasLimiter, hasLayerA, hasLayerB, hasChainA, hasChainB, hasChainOrgan, hasChainSynthA, hasOrganBuses, hasSynthBuses and hasRotary all true.",
+            "Gain staging is loose: enabling rotary raised organ rms from 0.097219 to 0.436606 (about 4.5x, peak 0.8681) with no compensating trim."
+          ]
+        },
+        {
+          "id": "qualityUnderLoad",
+          "rating": 2,
+          "evidence": [
+            "Voice cap is deterministic: 64 simultaneous noteOn calls left exactly 48 active voices (getActiveVoiceCount() == 48), matching DEFAULT_MAX_POLY in artifact/src/audio/piano-engine.ts:91.",
+            "Output clips under load: rendered peak was 1.3188 at 48 voices and 1.3741 at 64 requested voices, both above full scale, so the master path passes clipping signal to the destination.",
+            "The declared limiter is a plain DynamicsCompressorNode (artifact/src/audio/piano-engine.ts:119) with no output ceiling or makeup control, which explains the peaks above 1.0.",
+            "The rotary path adds roughly 13 dB with no trim (rms 0.097219 -> 0.436606), so engaging rotary mid-performance jumps level sharply.",
+            "Stability was fine in the live page: about 40 scripted control interactions and repeated note lifecycles produced zero uncaught page errors and no console errors beyond the sample-decode failure."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "stateRoundTrip",
+          "rating": 1,
+          "evidence": [
+            "Observed in the running build: from program 1.1 (data-piano-type=Grand), clicking #piano-type-clav flipped its aria-pressed to true but data-piano-type still read 'Grand' after 250 ms and again after a further 800 ms wait.",
+            "The dirty indicator is not truthful: data-dirty on .instrument stayed '0' through that Piano type edit and through a following Organ model edit.",
+            "Store does not persist a panel edit: after pressing #program-store twice (the OLED showed 'STORE -> 1'), navigating to program 1.4 and back to 1.1 read data-piano-type='Grand' - the Clav edit was lost.",
+            "Panel and engine disagree after recall: back on 1.1 the engine reported Grand while #piano-type-clav was still aria-pressed=true and #piano-type-grand aria-pressed=false.",
+            "The state layer itself exists (artifact/src/state/program-store.ts, 376 lines, with capture/apply at artifact/src/audio/piano-engine.ts:505-518) and tests/programs-roundtrip.test.ts passes, but it exercises the engine API directly and never the control-binding path that fails here."
+          ]
+        },
+        {
+          "id": "bindings",
+          "rating": 2,
+          "evidence": [
+            "234 elements carry stable IDs and 53 expose role=slider; keyboard operation works - five ArrowDown presses on #perf-master-level moved aria-valuenow 75 -> 50, and six on #organ-drawbar-1 moved it 80 -> 100 with 8 of 9 LED segments lit.",
+            "Focus is visible: the computed outline on a focused control is 'rgb(94, 200, 255) solid 2px'.",
+            "Keybed response is correct from a real PointerEvent: #key-60 gained class 'piano-key white is-pressed' with aria-pressed=true on pointerdown and reverted on pointerup.",
+            "Morph reaches a destination: with #program-morph-wheel armed (aria-pressed=true), driving #perf-mod-wheel from 0 to 5 moved #piano-level-a aria-valuenow from 80 to 85.",
+            "84 of 161 deck controls are unreachable by pointer at 1440x900 - document.elementFromPoint at the centre of #piano-type-grand returns key-56, of #fx-bypass returns key-94, and of #synth-filter-freq returns the control-deck, because they render outside their overflow:hidden plate.",
+            "Whole required binding groups have no panel control: querying [id*=split] in the live page returns only ['program-split'], [id*=arp] returns only synth-arp-rate/on/hold, and there is no master-clock or BPM control; the three declared unsupported controls (program-morph-aft, perf-hold, perf-mono) carry no aria-disabled or per-control marker."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "organSystem",
+          "rating": 2,
+          "evidence": [
+            "Nine physical drawbars with real LED ladders: #organ-drawbar-1 contains 9 .drawbar-led elements, 8 lit at aria-valuenow=100, and the lit count tracks the value.",
+            "Four models are measurably distinct in rendered audio with identical registration: B3 centroid 258.2 Hz (rms 0.105), Vox 448.2 Hz (rms 0.094), Farf 553.7 Hz (rms 0.142).",
+            "Rotary slow/fast/stop produce distinct rendered envelopes (slow about 0.9 Hz sweeping 0.290-0.589, fast a shallow ripple 0.417-0.477, stop flat at 0.1944); percussion, key click and vibrato are implemented at artifact/src/audio/organ-engine.ts:160-201 and 109-122.",
+            "The organ's percussion and rotary controls are clipped out of the plate and unclickable: #organ-perc-fast, #organ-perc-third, #organ-vibrato and #organ-rotary-speed overflow the section bottom by 42.2 px and #organ-rotary-stop by 67.2 px; 14 of the section's 33 controls are affected.",
+            "Pipe 1 and Pipe 2 reuse the B3 harmonic table verbatim (artifact/src/audio/organ-engine.ts:124), so the Pipe models are a recolouring of the tonewheel spectrum rather than a rank model.",
+            "tests/organ-rotary.test.ts only asserts that getOrganState().rotarySpeed echoes what it just set; it never checks that Slow, Fast or Stop reach the audio graph."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "rating": 2,
+          "evidence": [
+            "Sources are real and distinct in rendered audio: Saw centroid 709.9 Hz, Sine 450.6 Hz, Super Saw 1596.9 Hz with peak 0.3821; the filter works - dropping filterFreq to 0.08 with LP24 moved Saw's centroid from 709.9 Hz to 507.0 Hz.",
+            "Voice modes behave: three simultaneous notes gave getSynthVoiceCount() == 3 in Poly and 1 in Mono; 13 required waveforms are declared across Pure/Sync/Multi/Super/FM-H at artifact/src/model/synth-types.ts:24-38.",
+            "FM 2-op is barely differentiated: measured centroid 452.8 Hz against Sine's 450.6 Hz, so the single required FM waveform renders close to a sine.",
+            "The arpeggiator is incomplete on the panel: [id*=arp] in the live page returns only ['synth-arp-rate','synth-arp-on','synth-arp-hold'] - no direction, range or Arp/Poly/Gate mode - and artifact/evidence/stage3-visual-audit.md line 26 concedes arp timing is state-level without a clock.",
+            "27 of the Synth section's 38 controls are clipped out of the plate (#synth-filter-res overflows by 57.8 px, #synth-env-release by 61.1 px), so filter, envelopes, LFO and arp are invisible and unclickable at 1440x900."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "rating": 2,
+          "evidence": [
+            "Scenes work at the panel level: clicking #program-scene-2 set its aria-pressed to true and #program-scene-1 to false, and artifact/src/state/program-store.ts stores scene masks separately from sound parameters.",
+            "Morph assignment and interpolation reach a destination: with #program-morph-wheel armed, driving #perf-mod-wheel 0 -> 5 moved #piano-level-a from 80 to 85.",
+            "Layers exist for every engine - piano A/B, organ A/B, synth A/B/C - each with enable, level and octave controls, and getGraphInfo() confirms separate buses (hasLayerA, hasLayerB, hasOrganBuses, hasSynthBuses).",
+            "Splits are effectively unimplemented on the surface: querySelectorAll('[id*=split]') returns exactly one element, the #program-split on/off toggle, so the required 11 editable split points, up to 4 zones and the Off/+-6/+-12 crossfades have no panel representation.",
+            "Scene and split controls are themselves clipped: #program-scene-1 and #program-scene-2 overflow the plate bottom by 11.2 px and #program-split by 36.2 px, so a pointer click at their centre lands on a piano key instead."
+          ]
+        },
+        {
+          "id": "programWorkflows",
+          "rating": 1,
+          "evidence": [
+            "Navigation works: #program-btn-3 moved the OLED to '1.3 Tine Stack' and data-piano-type to Electric, #program-page-up moved to '2.3 Program 2.3', and #program-live entered 'Live 1' - four pages of eight buttons plus eight Live slots.",
+            "The list view toggles cleanly: #program-list swaps #program-oled to '1:Concert Grand | 2:Studio Upright | 3:Tine Stack | ...' and a second click restores '1.2 Studio Upright', though it takes over the primary OLED rather than using its own surface.",
+            "Store is broken through the panel: after editing Piano type to Clav and pressing #program-store twice (OLED showed 'STORE -> 1'), leaving to 1.4 and returning to 1.1 restored data-piano-type='Grand', so the stored program did not contain the edit.",
+            "The dirty indicator is untruthful: data-dirty stayed '0' across a Piano type edit and a subsequent Organ model edit.",
+            "Only 8 of the 32 slots carry real content - artifact/evidence/stage3-visual-audit.md line 29 states factory programs 0-7 demonstrate the engines and the remainder are named placeholders, which the OLED confirms ('2.3 Program 2.3')."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "critical",
+      "title": "84 of 161 deck controls render outside their section plate and are invisible and unclickable",
+      "detail": "artifact/src/styles.css:93 sets overflow:hidden on .deck-section while the section content is taller than the 187.7 px plate, so everything below the plate is clipped away. Measured overflow past the plate bottom at 1440x900: Organ 14 of 33 controls (up to 67.2 px), Piano 20 of 24 (up to 204.5 px), Program 10 of 23 (up to 61.2 px), Synth 27 of 38 (up to 61.3 px), Layer Effects 13 of 35 (up to 98.5 px), Performance 0 of 8. Several land inside the keybed's coordinate band: document.elementFromPoint at the centre of #piano-model (y 600.2-636.8) returns key-53, of #fx-bypass returns key-94, of #piano-type-grand returns key-56. Required landmarks including the six piano type selectors, the piano model and detail switches, organ percussion and rotary, compressor, reverb and effects bypass, and the whole synth filter/envelope/LFO/arp block cannot be seen or operated with a pointer.",
+      "criterion": "hardwareInventory"
+    },
+    {
+      "severity": "critical",
+      "title": "All 54 bundled WAV samples are malformed and never decode in a browser",
+      "detail": "artifact/scripts/generate-samples.mjs:29 writes numChannels with buf.writeUInt16LE(1, 21) - byte offset 21 instead of 22 - so every file carries audioFormat 0x0101 (257) and numChannels 0. Fetching public/samples/grand/r60_v0.wav in Chrome returns HTTP 200 with 39734 bytes, but ctx.decodeAudioData throws 'EncodingError: Unable to decode audio data'. The shipped build therefore sits permanently at data-audio-status='fallback' with the message 'Sample assets failed (grand,upright,electric) - labeled synthetic fallback', so the Grand/Upright/Electric sample sets declared in IMPLEMENTATION_DETAILS.json are never delivered at runtime. The fallback is honestly labelled, which preserves the honesty contract, but the declared primary audio source does not work.",
+      "criterion": "distinctEngines"
+    },
+    {
+      "severity": "critical",
+      "title": "Panel LEDs are one-way and contradict engine state after a program recall",
+      "detail": "Clicking #piano-type-clav sets that button's aria-pressed to true and clears #piano-type-grand, but the rendered panel does not reflect the engine's piano type until an unrelated re-render, the program never becomes dirty, Store does not capture the edit, and after recalling the program the engine reads Grand while the Clav button is still lit. The panel therefore displays a selection the instrument is not playing.",
+      "criterion": "panelState"
+    },
+    {
+      "severity": "major",
+      "title": "Deck/keybed vertical allocation is out of tolerance",
+      "detail": "Measured at 1440x900: instrument box y 231.33 height 437.33; keybed top y 440.45; instrument bottom 668.66. Deck including top rail is 209.12/437.33 = 0.4782 and keybed including bottom rail is 228.21/437.33 = 0.5218, against 0.54/0.46 +/-0.025 (allowed 0.515-0.565 and 0.435-0.485). Even the most favourable reading - deck 201.17 and keybed 200.25 over their combined 401.42 - gives 0.5011/0.4989, still outside tolerance. The CSS declares the right constants (artifact/src/styles.css:71 flex-basis calc(var(--deck-frac, 0.54) * 100%)) but the rail and status-bar siblings plus content-driven sizing collapse the deck, and tests/visual-section-layout.test.ts only asserts the constants, never the rendered boxes.",
+      "criterion": "chassisGeometry"
+    },
+    {
+      "severity": "major",
+      "title": "Silkscreen legends are truncated and below legible size",
+      "detail": "Control labels compute to font-size 7.2 px and 6.912 px with text-overflow:ellipsis and white-space:nowrap (artifact/src/styles.css:173-174 and 221-222). Measured 'Modulation Wheel' at a 52.0 px box against a 65 px scrollWidth, so it renders as 'Modulation ...'; the rendered panel also shows 'Piano Sectio...', 'Synth Octa...', 'Mod 2 Amou...' and 'Organ A Oct...'. A player cannot read what most controls do.",
+      "criterion": "materialsTypography"
+    },
+    {
+      "severity": "major",
+      "title": "Audio-behaviour tests are asserted against mocks and hardcoded signatures, not rendered signal",
+      "detail": "No file under tests/ references OfflineAudioContext, startRendering, an analyser or getChannelData; all 39 test files drive artifact/src/test/mock-audio.ts. PianoEngine.measureEnergy falls back, when OfflineAudioContext is absent as it is in jsdom, to an analytic formula at artifact/src/audio/piano-engine.ts:1282-1330 in which effect types differ only by a string hash: 'const typeHash = chain.mod1.type.length * 0.03 + chain.mod1.type.charCodeAt(0) * 0.001'. organModelSignature and typeSignature similarly return per-model constants. The claims that every effect, model and waveform measurably changes rendered audio are therefore unverified by the suite, even though my own OfflineAudioContext renders show the production graph does change.",
+      "criterion": "routingIntegration"
+    },
+    {
+      "severity": "major",
+      "title": "Split points, arpeggiator direction/range and master clock have no panel controls",
+      "detail": "In the running page [id*=split] returns only 'program-split', [id*=arp] returns only synth-arp-rate, synth-arp-on and synth-arp-hold, and [id*=clock],[id*=bpm] return nothing. The phase-3 contract requires 11 editable split positions, up to 4 zones with Off/+-6/+-12 crossfades, arp direction and range, and a master clock; artifact/evidence/stage3-visual-audit.md lines 25-26 concede the clock and arp scheduling are reachable only through the state API.",
+      "criterion": "performanceSystems"
+    },
+    {
+      "severity": "major",
+      "title": "Narrow viewport loses most of the control surface",
+      "detail": "At 390x844 the instrument keeps its silhouette (width fraction 0.9901, document scrollWidth 390 so no horizontal scroll, all 73 keys present) but the deck collapses to 169.0 px against a 201.0 px keybed and clipping is worse than at desktop: 4 of the 9 drawbars disappear and roughly four controls survive per section. Section titles clip to 'PERFORMAN' and 'PROGRAM'. About 400 px of empty page sits below the instrument instead of being used to restore the deck.",
+      "criterion": "narrowRetention"
+    },
+    {
+      "severity": "minor",
+      "title": "Output clips above full scale under polyphonic load",
+      "detail": "Rendered peak reached 1.3188 with 48 voices and 1.3741 with 64 requested voices. The declared limiter is a default DynamicsCompressorNode (artifact/src/audio/piano-engine.ts:119) with no output ceiling, and enabling rotary adds roughly 13 dB (rms 0.097219 -> 0.436606) with no compensating trim.",
+      "criterion": "qualityUnderLoad"
+    },
+    {
+      "severity": "minor",
+      "title": "typecheck does not reproduce outside the sealing environment",
+      "detail": "package.json declares build as 'tsc --noEmit && vite build' but does not depend on @types/node, while tests/regression-phase1.test.tsx:9-10 and tests/regression-phase2.test.ts:2-3 import node:fs and node:path and use process. A clean pnpm install from the committed lockfile followed by pnpm build fails with 8 TS2591 errors. vite build alone succeeds (dist/assets/index-BSpxIJH3.js, 290.94 kB) and vitest run passes 121 tests across 39 files, and inputs/verification.json records all four gates green at seal time, so this is noted for the operator rather than treated as a gate failure."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage3",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "rating": 2,
+        "evidence": [
+          "Instrument width fraction measured 1353.59/1440 = 0.9400, inside the 0.88-0.97 band; rendered aspect ratio 1353.59/437.33 = 3.0952 against the variant's specified 3.0951.",
+          "Deck/keybed vertical allocation measured 0.4782/0.5218 (deck including top rail 209.12 px, keybed including bottom rail 228.21 px, instrument height 437.33 px) against 0.54/0.46 +/-0.025 - both outside tolerance by about 0.062. The alternative deck-only/keybed-only reading (201.17 and 200.25 over 401.42) gives 0.5011/0.4989, still outside.",
+          "All six horizontal section fractions are exact and in the specified order, measured from the rendered section-slot boxes (widths 184.06, 262.94, 111.75, 164.34, 328.69 and 262.95 px over a 1314.73 px total): performance 0.1400 (spec 0.14), organ 0.2000 (0.20), piano 0.0850 (0.085), program 0.1250 (0.125), synth 0.2500 (0.25), effects 0.2000 (0.20).",
+          "The chassis is continuous - one .instrument element carrying a single red gradient with top rail, deck, keybed, bottom rail and status bar - with no marketing hero and document scrollHeight equal to the 900 px viewport, so nothing scrolls.",
+          "Controls escape the chassis geometry: 84 of 161 deck controls overflow their section plate and several render inside the keybed's vertical band (#piano-model at y 600.2-636.8 against a keybed spanning y 440.45-640.70)."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "rating": 1,
+        "evidence": [
+          "The DOM inventory is complete: 234 IDed controls and 53 role=slider elements, with every sectionLandmarks.required item declared - nine drawbars (#organ-drawbar-1 to -9) with LED ladders, B3/Vox/Farf/Pipe model switches, percussion and rotary controls, piano layer/type/model/detail controls, #program-oled with #program-dial, eight #program-btn-N, page up/down, Live Mode and Scene I/II, Store, Store As and Split, three morph assign buttons, a single #synth-oled, effect groups 1 and 2, amp/EQ, delay, compressor, reverb and FX focus controls.",
+          "Nothing forbidden is present: exactly two primary OLEDs (program and synth), a performance section that is bare red chassis with no inset plate and no display (artifact/src/styles.css:99 sets .section-performance background transparent), and an effects section that is not one undifferentiated grid.",
+          "But 84 of those 161 controls never appear on the rendered panel. Clipped per section: Organ 14 of 33, Piano 20 of 24, Program 10 of 23, Synth 27 of 38, Effects 13 of 35, Performance 0 of 8.",
+          "The clipped controls are also unclickable - document.elementFromPoint at the centre of #piano-type-grand returns key-56, of #piano-type-clav and #piano-model returns key-53, of #fx-reverb-on returns key-91, of #fx-bypass returns key-94, and of #synth-filter-freq and #program-store returns the control-deck.",
+          "The consequence is that whole required landmark groups are absent from the panel a player sees: the six piano type selectors, the piano model selector, the piano detail switches, organ percussion and rotary, compressor, reverb and effects bypass, and the entire synth filter, envelope, LFO and arpeggiator block."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "rating": 3,
+        "evidence": [
+          "Counted in the rendered page: 73 .piano-key elements, 43 white and 30 black, with ids key-28 (aria-label 'E1 key') through key-100 - exactly the Stage 4 73 variant's 73 keys, E1 to E7, and the correct 43/30 split.",
+          "All 73 key boxes fall inside the keybed container: the keybed box is left 44.20, right 1395.80, top 440.45, bottom 640.70, and 73 of 73 keys are contained within it (keys inside == key count == 73).",
+          "Geometry measured: white keys 30.63 x 182.03 px and black keys 18.98 x 111.03 px, giving a black/white width ratio of 0.6197 and a height ratio of 0.6100 against the variant's blackKeyHeightFraction of 0.61.",
+          "Layout is even and symmetric: 43 white keys at 30.63 px total 1317.1 px inside a 1351.59 px keybed, leaving 17.2 px and 17.3 px insets left and right, with the first white key starting at x 61.42.",
+          "Pressed state works from a real pointer event: #key-60 became class 'piano-key white is-pressed' with aria-pressed=true on pointerdown and reverted to 'piano-key white' with aria-pressed=false on pointerup.",
+          "Detail is simplified in ways a player would notice: keys are flat rounded rectangles with a three-stop linear gradient (rgb(244,244,244) to rgb(220,220,220) to rgb(200,200,200)), with no key front, chamfer, inter-key shadowing or felt strip."
+        ]
+      },
+      {
+        "id": "materialsTypography",
+        "rating": 2,
+        "evidence": [
+          "All five referenceColors are matched exactly in computed styles: the chassis gradient runs rgb(163,34,48) to rgb(133,26,37) = #851a25 (chassisMid) to rgb(90,12,19) = #5a0c13 (chassisDark); section plates use var(--panel) #3c424d (panelBlueGray, artifact/src/styles.css:7); white keys resolve to rgb(220,220,220) = #dcdcdc (keyWhite) and black keys to rgb(11,11,11) = #0b0b0b (keyBlack).",
+          "Control caps are modelled rather than generic: .ctrl-knob carries a --knob-rot custom property that changes with value, .ctrl-fader has a distinct cap and track, drawbars have a nine-segment LED ladder (8 lit at value 100), and 43 LEDs are lit across the panel at rest.",
+          "OLED treatment is credible: green monospace on a near-black inset for both #program-oled ('1.1 Concert Grand', with an 'E' dirty glyph) and #synth-oled ('Saw'), and these are the only two primary displays.",
+          "Silkscreen legends fail at rendered size: label font-size computes to 7.2 px and 6.912 px with text-overflow:ellipsis and white-space:nowrap, and labels truncate - 'Modulation Wheel' measured a 52.0 px box against a 65 px scrollWidth, and the rendered panel shows 'Piano Sectio...', 'Synth Octa...', 'Mod 2 Amou...' and 'Organ A Oct...'.",
+          "The page background is a neutral light product-study gradient (body rgb(232,230,227), shell #f2f0ed to #e4e1dc) with no reference image used as a rendered backdrop."
+        ]
+      },
+      {
+        "id": "panelState",
+        "rating": 1,
+        "evidence": [
+          "Some state does track the instrument: driving #organ-drawbar-1 from 80 to 100 lit 8 of its 9 LED segments; #perf-master-level moved aria-valuenow 75 -> 50 and its --knob-rot custom property changed; selecting #synth-layer-b changed the Synth OLED from 'Saw' to 'Square'; program buttons update #program-oled ('1.1 Concert Grand' -> '1.3 Tine Stack' -> '2.3 Program 2.3' -> 'Live 1').",
+          "But the panel does not re-render on section edits: after clicking #piano-type-clav, data-piano-type on .instrument still read 'Grand' at 250 ms and again after a further 800 ms, updating only when an unrelated program event forced a render.",
+          "The dirty indicator is untruthful: data-dirty stayed '0' through a Piano type edit and a following Organ model edit.",
+          "The panel actively contradicts the instrument after a recall: having pressed Store and navigated 1.1 -> 1.4 -> 1.1, the engine reported data-piano-type='Grand' while #piano-type-clav remained aria-pressed=true and #piano-type-grand aria-pressed=false, i.e. a lit LED for a sound that is not loaded.",
+          "The program list view takes over the primary OLED, rendering '1:Concert Grand | 2:Studio Upright | 3:Tine Stack | ...' into #program-oled rather than using a separate list surface."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "rating": 1,
+        "evidence": [
+          "Measured at 390x844: instrument box x 1.9, width 386.1, height 438.9 (width fraction 0.9901), document scrollWidth 390 so there is no horizontal scroll, and all 73 keys still render.",
+          "The deck collapses to 169.0 px against a 201.0 px keybed and clipping is worse than at desktop: only 5 of the 9 drawbars remain visible and roughly four controls survive per section.",
+          "Section titles themselves clip - the rendered narrow screenshot shows 'PERFORMAN' and 'PROGRAM' cut at the plate edge, and the Piano section shows 'iano Secti' and 'Piano Le'.",
+          "About 400 px of empty page sits below the instrument (438.9 px of instrument in an 844 px viewport) rather than the layout using that space to restore the deck."
+        ]
+      }
+    ]
+  },
+  "trial": "rubric-2.0.0 trial, run 1 of n — not registered"
+}

@@ -1,0 +1,145 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "grok-4-5",
+  "stage": 1,
+  "evaluator": "Independent blind Stagebench phase-1 evaluator: rebuilt the artifact (pnpm install/test/typecheck/lint/build on Node 24), served dist/ on a private port, and measured DOM geometry, hit-testing and real Web Audio output in headless Chromium via an analyser tapped onto the AudioContext destination.",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-15T19:40:00Z",
+  "summary": "A clean, honest, but thin Phase 1. All four gates pass locally (32 tests / 12 files, typecheck, lint, build) and the audio declaration is exactly what the running build does: four sine partials per note, no samples anywhere in dist. Pointer, multi-touch (CDP two-finger), computer keyboard and Web MIDI all reach one note lifecycle with audible velocity (peak 0.020 at vel 20 vs 0.060 at vel 110), working CC64/Space sustain, 32-voice oldest-first stealing and no clipping (peak 0.417 on 40 notes). The failures are in the surface and in what the tests actually prove. At 1440x900 the deck occupies 0.478 of the instrument against the required 0.54 +/-0.025, and 83 of 161 controls are clipped out of their section plates and buried under the keybed: clicking where the piano type selectors sit plays a note (peak 0.063) instead of moving the control. Held notes never stop when a MIDI port disconnects, and a held key's level is perfectly flat for 2.5 s, so nothing decays like a piano. Every audio assertion in the suite runs against a mock AudioContext and checks voice counts, never signal.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "rating": 2,
+          "evidence": [
+            "Measured envelope of a held MIDI note (C4, vel 110) through an analyser tapped on ctx.destination: peak 0.0331 at t=203 ms and still exactly 0.0331 at t=2427 ms - after the 120 ms initial decay the amplitude is perfectly flat, so a held note never decays. Source: artifact/src/audio/piano-engine.ts:156-157 ramps to peak then to peak*0.55 at +0.12 s and schedules nothing further.",
+            "Voice is dependable and even across the whole variant range: lowest key E1 (midi 28) peak 0.0508, highest key E7 (midi 100) peak 0.0543; 40 simultaneous MIDI notes (32-voice cap) peak 0.4175 with no clipping and no console errors.",
+            "Velocity and release do behave: pointer press at 5% key height peak 0.0321 vs 90% height peak 0.0656; after note-off the tail measures 0.0052 at +120 ms and 0.000 at +720 ms (release 0.35 s exponential, artifact/src/audio/piano-engine.ts:208-212).",
+            "Timbre is four fixed sine partials at 1x/2x/3x/4x with no inharmonicity, no detune, no hammer or key-off noise and no brightness change across the keybed (artifact/src/audio/piano-engine.ts:160-165); FFT of a held A4 shows the fundamental at 439.5 Hz and no non-harmonic content."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "rating": 4,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares 'Live additive synthesis (sine partials + amplitude envelope)', generatedSources=1, sampleSources=0, kind 'live-synthesis'. Verified against the running build: dist/ contains only index.html, one JS and one CSS chunk (no audio assets), and no media request occurs on load; every voice is built from ctx.createOscillator() with type 'sine' (artifact/src/audio/piano-engine.ts:168-179).",
+            "The declared decorative boundary is true in the build: clicking piano-type-electric toggled aria-pressed false->true and the analyser read peak 0.000000 during and after the click; no panel control reaches PianoEngine anywhere in artifact/src/components/ControlWidget.tsx.",
+            "Declared boundaries match the code: createContext injection (artifact/src/audio/piano-engine.ts:50), MidiInput requestAccess injection (artifact/src/input/midi.ts:42-52), attachKeyboardInput target (artifact/src/input/keyboard.ts:77). Status reporting is truthful in the running app - MIDI reads 'denied' with no Web MIDI grant, 'connected' with a stubbed requestMIDIAccess, and 'disconnected' after a port statechange.",
+            "Declaration notes correctly scope sustain to 'Space key, MIDI CC64, and engine API only'; observed exactly that - the organ-sustped and piano-sustped panel buttons toggle presentation state and produce no audio change."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "rating": 3,
+          "evidence": [
+            "Pointer: mouse down on [data-key-midi=60] produced analyser peak 0.0656 and class 'piano-key white is-pressed'; mouse up returned the analyser to 0.000 within 720 ms.",
+            "Touch: CDP Input.dispatchTouchEvent with two simultaneous touch points lit keys 60 and 64; releasing point 1 left only key 64 pressed, confirming independent per-pointer note ownership (artifact/src/components/Keybed.tsx:97-127).",
+            "Computer keyboard: KeyH mapped to midi 60 produced peak 0.0552 with the key visually pressed; repeat suppression is implemented at artifact/src/input/keyboard.ts:95-99 and holds under a repeat:true keydown.",
+            "Web MIDI: with navigator.requestMIDIAccess stubbed, the app reported midiState 'connected'; 0x90 60 110 produced peak 0.0600 and lit key 60, 0x90 60 20 produced 0.0204, 0xB0 64 127 sustained the note past note-off (tail 0.0299) and 0xB0 64 0 dropped it to 0.000.",
+            "Simplification a player would notice: the computer-key map duplicates notes across rows (KeyA and Comma both -> 52, KeyQ and KeyK both -> 64) and skips F2 (KeyX -> 42), so two mapped keys on the same pitch collide in the midi->noteId map in artifact/src/components/Instrument.tsx:49-58."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "rating": 2,
+          "evidence": [
+            "MIDI disconnect does not stop held notes: with midi 60 and 64 held (peak 0.1159) an input port statechange to 'disconnected' left the analyser at peak 0.0661 1.2 s later with both keys still lit; artifact/src/input/midi.ts:69-79 only sets state and calls onSustain(false), never all-notes-off. TASK.md requires all-notes-off on blur/disconnect/unmount.",
+            "Blur and unmount are correct: dispatching window blur while holding a note took the analyser from 0.0661 to 0.000, and the unmount effect disposes the engine (artifact/src/components/Instrument.tsx:102-127).",
+            "Velocity mapping measured end to end: MIDI velocity 20 -> peak 0.0204 vs velocity 110 -> peak 0.0600 (2.9x); pointer y-position velocity 0.0321 vs 0.0656.",
+            "Voice stealing is deterministic oldest-first at 32 voices (artifact/src/audio/piano-engine.ts:140-144); 40 held MIDI notes gave peak 0.4175 with no clipping, but 40 keys stayed lit against 32 live voices, so 8 stolen voices leave keys visually held with no sound. Stealing is an immediate osc.stop() with no fade."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "rating": 2,
+          "evidence": [
+            "83 of 161 controls (52%) fail hit-testing at 1440x900: document.elementFromPoint at their centre returns a piano key or the status bar, not the control. Cause: .deck-section sets overflow:hidden (artifact/src/styles.css:93) while .section-controls wraps past the plate - worst overflow is 347.8 px below the piano plate; the piano section has 20 of 24 controls below its plate, synth 27 of 38, organ 14 of 33.",
+            "Consequence observed: pressing the mouse at the centre of piano-type-grand's rect (589.9, 541.5) sounded a note (analyser peak 0.0632) and left aria-pressed unchanged at 'true' - the control cannot be reached by pointer at all, only by Tab.",
+            "Controls that are visible do move and report state: dragging perf-master-level 75->100, perf-mod-wheel 0->100, organ-drawbar-1 80->98, organ-level-a 80->94, program-dial 0->50, fx-mod1-rate 40->90 (aria-valuenow read back after each drag); perf-pitch-stick springs 0->90->0 on release; perf-panic flashes is-on and clears after 120 ms.",
+            "The decorative boundary itself is honest: no panel control produced any audio (peak 0.000000 after clicks), and the status bar states 'Panel controls are decorative (Phase 1)'. Focus is visible - :focus-visible outlines are defined for .ctrl-btn, .ctrl-knob, .ctrl-fader, .ctrl-wheel, .ctrl-stick and .piano-key, and only the two OLEDs are non-focusable."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "phase1Coverage",
+          "rating": 2,
+          "evidence": [
+            "All 11 required IDs are mapped to real non-empty test files in artifact/tests/feature-matrix.json and the suite passes (12 files / 32 tests), as do typecheck, lint and build (dist/index.html produced).",
+            "visual.section-layout is not met in the render: measured deck+top rail = 0.4782 of instrument height (deck 201.2 px, top rail 7 px, instrument 437.3 px) against the required 0.54 +/-0.025, and keybed+bottom rail+status = 0.5218 against 0.46 +/-0.025. .control-deck uses flex-basis 54% but shrinks (artifact/src/styles.css:71). artifact/tests/visual-section-layout.test.ts only asserts the constants 0.54/0.46, never a rendered box.",
+            "regression.chassis claims no overflow or clipping at 1440x900 and 390x844, but artifact/tests/regression-chassis.test.tsx runs in jsdom with no layout: measured 84 controls overflow their section plates at 1440x900 and only 38 of 161 controls are visible at 390x844 (instrument squeezed to 386.1 px wide, white keys 8.67 px). The visual audit's claim that narrow uses 'width: 180vw' horizontal pan does not hold - flex shrink overrides it.",
+            "Geometry that is correct and measured: 73 keys (43 white / 30 black), all 73 boxes inside the keybed bounds, black/white height ratio 0.6100 vs specified 0.61, aspect ratio 3.0951 exact, instrument width fraction 0.940 within 0.88-0.97, six sections in the documented order at rendered fractions 0.1362 / 0.1945 / 0.0827 / 0.1216 / 0.2432 / 0.1946 vs 0.14 / 0.20 / 0.085 / 0.125 / 0.25 / 0.20 (max deviation 0.0068, from inter-section gaps), and exactly two primary OLEDs at Program and Synth.",
+            "The audio test rules in TASK.md are not satisfied: every audio assertion runs against artifact/src/test/mock-audio.ts and checks getActiveVoiceCount(); no test proves output differs from silence, that velocity moves amplitude, or that release/sustain change duration - e.g. artifact/tests/piano-sustain-polyphony.test.ts:35-42 'velocity response' only asserts two voices exist."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "critical",
+      "title": "Half the control surface is clipped out of sight and unreachable by pointer",
+      "detail": "At 1440x900, 83 of 161 controls fail centre hit-testing: .deck-section is overflow:hidden while .section-controls wraps past the plate, so rows of controls are painted-clipped and their layout boxes sit under the keybed and status bar (worst 347.8 px below the piano plate). Pressing at piano-type-grand's centre sounded a piano note (peak 0.0632) and left the control unchanged. The phase hard gate requires every visible panel control to move or press accessibly; these controls are only reachable by Tab, and the whole Piano type/model/timbre landmark group plus most of Effects and Synth is invisible.",
+      "criterion": "controlBoundary"
+    },
+    {
+      "severity": "major",
+      "title": "Deck/keybed vertical split out of tolerance in the rendered build",
+      "detail": "Measured at 1440x900: deck+top rail 0.4782 of instrument height vs required 0.54 +/-0.025 (allowed 0.515-0.565); keybed+bottom rail+status 0.5218 vs 0.46 +/-0.025. Excluding the status bar from the chassis still gives 0.499. .control-deck declares flex: 0 0 calc(0.54 * 100%) but has default flex-shrink, and rails plus the status bar over-subscribe the aspect-ratio-fixed height, so the deck is compressed to 0.46 of the box.",
+      "criterion": "phase1Coverage"
+    },
+    {
+      "severity": "major",
+      "title": "Held notes never stop when a MIDI port disconnects",
+      "detail": "With two MIDI notes held, an input port statechange to 'disconnected' left the analyser at peak 0.0661 after 1.2 s with both keys lit. src/input/midi.ts only calls setState('disconnected') and onSustain(false); nothing releases the held note ids tracked in Instrument.tsx. TASK.md requires all-notes-off on blur/disconnect/unmount - blur and unmount are handled, disconnect is not.",
+      "criterion": "voiceLifecycle"
+    },
+    {
+      "severity": "major",
+      "title": "Piano voice has no decay after 120 ms",
+      "detail": "A held note measures peak 0.0331 at 203 ms and 0.0331 at 2427 ms - dead flat. The envelope ramps to peak, decays to 55% of peak at +0.12 s, then schedules nothing until release, so a held key sustains at constant level indefinitely. With four pure sine partials and no inharmonicity this reads as an organ-ish tone rather than a piano.",
+      "criterion": "pianoVoice"
+    },
+    {
+      "severity": "major",
+      "title": "Audio behavior is only tested against a mock AudioContext",
+      "detail": "All twelve test files use src/test/mock-audio.ts and assert voice counts or oscillator .started flags. Nothing asserts output differs from silence, that velocity moves amplitude, or that sustain/release change duration, which TASK.md explicitly rules out ('a state-only test with fakes is not enough'). The same blind spot lets visual.section-layout and regression.chassis pass in jsdom while the rendered geometry is out of tolerance.",
+      "criterion": "phase1Coverage"
+    },
+    {
+      "severity": "minor",
+      "title": "Visual audit overstates the narrow-viewport layout",
+      "detail": "evidence/stage1-visual-audit.md says narrow uses 'width: 180vw' horizontal pan 'so controls remain inspectable'. Measured at 390x844 the instrument is 386.1 px wide (the flex item shrinks inside .app-shell), white keys are 8.67 px, and only 38 of 161 controls are visible. The claim does not describe the sealed build.",
+      "criterion": "phase1Coverage"
+    },
+    {
+      "severity": "minor",
+      "title": "Stolen voices leave keys visually held",
+      "detail": "Holding 40 MIDI notes against the 32-voice cap left 40 keys with class is-pressed while only 32 voices sound; the steal path calls forceStop without clearing hardwareStore key state, and it stops oscillators with no fade.",
+      "criterion": "voiceLifecycle"
+    },
+    {
+      "severity": "minor",
+      "title": "Duplicated and gapped computer-keyboard mapping",
+      "detail": "src/input/keyboard.ts maps KeyA and Comma both to 52, KeyQ and KeyK both to 64, and the number row overlaps the top row; Instrument.tsx tracks keyboard notes in a midi->noteId map, so two mapped keys on one pitch overwrite each other's note id. KeyX jumps to F#2, skipping F2.",
+      "criterion": "inputCoverage"
+    },
+    {
+      "severity": "minor",
+      "title": "Black keys are uniformly centred on white-key boundaries",
+      "detail": "Every black key centre measures -0.04 white-key widths from the boundary between its neighbours, identical for all five pitch classes (C#, D#, F#, G#, A#), because Keybed.tsx uses one fixed 0.65 offset. Real key groups use per-pitch offsets; black/white width ratio is 0.620 and the height ratio 0.610 matches the specified 0.61.",
+      "criterion": "phase1Coverage"
+    }
+  ],
+  "trial": "rubric-2.0.0 trial, run 1 of n — not registered"
+}

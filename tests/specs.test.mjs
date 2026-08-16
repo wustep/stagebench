@@ -10,7 +10,10 @@ const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, re
 const manifest = readJson('specs/benchmark-phases.json')
 
 test('phase manifest defines a complete three-phase cumulative target contract', () => {
-  assert.equal(manifest.version, '1.1.0')
+  // Pinned deliberately: the protocol version is comparison-critical, so a
+  // change here has to be a change someone made on purpose. 2.0.0 introduced
+  // the run-level panel axis and computed criteria.
+  assert.equal(manifest.version, '2.0.0')
   assert.equal(manifest.phaseCount, 3)
   assert.equal(manifest.selectionMode, 'cumulative-target')
   assert.deepEqual(manifest.selection, { '1': [1], '2': [1, 2], '3': [1, 2, 3] })

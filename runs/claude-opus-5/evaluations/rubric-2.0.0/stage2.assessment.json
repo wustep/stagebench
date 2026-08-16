@@ -1,0 +1,145 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-opus-5",
+  "stage": 2,
+  "evaluator": "Blind Phase 2 evaluator; audited the sealed source, rebuilt the artifact, ran its own suite, and measured rendered audio in headless Chrome by tapping the AudioContext destination (ScriptProcessor capture plus an independent AnalyserNode tap) and A/B-ing every unit, type and control against a dry reference.",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-15T20:55:00Z",
+  "summary": "An unusually complete and honest Phase 2. Six piano types are genuinely distinct in the browser (min pairwise normalised-spectrum distance 0.10 against a 0.03-0.06 noise floor); Grand/Upright/Electric are 71 bundled 24 kHz WAVs with full CC BY/CC0/MIT provenance. Every effect unit, every listed type, both mod units, delay (feedback, tempo, filter-on-repeats-only), amp/EQ, compressor and rotary measurably change rendered audio, every bypass returns the dry signal, and all six piano performance controls plus layer level, octave and sustain reach the graph. One AudioContext, one destination connection, per-layer buses, documented order, master mute to digital silence. The defect that dominates: Reverb Hall and Cathedral self-oscillate in real Web Audio. Chrome reads BiquadFilter Q for lowpass in dB, so the tank's Q=0.7 damper peaks at x1.2215 and the comb loop gain becomes 1.06 (Hall) and 1.14 (Cathedral). After one 200 ms note at the default dry/wet the output climbs to the limiter's ceiling 0.89363 and stays there forever, with no visible indication. The candidate's offline renderer uses linear-Q coefficients, so its otherwise excellent signal-level tests cannot see it.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "rating": 3,
+          "evidence": [
+            "Measured in the running build (127.0.0.1:5401, bundle index-CgSbg-dB.js matching my own rebuild): all 15 type pairs are spectrally distinct on the same note (C4, v0.75). Minimum pair Upright|Electric 0.102, maximum Upright|Misc 0.437, on a normalised 30-band log spectrum whose bypass-vs-dry noise floor I measured at 0.03-0.06.",
+            "Envelope character differs per type, not just EQ: decay ratio (rms 0.6-1.2 s over rms 0-0.2 s) Clav 0.018, Upright 0.127, Misc 0.127, Grand 0.213, Digital 0.499, Electric 0.549; crest factor Electric 3.01 vs Clav 8.12.",
+            "Recorded sets are real multisamples, not one stretched note: on Grand the spectral distance between adjacent measured registers (MIDI 31/43/55/67/79/91) is 0.43, 0.89, 0.90, 1.21, 1.15. 71 WAV files ship in dist/samples (grand 4.8 MB, upright 3.7 MB, electric 1.4 MB) and load from the same origin with no network.",
+            "Provenance is complete and truthful in IMPLEMENTATION_DETAILS.json lines 42-137: FreePats YDP-GrandPiano (CC BY 3.0, 14 roots, 2 velocity layers), UprightPianoKW (CC0, 17 roots, 2 layers), FluidR3 Rhodes (MIT, 13 roots, 1 layer), each with root notes, velocity split and max pitch shift (3-4 semitones) declared; Clav/Digital/Misc are declared oscillator synthesis and the display prints SYNTHESISED.",
+            "Velocity is expressive, not a gain stage: soft (0.12) vs hard (0.97) strokes on Grand differ by 14.1 dB rms and the 1.5-5 kHz energy relative to level rises from 0.00085 to 0.00213.",
+            "Simplifications a player would hear: every set is mono 16-bit at 24 kHz (12 kHz bandwidth, artifact/src/audio/sampleManifest.json), the Electric set has a single recorded velocity layer (declared), and Clav/Digital/Misc are three- to four-partial oscillator stacks (artifact/src/audio/pianoVoice.ts)."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "rating": 2,
+          "evidence": [
+            "CRITICAL, observed live: with Reverb set to Hall at the panel default dry/wet (6.4), one 200 ms note drives the output to a constant 0.89363 rms = 0.89363 peak within ~5 s and it never decays. Per-second rms trace after the single note: 0.048 0.039 0.154 0.467 0.806 0.854 0.879 0.887 0.892 0.893 0.893 0.894 0.894 0.894 0.894 0.894, still 0.89363 after 8 further seconds of silence. Reproduced with two independent taps (ScriptProcessor capture and an AnalyserNode-only tap that adds no node to the signal path); level was exactly 0 before the note.",
+            "Root cause measured in the page: ctx.createBiquadFilter() type 'lowpass', frequency 2600, Q 0.7 has getFrequencyResponse peak magnitude 1.2215, because Web Audio reads Q for lowpass/highpass in dB. In artifact/src/audio/effects.ts:831 each comb damper is filterOf(context,'lowpass',shape.damping,0.7) inside a feedback loop of REVERB_SHAPES.hall.feedback 0.87 and cathedral 0.93 (effects.ts:786-787), giving loop gains 1.063 and 1.136. Booth 0.42, Room 0.68, Spring 0.79, Stage 0.80 stay below unity and decay normally (Room to silence in 1.5 s, Stage in 7.5 s).",
+            "The candidate's own audio tests do assert on real rendered signal, not mocks or voice counts (src/audio/effectsUnits.test.ts renders notes and measures rms, band energy, crest factor and stereo imbalance) - but against its own renderer, artifact/src/audio/offline.ts:423, whose biquad uses alpha = sin/(2*q) with q linear (RBJ). That renderer is flat at Q=0.7 where Chrome peaks at +1.7 dB, which is exactly why 200 passing tests miss this.",
+            "Recovery behaviour I observed: turning the unit off silences it (rms 0) but re-enabling restores the saturated tank immediately (0.893632); only changing the reverb type rebuilds the tank and clears it. Nothing in the UI reports the condition.",
+            "Everything else measured correct. Mod 1: all 6 types render and differ (A-Pan stereo imbalance 0.763 vs 0 dry; Tremolo modulation depth 0.946 at amount 10 versus 0.462 for the bare note; Ring Mod rate moves 2.5-7 kHz energy 2.85e-5 to 4.32e-5 with spectral distance 0.843 low vs high; A-Wah 700-3000 Hz energy relative to level 0.00282 soft vs 0.02646 hard, a 9.4x envelope response). Mod 2: all 15 pairs distinct, min 0.107.",
+            "Delay: feedback 1 to 9.5 raises the 1.5-3.2 s tail from 0.00021 to 0.02834; tempo 10 leaves a silent gap (0.6-0.9 s rms 2.5e-5) where tempo 0.2 is still repeating (0.0323); the feedback filter touches only the repeats (attack rms 0.0534/0.0506/0.0522 for LP/BP/HP while tail low-band energy is 8.57e-4 LP vs 6.4e-5 HP) and successive repeats dull (LP 1.5-5 kHz early 6.49e-5, late 2.5e-5). Dry/wet 0.5 to 9.5 moves the tail 0.00158 to 0.02000.",
+            "Amp/EQ and dynamics: all 6 amp positions distinct (min pair Twin|To Rotary 0.157); drive 0 to 10 drops crest factor 7.17 to 2.10; bass +15 dB raises 60-130 Hz from 4.82e-3 to 1.04e-2, treble +15/-15 dB gives 3500-6000 Hz 1.19e-4 vs 1.94e-5, mid +15 dB 5.86e-4 to 2.11e-3; LP24 cutoff sweep 2000-6000 Hz energy 1.1e-6 closed vs 5.07e-5 open, HP24 80-300 Hz 2e-7 vs 1.34e-3; resonance knob spectral distance 0.637. Compressor amount 0 to 10 narrows the soft/loud gap from 12.34 dB to 5.07 dB and lifts the decay tail ratio 0.084 to 0.159. Rotary Fast vs Slow: envelope crossings 2 vs 0 and stereo imbalance 0.370 vs 0.279; drive 0 to 10 drops crest 7.59 to 4.65.",
+            "Bypass is genuinely clean for every unit: spectral distance to the dry reference 0.037 (Mod 1), 0.047 (Mod 2 / compressor), 0.059 (delay, tail exactly 0), 0.032 (amp), 0.040 (reverb) - all at the measurement noise floor."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "rating": 3,
+          "evidence": [
+            "Exactly one connection reaches the destination: my patched AudioNode.prototype.connect counted taps = 1 for the whole session, and artifact/src/audio/pianoEngine.ts:97-98 wires master -> wave-shaper limiter -> context.destination once, with pianoBus and the shared rotary both joining at master (pianoEngine.ts:100-106).",
+            "Per-layer buses and the documented order are real, not a comment: artifact/src/audio/layer.ts:76-82 chains input -> Mod 1 -> Mod 2 -> Delay -> Amp/EQ -> Compressor -> Reverb -> layer level, then dryOut to the piano bus or rotaryOut to the shared rotary (layer.ts:149-154, 188-192).",
+            "Mute paths are exact, not approximate: Master Level at 0 gives rms 0.00000000 and peak 0.00000000 while keys are played; Piano Section On off gives the same digital silence; the Layer Effects ON bypass with all six units enabled returns rms 0.031508 against the dry reference 0.031545 (spectral distance 0.047).",
+            "Under load the master path stays bounded: 10 notes at velocity 0.95 with both layers enabled and Master Level at 10 gave peak 0.89363 with no sample at or above 1.0 and no NaN or Inf in 192512 captured frames; a 40-note burst over 1.8 s produced the same peak, no non-finite samples, and the voice counter returned to 00.",
+            "Gain-staging defect: the limiter table (pianoEngine.ts:391-402) is only computed for x in [-1,1], so Chrome clamps to the final table entry 0.89363 instead of continuing the soft knee toward the intended 0.97 ceiling. Every overload therefore flat-tops at exactly 0.89363 - the value I measured for the fff chord, for fully wet Hall/Cathedral, and for the runaway tank.",
+            "Master Level tracks sensibly elsewhere: rms 0.025005 at 5/10 versus 0.049113 at 10/10 on the same note (a 5.9 dB step), and moving Organ, Synth and Program controls left the rendered output unchanged (spectral distance 0.031, rms 0.070 vs 0.070)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "rating": 3,
+          "evidence": [
+            "Two independent layers verified in the build: enabling Piano B with a different type raised the same note from rms 0.037958 / peak 0.26739 to rms 0.116279 / peak 0.61233 with spectral distance 0.209, and disabling it restored the original figures exactly.",
+            "Effect settings are banked per layer and focus follows the layer: with Mod 1 On for layer A, pressing FX Focus Piano moved focus to Piano B where Mod 1 reads aria-pressed false, and returning to A restored true. Group mode (Shift + FX Focus Piano) lit the group LED and wrote a Mod 2 change into both layers; Shift + Delay On lit the Delay global LED.",
+            "Every detailed piano control measurably reaches the audio graph: Unison Off to 3 raises stereo width 0 to 0.591; Dyn Comp Off to 3 narrows the soft/loud range 13.57 dB to 2.60 dB by lifting soft strokes 0.0188 to 0.0688; KB Touch Light vs Heavy at identical pointer velocity gives 0.0644 vs 0.0316 rms (6.2 dB); Timbre Off/Soft/Mid/Bright gives 2-6 kHz energy relative to level 5.45e-4 / 1.86e-4 / 5.48e-4 / 1.27e-3; Soft Release lengthens the post-release tail 0.00264 to 0.01966; String Res on a pedalled three-note chord raises the 1.2-2.8 s tail 0.02204 to 0.02762.",
+            "Layer level and octave shift are real: fader 10 to 3 moves rms 0.087286 to 0.026284, and one Octave Up press doubles the measured fundamental of MIDI 55 from 198.3 Hz to 396.7 Hz (autocorrelation).",
+            "Sustain reaches the engine and is per layer: with the pedal held the tail at 0.5-1.0 s is 0.105821 against 0.000026 without it, and 1.0-2.0 s is 0.046595 against 0. The SUSTPED routing per layer is implemented at artifact/src/audio/pianoEngine.ts:288 and derived from the panel at artifact/src/state/settings.ts:109.",
+            "Simplifications a player would notice: String Res is a four-comb resonator bank tuned to the held notes rather than pedal-down recordings (layer.ts:156-180, declared), and Dyn Comp level 3 compresses to a 2.6 dB range, which is more aggressive than the hardware's gentle lift."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "rating": 3,
+          "evidence": [
+            "Stress pass in the running build: 40 notes triggered at 45 ms intervals over 1.8 s produced 192512 captured frames with 0 NaN and 0 Inf samples, peak 0.89363, and after release the display returned to VOICES 00 with the status still reading 'Audio engine running'. Zero console errors were recorded across every normal measurement session.",
+            "Asset failure degrades visibly and stays playable: with all /samples/** requests aborted, the display shows 'FALLBACK VOICE' and the status strip reads 'Sample set grand failed to load - playing the labelled synthesised fallback voice', while the keybed still sounds (rms 0.123034, peak 0.43058). The library is never reported ready in that state (artifact/src/audio/pianoEngine.ts:189-214).",
+            "Honest state reporting elsewhere: the Program display reads 'AUDIO SUSPENDED' before the first gesture and 'AUDIO READY' after, prints 'MIDI DENIED' when permission is refused, and labels 'RECORDED SAMPLES' versus 'SYNTHESISED' per selected type; the status vocabulary is restricted to states that can actually occur (artifact/src/audio/host.ts:8-28).",
+            "Control inventory matches the declaration exactly: 147 controls carry data-functional, 48 true and 99 false, with Organ 0/24, Synth 0/40 and Program 0/28 functional - the same numbers IMPLEMENTATION_DETAILS.json line 143 claims. Operating decorative controls left rendered audio unchanged (spectral distance 0.031).",
+            "The candidate's own suite is green on the rebuilt copy: 15 files, 200 tests passing under Node 24 (pnpm run test), plus typecheck, lint and build, matching inputs/verification.json.",
+            "Counter-evidence for this criterion: the Hall/Cathedral reverb runaway is a failure that does not degrade visibly - the instrument emits a constant full-scale tone with no message, no LED and no status change, and the only escape from the panel is to change the reverb type."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "phase2Coverage",
+          "rating": 3,
+          "evidence": [
+            "All 20 declared features in artifact/tests/feature-matrix.json are backed by named test files, and inputs/verification.json records 20/20 covered with a passing gate run; I re-ran the same suite (200 tests) and independently exercised each headline feature in the browser rather than trusting the matrix.",
+            "Piano spec required list is complete and verified live: six types selectable, three of them bundled recordings, two layers, KB Touch, Dyn Comp, Timbre (including the electric-only Dyno options gated at artifact/src/state/hardware.ts:184-186), Unison, Soft Release, String Res, sustain from UI/keyboard/MIDI CC64, and a labelled fallback - each measured above.",
+            "Effects spec required list is present: six units per layer chain plus one shared rotary, every listed type in Mod 1 (6), Mod 2 (6), Amp (6 panel positions) and Reverb (6), FX focus following layer focus, manual Piano focus button, group mode, global mode on Delay/Comp/Reverb, per-unit bypass, all-effects bypass, and the documented order. Tap tempo works: two taps 400 ms apart moved the Delay Tempo knob from 3.5 to 3.3, matching tapTempoValue in artifact/src/state/hardware.ts:148-154.",
+            "Master Level and Panic-equivalent cleanup are real (master 0 gives digital silence; allNotesOff/panic at artifact/src/audio/pianoEngine.ts:309-318), and the rotary speed and drive controls both change rendered audio.",
+            "Gaps against the spec's parameter lists: the Amp unit has no 'EQ only' position (the three-band EQ is instead always in circuit, artifact/src/audio/effects.ts:568-578); Compressor Fast mode is absent (the panel prints FAST with an inert LED, declared unsupported); Master Clock sync is listed for Mod 1 and Delay but nothing is wired to the printed MST CLK legends; optional ping-pong and rotary stop mode are absent (both optional).",
+            "Coverage is honest about what is not implemented: IMPLEMENTATION_DETAILS.json line 143 enumerates every still-decorative control, line 147 declares the approximations (comb/all-pass reverb tanks, unmeasured amp models, simulated string resonance, rectifier/low-pass compressor), and I confirmed each named decorative control reports data-functional=false in the DOM."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "critical",
+      "title": "Reverb Hall and Cathedral self-oscillate to full-scale and never recover",
+      "detail": "In real Web Audio the comb dampers are BiquadFilter lowpass nodes with Q set to 0.7 (artifact/src/audio/effects.ts:831), and Chrome interprets lowpass Q in dB: I measured getFrequencyResponse peak magnitude 1.2215 at 2600 Hz. Multiplied by the tank feedback of 0.87 (hall) and 0.93 (cathedral) from REVERB_SHAPES (effects.ts:786-787) the loop gain becomes 1.063 and 1.136, so the tank is unstable. Observed with two independent destination taps: one 200 ms note with Hall selected at the panel's default dry/wet takes the output from silence to a constant rms=peak=0.89363 (the master limiter's table ceiling) in about 5 seconds, and it is still 0.893632 after 8 more seconds with no notes played. Turning the unit off mutes it but re-enabling restores the saturated tank; only selecting a different reverb type rebuilds and clears it. Booth/Room/Spring/Stage stay below unity gain and decay correctly. Fix: express the damper Q in dB (e.g. 0) for lowpass/highpass, or scale the comb feedback by the damper's peak gain.",
+      "criterion": "sound.effectAudibility"
+    },
+    {
+      "severity": "major",
+      "title": "The offline test renderer models biquad Q differently from the browser, hiding the instability",
+      "detail": "artifact/src/audio/offline.ts:423 computes alpha = sin/(2*q) with q taken as a linear quality factor (RBJ cookbook), while Web Audio converts Q from dB for lowpass and highpass. At Q=0.7 the offline filter is essentially flat and the browser peaks at +1.7 dB. The effect suite is otherwise exemplary - it asserts on rendered signal (rms, band energy, crest factor, stereo imbalance) rather than mocks or voice counts - but 'grows the decay from Booth to Cathedral' passes offline while the same graph runs away in Chrome. Any DSP claim that depends on filter resonance is unverified by this suite.",
+      "criterion": "sound.effectAudibility"
+    },
+    {
+      "severity": "major",
+      "title": "Master limiter curve is only defined over [-1,1], so overload hard-clips at 0.894",
+      "detail": "limiterCurve (artifact/src/audio/pianoEngine.ts:391-402) fills the WaveShaper table across x in [-1,1] only. Chrome clamps input beyond the table, so instead of the intended 0.97 soft-knee ceiling every overload flat-tops at the final table entry, which I measured as exactly 0.89363 for a 10-note fff chord at Master Level 10, for fully wet Hall/Cathedral, and for the runaway tank. Extending the table beyond unity (or pre-scaling into it) would restore the intended soft knee.",
+      "criterion": "sound.signalGraph"
+    },
+    {
+      "severity": "minor",
+      "title": "Fully wet Hall and Cathedral are far hotter than the dry path even before instability",
+      "detail": "The comb bank has a large low-frequency gain (four combs at feedback 0.87-0.93 summed at 1/4) with no compensating trim, so at Dry/Wet 10 the reverb alone drives the master limiter: Stage measured peak 0.36681 against a dry reference peak of 0.28858, and Hall/Cathedral pin the limiter. A per-type output trim would keep the wet mix at parity with the dry path.",
+      "criterion": "sound.signalGraph"
+    },
+    {
+      "severity": "minor",
+      "title": "Three listed effect parameters are absent: EQ-only amp position, Compressor Fast mode, Master Clock sync",
+      "detail": "specs/nord-stage-4.effects.json lists 'EQ only' among the ampEq types, 'Fast mode' among the compressor parameters, and 'Master Clock sync' for Mod 1 and Delay. The amp selector has the hardware's six positions with the three-band EQ always in circuit and no dedicated EQ-only mode; the COMP FAST legend and both MST CLK legends are printed but inert. The Comp FAST case is declared in IMPLEMENTATION_DETAILS.json line 143; the other two are not called out.",
+      "criterion": "features.phase2Coverage"
+    },
+    {
+      "severity": "minor",
+      "title": "Sample sets are mono 16-bit at 24 kHz and the electric set has one velocity layer",
+      "detail": "src/audio/sampleManifest.json declares sampleRate 24000 and 16-bit PCM mono for all 71 files, capping bandwidth at 12 kHz - audible on a concert grand's top octave and on hammer noise. The electric set ships a single recorded take per root (13 roots), so velocity moves gain and filter cutoff rather than selecting a different stroke. Both limits are declared honestly in IMPLEMENTATION_DETAILS.json, and pitch stretch stays within the declared 3-4 semitones.",
+      "criterion": "sound.instrumentBreadth"
+    },
+    {
+      "severity": "minor",
+      "title": "The runaway reverb produces no visible failure indication",
+      "detail": "While the tank is saturated the instrument emits a constant full-scale tone, yet the Program display still reads AUDIO READY, no LED changes, and the status strip reports nothing. The artifact reports asset and MIDI failures honestly, so the same standard should apply to a unit that has left its stable range.",
+      "criterion": "playability.inputReliability"
+    }
+  ],
+  "trial": "rubric-2.0.0 trial, run 1 of n — not registered"
+}

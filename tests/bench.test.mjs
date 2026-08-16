@@ -39,6 +39,26 @@ function fixtureRoot() {
   return root
 }
 
+// Fill the run-level panel axis with values that sit inside every tolerance,
+// so a test that isn't about the gate never trips it by accident. `overrides`
+// substitutes specific measurements for the tests that are about the gate.
+function fillRunAxis(rubric, assessment, overrides = {}) {
+  const block = assessment[rubric.runAxis.category.id]
+  if (!block) return assessment
+  const perfect = {
+    chassisGeometry: { deckFraction: 0.54, keybedFraction: 0.46, widthFraction: 0.92, aspectRatio: 3.0951, sectionFractionMaxDeviation: 0 },
+    hardwareInventory: { requiredLandmarksPresent: 33, requiredLandmarksTotal: 33, controlsReachable: 100, controlsTotal: 100, forbiddenPresent: 0 },
+    keybedFidelity: { keysInsideKeybed: 73, keyCount: 73, whiteKeys: 43, blackKeys: 30, blackKeyHeightFraction: 0.61 },
+    colorFidelity: { referenceColorsMatched: 5, referenceColorsTotal: 5 },
+  }
+  for (const criterion of block.criteria) {
+    criterion.evidence = ['Fixture evidence with a measurement: 0.5400']
+    if (criterion.scoring === 'computed') Object.assign(criterion.measurements, perfect[criterion.id], overrides[criterion.id] ?? {})
+    else criterion.rating = 3
+  }
+  return assessment
+}
+
 function pngHeader(width, height) {
   const bytes = Buffer.alloc(24)
   Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]).copy(bytes)
@@ -240,8 +260,17 @@ test('a run flows new → start → seal → score with sealed digests and a sco
       rubric,
     })
     assert.ok(fs.existsSync(path.join(evalWorkspace.artifact, 'package.json')), 'the evaluator gets a copy of the sealed artifact')
-    assert.ok(fs.existsSync(path.join(evalWorkspace.artifact, 'dist', 'index.html')), 'the built app is included')
+    // The artifact is source; the build is derived and comes from the
+    // published preview, so every evaluator measures the same bits instead of
+    // each building its own.
+    assert.ok(!fs.existsSync(path.join(evalWorkspace.artifact, 'dist')), 'dist is not part of the sealed artifact')
     assert.ok(fs.existsSync(path.join(evalWorkspace.workspace, 'EVAL.md')), 'evaluator instructions are included')
+    // Sealed evidence is read-only so a build cannot be run inside it.
+    assert.throws(
+      () => fs.writeFileSync(path.join(evalWorkspace.artifact, 'intruder.txt'), 'x'),
+      /EACCES|EPERM/,
+      'artifact/ is not writable',
+    )
     assert.ok(fs.existsSync(path.join(evalWorkspace.inputs, 'rubric.json')), 'the rubric is scoped to the evaluator, not the candidate')
     assert.ok(fs.existsSync(path.join(evalWorkspace.inputs, 'verification.json')), 'the sealed verification record is included')
     assert.doesNotMatch(fs.readFileSync(path.join(evalWorkspace.inputs, 'TASK.md'), 'utf8'), /piano\.instrument-library/, 'the evaluator task is filtered to the scored phase')
@@ -281,16 +310,24 @@ test('a run flows new → start → seal → score with sealed digests and a sco
         criterion.evidence = ['Fixture evidence']
       }
     }
+    // Phase 1 is the only sealed phase here, so it carries the run-level axis.
+    assert.ok(assessment.panelFidelity, 'the highest sealed phase carries the run-level panel axis')
+    fillRunAxis(rubric, assessment)
+
     const evaluation = scoreAssessment(rubric, assessment, [{ id: 'build', passed: true }])
     assert.equal(evaluation.score, 75)
     assert.equal('grade' in evaluation, false, 'grades are no longer part of evaluations')
+    assert.equal(evaluation.runAxis.id, 'panelFidelity')
 
     const capped = scoreAssessment(rubric, assessment, [{ id: 'build', passed: false }])
     assert.equal(capped.score, 59)
     assert.equal(capped.rawScore, 75)
 
-    const aggregate = { ...aggregateStageEvaluations(rubric, [evaluation]), reportPath: `/reports/${created.id}/index.html` }
-    assert.equal(aggregate.score, 75)
+    // The aggregate is the panel axis plus the phase-weighted remainder.
+    const aggregate = { ...aggregateStageEvaluations(rubric, [evaluation], evaluation.runAxis), reportPath: `/reports/${created.id}/index.html` }
+    const expected = Math.round(((rubric.runAxis.weight / 100) * evaluation.runAxis.score + ((100 - rubric.runAxis.weight) / 100) * 75) * 10) / 10
+    assert.equal(aggregate.score, expected)
+    assert.equal(aggregate.phaseWeightedScore, 75)
     registerEvaluation(root, created.id, 1, {
       status: 'complete', score: evaluation.score, rawScore: evaluation.rawScore,
       evaluatedAt: evaluation.evaluatedAt, rubricVersion: evaluation.rubricVersion,
@@ -314,7 +351,9 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     const entry = readJson(path.join(root, 'src', 'data', 'runs.json'))[0]
     assert.equal(entry.legacy, false)
     assert.equal(entry.status, 'complete')
-    assert.equal(entry.score, 75)
+    // The gallery score is the aggregate: panel axis + phase-weighted remainder,
+    // so it is not the phase score.
+    assert.equal(entry.score, expected)
     assert.equal(entry.stages[0].score, 75)
     assert.equal(entry.telemetry.costUsd, 12.5)
     assert.equal(entry.telemetry.totalTokens, 1_500_000)
@@ -492,6 +531,151 @@ test('a panel merges to the per-criterion median rating with unioned evidence', 
   // The merged assessment scores like any other and is deterministic.
   const evaluation = scoreAssessment(rubric, { ...merged, runId: 'real-run' }, [{ id: 'build', passed: true }])
   assert.equal(evaluation.score, 75)
+})
+
+test('the pinned evaluator model is required, recorded, and uniform across a panel', () => {
+  const rubric = loadRubric()
+  const pinned = rubric.evaluator.model
+  const fill = (template) => {
+    template.evaluator = 'blind evaluator'
+    template.evaluatedAt = '2026-01-02T00:00:00.000Z'
+    template.summary = 'Summary.'
+    for (const category of template.categories) {
+      for (const criterion of category.criteria) {
+        criterion.rating = 3
+        criterion.evidence = ['aspect-ratio 3.0951 measured against the spec']
+      }
+    }
+    return template
+  }
+
+  // The template carries the pin, so an evaluator that follows EVAL.md passes.
+  const good = fill(createAssessmentTemplate(rubric, 'run-blind', 1))
+  assert.equal(good.evaluatorModel, pinned, 'the template pre-fills the pinned model')
+  const evaluation = scoreAssessment(rubric, good, [{ id: 'build', passed: true }])
+  assert.equal(evaluation.evaluatorModel, pinned, 'the scored record keeps the model')
+
+  // A different model, or none at all, is refused rather than silently scored.
+  for (const value of ['claude-opus-4-8', '', undefined]) {
+    const off = fill(createAssessmentTemplate(rubric, 'run-blind', 1))
+    off.evaluatorModel = value
+    assert.throws(() => scoreAssessment(rubric, off, []), /evaluatorModel must be/)
+  }
+
+  // The escape hatch exists for re-registering an older evaluation.
+  const legacy = fill(createAssessmentTemplate(rubric, 'run-blind', 1))
+  legacy.evaluatorModel = 'claude-opus-4-8'
+  assert.equal(scoreAssessment(rubric, legacy, [], { allowEvaluatorModel: true }).evaluatorModel, 'claude-opus-4-8')
+
+  // A panel averages evaluator noise, not model differences.
+  const mixed = fill(createAssessmentTemplate(rubric, 'run-blind', 1))
+  mixed.evaluatorModel = 'claude-opus-4-8'
+  assert.throws(
+    () => mergeAssessments(rubric, [fill(createAssessmentTemplate(rubric, 'run-blind', 1)), mixed], { allowEvaluatorModel: true }),
+    /same evaluator model/,
+  )
+})
+
+test('computed criteria score from measurements, and the hard gate keys on the measurement', () => {
+  const rubric = loadRubric()
+  const build = (overrides) => {
+    const a = createAssessmentTemplate(rubric, 'run-blind', 3, { includeRunAxis: true })
+    a.evaluator = 'blind evaluator'
+    a.evaluatorModel = rubric.evaluator.model
+    a.evaluatedAt = '2026-01-02T00:00:00.000Z'
+    a.summary = 'Summary.'
+    for (const category of a.categories) {
+      for (const criterion of category.criteria) { criterion.rating = 3; criterion.evidence = ['measured 0.5400'] }
+    }
+    return fillRunAxis(rubric, a, overrides)
+  }
+
+  // A panel measured exactly on spec scores full marks on the computed criteria.
+  const perfect = scoreAssessment(rubric, build({}), []).runAxis
+  for (const id of ['chassisGeometry', 'hardwareInventory', 'keybedFidelity', 'colorFidelity']) {
+    assert.equal(perfect.criteria.find((c) => c.id === id).score, 100, `${id} is on spec`)
+  }
+  assert.deepEqual(perfect.hardGate.tripped, [], 'nothing trips on a correct panel')
+
+  // The regression this test exists for: a keybed with the right key count,
+  // the right split and the right height ratio whose keys simply do not lay
+  // out inside it. Averaging five measurements turns that into a pass, so the
+  // gate keys on the measurement instead of the criterion score.
+  const blank = scoreAssessment(rubric, build({ keybedFidelity: { keysInsideKeybed: 1 } }), []).runAxis
+  assert.ok(blank.rawScore > rubric.runAxis.hardGate.scoreCap, 'the averaged criterion score alone would pass')
+  assert.deepEqual(blank.hardGate.tripped, ['keybedFidelity.keysInsideKeybed'])
+  assert.equal(blank.score, rubric.runAxis.hardGate.scoreCap, 'the gate caps the axis')
+
+  // Ratios are curved: a panel with 58% of its controls reachable is not 58%
+  // of a working panel.
+  const clipped = scoreAssessment(rubric, build({ hardwareInventory: { controlsReachable: 94, controlsTotal: 161 } }), []).runAxis
+  const reach = clipped.criteria.find((c) => c.id === 'hardwareInventory').measurements.find((m) => m.id === 'controlsReachable')
+  assert.ok(reach.score < 40, `curved reachability scores ${reach.score}, not the linear 58`)
+})
+
+test('a computed criterion re-normalises over the measurements actually reported', () => {
+  const rubric = loadRubric()
+  const a = createAssessmentTemplate(rubric, 'run-blind', 3, { includeRunAxis: true })
+  a.evaluator = 'e'; a.evaluatorModel = rubric.evaluator.model
+  a.evaluatedAt = '2026-01-02T00:00:00.000Z'; a.summary = 'S'
+  for (const category of a.categories) for (const c of category.criteria) { c.rating = 2; c.evidence = ['m'] }
+  fillRunAxis(rubric, a)
+  // Drop one measurement: a null is honest and must not read as a zero.
+  const geometry = a.panelFidelity.criteria.find((c) => c.id === 'chassisGeometry')
+  geometry.measurements.aspectRatio = null
+  const axis = scoreAssessment(rubric, a, []).runAxis
+  assert.equal(axis.criteria.find((c) => c.id === 'chassisGeometry').score, 100, 'an unreported measurement is dropped, not scored zero')
+
+  // But a criterion with nothing reported cannot be scored at all.
+  for (const key of Object.keys(geometry.measurements)) geometry.measurements[key] = null
+  assert.throws(() => scoreAssessment(rubric, a, []), /no usable measurements/)
+})
+
+test('assessment issues are constrained to one shape', () => {
+  const rubric = loadRubric()
+  const build = (issues) => {
+    const template = createAssessmentTemplate(rubric, 'run-blind', 1)
+    template.evaluator = 'blind evaluator'
+    template.evaluatedAt = '2026-01-02T00:00:00.000Z'
+    template.summary = 'Summary.'
+    template.issues = issues
+    for (const category of template.categories) {
+      for (const criterion of category.criteria) {
+        criterion.rating = 2
+        criterion.evidence = ['measured against inputs/specs/nord-stage-4.visual.json']
+      }
+    }
+    return template
+  }
+
+  const ok = scoreAssessment(rubric, build([{ severity: 'critical', title: 'Keybed blank', detail: '72 of 73 keys lay out beyond the keybed.' }]), [])
+  assert.equal(ok.issues.length, 1)
+
+  // The shapes that reached the archived assessments and forced the report to
+  // guess at keys are now rejected at the source.
+  assert.throws(() => scoreAssessment(rubric, build(['a bare string issue']), []), /must be an object/)
+  assert.throws(() => scoreAssessment(rubric, build([{ severity: 'moderate', title: 'x', detail: 'y' }]), []), /severity must be one of/)
+  assert.throws(() => scoreAssessment(rubric, build([{ severity: 'minor', description: 'no title or detail' }]), []), /title is required/)
+})
+
+test('package stores are not part of a sealed artifact', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-artifact-'))
+  try {
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'src', 'app.ts'), 'export const a = 1\n')
+    const bare = hashTree(root).digest
+
+    // A committed pnpm store made one run's sealed phase 139 MB against ~1 MB
+    // for every other run, and handed its evaluator an artifact/ that was
+    // almost entirely vendor source.
+    for (const dir of ['node_modules', '.pnpm-store', '.yarn', '.turbo', '.next']) {
+      fs.mkdirSync(path.join(root, dir), { recursive: true })
+      fs.writeFileSync(path.join(root, dir, 'vendor.js'), 'module.exports = {}\n')
+    }
+    assert.equal(hashTree(root).digest, bare, 'dependency trees and package stores never move the digest')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('implementation manifest validation rejects dishonest or malformed declarations', () => {
