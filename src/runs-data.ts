@@ -118,20 +118,24 @@ export function getPhaseName(run: RunEntry, phase: PhaseNumber) {
   return getPhaseList(run)[phase - 1]
 }
 
-// Runs are tiered by the rubric that produced their score, because scores from
-// different rubrics are not comparable — different weights, different criteria,
-// and (before the model was pinned) different judges. Ranking them in one list
-// would put a 93.8 scored under an older rubric above a 91 scored under the
-// current one and imply a result neither number supports.
+// Runs are tiered by the protocol they were SCORED under, which is not always
+// the one they were built under — rescoring an older run moves it into the
+// newer group. The rubric carries the same version number as the protocol, so
+// there is one number to track rather than two.
+//
+// Ranking across tiers would be a false comparison: different weights,
+// different criteria, and (before the evaluator was pinned) different judges.
+// One list would put a 93.8 scored under 1.1 above a 91 scored under 2.0 and
+// imply a result neither number supports.
 export function getResultClass(run: RunEntry) {
-  if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 2, description: 'Runs recorded under earlier protocol versions, kept for reference with their frozen evaluation reports.' }
+  if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 2, description: 'Runs recorded before the current run schema, under earlier prompts, specs, or scoring. Kept for reference with their frozen scores and reports.' }
   const scoredUnder = run.rubricVersion ?? null
   if (scoredUnder && scoredUnder !== protocol.version) {
     return {
-      id: `rubric-${scoredUnder}`,
-      label: `Rubric ${scoredUnder}`,
+      id: `protocol-${scoredUnder}`,
+      label: `Protocol ${scoredUnder}`,
       rank: 1,
-      description: `Scored under rubric ${scoredUnder}, before the current rubric changed the weights, the criteria, and the evaluator. Not comparable with Protocol ${protocol.version} scores — ranked separately rather than merged into one leaderboard.`,
+      description: `Scored under protocol ${scoredUnder}, before the current version changed the weights, the criteria, and the evaluator. Ranked separately from Protocol ${protocol.version} rather than merged into one leaderboard.`,
     }
   }
   return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: 'Benchmark evaluation reports are not rigorous and are just for fun.' }

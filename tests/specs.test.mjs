@@ -53,7 +53,7 @@ test('variant registry defines the three Nord Stage 4 modes with a valid default
   assert.match(manifest.variants, /^specs\/nord-stage-4\.variants\.json$/)
   const registry = readJson(manifest.variants)
   const ids = registry.variants.map((variant) => variant.id)
-  assert.deepEqual(ids, ['stage-4-88', 'stage-4-73', 'stage-4-compact-73'])
+  assert.deepEqual(ids, ['stage-4-73', 'stage-4-compact-73'])
   assert.ok(ids.includes(registry.default), 'default must be one of the defined variants')
   assert.equal(manifest.defaultVariant, registry.default)
   for (const variant of registry.variants) {

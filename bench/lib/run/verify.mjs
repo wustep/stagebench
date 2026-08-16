@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { hashTree, readJson, runCommand } from '../shared.mjs'
+import { hashFile, hashTree, readJson, runCommand } from '../shared.mjs'
 import { validateImplementationManifest } from '../implementation-details.mjs'
 
 export const REQUIRED_FEATURES = {
@@ -179,6 +179,28 @@ function evidenceChecks(stageDir, phase) {
   return checks
 }
 
+// Every spec whose contents change what an artifact is scored against, with
+// its declared version and a digest of its bytes. Recorded at seal so a later
+// scoring pass can tell whether the materials moved underneath a run.
+const MATERIAL_SPECS = [
+  'specs/benchmark-phases.json',
+  'specs/nord-stage-4.visual.json',
+  'specs/nord-stage-4.variants.json',
+  'bench/rubric.json',
+]
+
+export function materialDigests(root) {
+  const materials = {}
+  for (const relative of MATERIAL_SPECS) {
+    const file = path.join(root, relative)
+    if (!fs.existsSync(file)) continue
+    let version = null
+    try { version = readJson(file).version ?? null } catch { version = null }
+    materials[relative] = { version, digest: hashFile(file) }
+  }
+  return materials
+}
+
 // Verify a phase artifact in place. Throws on contract violations; returns a
 // structured result (with the sealing digest when everything passed).
 export function verifyPhase(root, id, phase, options = {}) {
@@ -195,13 +217,19 @@ export function verifyPhase(root, id, phase, options = {}) {
   const passed = checks.every((check) => check.passed) && evidence.every((check) => check.passed)
   const artifact = passed ? hashTree(stageDir) : null
   return {
-    version: 2,
+    version: 3,
     runId: id,
     stage: phase,
     verifiedAt: new Date().toISOString(),
     passed,
     artifactDigest: artifact?.digest,
     artifactFiles: artifact?.files,
+    // Which spec bytes this artifact was actually built against. The section
+    // fractions in the visual spec were once corrected without a version bump,
+    // so a run built to the old numbers was later scored against the new ones
+    // with nothing in its record to show it. A digest makes that detectable
+    // even when someone forgets to bump the version.
+    materials: materialDigests(root),
     phaseContract,
     featureMatrix,
     implementationDetails,

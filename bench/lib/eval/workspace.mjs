@@ -57,6 +57,10 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   removeWorkspaceTree(workspace)
   fs.mkdirSync(artifact, { recursive: true })
   fs.mkdirSync(inputs, { recursive: true })
+  // Somewhere to build and write probe scripts that is not shared with any
+  // other evaluator: two agents have had working files overwritten by a
+  // concurrent one writing the same path in a common scratch directory.
+  fs.mkdirSync(path.join(workspace, 'scratch'), { recursive: true })
 
   // The sealed artifact including dist/ and evidence/ — a copy, so nothing
   // the evaluator does can touch the sealed record. The registering score
@@ -132,8 +136,10 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     ] : []),
     `1. Read \`inputs/rubric.json\` — rate Phase ${phase} on its 0–4 anchors.`,
     '2. Inspect `artifact/` — the sealed candidate: source, tests and `evidence/`.',
-    '   Treat it as read-only evidence; it is chmod-protected on purpose. Build in a',
-    '   scratch copy if you need to run the suite.',
+    '   Treat it as read-only evidence; it is chmod-protected on purpose. Build and',
+    '   write probe scripts in `scratch/`, which belongs to you alone — never in a',
+    '   shared temp directory, where concurrent evaluators have overwritten each',
+    "   other's files.",
     ...(build ? [
       '   **Measure against `build/`**, not a build of your own. That is the published',
       '   build of this artifact — the exact bits the operator captured — so every',

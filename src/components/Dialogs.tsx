@@ -129,12 +129,26 @@ export function Dialogs({
             <div className="info-modal-body">
               <p>
                 Stagebench bumps its protocol version whenever the prompts, specs, rubric, or verifier behavior
-                change — anything that could shift what&rsquo;s being measured. Runs are only closely comparable
-                within the same protocol version.
+                change — anything that could shift what&rsquo;s being measured. The rubric carries the same
+                version number, so there is one number to track. A run is grouped by the protocol it was
+                <em> scored</em> under, which is not always the one it was built under: rescoring an older run
+                moves it into the newer group.
               </p>
               <dl className="protocol-history">
                 <div>
-                  <dt>Protocol 1.1 <span>Current</span></dt>
+                  <dt>Protocol 2.0 <span>Current</span></dt>
+                  <dd>
+                    Rewrote how a run is scored, not what is asked of it. Panel fidelity became a run-level axis
+                    worth 40%, scored once against the final artifact instead of three times at three different
+                    resolutions. Most of that axis is now <em>computed</em> from measurements — geometry, keybed
+                    layout, control inventory and colour reduce to numbers the specs already fix, so no judgment
+                    enters where ground truth exists. The evaluator model is pinned and enforced, evidence must
+                    carry a measurement, and hard gates cap a panel whose chassis or keybed does not render.
+                    Not comparable with 1.x scores.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Protocol 1.1</dt>
                   <dd>
                     Changed materials packaging: candidates no longer see scoring or harness docs, future-phase
                     details, or unassigned hardware variants, and evaluators now work in an isolated workspace.
@@ -146,7 +160,8 @@ export function Dialogs({
                   <dt>Protocol 1.0</dt>
                   <dd>
                     The baseline three-phase protocol: cumulative Surface + Piano, Pianos + FX, and Complete
-                    System phases, each scored against the published rubric.
+                    System phases, each scored against the published rubric. Judged entirely by rating, with the
+                    evaluator model unrecorded.
                   </dd>
                 </div>
                 <div>

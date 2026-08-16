@@ -19,10 +19,14 @@ const MIME = {
 
 // Minimal static file server for a built dist/ directory on an ephemeral port.
 export function serveDirectory(directory) {
+  // Resolve once: the traversal guard compares against path.resolve, so a
+  // relative directory made every request fail the check and 403 — including
+  // the root document, which looks exactly like an app that renders nothing.
+  const rootDirectory = path.resolve(directory)
   const server = http.createServer((request, response) => {
     const urlPath = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
-    let filePath = path.join(directory, urlPath)
-    if (!filePath.startsWith(path.resolve(directory))) {
+    let filePath = path.join(rootDirectory, urlPath)
+    if (!filePath.startsWith(rootDirectory)) {
       response.writeHead(403).end()
       return
     }
