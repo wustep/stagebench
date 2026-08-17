@@ -336,7 +336,11 @@ export function scoreAssessment(rubric, assessment, technicalChecks = [], option
   })
 
   const rawScore = round(categories.reduce((total, category) => total + category.score * category.weight / 100, 0))
-  const failedChecks = technicalChecks.filter((check) => !check.passed)
+  // Advisory checks are recorded and reported but never cap a score. They
+  // describe how much a gate actually covered rather than whether it exited 0,
+  // so a run sealed before the check existed is not retroactively re-capped by
+  // rescoring. Promote one to gating by dropping its `advisory` flag.
+  const failedChecks = technicalChecks.filter((check) => !check.passed && !check.advisory)
   const missingArtifact = failedChecks.some((check) => check.id === 'artifact')
   const scoreCap = missingArtifact
     ? rubric.technicalGate.missingArtifactScoreCap

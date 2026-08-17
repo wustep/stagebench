@@ -176,7 +176,37 @@ function evidenceChecks(stageDir, phase) {
       detail: fs.existsSync(absolutePath) ? relativePath : `Missing ${relativePath}`,
     })
   }
+  checks.push(documentModeCheck(stageDir))
   return checks
+}
+
+// A built index.html with no doctype puts the browser in quirks mode, where
+// the box model differs from standards mode — and every panel-fidelity
+// measurement is geometry taken from a real browser. Several sealed artifacts
+// ship a doctype-less fragment, so their chassis numbers were measured under
+// different layout rules than the rest of the field.
+//
+// Advisory rather than blocking: this describes how measurable the artifact is,
+// and making it a seal requirement now would retroactively invalidate runs
+// sealed before the check existed. Promote it by dropping the `advisory` flag.
+function documentModeCheck(stageDir) {
+  const id = 'dist/index.html standards mode'
+  const documentPath = path.join(stageDir, 'dist', 'index.html')
+  if (!fs.existsSync(documentPath)) {
+    return { id, advisory: true, passed: false, detail: 'Missing dist/index.html' }
+  }
+  // The doctype must lead the document; anything before it (other than
+  // whitespace or a BOM) still triggers quirks mode.
+  const head = fs.readFileSync(documentPath, 'utf8').replace(/^﻿/, '').trimStart().slice(0, 200)
+  const passed = /^<!doctype\s+html\b/i.test(head)
+  return {
+    id,
+    advisory: true,
+    passed,
+    detail: passed
+      ? 'dist/index.html opens with <!doctype html>, so the browser measures it in standards mode'
+      : 'dist/index.html has no leading <!doctype html>, so a browser renders it in quirks mode and its geometry is not comparable to artifacts measured in standards mode',
+  }
 }
 
 // Every spec whose contents change what an artifact is scored against, with
@@ -214,7 +244,9 @@ export function verifyPhase(root, id, phase, options = {}) {
   assert.ok(options.checks, 'verifyPhase requires precomputed package checks (call runChecks first)')
   const checks = options.checks
   const evidence = evidenceChecks(stageDir, phase)
-  const passed = checks.every((check) => check.passed) && evidence.every((check) => check.passed)
+  // Advisory evidence describes how measurable the artifact is rather than
+  // whether it meets the contract, so it is recorded but never blocks a seal.
+  const passed = checks.every((check) => check.passed) && evidence.every((check) => check.passed || check.advisory)
   const artifact = passed ? hashTree(stageDir) : null
   return {
     version: 3,

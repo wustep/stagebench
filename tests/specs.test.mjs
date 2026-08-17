@@ -110,3 +110,31 @@ test('active rubric and phase manifest stay aligned', () => {
     assert.equal(rubric.stages[String(phase.number)].name.toLowerCase(), phase.title.toLowerCase())
   }
 })
+
+// forbiddenPresent feeds a computed criterion, so it must resolve to a number
+// without an evaluator's eye. Every prose descriptor in sectionLandmarks needs
+// a detection rule, and every rule needs a descriptor — an orphan on either
+// side puts judgment back into the one axis that is supposed to be measured.
+test('every forbidden descriptor has exactly one detection rule', () => {
+  const spec = readJson('specs/nord-stage-4.visual.json')
+  const descriptors = new Set(Object.values(spec.sectionLandmarks).flatMap((section) => section.forbidden ?? []))
+  const rules = spec.forbiddenDetection?.rules ?? {}
+  assert.ok(descriptors.size > 0, 'the spec should forbid something')
+  assert.deepEqual([...descriptors].filter((name) => !rules[name]), [], 'forbidden descriptors with no detection rule')
+  assert.deepEqual(Object.keys(rules).filter((name) => !descriptors.has(name)), [], 'detection rules matching no forbidden descriptor')
+  for (const [name, rule] of Object.entries(rules)) {
+    assert.equal(typeof rule, 'string')
+    assert.ok(rule.length > 40, `${name} needs a rule specific enough to apply, not a restatement`)
+  }
+})
+
+// The section fractions were once corrected without a version bump, so a run
+// built to the old numbers was scored against the new ones with nothing in its
+// record to show it. The seal-time digest catches silent edits now, but the
+// declared version still has to move when the contents do.
+test('the visual spec declares the version its detection rules shipped in', () => {
+  const spec = readJson('specs/nord-stage-4.visual.json')
+  assert.match(spec.version, /^\d+\.\d+\.\d+$/)
+  const [major, minor] = spec.version.split('.').map(Number)
+  assert.ok(major > 1 || minor >= 4, 'forbiddenDetection landed in 1.4.0; bump the version when the spec changes')
+})

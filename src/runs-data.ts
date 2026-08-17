@@ -138,7 +138,7 @@ export function getResultClass(run: RunEntry) {
       description: `Scored under protocol ${scoredUnder}, before the current version changed the weights, the criteria, and the evaluator. Ranked separately from Protocol ${protocol.version} rather than merged into one leaderboard.`,
     }
   }
-  return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: 'Benchmark evaluation reports are not rigorous and are just for fun.' }
+  return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: `Scored under protocol ${protocol.version}: every phase measured against the published build by a fresh blind agent on one pinned evaluator model, with panel fidelity computed from the specs rather than judged.` }
 }
 
 // Leaderboard ordering and per-tier rankings are pure functions of the

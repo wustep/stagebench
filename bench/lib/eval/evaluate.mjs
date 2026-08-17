@@ -20,6 +20,95 @@ function outputTail(value, length = 1600) {
   return String(value || '').trim().slice(-length)
 }
 
+// A `lint` script that exits 0 without ever reading the candidate's own sources
+// is not a gate. Artifacts that ship no ignore config let oxlint walk
+// node_modules and report on bundled dependencies instead of src/ — three
+// sealed runs pass `lint` that way, one of them emitting ~45k warnings from a
+// vendored typescript.js while only 4 came from its own code.
+//
+// Coverage is probed rather than inferred from the output, because a lint that
+// covers everything and finds nothing prints nothing either: drop a file that
+// violates near-universal defaults beside a real source file, rerun the script,
+// and see whether the candidate's own tooling names it. Recorded as an advisory
+// check (see scoreAssessment) so a vacuous lint is visible in the report
+// without re-capping runs scored before this existed.
+const LINT_PROBE_STEM = '__stagebench_lint_coverage_probe'
+const LINT_PROBE_SOURCE = `// Temporary Stagebench lint-coverage probe. Deleted after the check runs.
+var stagebenchProbeUnused = 1
+function stagebenchProbeFn() { var shadowed = 2; return shadowed == '2' }
+`
+const LINT_PROBE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
+const LINT_PROBE_SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.vite', 'coverage', 'build'])
+
+// The probe has to land where the candidate's own lint globs already point, so
+// it is placed beside a real source file rather than at a guessed path.
+// Shallowest-first: a file directly under src/ is a better bet than one buried
+// in a fixtures directory the lint script may exclude.
+function findSourceSample(dir, depth = 0) {
+  if (depth > 4) return null
+  let entries
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return null
+  }
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    if (entry.name.startsWith(LINT_PROBE_STEM)) continue
+    if (LINT_PROBE_EXTENSIONS.has(path.extname(entry.name))) return path.join(dir, entry.name)
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || LINT_PROBE_SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue
+    const found = findSourceSample(path.join(dir, entry.name), depth + 1)
+    if (found) return found
+  }
+  return null
+}
+
+// Resolves where the probe should go, relative to the artifact root, or null
+// when the artifact has no lint script or no source file to sit beside. Shared
+// so the Docker path can place the probe on the host and lint it in the
+// container against the same bind-mounted copy.
+function lintProbePathFor(stageDir, packageJson) {
+  if (!packageJson.scripts?.lint) return null
+  const sourceRoot = fs.existsSync(path.join(stageDir, 'src')) ? path.join(stageDir, 'src') : stageDir
+  const sample = findSourceSample(sourceRoot)
+  if (!sample) return null
+  const probePath = path.join(path.dirname(sample), `${LINT_PROBE_STEM}${path.extname(sample)}`)
+  if (fs.existsSync(probePath)) return null
+  return path.relative(stageDir, probePath).split(path.sep).join('/')
+}
+
+async function probeLintCoverage(stageDir, packageJson) {
+  const label = 'Lint covers candidate sources'
+  if (!packageJson.scripts?.lint) return null
+  const relative = lintProbePathFor(stageDir, packageJson)
+  if (!relative) {
+    return { id: 'lint-coverage', label, advisory: true, passed: false, detail: 'No candidate source file found to place the probe beside' }
+  }
+  const probePath = path.join(stageDir, relative)
+  fs.writeFileSync(probePath, LINT_PROBE_SOURCE)
+  try {
+    const result = await runCommand('pnpm', ['run', 'lint'], { cwd: stageDir, timeout: 240_000, env: { ...process.env, CI: '1' } })
+    const output = `${result.stdout || ''}${result.stderr || ''}`
+    const named = output.includes(LINT_PROBE_STEM)
+    const scannedDeps = /node_modules[/\\]/.test(output)
+    const contaminated = scannedDeps ? ' Its output cites node_modules, so the gate also lints vendored dependencies and its result turns partly on code the candidate did not write.' : ''
+    return {
+      id: 'lint-coverage',
+      label,
+      advisory: true,
+      passed: named,
+      scannedDependencies: scannedDeps,
+      detail: named
+        ? `Lint reported the probe at ${relative}, so the script covers the candidate's own sources.${contaminated}`
+        : `Lint did not report a deliberate violation at ${relative}, so the script exits without checking the candidate's own sources.${contaminated}`,
+    }
+  } finally {
+    fs.rmSync(probePath, { force: true })
+  }
+}
+
 // Rerun the package gates against the sealed artifact so the recorded score
 // reflects checks the scorer executed, not checks the candidate claimed.
 export async function runTechnicalChecks(stageDir, rubric) {
@@ -59,6 +148,10 @@ export async function runTechnicalChecks(stageDir, rubric) {
     passed: fs.existsSync(artifactPath),
     detail: fs.existsSync(artifactPath) ? 'dist/index.html present' : 'Missing dist/index.html',
   })
+  // Runs last: the probe writes into the candidate's tree, so the required
+  // gates see the artifact exactly as sealed.
+  const lintCoverage = await probeLintCoverage(stageDir, packageJson)
+  if (lintCoverage) checks.push(lintCoverage)
   return checks
 }
 
@@ -113,6 +206,8 @@ async function runGatesInDocker(scratch, rubric, image, nodeTypes) {
   const scripts = rubric.technicalGate.requiredChecks
   const probe = spawnSync('docker', ['version'], { encoding: 'utf8' })
   if (probe.status !== 0) throw new Error('--sandbox requires Docker, but `docker version` failed')
+  const packageJson = fs.existsSync(path.join(scratch, 'package.json')) ? readJson(path.join(scratch, 'package.json')) : {}
+  const lintProbeRelative = lintProbePathFor(scratch, packageJson)
   const program = [
     'pnpm install --prefer-offline || { echo "GATE::install::FAIL"; exit 3; }',
     // Legacy fallback only: mirror the ambient platform types after install if
@@ -120,6 +215,18 @@ async function runGatesInDocker(scratch, rubric, image, nodeTypes) {
     // package.json check rejects a bare/partial directory).
     ...(nodeTypes ? ['[ -f node_modules/@types/node/package.json ] || { rm -rf node_modules/@types/node && mkdir -p node_modules/@types && cp -RL /ambient/node node_modules/@types/node; }'] : []),
     ...scripts.map((script) => `if pnpm run ${script}; then echo "GATE::${script}::PASS"; else echo "GATE::${script}::FAIL"; fi`),
+    // Advisory lint-coverage probe, after the required gates so they see the
+    // artifact as sealed. The path is resolved on the host against the same
+    // bind-mounted copy. Quoted heredoc: the probe is literal, not expanded.
+    ...(lintProbeRelative
+      ? [
+        `cat > ${JSON.stringify(lintProbeRelative)} <<'STAGEBENCH_PROBE_EOF'`,
+        LINT_PROBE_SOURCE.trimEnd(),
+        'STAGEBENCH_PROBE_EOF',
+        `if pnpm run lint 2>&1 | grep -q ${LINT_PROBE_STEM}; then echo "GATE::lint-coverage::PASS"; else echo "GATE::lint-coverage::FAIL"; fi`,
+        `rm -f ${JSON.stringify(lintProbeRelative)}`,
+      ]
+      : []),
   ].join('\n')
   const args = [
     'run', '--rm', '--init', '--network=bridge', '--memory=16g', '--cpus=8',
@@ -138,6 +245,18 @@ async function runGatesInDocker(scratch, rubric, image, nodeTypes) {
   if (result.error && !checks.some((check) => !check.passed)) checks.push({ id: 'test', label: 'test', passed: false, detail: outputTail(result.error.message) })
   const artifactPath = path.join(scratch, 'dist', 'index.html')
   checks.push({ id: 'artifact', label: 'Built phase artifact', passed: fs.existsSync(artifactPath), detail: fs.existsSync(artifactPath) ? 'dist/index.html present' : 'Missing dist/index.html' })
+  if (lintProbeRelative) {
+    const covered = /GATE::lint-coverage::PASS/.test(output)
+    checks.push({
+      id: 'lint-coverage',
+      label: 'Lint covers candidate sources',
+      advisory: true,
+      passed: covered,
+      detail: covered
+        ? `Lint reported the probe at ${lintProbeRelative}, so the script covers the candidate's own sources (sandboxed)`
+        : `Lint did not report a deliberate violation at ${lintProbeRelative}, so the script exits without checking the candidate's own sources (sandboxed)`,
+    })
+  }
   return checks
 }
 
@@ -161,3 +280,8 @@ export async function runGates(root, stageDir, rubric, { skip = false, sandbox =
     fs.rmSync(scratch, { recursive: true, force: true })
   }
 }
+
+// Exposed for tests: the lint-coverage probe is the one gate helper whose
+// failure mode (a lint that exits 0 having read nothing) cannot be observed
+// from the gate's own exit code.
+export const __internals = { probeLintCoverage, lintProbePathFor, findSourceSample, LINT_PROBE_STEM }
