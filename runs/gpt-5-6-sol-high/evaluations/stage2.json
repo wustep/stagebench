@@ -1,229 +1,173 @@
 {
-  "rubricVersion": "1.0.0",
+  "rubricVersion": "2.0.0",
   "runId": "gpt-5-6-sol-high",
   "stage": 2,
   "stageName": "Piano library and working effects",
   "status": "complete",
-  "evaluator": "Claude independent evaluator",
-  "evaluatedAt": "2026-07-09T21:31:20.000Z",
-  "summary": "Phase 2 brings the Piano section, Layer Effects, and Master Level alive while keeping Organ, Synth, and Program honestly decorative. Runtime inspection confirmed the boundary exactly: 65 data-functional=true controls (22 piano, 43 effects/master) and 0 functional controls in organ/synth/program. Six selectable piano types (Grand/Upright/Electric/Clav/Digital/Misc) render as distinct offline PCM voices, two layers support enable/focus/level/octave/SUSTPED/PSTICK, and performance controls (KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res) plus Master Level all measurably change the rendered signal (proven by rms/signature tests). The effects graph is one AudioContext with per-layer Piano A/B buses feeding an ordered node chain (Mod1->Mod2->Delay(with filtered feedback loop)->Amp/EQ->Compressor->Reverb->Rotary->layer level->master gain->limiter->one destination); every unit is real DSP with distinct types, and focus/group/global/bypass/dry-wet/order/To-Rotary routing is implemented and tested. 30 candidate tests pass across the DSP boundary. The one material defect is a declared hard-gate deviation: Grand/Upright/Electric are generated multi-root/multi-velocity PCM (SAMPLE_BANKS source 'generated-pcm'), NOT recorded sample sets. This is disclosed honestly in IMPLEMENTATION_DETAILS.json and asserted in tests, so it never fakes recordings, but the recorded-sample-set requirement for the three acoustic families is entirely unmet.",
-  "score": 72.4,
-  "rawScore": 72.4,
+  "evaluator": "blind-evaluator-phase2",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-16T22:40:00.000Z",
+  "summary": "Structurally the Phase 2 target is met: one AudioContext, one destination edge, two symmetric layer racks in exactly the required order, and every unit/type reachable from the panel. Delay, Reverb and Compressor are real DSP; every piano performance control (KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res) measurably moves the rendered signal; pointer, computer keyboard and MIDI (notes, CC64, CC120/123) are reliable with clean blur/disconnect cleanup and zero page errors. The hole is the modulation half of the chain: the live graph has no LFO anywhere. Mod 1 and Mod 2 are one static biquad each and Rotary is a static panner, so A-Pan never pans (panSwing 0.000), Tremolo's modulation depth equals silence-baseline (0.105 vs 0.105), Rotary never rotates at SLOW or FAST, and Phaser/Vibe are inaudible while their ON LED lights. Twin/JC/Small are identical to four significant figures, A-Wah is bit-equal to Wah, Dyno 1 to Dyno 2. The offline dsp.ts that the tests assert on does implement those effects, but it is not the shipped audio path. Grand/Upright/Electric are synthesized, not recorded (declared honestly). Octave shift moves 24 semitones, and a 10-note chord clips.",
+  "score": 49.5,
+  "rawScore": 49.5,
   "categories": [
     {
-      "id": "visualRetention",
-      "label": "Visual and interaction retention",
-      "weight": 10,
-      "score": 75,
-      "contribution": 7.5,
-      "criteria": [
-        {
-          "id": "surfaceRetention",
-          "label": "Surface fidelity retention",
-          "weight": 60,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "stage2-desktop.png retains the Phase 1 chassis geometry, six-section order, 73-key keybed, and exactly two OLEDs with no regression",
-            "stage2-visual-audit.md: inherited 3.0951:1 chassis, 54/46 split, 14/20/8.5/12.5/25/20 section widths unchanged; desktop 94vw / narrow 96vw",
-            "No new outer layout or fixed-width element introduced per audit"
-          ]
-        },
-        {
-          "id": "functionalHardwareState",
-          "label": "Piano/effect hardware state",
-          "weight": 40,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Program OLED shows 'PIANO A / Studio Grand / PROGRAM ENGINE OFF · LIVE SOUND', truthfully mirroring the focused live piano while Program buttons stay decorative",
-            "Layer Effects exposes Focus row (Piano A/B), per-unit on/bypass, all-effects bypass, and parameter knobs with LED state (stage2-desktop.png)",
-            "Runtime: piano/effects controls report focus, on/bypass, and value state through native aria-pressed/value"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "pianoLibrary",
-      "label": "Piano library and performance",
-      "weight": 35,
-      "score": 67.5,
-      "contribution": 23.6,
+      "id": "sound",
+      "label": "Sound",
+      "weight": 55,
+      "score": 41.3,
+      "contribution": 22.7,
       "criteria": [
         {
           "id": "instrumentBreadth",
-          "label": "Distinct Piano instruments",
-          "weight": 30,
+          "label": "Instrument breadth & character",
+          "weight": 35,
+          "scoring": "judged",
           "rating": 2,
           "score": 50,
           "evidence": [
-            "Six selectable, audibly distinct, offline piano types present and playable (dsp.test.ts asserts distinct signatures + rms>0.005 for all PIANO_TYPES)",
-            "SAMPLE_BANKS Grand/Upright/Electric each define 6 roots + 3 velocities but source:'generated-pcm' — NOT recorded sample sets, so the core recorded-library requirement is unmet",
-            "IMPLEMENTATION_DETAILS.json and stage2-visual-audit.md disclose the recorded-sample hard-gate deviation honestly; never described as recordings (escapes a 0)"
+            "Six types are genuinely distinct on rendered signal (build served on :5516, tap on AudioNode.prototype.connect at the destination, warm-up note first, MIDI 60 vel~0.7): crest 3.60 Grand / 4.85 Upright / 2.53 Electric / 6.50 Clav / 2.84 Digital / 6.58 Misc; zero-crossing rate 496/525/502/600/723/727 Hz; RMS 0.0343/0.0280/0.0293/0.0136/0.0259/0.0147. Not one voice relabelled.",
+            "None of them is a recorded sample set. artifact/src/stage-engine.ts:107 calls renderPianoNote() at every note-on and artifact/src/dsp.ts:17-26 builds each type from four sine partials with exponential decay, so Grand is a 4-partial sine stack; the Phase 2 hard gate 'Grand, Upright and Electric are bundled recorded sample sets' is not met (declared truthfully in IMPLEMENTATION_DETAILS.json).",
+            "SAMPLE_BANKS (artifact/src/instrument.ts:125) advertises six roots and three velocity layers, but velocity only scales amplitude in the renderer - measured MIDI velocity 20 vs 127 changed RMS 0.00121 -> 0.0798 with identical spectral shape, i.e. no velocity-layer timbre switch.",
+            "Electric's two Dyno timbres are the same sound: Dyno 1 RMS 0.03119 peak 0.0968 vs Dyno 2 RMS 0.03120 peak 0.0968."
           ]
         },
         {
-          "id": "twoLayerBehavior",
-          "label": "Two-layer Piano behavior",
-          "weight": 25,
+          "id": "effectAudibility",
+          "label": "Effect audibility & correctness",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "Delay is real and correct: with mix 90 / feedback 75 the -40 dB tail grows from 565 ms (feedback 0) to 2485 ms, and the feedback filter processes the repeats - zcr 584 (LP) / 1517 (HP) / 934 (BP) / 543 (Off) at identical dry input.",
+            "Reverb is real: fully wet tail length 445 ms Room, 490 ms Booth, 610 ms Spring, 705 ms Stage, 945 ms Hall, 1425 ms Cathedral; Spring is distinctly boingy (crest 8.21 vs 4.88 Cathedral); the Bright knob swings zcr 562 -> 2255; mix 0 returns the dry signal exactly. Compressor Fast mode cuts crest 3.84 -> 2.69.",
+            "No modulator exists anywhere in the live graph. artifact/src/stage-engine.ts:56-84 builds Mod 1 and Mod 2 as one BiquadFilterNode each and Rotary as a StereoPannerNode whose pan is assigned once per state update from Math.sin(currentTime*speed). Measured over a 1.5 s held note: A-Pan panSwing 0.000 and L/R 1.000; Tremolo modulation depth 0.105 against a 0.105 baseline; Rotary panSwing 0.000 at both SLOW and FAST, only a fixed L/R offset that re-rolls whenever any unrelated control is touched.",
+            "Types are not their namesakes and several collide. Ring Mod is a highpass (zcr 504 -> 2060, RMS down 6.6x, no sidebands). A-Wah and Wah are indistinguishable (peak 0.00418 both, RMS 0.00069 both, zcr 1073 vs 1072) and both attenuate 50x rather than sweeping. Phaser and Vibe are allpass, i.e. inaudible while the ON LED is lit: peak 0.12353 (unit off) vs 0.12473 (Phaser) vs 0.12410 (Vibe), against 0.15292 for Chorus. Amp Twin / JC / Small at drive 70 measure peak 0.12351 / 0.12353 / 0.12354, RMS 0.03573 all three - the effects spec explicitly requires the three not sound identical.",
+            "Bypass and dry/wet do work: a loaded chain (mod1+mod2+delay+reverb+comp) measured RMS 0.01566, tail 1685 ms, panSwing 1.276; all-effects BYPASS returned RMS 0.02098, tail 615 ms, panSwing 0.000, and un-bypassing restored 0.01602 / 1675 ms."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "label": "Signal graph & gain staging",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Graph census by instrumenting AudioNode.prototype.connect: exactly 1 AudioContext constructed, exactly 1 edge into AudioDestinationNode (from the master DynamicsCompressor limiter), and every rack node type appears exactly twice - two symmetric per-layer buses. Edge order matches the required contract: source -> layer input -> mod1 -> mod2 -> delay(dry/wet + filtered feedback loop) -> amp -> compressor -> reverb(dry/wet, convolver) -> rotary -> layer level -> master -> limiter -> destination.",
+            "Gain staging fails under load. Peak of the signal actually reaching the destination: 1 note 0.2424, 3 notes 0.649, 5 notes 0.8436, 8 notes 0.9572, 10 notes 1.0026 (4 samples at or above 0 dBFS), 16 voices 1.0539 (44 samples over), 32 voices 1.1316 (356 samples over) - all at the default Master Level 0.72. The master DynamicsCompressor (threshold -2 dB, ratio 18, attack 3 ms, artifact/src/stage-engine.ts:45-50) is not a limiter and its makeup gain pushes past full scale.",
+            "Node cleanup is correct: voice count returns to 0 after note-off, CC123 panic, window blur and MIDI disconnect; a 48-note burst with the sustain pedal held returned to '0 voices' and produced no page errors.",
+            "Per-note cost is on the main thread: artifact/src/stage-engine.ts:101-119 synthesises a fresh 2.4 s buffer inside start() for every note-on rather than reusing a bank, and there is no voice cap - 48 simultaneous voices were allocated without stealing."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 20,
+      "score": 65,
+      "contribution": 13,
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "label": "Two-layer piano behaviour",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "A/B enable, level and focus all reach the graph and the panel: A-only RMS 0.03325 -> A+B 0.04623; B level 0 returns to 0.03336; disabling B returns to 0.03322. The B button reads 'B OFF' when disabled, and the Program OLED tracks focus ('PIANO A / Studio Grand' -> 'PIANO B / Felt Upright').",
+            "Focus is honest per layer: with B focused and set to Misc, the Misc button reads aria-pressed=true; re-focusing A flips the pressed state back to Grand and the OLED back to 'PIANO A / Studio Grand', while the audio stays A=Grand + B=Misc.",
+            "FX focus follows layer focus and group/global propagate: Mod 1 ON on chain A reads aria-pressed=false when focus moves to B; with GROUP on, Mod 2 ON set on A reads pressed on B; with Delay GLOBAL armed, turning Delay ON propagated to B (the GLOBAL LED itself does not propagate).",
+            "Octave shift is out of spec by a factor of two. MIDI note 60 measured 262.3 Hz normally and 1043.5 Hz with OCT+ (a 2-octave jump; C6, not C5), and zcr fell 545 -> 131 (0.24x) with OCT-. Cause: artifact/src/stage-engine.ts:107 renders the buffer at root+layer.octave and then line 113 applies layer.octave a second time in playbackRate. Pitch stick is correct by contrast: 262.3 -> 294.5 Hz, exactly +2 semitones."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "label": "Detailed piano controls",
+          "weight": 30,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "App.tsx PianoSection: layer A/B enable/focus toggles, independent level faders, octave +/-12, per-layer voice ownership via setLayerEnabled",
-            "stage-engine start()/noteOn own per-layer voice handles; disabling a layer stops that layer's owned handles",
-            "Tests exercise layer enable/level and confirm distinct rendered signatures per layer"
+            "Every required control measurably changes rendered signal, in the right direction. Soft strike (velocity ~0.28): KB Touch Heavy 0.00185 / Medium 0.00423 / Light 0.00856 RMS, a 4.6x spread that collapses to 0.064-0.068 on a hard strike. Dyn Comp OFF/1/2/3 raises the same soft stroke 0.00423 -> 0.00564 -> 0.00726 -> 0.00872 monotonically without touching the hard-stroke peak.",
+            "Timbre Off/Soft/Mid/Bright: peak 0.1234 / 0.1062 / 0.1289 / 0.1462, crest 3.71 / 3.32 / 3.82 / 4.10 - correct dampen-to-brighten ordering. Unison Off/1/2/3: RMS 0.0332 / 0.0248 / 0.0195 / 0.0177 with zcr 545 -> 698, audible detune widening.",
+            "Soft Release lengthens the release tail from 475 ms to 710 ms measured after key-up (hold 250 ms), and is correctly skipped for Clav in artifact/src/stage-engine.ts:135. String Res changes peak 0.1234 -> 0.1284 and crest 3.712 -> 3.850.",
+            "Simplifications a player would notice: String Res is a single fixed 1.502x partial baked into the note (artifact/src/dsp.ts:58), so it does not respond to which other notes or the pedal are held; Dyn Comp is applied only at note-on so it cannot ride a sustained chord; Dyno 1 and Dyno 2 render identically (peak 0.0968 both). Pedal noise/half-pedal are excluded by the spec and correctly declared unsupported."
           ]
         },
         {
-          "id": "pianoControls",
-          "label": "Detailed Piano controls",
-          "weight": 25,
+          "id": "inputReliability",
+          "label": "Input reliability & failure behaviour",
+          "weight": 30,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "dsp.test.ts proves KB Touch Light>Heavy rms direction, Dyn Comp floor lift, Timbre Bright!=Soft, Unison and String Res distinct, Soft Release longer tail, octave shift, Master Level lowering rms",
-            "shapedVelocity + harmonics(type) + timbre/unison/stringRes/softRelease all implemented in renderPianoNote",
-            "Master Level is a functional range wired to master gain before the limiter (stage2-visual-audit.md)"
+            "All three input paths drive one full note lifecycle in the served build: real mouse press on a key (RMS 0.0332, key lights, '1 voices'), computer keyboard KeyK (RMS 0.0406, '1 voices', releases on keyup), and Web MIDI through a stubbed requestMIDIAccess - note-on/off, CC64 sustain (voice held after note-off, released on CC64=0) and velocity mapping (vel 20 RMS 0.00121 vs vel 127 RMS 0.0798).",
+            "Failures degrade visibly and cleanly: CC123 took 7 voices -> 0; window blur took 5 -> 0; MIDI disconnect took 3 -> 0 and the status button switched to 'MIDI disconnected'; releasing the pointer 200 px above the key still released the voice (0 voices, 0 lit keys). Zero pageerror events across the whole session.",
+            "Under stress the tab stayed responsive: 16 simultaneous MIDI notes reported '16 voices' and DOM queries answered in under 20 ms; a 48-note burst with the sustain pedal held reported '48 voices' and returned to 0 on pedal-up; no freeze.",
+            "Weakness: there is no polyphony cap or voice stealing (48 concurrent voices allocated), and each note-on synchronously renders a 2.4 s buffer on the main thread, which is what drives the destination peak to 1.13 under a 32-voice cluster. Space is deliberately swallowed while a panel button holds focus (verified: Space activated the focused Timbre button instead of sustaining) - correct behaviour, not a defect."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 25,
+      "score": 55,
+      "contribution": 13.8,
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "label": "Required piano instruments",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "All six required types are present as dedicated panel buttons (piano-type-grand/upright/electric/clav/digital/misc), each selects, sets aria-pressed, names itself in the Program OLED and actually plays - measured RMS 0.0136-0.0343 across the six with no silent selection.",
+            "Recorded sample sets for Grand, Upright and Electric are absent; all six are synthesized per note (artifact/src/dsp.ts renderPianoNote). This is a Phase 2 hard-gate item, declared openly in IMPLEMENTATION_DETAILS.json notes.",
+            "The model dial does not select within a type: setting #piano-model to 0 gives 'Grand 1' and to 50 gives 'Clav 1', so it re-selects the type instead of a model, and each type has exactly one model. The piano spec's modelDialSelectsWithinType is not implemented.",
+            "Loading/ready state is truthful in the normal path ('Phase 2 PCM piano library ready') and the no-AudioContext path ('Audio unavailable - playable controls in silent fallback'), and both drive a status dot class."
           ]
         },
         {
-          "id": "inputsReliability",
-          "label": "Input and fallback reliability",
+          "id": "effectUnitCoverage",
+          "label": "Required effect units and types",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "All six units plus the shared Rotary are on the panel and every listed type is reachable by cycling its type button: Mod 1 A-Pan/Tremolo/Ring Mod/A-Wah/Wah/Pump, Mod 2 Chorus/Flanger/Phaser/Vibe/Ensemble/Spin, Amp EQ only/Twin/JC/Small/LP24/HP24/To Rotary, Reverb Room/Booth/Spring/Stage/Hall/Cathedral, Delay filter Off/LP/HP/BP - all reached and recorded in this session.",
+            "Chain-level controls are all present and functional: FX focus A/B, GROUP, per-unit ON, Delay/Comp/Reverb GLOBAL, Delay TAP tempo and SYNC, and the all-effects BYPASS (verified to null the whole chain and restore it).",
+            "Four controls are decorative while marked data-functional=\"true\": Mod 1 SYNC (peak 0.13987 and RMS 0.03712 identical with it on and off), the Amp/EQ Bass knob (ampEq.rate is never read in artifact/src/stage-engine.ts:167-172; bass 0 vs 100 gives peak 0.12330 both), Rotary Drive (rotaryDrive appears nowhere in stage-engine.ts; drive 0 vs 100 only re-rolls the static pan), and the 'PIANO' FX-focus button, which is permanently lit with onClick returning undefined (artifact/src/App.tsx:271).",
+            "Optional items Ping Pong and Rotary stop mode are absent, which the spec permits; the excluded Variations/Chorale/Analog/pedal-mode items are correctly not present."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "label": "Declared gaps are accurate",
           "weight": 20,
-          "rating": 3,
-          "score": 75,
+          "scoring": "judged",
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "Inherited pointer/multitouch/keyboard/MIDI paths retained; sustain from UI/Space/CC64 shares one pedal lifecycle",
-            "simulateAssetFailure() sets a labeled 'PCM library failed · synthesized playable fallback active' status without claiming primary ready",
-            "Blur/visibility/MIDI-disconnect/all-notes-off/layer-disable/unmount clean owned handles (stage2-visual-audit.md, cleanup code)"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "effectsAudio",
-      "label": "Effects and signal graph",
-      "weight": 30,
-      "score": 75,
-      "contribution": 22.5,
-      "criteria": [
-        {
-          "id": "sharedGraph",
-          "label": "Shared graph and gain staging",
-          "weight": 25,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "stage-engine.ts createRack builds per-layer Piano A/B node chains converging into one master GainNode -> limiter (DynamicsCompressor) -> single context.destination",
-            "One lazy AudioContext; runtime instrumentation confirmed exactly 1 context created on first note (ctxCount=1, state running)",
-            "18ms parameter ramps avoid clicks; dispose() disconnects all rack nodes and closes the context"
-          ]
-        },
-        {
-          "id": "effectCoverage",
-          "label": "Audible effect coverage",
-          "weight": 45,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "processEffect implements real DSP for Mod1 (Tremolo/Pump/Ring/A-Pan/A-Wah/Wah), Mod2 (Chorus/Flanger/Phaser/Vibe/Ensemble/Spin), Delay, Amp/EQ, Compressor, Reverb",
-            "dsp.test.ts asserts every Mod1/Mod2/Amp/Reverb type yields a distinct signature and compressor lowers rms",
-            "Rotary reached via To Rotary; delay feedback traverses a filtered loop (LP/HP/BP) proven distinct in tests"
-          ]
-        },
-        {
-          "id": "routingControl",
-          "label": "Routing and control",
-          "weight": 30,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "updateEffectUnit routes focused/group(Piano A+B)/global(all targets) edits; dsp.test.ts verifies focused vs group vs global propagation",
-            "Per-unit bypass and allBypass equality (bypassed output === input) tested; dry/wet mix and documented order (Reverb before Rotary) verified",
-            "Delay feedback path + tempo/feedback/mix/clock-sync changes proven to alter output"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "systemBehavior",
-      "label": "System behavior and UX",
-      "weight": 10,
-      "score": 75,
-      "contribution": 7.5,
-      "criteria": [
-        {
-          "id": "audibleFeedback",
-          "label": "Audible/visible feedback",
-          "weight": 50,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Selecting a piano type/parameter updates the Program OLED and control LED state immediately (stage2-desktop.png)",
-            "Runtime: 65 functional controls expose live aria-pressed/value feedback; effect on/bypass reflected on button LEDs",
-            "Parameter changes ramp audio over 18ms per stage-engine ramp()"
-          ]
-        },
-        {
-          "id": "failureStress",
-          "label": "Failure and stress behavior",
-          "weight": 50,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "simulateAssetFailure provides a labeled playable fallback; MIDI denied/disconnected handled via onstatechange + allNotesOff",
-            "Cleanup on blur/visibility/disconnect/layer-disable/unmount returns owned handles to baseline (audit + code)",
-            "Rapid effect edits use ramped params and reduce-friendly node reuse (reverb buffer regenerated only on type change)"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "engineeringQuality",
-      "label": "Engineering quality",
-      "weight": 15,
-      "score": 75,
-      "contribution": 11.3,
-      "criteria": [
-        {
-          "id": "audioArchitecture",
-          "label": "Audio architecture",
-          "weight": 45,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Clear source/voice/layer-bus/effect/master boundaries; StageAudioGraph owns racks, StagePianoEngine owns voice ownership and status",
-            "Injectable AudioContext constructor and storage/timing boundaries enable deterministic tests",
-            "Architecture extended cleanly into Phase 3 (offline renderers reuse the same canonical parameters)"
-          ]
-        },
-        {
-          "id": "realBoundaryTests",
-          "label": "Real-boundary tests",
-          "weight": 30,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "30 tests pass; dsp.test.ts uses rms + strided signature over rendered Float32Array to prove instrument/control/effect distinctions, bypass equality, and routing",
-            "Tests assert direction (velocity/master level lower rms; soft-release longer tail) not just state",
-            "SAMPLE_BANKS provenance (source==='generated-pcm') asserted, keeping the honesty contract testable"
-          ]
-        },
-        {
-          "id": "performanceMaintainability",
-          "label": "Performance and maintainability",
-          "weight": 25,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Concise, well-named modules (dsp.ts, stage-engine.ts, instrument.ts) with low duplication; feature-matrix keeps inherited Phase 1 coverage",
-            "Reverb impulse regenerated only when type changes; ramps for stability",
-            "Piano voices render 2.4s buffers synchronously per note-on, a modest main-thread cost under heavy play"
+            "The headline deviation is declared with unusual honesty: IMPLEMENTATION_DETAILS.json states outright that Grand/Upright/Electric are generated PCM rather than recordings and that this 'truthfully deviates from the Phase 2 hard gate', with sampleSources left empty. The nine-item unsupported list is accurate for everything it names.",
+            "But the declaration claims capability the build does not have. audio.strategy claims 'six ordered per-layer effect units' and architecture.offlineRenderer claims 'Deterministic offline DSP mirrors the audible controls'. It does not mirror them: artifact/src/dsp.ts implements LFO tremolo/pan/ring-mod and comb-delay chorus, while the shipped graph in artifact/src/stage-engine.ts has no LFO or delay line in Mod 1/Mod 2/Rotary at all - measured panSwing 0.000 and modulation depth equal to baseline for every modulation type.",
+            "The candidate's own tests assert only on that offline path (artifact/src/dsp.test.ts:51-57 runs processEffect over MOD1_TYPES/MOD2_TYPES/AMP_TYPES/REVERB_TYPES), so 'every type distinct' is proven for code that never plays. Measured on the shipped path, Phaser and Vibe are inaudible, A-Wah equals Wah, and Twin/JC/Small are identical.",
+            "One declared status string is false. Forcing the engine constructor to throw yields the label 'PCM library failed - synthesized playable fallback active' while nothing is synthesized - ensureGraph() returns null and noteOn substitutes no-op handles (artifact/src/stage-engine.ts:244), so the instrument is silent while claiming an active synthesized fallback. Voice count and key highlighting still animate, which makes the claim look confirmed.",
+            "Undeclared gaps found by measurement: octave shift moves 24 semitones instead of 12; Mod 1 SYNC, EQ Bass and Rotary Drive are inert; Dyno 1 equals Dyno 2; the model dial changes type rather than model."
           ]
         }
       ]
     }
   ],
+  "runAxis": null,
   "technicalGate": {
     "passed": true,
     "scoreCap": null,
@@ -232,28 +176,28 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "durationMs": 9529,
+        "durationMs": 3792,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "durationMs": 2037,
+        "durationMs": 1017,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "durationMs": 648,
+        "durationMs": 26406,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "durationMs": 1754,
+        "durationMs": 1586,
         "detail": "Passed"
       },
       {
@@ -265,7 +209,70 @@
     ]
   },
   "issues": [
-    "HARD-GATE DEVIATION: Grand/Upright/Electric are generated PCM (SAMPLE_BANKS source 'generated-pcm'), not recorded/redistributable sample sets, so piano.instrument-library's recorded-sample requirement is unmet. Declared honestly in IMPLEMENTATION_DETAILS.json and tests, so it is not faked.",
-    "Piano voices render full 2.4s buffers synchronously on note-on, a main-thread cost that could add latency under dense polyphony."
+    {
+      "severity": "critical",
+      "criterion": "effectAudibility",
+      "title": "No modulator exists in the shipped audio graph - Mod 1, Mod 2 and Rotary are static filters",
+      "detail": "artifact/src/stage-engine.ts builds Mod 1 and Mod 2 as a single BiquadFilterNode each and Rotary as a StereoPannerNode whose pan is assigned once per state update from Math.sin(currentTime*speed). Measured on the served build over a 1.5 s held note: A-Pan panSwing 0.000 with L/R 1.000; Tremolo modulation depth 0.105 against a 0.105 no-effect baseline; Rotary panSwing 0.000 at SLOW and at FAST, with only a fixed L/R offset that changes arbitrarily whenever any unrelated control is touched. Twelve of the thirteen Mod 1/Mod 2 type names plus Rotary therefore describe behaviour the instrument does not produce, while their ON LEDs light. Phaser and Vibe (allpass) are outright inaudible - peak 0.12353 unit-off vs 0.12473 and 0.12410 - which is the honesty-contract failure mode of a control that indicates success and does nothing."
+    },
+    {
+      "severity": "critical",
+      "criterion": "declaredGapAccuracy",
+      "title": "Failure status claims a synthesized fallback while the instrument is silent",
+      "detail": "With AudioContext construction forced to throw, the status line reads 'PCM library failed - synthesized playable fallback active' and the status dot switches to the fallback class, but ensureGraph() returns null and noteOn() substitutes {release(){},stop(){}} handles (artifact/src/stage-engine.ts:244). No synthesis path runs - the instrument is completely silent while the voice counter and key highlighting keep animating, so the panel corroborates a false claim. The sibling no-AudioContext path is labelled honestly ('silent fallback'), which shows the wording was a choice."
+    },
+    {
+      "severity": "major",
+      "criterion": "signalGraph",
+      "title": "Master output clips from a 10-note chord upward",
+      "detail": "Peak of the signal reaching AudioDestinationNode, at the default Master Level 0.72: 8 notes 0.9572 (clean), 10 notes 1.0026 with 4 samples at or above 0 dBFS, 16 voices 1.0539 with 44 samples over, 32 voices 1.1316 with 356 samples over. At Master 100 the 16-voice case reaches 1.1250. The declared 'limiter' is a DynamicsCompressorNode at threshold -2 dB / ratio 18 / attack 3 ms whose internal makeup gain pushes the sum past full scale; there is also no voice cap, so 48 concurrent voices are allocated without stealing."
+    },
+    {
+      "severity": "major",
+      "criterion": "layerBehavior",
+      "title": "Octave shift transposes 24 semitones instead of 12",
+      "detail": "MIDI note 60 measures 262.3 Hz normally and 1043.5 Hz with OCT+ engaged - two octaves, not one - and zero-crossing rate falls to 0.24x with OCT-. artifact/src/stage-engine.ts:107 renders the source buffer at root + layer.octave and line 113 then applies layer.octave a second time in playbackRate. The piano spec calls for +/-12 semitones. The pitch stick, by contrast, is exactly right at +2 semitones (262.3 -> 294.5 Hz)."
+    },
+    {
+      "severity": "major",
+      "criterion": "effectAudibility",
+      "title": "Effect types that the spec requires to differ are bit-identical",
+      "detail": "Amp Twin / JC / Small at drive 70 measure peak 0.12351 / 0.12353 / 0.12354 and RMS 0.03573 for all three; the effects spec states the three must not sound identical. Mod 1 A-Wah and Wah measure peak 0.00418, RMS 0.00069 and zcr 1073 vs 1072 - indistinguishable - and both attenuate the signal roughly 50x rather than sweeping. Piano Timbre Dyno 1 and Dyno 2 render identically (peak 0.0968, RMS 0.03119 vs 0.03120) because artifact/src/dsp.ts:47 matches them with a single startsWith('Dyno') branch."
+    },
+    {
+      "severity": "major",
+      "criterion": "declaredGapAccuracy",
+      "title": "The test suite validates an offline DSP that is not the shipped audio path",
+      "detail": "All 30 tests pass on a clean install, but the effect coverage tests (artifact/src/dsp.test.ts:51-111) exercise processEffect/processEffectChain in artifact/src/dsp.ts, which implements real LFO tremolo, panning, ring modulation and comb-delay chorus. None of that code runs in the browser; the audible path is artifact/src/stage-engine.ts, which has none of it. IMPLEMENTATION_DETAILS.json describes the offline renderer as mirroring 'the audible controls', so the green suite reads as proof of behaviour that measurement contradicts."
+    },
+    {
+      "severity": "major",
+      "criterion": "instrumentLibraryCoverage",
+      "title": "No recorded sample sets for Grand, Upright or Electric",
+      "detail": "The Phase 2 contract requires bundled, redistributable recorded sample sets for these three types. All six types are synthesized from four sine partials per note at note-on (artifact/src/dsp.ts:17-62), and SAMPLE_BANKS' six roots and three velocity layers are metadata only - measured MIDI velocity 20 vs 127 scales amplitude 66x with no timbre-layer switch. Rated as a gap rather than dishonesty because IMPLEMENTATION_DETAILS.json declares the deviation explicitly and leaves sampleSources empty."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectUnitCoverage",
+      "title": "Four controls carry data-functional=\"true\" but do nothing",
+      "detail": "Mod 1 SYNC: peak 0.13987 and RMS 0.03712 identical with it on and off (chain.mod1.fast is read only by the delay). Amp/EQ Bass: ampEq.rate is never referenced in the graph's amp block (artifact/src/stage-engine.ts:167-172); bass 0 vs 100 gives peak 0.12330 both. Rotary Drive: rotaryDrive appears nowhere in stage-engine.ts, and the apparent change at drive 100 is the static rotary pan being re-rolled by the state update. The 'PIANO' FX-focus button is permanently aria-pressed with onClick returning undefined (artifact/src/App.tsx:271). The honesty contract asks such controls to be visibly inert; these are marked functional."
+    },
+    {
+      "severity": "minor",
+      "criterion": "instrumentLibraryCoverage",
+      "title": "Model dial selects the type, not a model within the type",
+      "detail": "#piano-model at 0 shows 'Grand 1' and at 50 shows 'Clav 1' in the Program OLED, so the dial walks the six types rather than the models inside one, and each type exposes exactly one model. The piano spec's modelDialSelectsWithinType is unimplemented and undeclared."
+    },
+    {
+      "severity": "minor",
+      "title": "No lint configuration ships with the artifact",
+      "detail": "All four gates reproduce on a clean pnpm install --frozen-lockfile (30 tests pass; the rebuild emits the same asset hashes index-CfD8M-Sn.js / index-DRG8P7vm.css as the published build, confirming build/ matches the sealed source). However the artifact ships no oxlint config, so `pnpm lint` walks node_modules and reports warnings from typescript.js rather than linting the candidate's own source. It exits 0, so the gate passes, but it is not meaningfully checking this code."
+    },
+    {
+      "severity": "minor",
+      "criterion": "layerBehavior",
+      "title": "GLOBAL indicator does not propagate to the layer it targets",
+      "detail": "Arming Delay GLOBAL on chain A and then toggling Delay ON correctly turned the unit on for both layers, but focusing B shows the GLOBAL button aria-pressed=false while its ON button reads true. The flag lives per chain (artifact/src/instrument.ts:108-111), so the panel under-reports which layers a global unit is driving."
+    }
   ]
 }

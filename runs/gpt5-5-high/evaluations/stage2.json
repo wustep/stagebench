@@ -1,240 +1,162 @@
 {
-  "rubricVersion": "1.0.0",
+  "rubricVersion": "2.0.0",
   "runId": "gpt5-5-high",
   "stage": 2,
   "stageName": "Piano library and working effects",
   "status": "complete",
-  "evaluator": "independent-agent (opus-4.8)",
-  "evaluatedAt": "2026-07-04T00:00:00.000Z",
-  "summary": "Phase 2 retains an excellent Phase-1 surface and honestly declares its Grand/Upright/Electric sets as generated approximations rather than faking recordings, so the honesty contract is intact and instrumentBreadth is a fidelity gap (rating 1) not a zero. The decisive weakness is architectural: the entire effect chain (Mod 1/2, Delay, Amp/EQ, Compressor, Reverb, Rotary) plus the richer per-type additive piano synthesis exist only inside a test-only renderProbe() and are NEVER inserted into the live audible graph. Live playback is oscillator -> filter -> gain -> layer bus -> master gain/limiter -> destination with no effect nodes, so no effect is audible when the keyboard is played. Tests exercise the parallel Float32Array probe (and node counts on a FakeAudioContext), never an OfflineAudioContext or the real live path, so they prove math but not audible behavior. Effects and controls therefore land near the disconnected-node failure the rubric penalizes.",
-  "score": 50.5,
-  "rawScore": 50.5,
+  "evaluator": "stagebench-blind-evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-16T00:00:00.000Z",
+  "summary": "Phase 2 is presentation-deep. The live Web Audio graph is exactly Oscillator -> BiquadFilter -> Gain -> layer bus -> master gain -> DynamicsCompressor -> destination; instrumenting AudioNode.prototype.connect showed enabling all six effect units plus Rotary adds zero nodes and zero edges, and A/B of every unit and every listed type against a warmed-up baseline is inside repeat-to-repeat jitter (reverb-on tail RMS 0.0077 vs bypassed 0.0116). All effect DSP lives in renderProbe(), a pure Float32Array function the audible path never calls; the candidate's own audio tests assert only that function. Six piano types select, but Grand, Upright and Digital are the same triangle oscillator (h3/h1 = 0.094 for all three, identical RMS/envelope to 5 dp); Electric is a bare sine, Clav a saw, Misc a square. No AudioBuffer, delay or convolver exists in source or the shipped bundle, and the declared root notes and velocity layers do not exist. Layers, octave, layer/master level, KB Touch, Dyn Comp and Soft Release measurably work; Timbre Mid/Bright/Dyno, Unison levels and String Res do not. Inputs are reliable and error-free, but master+layers at max clip at peak 1.168 post-limiter.",
+  "score": 30.8,
+  "rawScore": 30.8,
   "categories": [
     {
-      "id": "visualRetention",
-      "label": "Visual and interaction retention",
-      "weight": 10,
-      "score": 65,
-      "contribution": 6.5,
-      "criteria": [
-        {
-          "id": "surfaceRetention",
-          "label": "Surface fidelity retention",
-          "weight": 60,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "stage2-desktop.png is essentially identical to stage1-desktop.png: continuous red chassis, deck+keybed split, six ordered sections (Performance/Organ/Piano/Program/Synth/Effects), Program+Synth OLEDs, 9 drawbars with LED ladders, and the 73-key E-to-E keybed all retained with no regression.",
-            "stage2-narrow.png (390x844) keeps the full chassis and keybed with no clipping or lost controls; capture json reports zero console messages and zero page errors at both 1440x900 and 390x844.",
-            "Silhouette and section arrangement track reference nord-stage-4-73.jpg, though control density is lower and many panel legends are truncated placeholders (ORGAN..., PIANO..., generic knob caps) rather than the reference's dense labeled inventory.",
-            "Layer Effects panel expanded coherently from Phase 1 to show Mod1/Mod2/Delay/Amp/Comp/Reverb/Rotary rows matching the effects spec order."
-          ]
-        },
-        {
-          "id": "functionalHardwareState",
-          "label": "Piano/effect hardware state",
-          "weight": 40,
-          "rating": 2,
-          "score": 50,
-          "evidence": [
-            "Piano type/layer/focus buttons update presentation state (mutually-exclusive type highlight, focus latch) via changeControl in App.tsx and drive engine.updateLayer.",
-            "Effect on/type/global toggles flip aria-pressed and control state, so on/bypass/target read coherently on the surface.",
-            "However display state is thin and partly hardcoded: OLEDs show static 'Nord Stage 4 / Phase 2 Piano' and 'Decorative' text, and the snapshot.graph.order is a fixed string array rather than a reflection of the actual (effect-free) live topology, so 'parameter/display state' does not faithfully mirror the real signal path."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "pianoLibrary",
-      "label": "Piano library and performance",
-      "weight": 35,
-      "score": 53.8,
-      "contribution": 18.8,
+      "id": "sound",
+      "label": "Sound",
+      "weight": 55,
+      "score": 23.8,
+      "contribution": 13.1,
       "criteria": [
         {
           "id": "instrumentBreadth",
-          "label": "Distinct Piano instruments",
-          "weight": 30,
+          "label": "Instrument breadth & character",
+          "weight": 35,
+          "scoring": "judged",
           "rating": 1,
           "score": 25,
           "evidence": [
-            "IMPLEMENTATION_DETAILS.json has sampleSources: [] and lists Grand/Upright/Electric under generatedSources with method 'not sampled from a recording'; the required bundled RECORDED sample sets are absent, so the core Phase-2 hard gate is unmet.",
-            "This is honestly disclosed (visible status 'generated offline approximations declared', IMPLEMENTATION_PLAN checkbox for recorded sets is left unchecked), so it is not a faked-recording zero; it is a genuine fidelity gap, hence rating 1 rather than 0.",
-            "Per-type distinction in the AUDIBLE live path is only a single OscillatorNode waveform + biquad filter (triangle/sine/saw/square by type in noteOnLayer); the richer additive typeHarmonics recipe that actually differentiates the six types lives only in renderProbe and never plays live.",
-            "renderProbe tests confirm the six probe renders differ (distance > 0.003), but that difference is not what a user hears."
+            "Harmonic analysis of the published build (Goertzel on a destination-tap recording, 700 ms held C4, warm-up note played first): Grand harm[1..10] = [1, .0010, .0943, .0004, .0235, .0002, .0059, .0001, .0013, .0001], Upright = [1, .0010, .0943, .0004, .0235, .0002, .0059, .0001, .0013, .0001], Digital = [1, .0006, .0948, .0001, .0236, .0001, .0060, .0001, .0013, .0001]. Grand and Upright were identical to 5 decimal places on RMS (0.049674), peak (0.128261) and all eight envelope blocks - three of the six types are literally one voice relabelled.",
+            "The three that do differ are raw waveforms, not piano character: Electric harm = [1, .0009, .0006, .0004, ...] (pure sine), Clav = [1, .4713, .2837, .1832, .1190, ...] (sawtooth), Misc = [1, .0006, .2849, .0005, .1207, ...] (square). artifact/src/pianoEngine.ts:532 is the whole difference: oscillator.type = Electric ? 'sine' : Clav ? 'sawtooth' : Misc ? 'square' : 'triangle'. typeHarmonics() at line 229, which does distinguish all six, is only read by the offline renderProbe.",
+            "specs/nord-stage-4.piano.json requires recorded, bundled sample sets for Grand/Upright/Electric. grep for createBuffer / decodeAudioData / createBufferSource / AudioBuffer across artifact/src and the shipped build/assets/index-BpKIiMAV.js returns nothing: there is no sampled or generated buffer content of any kind, only one live oscillator per voice."
           ]
         },
         {
-          "id": "twoLayerBehavior",
-          "label": "Two-layer Piano behavior",
-          "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "id": "effectAudibility",
+          "label": "Effect audibility & correctness",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 0,
+          "score": 0,
           "evidence": [
-            "initialLayerState defines A (enabled/focused) and B (disabled) with per-layer level/octave/sustainPedal/pitchStick/type; noteOnLayer fans a keypress to every enabled layer and tags each Voice with its owning layer.",
-            "Test 'owns voices per enabled layer...' proves enabling B yields 2 voices per note, focus follows to B, and per-layer sustainPedal routing plus timed cleanup return activeVoices to 0.",
-            "Each layer has its own GainNode bus (bus.connect(masterGain)) with level automation via setTargetAtTime, giving correct per-layer ownership and gain staging.",
-            "Minor gap: octave buttons set a fixed +/-12 rather than accumulating multi-octave shifts, and layer level in live playback is applied on the voice gain, not only the bus."
+            "Graph census: I patched AudioNode.prototype.connect before app load and recorded every edge. After a warm-up note the distinct edge set is {Oscillator->BiquadFilter, BiquadFilter->Gain, Gain->Gain, Gain->DynamicsCompressor, DynamicsCompressor->Destination}, ctxCount 1. After turning Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb and Rotary all ON and playing again, the distinct edge set is byte-for-byte the same set; edge count rose 7 -> 10, which is only the three nodes of the second note. No DelayNode, ConvolverNode, WaveShaperNode, StereoPannerNode or modulation oscillator is ever created.",
+            "Rendered-signal A/B, each unit switched on with its amount/mix knob driven to maximum, measured against a warmed-up baseline (hold RMS 0.052252, tail RMS 0.011615): mod1 0.051846 / 0.012862, mod2 0.050837 / 0.008767, delay 0.051846 / 0.013254, ampEq 0.049401 / 0.011615, compressor 0.049674 / 0.010732, reverb 0.051284 / 0.007746. Reverb ON produced a *smaller* post-release tail than bypass, and every post-release envelope reached zero in the same 2 of 8 blocks - no repeats, no tail. Cycling every listed type (6 Mod 1, 6 Mod 2, 7 Amp/EQ, 6 Reverb) and Rotary slow vs fast likewise stayed inside the +/-4% jitter band of repeated identical notes.",
+            "Source confirms the mechanism: applyMod1/applyMod2/applyDelay/applyAmpEq/applyCompressor/applyReverb/applyRotary in artifact/src/pianoEngine.ts are pure Float32Array functions reached only from processEffects(), which is called only by renderProbe() (line 624). noteOnLayer(), the sole audible path, connects oscillator -> filter -> gain -> layer bus and never consults chain state."
           ]
         },
         {
-          "id": "pianoControls",
-          "label": "Detailed Piano controls",
-          "weight": 25,
+          "id": "signalGraph",
+          "label": "Signal graph & gain staging",
+          "weight": 30,
+          "scoring": "judged",
           "rating": 2,
           "score": 50,
           "evidence": [
-            "KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, and Master Level all bind through updatePerformance and measurably change the renderProbe output (test asserts energy/distance deltas for each).",
-            "In LIVE playback only a subset is wired into audible nodes: velocityForTouch/applyDynComp affect voice gain, timbre picks a filter type/frequency, and unison only nudges detune; String Res, Soft Release nuances, and the additive timbre shaping are probe-only and inaudible live.",
-            "Master Level is genuinely audible live (masterGain.gain.setTargetAtTime in updatePerformance).",
-            "So controls change canonical STATE and the offline probe, but several change no audible live signal, which is a meaningful integration gap for a criterion requiring audible change."
-          ]
-        },
-        {
-          "id": "inputsReliability",
-          "label": "Input and fallback reliability",
-          "weight": 20,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Pointer (with capture + cancel + lost-capture), independent multi-touch via a pointer->key map, mapped computer keys with repeat suppression, and MIDI note/velocity/CC64 sustain are all handled in App.tsx and covered by tests.",
-            "allNotesOff on blur, MIDI onstatechange, and unmount cleanup prevent stuck notes; voice stealing is deterministic (released-first then oldest) and tested (stolenVoices increments at maxVoices).",
-            "Fallback is truthful: when no AudioContext exists ensureContext sets state 'fallback' with a labeled message and does not claim primary library readiness; a test asserts this.",
-            "Sustain honors per-layer SUSTPED (sustained set only added when layers[voice.layer].sustainPedal); no soft/sostenuto pedal is claimed, consistent with the honesty contract."
+            "The topology the criterion names is genuinely there and measured: exactly one AudioContext was constructed (instrumented constructor counter = 1), two per-layer Gain buses feed one master Gain, which feeds a DynamicsCompressor (threshold -8 dB, ratio 12, knee 8) into a single destination. Master Level Home->End moved measured RMS from 0.000000 to 0.077618; Layer A fader Home->End moved it 0.000004 -> 0.079170; layer/master changes use setTargetAtTime ramps and no click or console error appeared in any probe.",
+            "Gain staging fails under a reachable configuration: with Master Level at max, both piano layers enabled and Layer B level at max, 17 simultaneously held computer-keyboard notes measured post-limiter peak 1.167918 and RMS 0.349392 at the destination tap - above full scale, so it clips. At default levels the same 17 notes measured peak 0.772111 / RMS 0.183326.",
+            "The 'documented signal order' the spec requires between the layer source and the layer level does not exist in the audible graph at all (see effectAudibility); getSnapshot().graph.order in artifact/src/pianoEngine.ts:641 returns the required order as a hard-coded string array rather than reflecting anything built."
           ]
         }
       ]
     },
     {
-      "id": "effectsAudio",
-      "label": "Effects and signal graph",
-      "weight": 30,
-      "score": 38.8,
-      "contribution": 11.6,
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 20,
+      "score": 57.5,
+      "contribution": 11.5,
       "criteria": [
         {
-          "id": "sharedGraph",
-          "label": "Shared graph and gain staging",
-          "weight": 25,
+          "id": "layerBehavior",
+          "label": "Two-layer piano behaviour",
+          "weight": 40,
+          "scoring": "judged",
           "rating": 2,
           "score": 50,
           "evidence": [
-            "One AudioContext is created lazily in ensureContext with two per-layer GainNode buses, a master GainNode, and a DynamicsCompressor limiter feeding a single context.destination; dispose disconnects buses/master/limiter and closes an owned context.",
-            "getSnapshot().graph reports contextCount 1, destinationCount 1, layerBuses 2, masterLimiter true, verified by test.",
-            "Critical flaw: the live graph contains NO ordered effect path. grep confirms processEffects and every applyXxx run only inside renderProbe; the claimed 'Mod1..Reverb..Rotary' order is a hardcoded string array in the snapshot, not the real live topology, so gain staging is correct but the ordered-effects requirement is unmet in the audible graph."
+            "Layer enable, level, octave and focus all reach the audio graph, measured on the published build: enabling Piano B raised RMS 0.055441 -> 0.060349; Layer B octave-up put energy in the C5 Goertzel bin (0.000042 -> 0.002969) and octave-down in the C3 bin (0.000047 -> 0.002996); Layer A fader at Home rendered RMS 0.000004 and at End 0.079170. Panel feedback tracks (aria-pressed flips, aria-valuenow follows the fader).",
+            "Octave shift latches and cannot be returned to 0: artifact/src/App.tsx:579-583 always sets octave to +12 or -12 regardless of button value. Pressing layer-b-octave-down a second time left the C3 bin at 0.003173 rather than restoring unison pitch - there is no path back to 0 short of a reload.",
+            "'Piano Section On' is listed in functionalControlIds (artifact/src/App.tsx:64) and therefore rendered with aria-label '...control' rather than 'decorative control', but no branch of changeControl handles it; pressing it (aria-pressed went to false) left rendered audio unchanged at RMS 0.055441 versus a 0.0554 baseline. The section cannot be switched off. Layer focus does change effects.focusedLayer, but since no effect touches audio the 'effect focus follows layer focus' contract is untestable in sound."
           ]
         },
         {
-          "id": "effectCoverage",
-          "label": "Audible effect coverage",
-          "weight": 45,
-          "rating": 1,
-          "score": 25,
-          "evidence": [
-            "The effect DSP is real code (Mod1 pan/tremolo/ringmod/wah/pump, Mod2 chorus/flanger/phaser/vibe/spin, Delay with LP/HP/BP feedback filter, Amp/EQ amp models + LP24/HP24 filters, compressor, multi-reverb taps, rotary) and measurably alters the renderProbe output; tests assert every unit and type changes the probe (distance > 0.0005).",
-            "But grep confirms none of these processors is inserted into the live audible chain: live voices connect gain -> layer bus -> master, bypassing all effects. Playing the keyboard produces zero effect processing.",
-            "The rubric states disconnected nodes / labels score 0; here the effects are effectively disconnected from the audible path (reachable only through a test-only probe), which is the failure this criterion penalizes.",
-            "Rating 1 rather than 0 only because the DSP genuinely exists and is exercised offline, not a bare label; audibly, effect coverage is absent."
-          ]
-        },
-        {
-          "id": "routingControl",
-          "label": "Routing and control",
+          "id": "pianoControlDepth",
+          "label": "Detailed piano controls",
           "weight": 30,
+          "scoring": "judged",
           "rating": 2,
           "score": 50,
           "evidence": [
-            "State-level routing is thorough: focus follows layer focus, manual focus, pianoGroup mirrors A->B, per-unit on/bypass, allBypass, delay feedback filter, reverb-before-rotary order, and To Rotary gating are all implemented in updateChain/processEffects and tested on the probe.",
-            "Physical parameter bindings are wired in changeControl for rate/amount/type/mix/feedback/filter/drive/eq/global across all units.",
-            "However all of this routing only affects renderProbe; because effects never touch the live graph, none of the focus/bypass/wet-dry/order behavior is audible in actual playback, so routing 'control' exists as state but not as heard signal."
+            "Three of the six named controls measurably change rendered signal. KB Touch: Light 0.055115, Medium 0.050837, Heavy 0.046329 RMS on the same held C4 (correct direction). Dyn Comp on a soft stroke (pointer near the top of the key, velocity ~0.46): Off 0.025950 -> 1 0.027724 -> 2 0.030119 -> 3 0.031973, monotonic, exactly the 'raises softer strokes' behaviour the spec asks for. Soft Release: post-release envelope [0.03244, 0.00741, 0.00163, 0.00036, 0.00008, 0...] versus baseline [0.02866, 0.00236, 0.00015, 0, ...].",
+            "Timbre is mostly inert. On a held C6 the 3.14 kHz bin measured Off 0.0008051, Soft 0.0003811 (the lowpass works), Mid 0.0008767 and Bright 0.0007320 - both inside jitter of Off, and Bright moved the wrong way. Cause: artifact/src/pianoEngine.ts:535-537 sets filter.type to 'peaking'/'highshelf' but never sets filter.gain, which defaults to 0 dB, i.e. pass-through. On Electric, the fundamental bin measured Off 0.0317273, Dyno 1 0.0316962, Dyno 2 0.0314544 - the two Dyno positions are exactly inert.",
+            "Unison levels are indistinguishable and String Res does nothing. Unison 1/2/3 measured C4 bin 0.028805 / 0.031311 / 0.031941 - all three map to the same single-oscillator 9-cent detune (line 534); there is no detuned voice stack, so 'wide and obviously detuned' at 3 is absent. String Res on measured hold RMS 0.053529 vs 0.053557 baseline and a tail envelope identical to baseline ([0.03412, 0.00307, 0.00019, 0...] vs [0.03244...]); the resonance term exists only inside renderBase(), which the audible path never calls."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "label": "Input reliability & failure behaviour",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Inputs are dependable under stress. 17 simultaneously held computer-keyboard notes rendered RMS 0.183326 with the page responsive; a 102-note burst (6 rounds of all 17 keys) with sustain held completed in 1802 ms and the destination tap then recorded exact silence (RMS 0.000000, all 12 envelope blocks 0) - no stuck voices, no freeze. Simulating window blur mid-note cut the sound within two envelope blocks ([0.05748, 0.01760, 0, 0...]).",
+            "Sustain works from the computer keyboard once focus is cleared: with Space held, releasing the note key left the envelope flat at ~0.0414 for the full 1.2 s window, and releasing Space produced [0.04039, 0.01533, 0.00226, 0.00035, 0.00005, 0...]; without Space the same note decayed to zero in 4 blocks. A sweep pressing all 126 pointer-reachable panel controls produced zero console errors and left the app alive.",
+            "Two caveats. Web MIDI reported 'MIDI permission denied or unavailable' in headless Chromium, so the MIDI claims (note on/off, CC64 -> setSustain, onstatechange -> cleanupAll at artifact/src/App.tsx:488-535) could only be checked by reading source, not measured. And the no-AudioContext path (verified by deleting window.AudioContext before load) shows 'Playable fallback: generated piano approximations, no browser AudioContext' - the state is labelled and error-free, but nothing is actually playable there, since noteOnLayer returns early."
           ]
         }
       ]
     },
     {
-      "id": "systemBehavior",
-      "label": "System behavior and UX",
-      "weight": 10,
-      "score": 62.5,
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 25,
+      "score": 25,
       "contribution": 6.3,
       "criteria": [
         {
-          "id": "audibleFeedback",
-          "label": "Audible/visible feedback",
-          "weight": 50,
-          "rating": 2,
-          "score": 50,
-          "evidence": [
-            "Selections give immediate visible feedback: type highlight, focus latch, aria-pressed toggles, and a status strip that updates (e.g. 'Grand selected for Piano A', 'sustain held from keyboard').",
-            "Note-on/off and Master Level produce immediate audible feedback in the live graph.",
-            "But effect and most performance-control changes produce no immediate audible result live (only the probe changes), so the 'coherent sound feedback' half of this criterion is only partially met.",
-            "OLED/LED displays are largely static placeholders and do not reflect selected effect type or parameter values."
-          ]
-        },
-        {
-          "id": "failureStress",
-          "label": "Failure and stress behavior",
-          "weight": 50,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Denied/unavailable MIDI is handled (catch sets 'MIDI permission denied or unavailable', shown in the capture status strip) and Web-MIDI-absent path is labeled.",
-            "Asset/context failure enters a labeled playable fallback without claiming readiness (tested).",
-            "Voice stealing at maxVoices, allNotesOff on blur/disconnect/unmount, and a master limiter (DynamicsCompressor + tanh in probe) guard against runaway polyphony and clipping.",
-            "Rapid effect changes are safe because they only mutate immutable state objects (updateEffects via cloneEffects), though they also have no live audio consequence."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "engineeringQuality",
-      "label": "Engineering quality",
-      "weight": 15,
-      "score": 48.8,
-      "contribution": 7.3,
-      "criteria": [
-        {
-          "id": "audioArchitecture",
-          "label": "Audio architecture",
-          "weight": 45,
-          "rating": 2,
-          "score": 50,
-          "evidence": [
-            "Clean typed model (PianoLayerState, EffectsState, LayerEffectChain), injectable context option, and separated source/voice/layer/bus/master boundaries in the live graph are good foundations.",
-            "Major architectural problem: two divergent audio engines coexist. Live playback uses OscillatorNode voices with no effects; renderProbe uses entirely separate additive Float32Array synthesis WITH effects. The effect and additive-timbre code is never shared with what the user hears, so the phase's central deliverable (a connected shared effect graph) is not actually built.",
-            "This split also undermines Phase 3 extensibility: effect processors are array functions, not AudioNodes, and cannot be reused by the real-time Organ/Synth engines without reimplementation as nodes.",
-            "voice.delay/filter fields on Voice are partly vestigial (delay never used live), indicating incomplete wiring."
-          ]
-        },
-        {
-          "id": "realBoundaryTests",
-          "label": "Real-boundary tests",
-          "weight": 30,
+          "id": "instrumentLibraryCoverage",
+          "label": "Required piano instruments",
+          "weight": 40,
+          "scoring": "judged",
           "rating": 1,
           "score": 25,
           "evidence": [
-            "Tests are deterministic and cover lifecycle, layers, controls, effect units/types, bypass, group, and cleanup.",
-            "But they do NOT cross the real audio backend: renderProbe is pure JS array math (no AudioContext), and the graph/live tests run against a FakeAudioContext/FakeNode that only records connect() calls and node counts.",
-            "No OfflineAudioContext render is used, so the tests never prove that the AUDIBLE path processes effects; in fact they cannot catch the core defect that effects are disconnected from live audio, because they assert on the parallel probe instead.",
-            "This is exactly the 'state-only / non-backend' shortfall the rubric warns against for claimed-audible behavior."
+            "All six types exist as panel buttons and select synchronously (status text confirmed 'Grand selected for Piano A', 'Upright selected...', etc.), with no loading failure. But the Phase 2 gate requires bundled recorded sample sets for Grand, Upright and Electric and the artifact ships none: build/ contains only index.html, one 220 KB JS bundle and an 8 KB CSS file, and grep across artifact/src and the bundle finds no createBuffer, decodeAudioData, createBufferSource or AudioBuffer.",
+            "The declared provenance describes content that does not exist. IMPLEMENTATION_DETAILS.json claims 'generated buffer approximation with nine declared root notes and soft/medium/hard velocity variants in code'; artifact/src/pianoEngine.ts:133-158 is a metadata array whose roots/velocities are plain strings, referenced only by App.tsx:736 (a count in the status strip) and by App.test.tsx:206, which merely asserts roots.length >= 9.",
+            "Selection is also incomplete and partly unreachable. 'piano.model-select' is listed as functional but has no handler, so the model dial does nothing and the Program OLED shows a fixed 'Nord Stage 4 / Phase 2 Piano' rather than a model name; there is no missing-model / flashing-LED state. A 5x5 elementFromPoint grid over piano.electric at 1440x900 resolved 13/25 points to the button and 12/25 - including the centre - to a neighbouring control's .control-face, so a centre click cannot select Electric."
           ]
         },
         {
-          "id": "performanceMaintainability",
-          "label": "Performance and maintainability",
-          "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "id": "effectUnitCoverage",
+          "label": "Required effect units and types",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "Code is well organized, low-duplication, clearly named, with immutable state updates and thorough cleanup timers; capture shows zero console errors at both viewports.",
-            "All Phase 1 regression tests are retained in the single App.test.tsx and feature-matrix.json maps every required Phase 1-2 ID.",
-            "Weakness: all 19 feature IDs point to one test file, and the duplicated synthesis logic (live vs probe) is a maintainability liability that will diverge further as engines are added.",
-            "Effect DSP is readable and self-contained but dead relative to live output, so a meaningful fraction of the code is untested against the path that matters."
+            "Inventory is nominally complete on the panel: Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb and Rotary all have on/type/parameter controls, the type lists in artifact/src/pianoEngine.ts:128-131 hold all 6/6/7/6 entries, and all of them are pointer-reachable (the full 130-control sweep reached 126; the 4 misses are all Program-section controls). Cycling each type button advances state without error.",
+            "Every one of those units and types is presentation-only: with each unit on and its mix/amount at maximum, rendered RMS stayed inside the +/-4% baseline jitter band (see effectAudibility), and the connect-instrumented graph census shows no effect node is ever constructed. All-effects bypass, Piano FX Group and the Global flags set booleans no signal path reads; 'effects.focus-piano' is listed as functional but falls through updateEffects unmatched and returns state unchanged.",
+            "Several required parameters have no control at all in artifact/src/hardware.ts:132-167: Reverb Bright/Dark, Amp Sim/EQ Mid Freq, and Mod 1 master-clock sync are absent, and Delay Tap/Tempo is present but declared decorative."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "label": "Declared gaps are accurate",
+          "weight": 20,
+          "scoring": "judged",
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "The sample-set shortfall is disclosed well and in several places: IMPLEMENTATION_DETAILS.json lists sampleSources: [] with six generatedSources, evidence/stage2-visual-audit.md carries it under 'Known deviations', and the running app's status strip reads 'generated pianos are not claimed as recordings'. Nothing generated is described as a recording.",
+            "The largest gap is instead declared as implemented. IMPLEMENTATION_DETAILS.json audio.strategy states 'one Web Audio context with Piano A/B layer buses, generated piano-like source voices, ordered deterministic effect processors, master gain, limiter, and one destination' and audio.effects lists all seven units as processors; the graph census proves no effect processor is in that context. In-app, the sr-only 'Decorative contract' (artifact/src/App.tsx:748) asserts 'Piano, Layer Effects, and Master Level are functional in Phase 2', and every effect control carries aria-label '<name> control' rather than 'decorative control'.",
+            "Further undeclared no-ops measured in the build: String Res (hold 0.053529 vs 0.053557 baseline), Timbre Mid/Bright and Electric Dyno 1/Dyno 2 (C6 3.14 kHz bin 0.0008767 / 0.0007320 vs Off 0.0008051; Electric fundamental 0.0316962 / 0.0314544 vs Off 0.0317273), Unison levels 1/2/3, Piano Section On (audio unchanged at RMS 0.055441 with the section 'off') and Piano Model Select. The declared root notes and velocity layers also do not exist in code."
           ]
         }
       ]
     }
   ],
+  "runAxis": null,
   "technicalGate": {
     "passed": true,
     "scoreCap": null,
@@ -243,28 +165,28 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "durationMs": 7140,
+        "durationMs": 3580,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "durationMs": 1667,
+        "durationMs": 1082,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "durationMs": 626,
+        "durationMs": 727,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "durationMs": 1740,
+        "durationMs": 1702,
         "detail": "Passed"
       },
       {
@@ -278,15 +200,63 @@
   "issues": [
     {
       "severity": "critical",
-      "detail": "Effects are disconnected from live audio. processEffects and all applyXxx DSP are invoked only inside renderProbe() (verified by grep); the live graph is oscillator->filter->gain->layer bus->master gain/limiter->destination with no effect nodes. No Mod/Delay/Amp/Compressor/Reverb/Rotary processing is audible when the keyboard is played, contradicting the Phase-2 requirement for real audible effect processing and the claimed ordered effect path."
+      "criterion": "effectAudibility",
+      "title": "No effect unit is connected to the audible signal graph",
+      "detail": "Patching AudioNode.prototype.connect before app load shows the live graph never contains anything but OscillatorNode, BiquadFilterNode, GainNode and one DynamicsCompressorNode. Turning Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb and Rotary all on adds zero nodes and zero edges, and A/B measurement of every unit and every listed type against a warmed-up baseline stays inside repeat-to-repeat jitter (e.g. reverb-on post-release tail RMS 0.007746 versus bypassed 0.011615). All the DSP lives in applyMod1..applyRotary in artifact/src/pianoEngine.ts, which only processEffects() calls, which only renderProbe() calls - an offline Float32Array path the audible engine never touches. The candidate's own audio tests (App.test.tsx lines 239-334) assert exclusively against renderProbe, so all four gates pass over a chain nobody can hear."
+    },
+    {
+      "severity": "critical",
+      "criterion": "declaredGapAccuracy",
+      "title": "IMPLEMENTATION_DETAILS.json declares a Web Audio effect chain that does not exist",
+      "detail": "audio.strategy claims 'one Web Audio context with Piano A/B layer buses, generated piano-like source voices, ordered deterministic effect processors, master gain, limiter, and one destination', and audio.effects enumerates all seven units as real processors. The context, buses, master gain, limiter and destination are real; the effect processors are not in that graph at all. The in-app accessibility text repeats the claim ('Piano, Layer Effects, and Master Level are functional in Phase 2') and every effect control is labelled 'control' rather than 'decorative control', so the artifact affirmatively reports success for behaviour it does not have. This is the honesty contract's central prohibition."
     },
     {
       "severity": "major",
-      "detail": "Required bundled recorded Grand/Upright/Electric sample sets are absent (sampleSources: []); they are honestly declared as generated approximations. Honesty contract preserved, but the piano-library hard gate is unmet."
+      "criterion": "instrumentBreadth",
+      "title": "Grand, Upright and Digital are the same voice relabelled",
+      "detail": "All three map to oscillator.type 'triangle' (pianoEngine.ts:532) and measured identically: harm[3]/harm[1] = 0.0943 / 0.0943 / 0.0948, with Grand and Upright matching to 5 dp on RMS (0.049674), peak (0.128261) and every envelope block. Only Electric (sine), Clav (saw) and Misc (square) differ, so six types yield four timbres, none of which reads as a piano - there is no attack transient beyond a 12 ms ramp, no inharmonicity and no per-note content."
     },
     {
       "severity": "major",
-      "detail": "Tests validate a parallel offline probe and FakeAudioContext node counts, never an OfflineAudioContext or the real live path, so they cannot detect that effects and most performance controls are inaudible live."
+      "criterion": "instrumentLibraryCoverage",
+      "title": "Declared sample provenance describes content that does not exist",
+      "detail": "IMPLEMENTATION_DETAILS.json declares nine or ten root notes and soft/medium/hard velocity layers per generated library. There are no buffers: no createBuffer, decodeAudioData, createBufferSource or AudioBuffer appears anywhere in artifact/src or in build/assets/index-BpKIiMAV.js. sampleLibrary (pianoEngine.ts:133) is a metadata array whose root-note strings are only counted by App.test.tsx:206 and whose length is printed in the status strip. Honest disclosure that these are not recordings is undercut by fabricated detail about how they were generated."
+    },
+    {
+      "severity": "major",
+      "criterion": "pianoControlDepth",
+      "title": "String Res, Timbre Mid/Bright/Dyno and Unison levels are silent no-ops",
+      "detail": "Measured on the published build: String Res on/off gives 0.053529 vs 0.053557 hold RMS with an identical release tail (the resonance term exists only in renderBase, used by renderProbe). Timbre Mid and Bright leave the C6 3.14 kHz bin at 0.0008767 and 0.0007320 against 0.0008051 for Off, because filter.gain is never set and peaking/highshelf default to 0 dB; Electric's Dyno 1 and Dyno 2 measure 0.0316962 and 0.0314544 against Off's 0.0317273. Unison 1/2/3 all resolve to one 9-cent detune of a single oscillator (C4 bin 0.028805 / 0.031311 / 0.031941), so 'wide and obviously detuned' at level 3 is absent."
+    },
+    {
+      "severity": "major",
+      "criterion": "layerBehavior",
+      "title": "Piano Section On and Piano Model Select are labelled functional but have no handler",
+      "detail": "Both ids are in functionalControlIds (App.tsx:64-86), so they render with aria-label '<name> control' rather than 'decorative control', but changeControl has no branch for either; they fall through to updateEffects and return state unchanged. Pressing Piano Section On (aria-pressed went to false) left rendered audio at RMS 0.055441, unchanged from baseline - the Piano section cannot be turned off. effects.focus-piano is in the same position."
+    },
+    {
+      "severity": "major",
+      "criterion": "signalGraph",
+      "title": "Output clips under a reachable configuration",
+      "detail": "With Master Level at maximum, both piano layers enabled and Layer B level at maximum, 17 simultaneously held notes measured peak 1.167918 and RMS 0.349392 at a tap taken after the DynamicsCompressor - above full scale. The limiter (threshold -8 dB, ratio 12, attack 4 ms) does not hold the output below 0 dBFS, and there is no makeup/trim staging between the layer buses and master gain."
+    },
+    {
+      "severity": "minor",
+      "criterion": "layerBehavior",
+      "title": "Octave shift latches at +/-12 and cannot return to 0",
+      "detail": "App.tsx:579-583 sets octave to +12 or -12 from the button id irrespective of the button's value. Pressing layer-b-octave-down twice left the C3 Goertzel bin at 0.003173 rather than restoring the C4 pitch; there is no way back to unison without reloading."
+    },
+    {
+      "severity": "minor",
+      "criterion": "instrumentLibraryCoverage",
+      "title": "The Electric type button's centre is covered by a neighbouring control",
+      "detail": "A 5x5 elementFromPoint grid over [data-control-id=piano.electric] at 1440x900 unscrolled resolves 13/25 points to the button and 12/25 - the centre among them - to an adjacent control's .control-face span. A centre click therefore selects a different control; Electric is only selectable by aiming at the corners. Four Program-section controls (split, morph-wheel, morph-pedal, morph-aftertouch) miss on all 25 grid points."
+    },
+    {
+      "severity": "minor",
+      "criterion": "inputReliability",
+      "title": "The no-AudioContext fallback is labelled 'Playable' but is silent",
+      "detail": "With window.AudioContext deleted before load the app cleanly reports 'Playable fallback: generated piano approximations, no browser AudioContext' with no console errors and a responsive keybed, but noteOnLayer returns early so nothing sounds. The state is honestly surfaced; the word 'Playable' is not accurate. Separately, Space both activates a focused panel button and engages sustain, since the window keydown handler runs alongside the button's own handler."
     }
   ]
 }

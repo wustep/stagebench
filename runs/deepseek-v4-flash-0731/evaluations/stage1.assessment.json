@@ -1,161 +1,114 @@
 {
-  "rubricVersion": "1.1.0",
+  "rubricVersion": "2.0.0",
   "runId": "deepseek-v4-flash-0731",
   "stage": 1,
-  "evaluator": "stagebench-phase1-evaluator-a (revised by stagebench-phase1-reviewer-b)",
-  "evaluatedAt": "2026-08-14T14:24:51.000Z",
-  "reviewOf": "assessment.json",
-  "reviewNotes": "Independent replication confirmed all three critical issues and nine of eleven ratings. Adjusted: decorativeBoundary 4 -> 3, runtime 3 -> 2. Corrected the Web MIDI evidence (MIDI is non-functional against a real browser) and added two issues the first pass missed (midi-access-api-mismatch, missing-viewport-meta). See review.json.",
-  "summary": "The artifact ships a complete, spec-measured control deck (six ordered sections at exactly the documented fractions, 0.543/0.454 deck:keybed split, 90.5% desktop width, 194 accessible controls, Program+Synth as the only OLEDs) with clean TypeScript/React structure, 58 passing tests, and a byte-reproducible build. Two structural failures dominate Phase 1 scoring, both invisible to the candidate test suite because every test runs in jsdom without layout or audio. (1) The keybed does not render: Keybed.tsx applies key geometry from keys.ts (white-key units 0..43) as CSS percentages, so 72 of 73 keys are laid out from x=1370px to x=54700px and are clipped away; the keybed reads as one blank slab containing a single full-width key labelled E1 at both 1440x900 and 390x844. Additionally, the .keys-black layer is an absolutely positioned inset:0 overlay with no pointer-events:none, so it swallows every pointer and touch event over the whole keybed — a real mouse click and a real touch tap produce no note at all. (2) There is no audio output path anywhere: 'AudioContext' occurs zero times in src/ and zero times in dist/assets/index-peaxqnv0.js, PianoEngine.render() is never called at runtime, and an instrumented Chromium run counted 0 AudioContext constructions across pointer, keyboard, MIDI and stress passes. IMPLEMENTATION_DETAILS.json nonetheless states 'The browser drains the engine into the speakers via the Web Audio path' and the status strip reports 'Basic piano ready (synthesized voice)', so the artifact claims audible behavior it does not have. A third input failure compounds these: the MIDI binding calls MIDIAccess.inputs as a function (inputs.ts:215) where the platform exposes a maplike attribute, so against a real browser connect() throws an unhandled TypeError, binds no port, and the strip reads 'Web MIDI not available' — and the test suite stubs the artifact's own wrong shape, so it passes. What does work is real: the computer keyboard drives a well-factored shared note lifecycle with velocity, sustain (UI, Space, CC64), 32-voice deterministic stealing, and verified blur cleanup; 44 knobs, 6 faders, 2 encoders, wheel, spring-return stick and 57 buttons all move by pointer and keyboard with correct ARIA state; and the decorative boundary is architecturally clean — panel controls write only to a presentation store that nothing reads, though that boundary is never exercised against a live audio path. The 9 organ drawbars are the exception: a value-domain mismatch (0..1 drag vs 0..8 store) leaves them frozen at 0 and only able to ratchet downward.",
+  "evaluator": "blind-evaluator-phase1",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-16T19:55:00.000Z",
+  "summary": "A dense, fully reachable control deck on top of an instrument that makes no sound and cannot be played with a mouse. The deck is the strong half: six sections at exactly the specified fractions (0.140/0.200/0.085/0.125/0.250/0.200), 0.905 viewport width, exactly two OLEDs in Program and Synth, 132 named controls, 120/120 reachable on the 5x5 elementFromPoint grid, and honest decorative behaviour. Two failures dominate. First, no audio path exists: AudioContext/Audio/OfflineAudioContext are constructed zero times, the served bundle holds no Web Audio symbol, and PianoEngine.render() is called only from tests - yet IMPLEMENTATION_DETAILS.json claims the browser drains the engine into the speakers and the status strip permanently reads 'ready'. Second, a unit bug lays 72 of 73 keys beyond the keybed (to x=56000 in a 1370px bed) under a full-width overlay, so 0/73 keys are pointer-reachable; only mapped computer keys and MIDI reach the lifecycle, silently. The sealed visual audit asserts a depressing 73-key keybed its own screenshot refutes. Gates reproduce cleanly (58 tests, typecheck, lint, build) but exercise the model in jsdom, never the built page.",
   "categories": [
     {
-      "id": "visualFidelity",
+      "id": "sound",
       "criteria": [
         {
-          "id": "silhouetteGeometry",
-          "rating": 1,
+          "id": "pianoVoice",
+          "scoring": "judged",
+          "rating": 0,
           "evidence": [
-            "Keybed renders as a single blank slab: Chromium measurement of artifact/dist at 1440x900 found keyCount=73 but keysVisible=1; every key element is 1300.7px wide (100% of the keybed) and key x positions run 69.6px -> 54,699.8px. At 390x844 the same measurement gives keysVisible=1, key x range 7 -> 15,799px.",
-            "Root cause is a unit mismatch: artifact/src/hardware/keys.ts:38,63,69 emits x/width in white-key units (white keys x=0..42, width=1; black width=0.6), while artifact/src/components/Keybed.tsx:68 renders style={{ left: `${keySpec.x * 100}%`, width: `${keySpec.width * 100}%` }} — so key 0 fills the bed and keys 1..72 are pushed outside it.",
-            "Confirmed visually in the sealed captures and in an independent reviewer capture: artifact/evidence/stage1-desktop.png and stage1-narrow.png show an undifferentiated light rectangle where the 73-key bed should be, with one 'E1' label centred at the bottom; no black keys and no key seams are visible anywhere.",
-            "Chassis and deck geometry are correct: chassis 1302.7x565 at x=68.6,y=150 (90.47% of the 1440 viewport, inside the required 0.88-0.97); top rail 28.5px, deck 278.2px, keybed 238.1px, bottom rail 18.2px => deck-incl-rail 0.543 / keybed-incl-rail 0.454 vs spec 0.54/0.46 +/-0.025; documentElement scrollWidth/scrollHeight equal the viewport at both profiles (no overflow, no vertical scroll).",
-            "Section widths match nord-stage-4.visual.json exactly: measured 182.1/260.1/110.5/162.6/325.2/260.1 of a 1300.7px deck = 0.140/0.200/0.085/0.125/0.250/0.200.",
-            "Silhouette proportion deviates from the assigned variant: rendered instrument aspect ratio 1302.7/565 = 2.306 vs measuredInstrumentBounds.aspectRatio 3.0951 for stage-4-73 (a spec-conformant chassis at this width would be ~421px tall, so the render is ~34% taller). artifact/evidence/stage1-visual-audit.md 'Known deviations' declares this trade-off honestly."
+            "The published build never creates any audio output object. With AudioContext, webkitAudioContext, OfflineAudioContext and Audio all proxied by an addInitScript before page load, the constructor counter stayed at 0 through page load, a pointer press on the keybed, computer-keyboard notes (z, x, c), MIDI note-on via an injected requestMIDIAccess, and sustain toggling (scratch/probe-p1-interact.json, every 'audio' field {ctx:0}). document.querySelectorAll('audio,video').length is 0 and no window key matches /audio/i.",
+            "Static confirmation on the exact served bundle: grep for AudioContext|webkitAudioContext|createScriptProcessor|audioWorklet|createBufferSource|OscillatorNode|GainNode|new Audio over build/assets/index-peaxqnv0.js returns zero hits; grep -o 'Audio[A-Za-z]*' returns nothing at all.",
+            "The synthesiser exists but is orphaned: artifact/src/audio/engine.ts PianoEngine.render() is the only sound-producing routine, and the only callers of .render( in the whole artifact are artifact/tests/audio.test.ts. App.tsx constructs PianoEngine and NoteLifecycle but nothing ever pulls PCM out of it, so pressing a key changes aria-pressed and nothing else.",
+            "A warm-up note was played first (pointer press on the keybed, then keyboard 'z' held 250ms) before every measurement, per the fallback-voice trap; the audio counters were identical before and after, so this is not a first-note artefact."
           ]
         },
         {
-          "id": "hardwareInventory",
-          "rating": 2,
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 0,
           "evidence": [
-            "All six sections present in documented order with every required landmark: artifact/src/hardware/sections.ts declares performance (master level knob, pitch stick, mod wheel, branding), organ (9 drawbars + 9 LED ladders, 4 model switches, percussion, rotary, level), piano (6 type selectors, model encoder, 2 layer faders + focus, KB Touch/Dyn Comp/Timbre/Unison, soft release, string res), program (OLED, dial, 8 program buttons, page up/down, Live Mode, 2 scenes, store, split, 3 morph assigns), synth (OLED, 3 layer faders + focus, osc/filter/env/LFO/arp), effects (Mod1, Mod2, amp+EQ, delay, compressor, reverb, rotary, 5 focus buttons).",
-            "Live DOM inventory at 1440x900: 194 interactive controls — 44 .ctl--knob, 57 .ctl--button, 9 .ctl--drawbar, 9 .ctl--graph, 6 .ctl--fader, 2 .ctl--encoder, 1 wheel, 1 stick, 2 .ctl--oled; per-section interactive counts performance 3 / organ 21 / piano 20 / program 19 / synth 28 / effects 29; 0 duplicate DOM ids, all ids stable and dotted (perf.master-level, organ.db-16, fx.mod2-rate).",
-            "Program and Synth are the only primary OLEDs: exactly two .ctl--oled elements in the DOM (Program 'A:001 Grand', Synth 'SYNTH'); countPrimaryDisplays() === 2 asserted in artifact/tests/hardware.test.ts.",
-            "Forbidden hardware present in Synth: nord-stage-4.visual.json forbids 'wide display spanning the section' for synth, but artifact/src/styles.css:395 sets .ctl--oled { flex: 1 1 100% } and the measured Synth OLED is 307.58px wide inside a 307.58px control area — a full-width banner, versus the small centred display in inputs/reference/nord-stage-4-73.jpg.",
-            "Placement/density is schematic rather than reference-grouped: .section-controls is a single wrapping flex row (artifact/src/styles.css:119-127), so Synth reads close to the forbidden 'uniform repeated knob matrix' and Effects close to the forbidden 'single undifferentiated control grid' — no group frames or dividers separate Mod 1 / Mod 2 / Amp+EQ / Delay / Comp / Reverb, and the reference's clustered rows are not reproduced."
-          ]
-        },
-        {
-          "id": "materialsTypography",
-          "rating": 2,
-          "evidence": [
-            "Palette matches the spec closely; pixels sampled from artifact/evidence/stage1-desktop.png: chassis cheek #8b1c28 (spec chassisMid #851a25), bottom rail #48090e (spec chassisDark #5a0c13), organ plate #363b45 (spec panelBlueGray #3c424d), white key #d4d4d5 (spec keyWhite #dcdcdc), OLED body #0a1b18 with blue-green monospace glow.",
-            "Real material modelling in artifact/src/styles.css: dark inset plates with red perimeter on Organ/Piano/Synth/Effects vs exposed red chassis on Performance/Program, knob body gradients + index marks + rotating pointer, fader rails/caps with LED ladders, red button lights, OLED inner glow and drop shadows.",
-            "Branding is a placeholder, not the wordmark: sections.ts:16 declares { id: 'perf.branding', kind: 'led', label: 'Nord Stage 4 branding' }, rendered as a white pill whose visible legend literally reads 'Nord Stage 4 branding' (bottom-left of the Performance section in stage1-desktop.png; independently reproduced).",
-            "Legends are spec sentences at unreadable sizes rather than hardware nomenclature: visible text includes 'Percussion on/off', 'Program button 1', 'Morph assign aftertouch', 'Piano layer A focus'; the 9 drawbar LED-ladder legends ('16 foot drawbar level graph') wrap into garbled vertical stacks ('1 foo dra lev gra') beside the ladders, and the drawbar scale renders as overlapping '0 ... 80 ... 80' runs. Measured font sizes at desktop are 5-7px for legends; the reference uses terse uppercase legends (ON, DECAY, FAST, DYNO).",
-            "Hierarchy is flat: no section sub-group boxes, no differentiated button colours by function (all latching buttons share one red-light treatment), and LED ladders are always unlit because graph values are never set (store default 0)."
-          ]
-        },
-        {
-          "id": "responsiveRetention",
-          "rating": 1,
-          "evidence": [
-            "No overflow in a desktop-style 390x844 context: documentElement scrollWidth/scrollHeight = 390/844, chassis 378x548 at x=6,y=122 (96.9% width), all six sections rendered at 52.6/75.2/32/47/94/75.2px, all 194 controls still in the DOM with accessible names.",
-            "But the responsive rules never engage on a real mobile device: artifact/index.html and artifact/dist/index.html ship no <meta name=\"viewport\">, no <title> and no lang attribute, so in a Chromium mobile context at 390x844 the page falls back to the 980px layout viewport — clientWidth 980, scrollWidth 980, scrollHeight 2120, chassis 879.5px (2.26x the device width), .ctl-legend computed display 'block' and .section-title 8px because @media (max-width:700px) never matches.",
-            "The keybed bug persists at narrow: keysVisible = 1 of 73; the bottom 230px of the chassis is a blank light slab (artifact/evidence/stage1-narrow.png).",
-            "State is not legibly inspectable at narrow: artifact/src/styles.css:631 hides every control legend (.ctl-legend { display: none }, computed display 'none' confirmed live), section titles compute to 4.8px, drawbar readouts 5.44px, encoder values 5.76px.",
-            "120-157 elements are clipped at 390x844 depending on counting rule (scrollWidth/scrollHeight exceeding client box), including all 9 drawbar scales, all 9 ladder legends, and the Program OLED whose 'A:001 Grand' text is cut inside a 40.5px-wide display (measured); .section-controls uses overflow:hidden so the excess is silently cropped rather than reflowed."
+            "IMPLEMENTATION_DETAILS.json audio.strategy states 'The browser drains the engine into the speakers via the Web Audio path'. Exercising the build disproves it: 0 AudioContext constructions and no Web Audio symbol anywhere in build/assets/index-peaxqnv0.js. The declaration describes a signal path that does not exist in the shipped artifact.",
+            "The running UI repeats the claim: the status strip reads 'Basic piano ready (synthesized voice)' with a green ready dot from load onward (measured on the served build at 1440x900), while nothing is audible on any input path. src/piano/status.ts supports loading/error/fallback states, but App.tsx unconditionally calls status.setReady, so the honest states are never reachable.",
+            "What is declared about the *character* of the source is accurate as far as it goes - one generated partial-stack voice, no recordings, no network (sampleSources: [], one generatedSources entry), and the build issues only three requests (index.html, the JS chunk, the CSS chunk; scratch/probe-p1-base.json). The failure is the claim of audible output, not a sample mislabelled as a recording.",
+            "IMPLEMENTATION_DETAILS.json notes[2] also asserts 'Every panel control from the visual spec is present, moves/presses accessibly'; the nine organ drawbars do not move (measured below), so a second declared claim is contradicted by the build."
           ]
         }
       ]
     },
     {
-      "id": "basicPiano",
+      "id": "playability",
       "criteria": [
         {
-          "id": "unifiedInputs",
+          "id": "inputCoverage",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "One shared lifecycle exists and is well factored: artifact/src/piano/lifecycle.ts owns per-note press counting keyed by source, and artifact/src/piano/inputs.ts adapts computer keyboard and Web MIDI onto it; Keybed.tsx binds pointer/touch to the same object.",
-            "Pointer input is dead in the real browser: .keys-black is position:absolute; inset:0 (artifact/src/styles.css:543) with no pointer-events:none and sits after .keys-white, so document.elementFromPoint at 2%/10%/25%/50%/75%/90%/98% across the keybed returns 'keys-black' at every probe; a real page.mouse.down at the keybed produced zero pressed keys and Playwright reported '<div class=\"keys-black\"> intercepts pointer events'.",
-            "Touch input fails the same way: a real touchscreen tap at 390x844 (hasTouch context) over the keybed left 0 keys with aria-pressed=true, hit element 'keys-black'.",
-            "Web MIDI is non-functional against a real browser: inputs.ts:150-153 declares `inputs(): MidiInput[]` and connect() calls `access.inputs()` (inputs.ts:215), but the Web MIDI API exposes MIDIAccess.inputs as a MIDIInputMap maplike attribute, not a callable; the default requestAccess launders the platform object with `as unknown as MidiAccess` (inputs.ts:192) so tsc cannot catch it. Driving the built app with a spec-shaped access object threw an unhandled 'TypeError: e.inputs is not a function' page error via `void midi.connect()` (App.tsx:59), bound no port, produced no note on 0x90/60/100, and left the strip reading 'Web MIDI not available'. Only a stub matching the artifact's own non-standard interface (as tests/piano-inputs.test.ts:82 uses) makes the path appear to work.",
-            "Dispatching pointerdown directly on the key element (bypassing hit-testing, which is what artifact/tests/interaction.test.tsx does with fireEvent) does work: aria-pressed true then false — so the handler logic is correct and only the overlay/geometry defeats it in the shipped app.",
-            "Computer keyboard works live and is the only functioning input path: keydown 'z' set [data-midi=\"60\"] aria-pressed=true, keyup cleared it; repeat suppression via heldKeys (inputs.ts:90); window blur released 3 held notes (3 pressed -> 0 pressed, verified live). Playable coverage is the 24 mapped notes of KEY_TO_MIDI out of 73 keys.",
-            "MIDI failure paths are honest but conflated: a rejected requestMIDIAccess and a missing requestMIDIAccess both render 'MIDI unavailable' (App.tsx:27-31), so unsupported is reported as denied.",
-            "Focused keys are not keyboard-operable: KeyView (Keybed.tsx:70-84) exposes role=button tabIndex=0 but has no onKeyDown, so Enter/Space on a focused key leaves aria-pressed=false (Space instead toggles global sustain)."
+            "Pointer input to the keybed is entirely dead. Using the 5x5 elementFromPoint grid at 1440x900 with the page unscrolled, 0 of 73 key elements are reachable. Real trusted mouse presses at three points across the keybed (x-fractions 0.1, 0.5, 0.9 at 80% of keybed height) each produced an empty '.key[aria-pressed=true]' set. Every probe point resolves to DIV.keys-black, an absolutely positioned full-keybed overlay at z-index 2 that swallows all pointer events.",
+            "The underlying cause is a unit bug in artifact/src/hardware/keys.ts: key.x is a white-key index (0..42) and key.width is 1, and Keybed.tsx renders style={{left: `${key.x*100}%`, width: `${key.width*100}%`}}. Measured consequence on the served build: key rects run from x=69.6 to x=56000.5 inside a keybed spanning x 69.6-1370.4; each white key is 1300.7px wide. Only 1 of 73 keys falls inside the keybed bounds.",
+            "Computer keyboard works: with focus cleared, holding 'z' set key MIDI 60 to aria-pressed=true, adding 'x' gave the concurrent set [60, 62], and releasing both cleared it (scratch/probe-p1-interact.json kbDown/kbTwoNotes/kbUp). The map covers 24 notes (MIDI 60-83) of the 73-note E1-E7 bed.",
+            "Web MIDI works: with an injected navigator.requestMIDIAccess, the app bound onmidimessage on the fake input, the status strip read 'MIDI connected', 0x90/67/100 pressed key 67, 0x80/67/0 released it, and CC64 127/0 drove the sustain button's aria-pressed true/false. Without an injected access the strip degrades honestly to 'MIDI unavailable'.",
+            "No input path is audible - see pianoVoice - so even the two working paths reach only presentation state, never a note."
           ]
         },
         {
           "id": "voiceLifecycle",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "No voice is ever audible: 'AudioContext' appears 0 times in artifact/src/** and 0 times in artifact/dist/assets/index-peaxqnv0.js (grep -c = 0); nothing calls PianoEngine.render() outside tests (grep of src shows only engine.ts's own definition), and an instrumented Chromium run that counted AudioContext/webkitAudioContext/OfflineAudioContext constructions reported ctxCreated=0 after pointer, key, MIDI, sustain and stress passes.",
-            "The engine models the required behaviors deterministically: velocity->gain and brightness (artifact/src/audio/engine.ts:102,182), attack/decay/sustain and per-voice exponential release (engine.ts:24-27,131-144), sustain hold with damper-up cutoff on release (engine.ts:146-156), MAX_VOICES=32 with oldest-onset stealing (engine.ts:92-99), self-pruning released voices (engine.ts:175-179).",
-            "Overlap/repeat semantics are source-counted so a note is released only by its last holder (lifecycle.ts:73-105); allNotesOff/forceRelease/dispose all zero the voice list (lifecycle.ts:122-145).",
-            "Cleanup is real at runtime: App.tsx:60-64 detaches the keyboard, disposes MIDI and the lifecycle on unmount; a live blur test returned 3 held notes to 0; 40 rapid keyboard note cycles left DOM node count unchanged (977 -> 977) with 0 keys stuck pressed and no console output.",
-            "Because the render path terminates nowhere, velocity/release/sustain/polyphony are unobservable outside the offline unit tests — the criterion's performance behavior exists as model state only.",
-            "Visible panel controls stay decorative during play: interaction.test.tsx asserts decorative movement never depresses a key or starts a voice, and hardwareStore is not read by engine, lifecycle or inputs (verified by grep)."
+            "The state machine is complete and correct in source: artifact/src/audio/engine.ts implements MAX_VOICES=32 with deterministic oldest-onset stealing (voices sorted oldest-first, splice of the lowest onset), a per-voice release captured at beginRelease with RELEASE_S=0.5 exponential decay, and setSustain(false) releasing every sustained voice; artifact/src/piano/lifecycle.ts refcounts presses per note so overlapping sources share one voice and adds forceRelease/dispose. 58 unit tests over this model pass on a clean pnpm install.",
+            "None of it is audible. The engine's render() is never called outside artifact/tests/audio.test.ts and no AudioContext is ever constructed, so velocity->gain (v^1.12*0.95), brightness tracking, sustain tails and voice stealing have no rendered consequence in the build. The rubric's audible behaviours are provable only against a synthesiser the page never drains.",
+            "Cleanup is observable and correct: holding 'c' set key 64 pressed, then dispatching a window blur cleared every pressed key (scratch/probe-p1-interact.json beforeBlur=[64], afterBlur=[]). Sustain latches from Space, from the UI 'Sustain pedal' button and from MIDI CC64, and clears on release in all three.",
+            "Velocity is effectively fixed for the two human input paths: Keybed.tsx sends 0.85 for every pointer press and ComputerKeyboard sends 0.8 for every key, so only MIDI carries dynamics (value/127). There is no velocity gesture on the keybed at all."
           ]
         },
         {
-          "id": "honestBasicSource",
-          "rating": 0,
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 2,
           "evidence": [
-            "artifact/IMPLEMENTATION_DETAILS.json:6 claims 'The browser drains the engine into the speakers via the Web Audio path'; the shipped bundle contains no AudioContext/AudioWorklet/ScriptProcessor/createBuffer/destination reference at all, so this describes behavior that does not exist. inputs/verification.json:21 records the same audioStrategy string.",
-            "The UI asserts readiness it cannot deliver: StatusModel's READY message 'Basic piano ready (synthesized voice)' is set unconditionally in App.tsx:58 and rendered with a green status dot, while no note can be heard.",
-            "There is no dependable audible Piano-like voice — the rubric's core requirement for this criterion is contradicted by direct measurement (ctxCreated=0 across every interaction path; zero AudioContext occurrences in dist).",
-            "A second status untruth: with Web MIDI present but the binding broken (see unifiedInputs), the strip renders 'Web MIDI not available'.",
-            "Partial credit where due: the source is honestly typed as generated, not recorded — IMPLEMENTATION_DETAILS.json lists sampleSources: [] and one generatedSources entry with kind 'generated' and license 'Generated buffer; not a recording.', which satisfies the generated-vs-recorded honesty rule.",
-            "Status/fallback taxonomy exists but is unreachable in the app: artifact/src/piano/status.ts implements loading/ready/error/fallback and is unit-tested (tests/piano-status.test.ts), yet nothing in App.tsx can ever call setLoading/setError/setFallback, so no failure could ever be reported to the user."
+            "Coverage and reachability of the deck are genuinely good: 120 of 120 interactive deck controls pass the 5x5 elementFromPoint reachability grid at 1440x900 (0 unreachable), and 132 labelled deck elements carry an aria-label with 63 sliders all exposing aria-valuenow.",
+            "Most control classes move and report honestly under a real pointer/keyboard: 'Master level' 0.8 -> 0.4 after 8 ArrowDown (one event per animation frame) and back to 0.6 after 4 ArrowUp, with the knob pointer transform rotating accordingly; a real mouse press toggles 'Vibrato on/off' aria-checked false->true and Enter toggles it back; 'Program button 1' (momentary) is aria-pressed true only while the button is held; the pitch stick reaches 0.66 'Up' on drag and springs back to 0.5 'Center' on release; the 'Organ level' fader cap and LED ladder track a drag.",
+            "The nine organ drawbars - a required Organ landmark - are effectively inert. A real 300px upward drag on '16 foot drawbar' left aria-valuenow at 0, aria-valuetext '0', and the handle at bottom 0px (travel fraction 0.000 of a 42.3px track). Five PageUp presses (one per animation frame) only reached aria-valuenow 1 of a declared max 8, handle bottom 5.28px. Cause: DrawbarControl passes pos=n/8 into useDragValue but writes the raw 0..1 result back to the store, so each gesture re-divides and the value saturates near 0.09.",
+            "Value reporting contradicts the rendering on segmented faders: at rest 'Organ level' reports aria-valuenow 0.7 with aria-valuetext '1/11' while the cap sits at 70% and 8 of 12 ladder segments are lit; 'Piano layer A level' reports '1/11' at 0.8 with 9 segments lit. Home/End are treated as deltas rather than absolutes in useDragValue (Home = +1, End = +0), so on 'Filter cutoff' End was a no-op (0.8 -> 0.8) and Home jumped to 1.0.",
+            "The decorative boundary itself is respected: driving the program dial through five ArrowUp steps moved its aria-valuetext to '5' while both OLEDs stayed at their static 'A:001 Grand' / 'SYNTH' text, and no panel control starts a note or claims audio. No console errors or page errors were emitted during the entire interaction pass."
           ]
         }
       ]
     },
     {
-      "id": "interaction",
+      "id": "features",
       "criteria": [
         {
-          "id": "physicalInteraction",
-          "rating": 2,
-          "evidence": [
-            "Most control families move correctly under real input (measured live at 1440x900): knob 'Master level' 0.8 -> 1 by vertical drag and 0.8 -> 0.7 by two ArrowDown presses with .knob-pointer transform rotate(54deg); fader 'Organ level' 0.7 -> 1 via arrows with aria-valuetext '11/11' and cap bottom 100%; encoder 'Model selector' 0 -> 0.2 by drag, -> 0.4 by arrows; modulation wheel 0 -> 0.4; pitch stick springs back to 0.5 on pointerup (controls.tsx:277-297); latching button 'B3 organ model' toggles aria-checked true->false on a real click; momentary 'Program button 1' reports aria-pressed true only while held.",
-            "Accessible state is deliberate: 194 interactive elements, 0 without an accessible name, 0 with tabIndex<0, 63 role=slider all carrying aria-valuenow/valuemin/valuemax (plus aria-valuetext), 41 role=switch with aria-checked, focus ring computed as 2px solid on knob/fader/drawbar/encoder/wheel/button.",
-            "All 9 organ drawbars are effectively frozen and can only ratchet downward — a required Organ landmark that does not move. Measured aria-valuenow trail for '8 foot drawbar' under 10 ArrowUp presses: 8,1,0,0,0,0,0,0,0,0,0 with .drawbar-handle bottom stuck at 0%; a real 200px upward pointer drag on a drawbar left aria-valuenow at 0.",
-            "Cause: controls.tsx:126-133 passes the normalized position (n/8) into useDragValue, whose onChange writes that 0..1 value straight back into a store field that hardwareStore.normalize rounds as a 0..8 drawbar integer (store.ts:81-83), so any drag/arrow result <0.5 collapses to 0 and the handle can never rise above 12.5% of its track.",
-            "Keybed input by pointer/touch is not usable at all (see unifiedInputs): the .keys-black overlay intercepts every press over the keybed, and focused keys ignore Enter/Space.",
-            "No console errors or page errors during the interaction pass on the paths that do not touch real Web MIDI (desktop, narrow and stress runs all logged 0 messages)."
-          ]
-        },
-        {
-          "id": "decorativeBoundary",
+          "id": "panelControlCoverage",
+          "scoring": "judged",
           "rating": 3,
           "evidence": [
-            "Panel state is structurally isolated from audio: artifact/src/hardware/store.ts holds a control-id -> presentation-value map, and grep confirms hardwareStore is imported only by components (Section.tsx, controls/controls.tsx) and test-setup.ts — never by src/audio/engine.ts, src/piano/lifecycle.ts or src/piano/inputs.ts.",
-            "No panel control mutates the engine, no LED or OLED text changes in response to notes, and the only intended real inputs are keybed notes plus sustain (UI button, Space, CC64) — exactly the Phase 1 allowance.",
-            "Proven by test: artifact/tests/interaction.test.tsx 'decorative movement never depresses a key or starts a voice' drags Master Level fully and asserts pressedKeyCount() === 0; verified live too (drag passes produced 0 pressed keys and ctxCreated stayed 0).",
-            "Declared honestly in artifact/IMPLEMENTATION_DETAILS.json note 3: 'Every panel control ... changes presentation state only; no panel control claims to alter audio or system state in Phase 1', matching observed behavior.",
-            "Displays stay static placeholders ('A:001 Grand', 'SYNTH') rather than faking program/model changes when decorative controls move — confirmed by re-reading .oled-text after a full control sweep.",
-            "Held back from the top anchor for two reasons. The criterion scores a boundary between a real half and a decorative half, and the real half does not exist: with no audio graph anywhere and pointer/touch note input dead, the isolation is proven only against an engine that is itself disconnected, so it is never exercised under a live signal path. And the criterion requires the surface not to 'falsely claim ... audio/system state', while the status strip rendered directly beneath the chassis asserts 'Basic piano ready (synthesized voice)' behind a green dot when nothing can be heard."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "engineeringQuality",
-      "criteria": [
-        {
-          "id": "structureTests",
-          "rating": 2,
-          "evidence": [
-            "Clean, normalized data and module boundaries: artifact/src/hardware/{types,keys,sections,instrument,store}.ts describe the surface declaratively with stable dotted IDs; artifact/src/piano/{lifecycle,inputs,status}.ts separates input adaptation from audio; artifact/src/audio/engine.ts is platform-free DSP; components render specs generically via ControlView (~2,000 lines total, consistently documented).",
-            "Platform boundaries are injectable: MidiInputBinding takes requestAccess (inputs.ts:144), PianoEngine takes sampleRate/clock/events (engine.ts:65-69), so tests run without devices; 58 tests across 9 files pass (reproduced independently from a clean copy of the source: 'Test Files 9 passed, Tests 58 passed').",
-            "tests/feature-matrix.json maps all 11 required Phase 1 IDs to non-empty test files, matching inputs/verification.json featureMatrix 11/11.",
-            "The suite is systematically blind to the presentation layer, which is how both structural defects shipped: tests/regression.test.tsx only counts .key/.key-white/.key-black elements and asserts section style.width ends in '%' (comment concedes 'jsdom does not compute layout geometry'), so nothing catches keys laid out to x=54,700px or an overlay that blocks the keybed.",
-            "The suite is also blind to the platform contract it fakes: tests/piano-inputs.test.ts:80-83 builds MIDI access as `inputs: () => [input]`, matching the artifact's own non-standard MidiAccess interface rather than the Web MIDI maplike attribute, so it certifies a MIDI path that throws in a real browser.",
-            "One test is written loosely enough to pass the drawbar defect: tests/interaction.test.tsx 'a drawbar slides and stays an integer in 0..8' drags and then asserts only 0 <= value <= 8 and Number.isInteger(value) — it never asserts the value changed, so a permanently frozen drawbar passes.",
-            "Latent contract smells: keys.ts unit coordinates vs Keybed.tsx percentage consumption with no shared adapter or test; drawbar value domain 0..1 in controls.tsx vs 0..8 in store.ts; the `as unknown as MidiAccess` cast at inputs.ts:192; instrumentSpec.keybed initialized as {} as InstrumentSpec['keybed'] (sections.ts:243) then read for blackKeyHeightFraction (instrument.ts:10); 'void version' / 'void low; void high' placeholders kept to satisfy lint."
+            "All six sections render in order at exactly the documented deck fractions - measured 0.1400 / 0.2000 / 0.0850 / 0.1250 / 0.2500 / 0.2000 against the spec's 0.14 / 0.20 / 0.085 / 0.125 / 0.25 / 0.20 - and the instrument occupies 0.905 of the 1440px viewport (spec range 0.88-0.97), with no scroll in either axis.",
+            "Labelled control counts per section on the served build: performance 4, organ 30 (9 drawbars, 9 LED ladders, 4 model switches, percussion on + decay + level, rotary speed/drive, vibrato + chorus, level fader), piano 20 (six type selectors, model encoder, A/B level faders and focus, KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, section on, SUSTPED, PSTICK), program 20 (OLED, dial, eight program buttons, page up/down, Live Mode, two Layer Scenes, Store, Split, three morph assigns), synth 29 (OLED, three layer faders + focus, osc, filter, envelopes, LFO, glide, vibrato, arp), effects 29 (two mod groups, amp/EQ, delay, compressor, reverb, rotary, five layer-focus buttons).",
+            "Exactly two primary OLEDs, in Program and Synth (document.querySelectorAll('.oled').length === 2, one in each of those sections and none elsewhere), matching the phase-1 hard gate.",
+            "Placement deviation: the Rotary Speaker block is absent from the performance band. The visual spec's performance sectionLandmarks require 'rotary speaker controls' on the exposed red chassis there (with the photo cited at x 2200-2500 of 11600), but the performance section renders only Pitch stick, Modulation wheel, Master level and branding; the rotary controls sit in Organ (organ.rotary-speed, organ.rotary-drive) and again in Effects (fx.rotary-speed, fx.rotary-on).",
+            "Legibility, not inventory, is the other weak point: at 1440x900 the 110px-wide piano section stacks 20 legends into overlapping 4-5px type (see scratch/probe-p1-desktop.png), though every control keeps a correct aria-label - 0 of 132 labelled deck elements are missing a name."
           ]
         },
         {
-          "id": "runtime",
-          "rating": 2,
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 1,
           "evidence": [
-            "All four technical checks pass and are reproducible: vitest run -> 9 files / 58 tests passed; tsc --noEmit -> clean; oxlint exits 0 (3 warnings when scoped to src and tests: unused `vi` in tests/piano-inputs.test.ts:1, unused `getKeys` in tests/hardware.test.ts:2, a useless spread at src/piano/inputs.ts:116); vite build reproduces the sealed bundle byte-for-byte (sha256 472fd0ef... for index-peaxqnv0.js, 0a8171c3... for index-CSpqh0zs.css, 222,083 B and 12,504 B, identical hashed names to artifact/dist/assets), so the served dist matches the evaluated source.",
-            "Console is clean on the paths that do not touch real Web MIDI: 0 console messages and 0 page errors across desktop 1440x900, narrow 390x844 and a 40-cycle stress run; artifact/evidence/stage1-capture.json also records empty consoleMessages/pageErrors.",
-            "But the real Web MIDI path throws: `void midi.connect()` (App.tsx:59) leaves the rejection unhandled, so a browser presenting a spec-shaped MIDIAccess produces an unhandled 'TypeError: e.inputs is not a function' page error at load and silently loses MIDI input.",
-            "Repeated-interaction stability is good: 40 rapid keyboard note cycles left DOM node count unchanged (977 -> 977), no keys stuck pressed, no listener growth; window blur returned pressed-key state to 0; unmount tears down keyboard/MIDI/lifecycle (App.tsx:60-64).",
-            "Responsiveness is broken on real mobile: index.html ships no viewport meta (also no title, no lang), so a mobile context at 390x844 lays out at the 980px fallback viewport (scrollWidth 980, scrollHeight 2120, chassis 879.5px) and the @media (max-width:700px) rules never apply. In a desktop-style 390px window the layout is non-overflowing but illegible.",
-            "Runtime gaps: there is no loading path or audio initialization at all (no AudioContext, so no user-gesture resume handling and no error/fallback state can ever surface), and the two structural defects — invisible keybed, pointer/touch-blocking overlay — are runtime-visible failures rather than build failures. Three of the criterion's six sub-dimensions (loading, responsiveness, console state under real MIDI) therefore fail or are absent."
+            "tests/feature-matrix.json maps all 11 required phase-1 IDs to non-empty test files and the suite reproduces on a clean install (pnpm install --frozen-lockfile then vitest: 9 files, 58 tests passing; typecheck, lint and build also pass, and the rebuilt bundle is byte-identical in name to the published assets/index-peaxqnv0.js). But the tests exercise the model in jsdom, not the build.",
+            "piano.basic-note-lifecycle and piano.basic-sustain-polyphony are unexercisable in the running build: no audio object is ever constructed, so note on/off, release tails, sustain and 32-voice stealing have no rendered signal. The only assertions about audio run PianoEngine.render() directly (tests/audio.test.ts), a path the app never invokes.",
+            "piano.basic-inputs is only two-thirds live in the build: keyboard and MIDI (with an injected access) drive the shared lifecycle, but pointer and touch are dead - 0 of 73 keys are reachable by the 5x5 elementFromPoint grid and real mouse presses across the keybed produce no press state. tests/interaction.test.tsx proves multi-touch with fireEvent.pointerDown on the element directly, which bypasses hit-testing and so cannot catch this.",
+            "piano.basic-status-cleanup is half-honest: the status model supports loading/error/fallback and blur/dispose cleanup verifiably clears held notes, but App.tsx calls status.setReady unconditionally, so the build permanently claims 'Basic piano ready (synthesized voice)' for a voice that cannot be heard."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 0,
+          "evidence": [
+            "The two largest gaps in the artifact are undeclared and are instead asserted as working. IMPLEMENTATION_DETAILS.json audio.strategy claims 'The browser drains the engine into the speakers via the Web Audio path' (no audio object is ever constructed in the served build), and notes[2] claims 'Every panel control from the visual spec is present, moves/presses accessibly' (the nine organ drawbars do not move: 0.000 travel fraction under a 300px real drag).",
+            "Nothing at all is declared unimplemented beyond phase scope, so there are no over-declared gaps - the failure is entirely one of undeclared missing behaviour. The broken keybed (72 of 73 keys laid out beyond the keybed's right edge, up to x=56000 in a 1370px-wide bed) appears nowhere in IMPLEMENTATION_DETAILS.json, IMPLEMENTATION_PLAN.md or the visual audit.",
+            "The sealed evidence affirmatively contradicts itself: evidence/stage1-visual-audit.md asserts '73 keys, range E1-E7, 43 white / 30 black, black-key height 61% of white. Keys depress on press', while its own evidence/stage1-desktop.png shows the keybed as a single featureless white slab with a lone 'E1' legend - the same rendering I reproduced from build/ at 1440x900. IMPLEMENTATION_PLAN.md likewise ticks all five phase-1 hard gates.",
+            "The one deviation that is declared - the 600px instrument height against the photo's 3.095 aspect - is real and honestly described (measured aspect 2.171), which shows the declaration mechanism works when used; it simply was not used for the failures that matter."
           ]
         }
       ]
@@ -163,95 +116,57 @@
   ],
   "issues": [
     {
-      "id": "keybed-not-rendered",
       "severity": "critical",
-      "category": "visual/hard-gate",
-      "summary": "72 of 73 keys are laid out outside the keybed; the keybed renders as one blank slab.",
-      "detail": "artifact/src/components/Keybed.tsx:68 uses keySpec.x/width (white-key units from artifact/src/hardware/keys.ts:38,63,69) as CSS percentages. Measured at 1440x900: 73 .key elements, each 1300.7px wide, x from 69.6px to 54,699.8px, keysVisible=1; same at 390x844 (x up to 15,799px). Visible in artifact/evidence/stage1-desktop.png and stage1-narrow.png as an empty light rectangle with one 'E1' label. Fails the hard gate 'The exact keybed count and range for the assigned variant are modeled and playable' at the presentation level. Independently reproduced by the reviewer."
+      "criterion": "pianoVoice",
+      "title": "The build is completely silent: no audio path is ever created",
+      "detail": "With AudioContext, webkitAudioContext, OfflineAudioContext and Audio proxied before page load, the constructor count stayed at 0 across page load, a warm-up pointer press, keyboard notes, MIDI note-on and sustain toggling. There are no <audio>/<video> elements and grep over the served build/assets/index-peaxqnv0.js finds no Web Audio symbol whatsoever. PianoEngine.render() - the only sound-producing routine - is called only from artifact/tests/audio.test.ts. The phase-1 core deliverable, 'one dependable piano voice played from the keybed', produces nothing audible on any input path."
     },
     {
-      "id": "no-audio-output-path",
       "severity": "critical",
-      "category": "audio/honesty",
-      "summary": "The app can produce no sound: there is no Web Audio path anywhere, yet the artifact claims one.",
-      "detail": "grep -c AudioContext = 0 in artifact/src/** and in artifact/dist/assets/index-peaxqnv0.js; PianoEngine.render() is never called at runtime; an instrumented Chromium run counted 0 AudioContext/webkitAudioContext/OfflineAudioContext constructions across pointer, keyboard, MIDI, sustain and stress passes. artifact/IMPLEMENTATION_DETAILS.json:6 (mirrored in inputs/verification.json:21) states 'The browser drains the engine into the speakers via the Web Audio path', and the status strip renders 'Basic piano ready (synthesized voice)' — both claim behavior the artifact does not implement, breaching the honesty contract. Independently reproduced by the reviewer."
+      "criterion": "sourceHonesty",
+      "title": "IMPLEMENTATION_DETAILS.json and the UI assert an audible path that does not exist",
+      "detail": "audio.strategy states 'The browser drains the engine into the speakers via the Web Audio path'; the build never constructs an audio object. The status strip reinforces the claim, showing a green dot and 'Basic piano ready (synthesized voice)' from load onward because App.tsx calls status.setReady unconditionally, even though src/piano/status.ts supports honest error/fallback states. This is an affirmative false claim about the audible signal graph, not an omission, and it breaks the honesty contract and the shared completion gate 'Every claimed audio feature is connected to the audible signal graph'."
     },
     {
-      "id": "keybed-pointer-overlay",
       "severity": "critical",
-      "category": "interaction/hard-gate",
-      "summary": "A full-size .keys-black overlay swallows all pointer and touch input over the keybed.",
-      "detail": "artifact/src/styles.css:543 sets .keys-white, .keys-black { position: absolute; inset: 0 } with no pointer-events:none; the black layer paints last, so document.elementFromPoint returns 'keys-black' at every probe across the keybed. A real mouse press and a real touchscreen tap both produced 0 pressed keys; Playwright reported 'keys-black intercepts pointer events'. Pointer and multi-touch note input — both required by the phase contract — are non-functional in the shipped app even though the handlers themselves are correct. Independently reproduced by the reviewer."
+      "criterion": "inputCoverage",
+      "title": "Keybed geometry collapses: 72 of 73 keys render off-canvas and no key is pointer-reachable",
+      "detail": "artifact/src/hardware/keys.ts assigns key.x as a white-key index (0..42) with width 1, and Keybed.tsx renders left:`${x*100}%` / width:`${width*100}%`. Measured on the served build at 1440x900: key rects span x 69.6 to 56000.5 inside a keybed of x 69.6-1370.4, each white key 1300.7px wide; 1 of 73 keys falls inside the keybed and it covers the whole bed. The 5x5 elementFromPoint grid finds 0 of 73 keys reachable - every probe point resolves to DIV.keys-black, a full-keybed absolutely positioned overlay at z-index 2 - and real mouse presses at three points across the keybed produce no pressed key. The instrument renders as a blank white slab in place of a keyboard, at both 1440x900 and 390x844."
     },
     {
-      "id": "midi-access-api-mismatch",
-      "severity": "critical",
-      "category": "input/honesty",
-      "summary": "Web MIDI is non-functional against a real browser: MIDIAccess.inputs is called as a function, and the tests stub the same wrong shape.",
-      "detail": "inputs.ts:150-153 declares `interface MidiAccess { inputs(): MidiInput[] }` and connect() iterates `access.inputs()` at inputs.ts:215, but the Web MIDI API exposes MIDIAccess.inputs as a MIDIInputMap maplike attribute, not a callable operation; the default requestAccess launders the platform object with `as unknown as MidiAccess` (inputs.ts:192) so typecheck cannot catch it. Driving the built app with a spec-shaped access object threw an unhandled 'TypeError: e.inputs is not a function' page error via `void midi.connect()` (App.tsx:59), bound no input port, produced no note on 0x90/60/100, and left the status strip reading 'Web MIDI not available' while Web MIDI was in fact present. tests/piano-inputs.test.ts:80-83 fakes access as `inputs: () => [input]`, matching the artifact's own interface rather than the platform's, which is why the suite passes. Fails the phase hard gate requiring MIDI support and adds a third input path to the pointer/touch failures. Found by the reviewer; not in the original assessment."
-    },
-    {
-      "id": "drawbars-frozen",
       "severity": "major",
-      "category": "interaction",
-      "summary": "All 9 organ drawbars cannot be raised and can only ratchet down to 0.",
-      "detail": "controls.tsx:126-133 feeds the normalized position (n/8) into useDragValue and writes the resulting 0..1 value back into a store field normalized as a 0..8 integer (store.ts:81-83). Measured: '8 foot drawbar' aria-valuenow under 10 ArrowUp presses went 8,1,0,0,... with .drawbar-handle bottom 0%; a real 200px upward pointer drag left the value at 0. Violates 'every visible panel control moves or presses accessibly'. Independently reproduced by the reviewer."
+      "criterion": "declaredGapAccuracy",
+      "title": "Sealed visual audit claims a keybed its own screenshot refutes",
+      "detail": "evidence/stage1-visual-audit.md states '73 keys, range E1-E7, 43 white / 30 black, black-key height 61% of white. Keys depress on press (CSS transform + aria-pressed)', and the narrow section claims 'all 73 keys and all six sections rendered'. evidence/stage1-desktop.png and evidence/stage1-narrow.png both show an empty white rectangle with a single 'E1' label, which is exactly what I reproduce from build/. IMPLEMENTATION_PLAN.md also ticks all five phase-1 hard gates including 'The exact keybed count and range for the assigned variant are modeled and playable'."
     },
     {
-      "id": "synth-full-width-oled",
       "severity": "major",
-      "category": "visual/forbidden-hardware",
-      "summary": "The Synth OLED spans the entire section, which nord-stage-4.visual.json forbids.",
-      "detail": "styles.css:395 (.ctl--oled { flex: 1 1 100% }) yields a measured Synth display 307.58px wide inside a 307.58px control area. The visual spec lists 'wide display spanning the section' under synth.forbidden, and the reference photo shows a small centred display. Independently reproduced by the reviewer."
+      "criterion": "controlBoundary",
+      "title": "The nine organ drawbars cannot be moved",
+      "detail": "DrawbarControl passes pos = n/8 into useDragValue but writes the hook's raw 0..1 output straight back to the store, so each gesture re-divides the value and it saturates around 0.09 of travel. Measured on '16 foot drawbar': a real 300px upward drag left aria-valuenow at 0, aria-valuetext '0' and the handle at bottom 0px (travel fraction 0.000 of a 42.3px track); five PageUp presses, one per animation frame, reached only aria-valuenow 1 against a declared aria-valuemax of 8. The phase-1 gate requires every visible panel control to move or press accessibly, and tests/interaction.test.tsx only asserts the drawbar value is an integer in 0..8, which a stuck value satisfies."
     },
     {
-      "id": "narrow-illegible-state",
-      "severity": "major",
-      "category": "responsive",
-      "summary": "At 390x844 all control legends are hidden and well over 100 elements are clipped, so state is not inspectable.",
-      "detail": "styles.css:631 hides .ctl-legend (computed display:none confirmed live); section titles compute to 4.8px, drawbar readouts 5.44px; between 120 and 157 elements (depending on counting rule) have scrollWidth/scrollHeight beyond their client box, including all 9 drawbar scales, all 9 ladder legends and the Program OLED ('A:001 Grand' inside a 40.5px display). .section-controls overflow:hidden crops the excess silently."
-    },
-    {
-      "id": "missing-viewport-meta",
-      "severity": "major",
-      "category": "responsive/runtime",
-      "summary": "index.html ships no viewport meta, title or lang, so the narrow layout never applies on a real mobile device.",
-      "detail": "artifact/index.html and artifact/dist/index.html contain only the root div and the module/style tags. In a Chromium mobile context at 390x844 the page therefore lays out at the 980px fallback viewport: clientWidth 980, scrollWidth 980, scrollHeight 2120, chassis 879.5px wide (2.26x the device width), .ctl-legend computed display 'block' and .section-title 8px because @media (max-width:700px) never matches. The narrow evidence capture and the original narrow measurements were both taken in a desktop-style 390px context, the only configuration where the responsive rules engage. Found by the reviewer; not in the original assessment."
-    },
-    {
-      "id": "placeholder-legends-and-branding",
-      "severity": "major",
-      "category": "visual/typography",
-      "summary": "Legends are spec sentences and the brand mark is literal placeholder text.",
-      "detail": "sections.ts:16 renders the Performance branding as a white pill whose visible text is 'Nord Stage 4 branding' instead of the nord wordmark. Visible legends read 'Percussion on/off', 'Program button 1', 'Morph assign aftertouch'; the 9 'N foot drawbar level graph' legends wrap character-by-character into garbled vertical stacks and the drawbar scales overlap as '0 ... 80 ... 80' (see artifact/evidence/stage1-desktop.png, organ section; independently reproduced)."
-    },
-    {
-      "id": "tests-blind-to-presentation",
-      "severity": "major",
-      "category": "engineering/tests",
-      "summary": "The suite cannot catch layout, audio-path or platform-API regressions, and one test is written loosely enough to pass a frozen drawbar.",
-      "detail": "tests/regression.test.tsx only counts key elements and checks section style.width ends in '%' (its comment concedes jsdom has no layout), so the keybed and overlay defects pass 58/58. tests/interaction.test.tsx 'a drawbar slides and stays an integer in 0..8' asserts only the 0..8 integer invariant, never that the value changed. tests/piano-inputs.test.ts:82 stubs MIDI access with the artifact's own non-standard `inputs()` callable, certifying a path that throws in a real browser. tests/audio.test.ts measures PCM from PianoEngine directly, so it proves the offline DSP while the app has no output path."
-    },
-    {
-      "id": "keys-not-keyboard-operable",
       "severity": "minor",
-      "category": "accessibility",
-      "summary": "Focused keys expose role=button but ignore Enter/Space.",
-      "detail": "Keybed.tsx:70-84 sets role=button and tabIndex=0 with no onKeyDown; live test shows aria-pressed stays false after Enter and after Space (Space instead toggles global sustain). Playable keyboard coverage is the 24 notes in KEY_TO_MIDI (inputs.ts:12) out of 73 keys."
+      "criterion": "controlBoundary",
+      "title": "Segmented faders report a value that contradicts what they render",
+      "detail": "FaderControl computes valueText as `${Math.round(n)}/${segments-1}` on the un-normalised store value. At rest 'Organ level' exposes aria-valuenow 0.7 with aria-valuetext '1/11' while the cap sits at 70% and 8 of 12 ladder segments are lit; 'Piano layer A level' reads '1/11' at 0.8 with 9 lit. A screen-reader user and a sighted user get different readings of the same control."
     },
     {
-      "id": "unreachable-status-states",
       "severity": "minor",
-      "category": "honesty/status",
-      "summary": "loading/error/fallback status states exist but can never be reached at runtime.",
-      "detail": "src/piano/status.ts implements and unit-tests all four states, but App.tsx only ever calls status.setReady() (App.tsx:58); no code path can report an audio failure or a labeled fallback to the user. Relatedly, App.tsx:27-31 reports unsupported Web MIDI as 'denied'/'MIDI unavailable' rather than distinguishing unsupported from denied — confirmed live for both a rejected and a missing requestMIDIAccess."
+      "criterion": "controlBoundary",
+      "title": "Keys are focusable buttons with no keyboard handler; Home/End are deltas",
+      "detail": "Each of the 73 key elements has role=button and tabIndex=0 but no onKeyDown, so a focused key does nothing on Enter or Space (Space is captured globally for sustain) - 73 dead tab stops between index 120 and 193. Separately, useDragValue maps Home to a +1 delta and End to a +0 delta rather than jumping to max/min: on 'Filter cutoff' End was a no-op (0.8 -> 0.8) while Home clamped to 1.0."
     },
     {
-      "id": "silhouette-aspect-deviation",
       "severity": "minor",
-      "category": "visual/geometry",
-      "summary": "Rendered instrument is materially too tall for the assigned variant.",
-      "detail": "Measured chassis 1302.7x565 => aspect 2.306 vs stage-4-73 measuredInstrumentBounds.aspectRatio 3.0951; a spec-conformant chassis at this width would be ~421px tall, so the render is ~34% taller. Declared as a deliberate trade in artifact/evidence/stage1-visual-audit.md 'Known deviations' so that all controls stay unclipped. Background also renders as mid-dark gray (#5a5653 sampled) rather than the spec's 'neutral light product-study surface'."
+      "criterion": "panelControlCoverage",
+      "title": "Rotary Speaker block is missing from the performance band",
+      "detail": "The visual spec's performance sectionLandmarks require rotary speaker controls on the exposed red chassis of that band, citing the variant photograph at roughly x 2200-2500 of 11600. The rendered performance section holds only Pitch stick, Modulation wheel, Master level and branding; the rotary controls appear in Organ (organ.rotary-speed, organ.rotary-drive) and again in Effects (fx.rotary-speed, fx.rotary-on)."
+    },
+    {
+      "severity": "minor",
+      "title": "Instrument aspect ratio is far from the variant photograph",
+      "detail": "Measured instrument box at 1440x900 is 1302.7 x 600, an aspect ratio of 2.171 against the 3.0951 the variant specifies. The candidate declares this deliberately in evidence/stage1-visual-audit.md as a trade to keep the control inventory unclipped, so it is honest, but it is a large deviation and the extra vertical space is what the blank keybed occupies."
     }
   ]
 }

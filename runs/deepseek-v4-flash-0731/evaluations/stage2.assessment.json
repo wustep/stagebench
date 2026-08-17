@@ -1,202 +1,123 @@
 {
-  "rubricVersion": "1.1.0",
+  "rubricVersion": "2.0.0",
   "runId": "deepseek-v4-flash-0731",
   "stage": 2,
-  "evaluator": "stagebench-phase2-evaluator-a7",
-  "evaluatedAt": "2026-08-14T20:15:00.000Z",
-  "summary": "The artifact ships a genuinely broad pure-DSP audio layer — six distinguishable piano voices, seven real effect units with per-type behaviour, an ordered per-layer chain, and a browser graph that verifiably resolves to one AudioContext -> two bus GainNodes -> master GainNode -> DynamicsCompressor limiter -> one AudioDestinationNode. All four technical checks reproduce (94/94 tests, typecheck, lint, build), the feature matrix covers all 20 required IDs, and IMPLEMENTATION_DETAILS.json truthfully labels every source as generated rather than recorded. What it does not do is connect that DSP to a working instrument surface. The rendered keybed is broken: src/components/Keybed.tsx:68 multiplies unit-index key coordinates (x=0..42, width=1) by 100, producing inline styles left:0%..4200%/width:100%, so one full-width white key and no black keys are visible, and a real mouse press anywhere on the keybed hits the inert .keys-black wrapper and produces no note, no pressed state and zero PCM (measured at five positions; only the computer keyboard plays). Sample playback is pitched by the reciprocal ratio (src/audio/stage.ts:236), so every note off the 5-semitone root grid sounds up to ~400 cents flat (measured: MIDI 60 renders ~214 Hz instead of 261.6 Hz). The six piano-type buttons are independent latching switches, so selecting Upright leaves Grand lit and still sounding. Panel-to-engine bindings are widely mis-scaled: the layer level fader sends 0..11 into a 0..1 gain, only 2 of 6 types are reachable on every effect-type knob, Rotary On/Speed/Drive and the three manual FX-focus buttons reach nothing, and String Res is summed after master gain so Master Level 0 still outputs. Grand/Upright/Electric are additive synthesis computed in-process; the 21 MB of WAVs shipped in dist/samples are never fetched. Honest and well-structured underneath, substantially non-functional at the surface.",
+  "evaluator": "stagebench-blind-evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-16T22:15:37.446Z",
+  "summary": "Phase 2 built a genuine pure-DSP engine behind one AudioContext - the graph, the documented effect order, the master gain (destination peak 0.126 -> 0.000 -> 0.157 across the knob) and the all-effects bypass (relDiff 0.0000) all verify - but almost every panel binding in front of it is wrong. The keybed renders 72 of 73 keys outside its own bounds and 0 of 73 are hit-testable, so pointer and touch input are dead; only the computer keyboard plays. The six type buttons are independent latches, so clicking Upright leaves the audio bit-identical to Grand while two LEDs light. Type knobs store 0..1 but are read as an index, capping every unit at 2 of 6 types (12 of 30 listed selections reachable). Rotary On/Speed, FX focus and Piano-section-on are unread; Tremolo's Amount is inverted (max = exact bypass); the compressor is 1.3% audible at operating level; the layer fader applies its 0..11 integer as gain, so one arrow key is +20 dB and full travel pins the limiter for 96% of samples. Grand/Upright/Electric are honestly declared generated tables and are genuinely distinct; Clav/Digital/Misc are the grand table relabelled (corr 0.97-0.9999). The plan ticks all five hard gates and the visual audit certifies the keybed as regression-free.",
   "categories": [
     {
-      "id": "visualRetention",
-      "criteria": [
-        {
-          "id": "surfaceRetention",
-          "rating": 1,
-          "evidence": [
-            "Deck geometry matches the spec exactly: measured at 1440x900 the six sections occupy 182.1/260.1/110.5/162.6/325.2/260.1 px of a 1300.7 px deck = 0.140/0.200/0.085/0.125/0.250/0.200, matching inputs/specs/nord-stage-4.visual.json horizontalSections; deck 278.2 px vs keybed 238.1 px = 0.539/0.461, inside the 54/46 +/-0.025 tolerance.",
-            "Single continuous chassis (1302.7x565 px, 0.90 of viewport width, inside the 0.88-0.97 band), top and bottom rails attached, no horizontal overflow at 1440x900 or 390x844 (body.scrollWidth == clientWidth at both), exactly two OLEDs (Program 'A:001 Grand', Synth 'SYNTH'), palette #851a25/#5a0c13/#3c424d as specified.",
-            "CRITICAL keybed regression: src/components/Keybed.tsx:68 emits style={{left: `${keySpec.x*100}%`, width: `${keySpec.width*100}%`}} while src/hardware/keys.ts:38-39 stores x as a white-key index (0..42) and width as 1. Live DOM inline styles read 'left: 0%; width: 100%', 'left: 100%; width: 100%' ... 'left: 4200%; width: 100%'; the 43rd white key measures x=54699.8 px. Only key E1 is visible, spanning the whole keybed; black keys (left:170%..) are all off-panel.",
-            "The defect is present in the artifact's own sealed captures: evidence/stage2-desktop.png and evidence/stage2-narrow.png both show the keybed as a featureless white slab with a single 'E1' label, versus the finely divided 43 white / 30 black keybed in inputs/reference/nord-stage-4-73.jpg.",
-            "evidence/stage2-visual-audit.md:18-20 claims 'exactly 73 keys (43 white / 30 black) ... continuous tiled white keys with black keys centered on seams', which its own committed capture contradicts.",
-            "artifact/index.html is a bare fragment with no doctype, <html lang>, <title> or viewport meta; the built page therefore renders in quirks mode (document.compatMode == 'BackCompat', document.title == '') and has no mobile layout viewport."
-          ]
-        },
-        {
-          "id": "functionalHardwareState",
-          "rating": 1,
-          "evidence": [
-            "Piano type buttons are non-exclusive latching switches: after real clicks on 'Upright piano type' then 'Electric piano type', aria-checked is true on Grand, Upright AND Electric simultaneously. src/piano/bridge.ts:39-45 returns the first true entry in PIANO_TYPES order, so the sounding instrument stays Grand while three type LEDs are lit — panel feedback contradicts audio state and inputs/specs/nord-stage-4.piano.json selection.typeButtonCyclesSixLeds.",
-            "'Piano layer A level' reports aria-valuenow=0.8 with aria-valuetext='1/11' on load (two contradictory readings of the same control), and five ArrowUp presses take it to 11/11; measured through the real hardwareStore, the value handed to the engine goes 0.8 -> 0 -> 3 -> 6 -> 8 -> 11 (src/hardware/store.ts:92-95 stores segmented faders as integers, src/piano/bridge.ts:66 consumes them as a 0..1 gain).",
-            "Effect type knobs display more positions than they can select: 'Mod 1 effect type' steps through aria-valuetext 0..8 and 'Reverb type' through 0..1 in 0.2 increments, but src/piano/bridge.ts:95,104,113 apply Math.round() to the 0..1 knob value, so only type indices {0,1} ever reach the chain (measured by sweeping each knob across 21 positions).",
-            "'Rotary on' and 'Rotary speed' toggle their own aria state but never reach the engine: after setting fx.to-rotary-a=true and fx.rotary-on=false, engine.rotary.params == {} and the shared Rotary still processes (src/audio/stage.ts:324-325 checks routesToRotary only, never rotary.on).",
-            "The three manual FX focus buttons ('Effects focus piano/organ/synth S1') change no engine state: toggling them leaves the serialized layer chain byte-identical.",
-            "Nine organ drawbars are immovable: 12 ArrowUp presses and a full-height pointer drag on '16 foot drawbar' both leave aria-valuenow at 0, because src/components/controls/controls.tsx:129-133 emits a 0..1 fraction into src/hardware/store.ts:82 which rounds it to an integer 0..8."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "pianoLibrary",
+      "id": "sound",
       "criteria": [
         {
           "id": "instrumentBreadth",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "Six types exist and render measurably different audio (rendered 16384 frames at 44.1 kHz, MIDI 60, effects off): Grand rms 0.0234/peak 0.0759, Upright 0.0220/0.0681, Electric 0.0125/0.0308, Clav 0.0381/0.1242, Digital 0.0144/0.0473, Misc 0.0260/0.0955.",
-            "Grand/Upright/Electric are NOT recorded sample sets: src/audio/samples.ts:62-101 renderFamilySample() computes each table by additive synthesis at call time and SampleLibrary.get() caches it in-process. Nothing in src/ or tests/ contains fetch, decodeAudioData or any reference to 'samples/', so the 45 WAVs per family (21 MB in dist/samples, all HTTP 200) are never loaded — they are dead weight, not the audible source. The phase-2 hard gate 'bundled recorded sample sets' is unmet.",
-            "Honesty contract is nonetheless kept: IMPLEMENTATION_DETAILS.json labels each set 'generated deterministically ... not a field recording' and lists Clav/Digital/Misc as synthesis, so this is not a generated-buffer-presented-as-recording case.",
-            "CRITICAL pitch defect: src/audio/stage.ts:236 sets ratio = tableFreq/desiredFreq and src/audio/stage.ts:435 advances pos by that ratio, inverting the resample direction. Measured fundamentals vs. target: MIDI 60 -> 214.1 Hz (want 261.6, -347 cents), MIDI 50 -> 120.5 Hz (want 146.8, -342 cents), MIDI 35 -> 50.6 Hz (want 61.7, -343 cents); on-grid roots (28, 33, 63) track correctly. With a 5-semitone root grid, 4 of every 5 notes are ~3-4 semitones flat.",
-            "Type selection is unreachable from the panel while Grand is lit (see functionalHardwareState), so in practice the built app only plays the Grand table."
+            "All six types render audio, but only three are real: measured against a warmed-up single note (MIDI 60, offline render of the app's own ScriptProcessor drain at 48 kHz, deterministic - two identical runs correlate 1.0000, relDiff 0.0000). Grand/Upright/Electric are genuinely different signals (Grand-vs-Upright corr 0.5327, Grand-vs-Electric corr 0.5119; spectral centroid 1357 / 1198 / 1129 Hz).",
+            "Clav, Digital and Misc are the Grand sample table with trivial post-shaping, not distinct instruments: Grand-vs-Misc corr 0.9999 (centroid 1349 vs 1357 Hz), Grand-vs-Digital corr 0.9806 (1360 Hz), Grand-vs-Clav corr 0.9697 (1376 Hz). artifact/src/audio/stage.ts:212 falls back to library.get('grand', ...) for every non-sample family and artifact/src/audio/stage.ts:440 shapeByFamily() only adds a decaying sine or an exponential to it.",
+            "Out of the box no type but Grand can be selected: the six type buttons are independent latches, and clicking 'Upright piano type' with a real mouse leaves both Grand and Upright aria-checked=true while typeFrom() (artifact/src/piano/bridge.ts:39) returns the first lit entry. Rendered audio after that click is bit-identical to Grand (relDiff 0.0000); only after separately un-latching Grand does it change (relDiff 1.0633).",
+            "A held note stops decaying and freezes into DC after ~2 s: successive 1-second windows of one held note read rms 0.01954, 0.01690, 0.00913, 0.00912, 0.00912, 0.00912 with peak == |mean| == 0.00912, i.e. the sample table's last value repeated (artifact/src/audio/stage.ts:436 clamps v.pos to tbl.length-1). Usable note length is under two seconds."
           ]
         },
         {
-          "id": "twoLayerBehavior",
+          "id": "effectAudibility",
+          "scoring": "judged",
           "rating": 2,
           "evidence": [
-            "The engine models both layers properly: src/audio/stage.ts:134-137 holds independent A/B LayerState (enable, level, octave, sustped, type, per-layer chain), noteOn/noteOff are layer-scoped with per-layer 24-voice pools and oldest-first stealing (src/audio/stage.ts:225-230), and tests/piano-library.test.ts:89-142 exercises ownership, disable, independent mixing and cleanup.",
-            "Focus is real and drives FX inheritance: src/piano/bridge.ts:28-30 reads piano.layer-a-focus, and src/piano/bridge.ts:125-137 makes the unfocused layer inherit the focused chain under group mode or per-unit global mode.",
-            "'Piano layer B on' toggles aria-checked=true in the live app and enables the layer.",
-            "Panel level control is broken for both layers (0..11 integer into a 0..1 gain), so any non-zero fader position drives the mix 3x-11x into the 0.9 limiter; layer B ships at level 0 by default (src/hardware/sections.ts:65).",
-            "Octave knobs are coarse: 'Piano layer A octave' has 4 reachable knob positions (0, 1/3, 2/3, 1) mapped onto 3 octave values by src/piano/bridge.ts:33-36, and from the 0.5 default a single ArrowUp saturates it at 1.",
-            "Because keybed pointer input is dead, layer behaviour can only be driven from the computer keyboard in the built app."
+            "Each unit was A/B'd against a warmed-up dry baseline (amp off, one note, 0.5 s window) on rendered PCM. Audible: Mod 1 A-Pan relDiff 0.3914 (0.9786 at max amount), Mod 2 Chorus 0.2076 and Flanger 0.9866 (corr 0.4020), Delay 0.2487 rising to 1.2873 at max mix+feedback with tail rms 0.01541 -> 0.03350, Amp/EQ 0.2006 (bass max centroid -33 Hz, treble max +133 Hz, Twin at max drive relDiff 3.0579), Reverb 0.3687 rising to 1.2043 at max mix. The all-effects bypass ('Layer effects on' off) restores the dry signal exactly (relDiff 0.0000).",
+            "Tremolo is inverted and inert at its documented setting: with Mod 1 type=Tremolo and rate at max, Amount at MAXIMUM renders output bit-identical to dry (relDiff 0.0000, peak 0.07589 both), while Amount at MINIMUM modulates (relDiff 0.5180). artifact/src/audio/effects.ts:185 computes depth = 1-(1-amount)*(0.5+0.5*xn), so amount=1 pins depth to 1. The effects spec says the opposite ('full level at zero amount').",
+            "The compressor is effectively inaudible at the engine's operating level: 'Compressor on' with Amount at max changes the signal by relDiff 0.0130 (rms 0.02349 -> 0.02290). It does compress when fed a hot signal (Amp Twin + max drive: per-50 ms rms 0.0938 -> 0.0288, -10.2 dB), so the threshold (0.18-0.12*amount, artifact/src/audio/effects.ts:588) is simply mis-scaled against a source that peaks at 0.076.",
+            "The shared Rotary's own controls are disconnected. 'To Rotary layer A' alone produces the effect (relDiff 0.3357, envelope shows the speed ramp 0.0111 -> 0.0161 over 0.6 s), but adding 'Rotary on' and driving 'Rotary speed' to max yields byte-identical output (relDiff 0.0000). artifact/src/piano/bridge.ts never writes any rotary params, and artifact/src/audio/stage.ts:324 applies the rotary on routing alone without checking rotary.on.",
+            "The Delay feedback filter is a degenerate stage: artifact/src/audio/effects.ts:433-440 calls this.lp.reset() immediately before and after filtering each sample, so the one-pole is a per-sample gain rather than a filter. Measured Off vs LP at max mix/feedback: tail rms 0.03350 -> 0.01609 (attenuation), not progressive filtering of the repeats."
           ]
         },
         {
-          "id": "pianoControls",
+          "id": "signalGraph",
+          "scoring": "judged",
           "rating": 2,
           "evidence": [
-            "All six required controls plus Master Level are connected and measurably alter rendered PCM; tests/piano-velocity-controls.test.ts renders real blocks for KB Touch, Dyn Comp, Unison, Timbre, Soft Release, String Res and Master Level rather than asserting state.",
-            "KB Touch is a real curve (src/audio/stage.ts:111-114, exponents 1.45/1.12/0.85) and Soft Release lengthens the tail (RELEASE_S 0.4 -> SOFT_RELEASE_S 0.9, correctly skipped for clav).",
-            "Unison is far below spec: src/audio/stage.ts:243 gives detune ratios of -0.00025/0/+0.00025, i.e. a maximum of +/-0.43 cents, and Unison=1 adds a voice with exactly 0 cents detune (a pure duplicate). inputs/specs/nord-stage-4.piano.json performance.unisonBehavior requires '3 is wide and obviously detuned'.",
-            "Timbre is a continuous first-order tilt (src/audio/stage.ts:367-368), not the specified Off/Soft/Mid/Bright (+ Dyno 1/2 for electric) steps; the knob's 0 default maps to tilt -0.7, so 'Off' applies a strong high-cut instead of being neutral.",
-            "String Res bypasses the master gain: src/audio/stage.ts:334-347 adds the resonance sine after masterL/masterR have been multiplied by masterGain. Measured with Master Level = 0 and a held note: peak 0.0400, rms 0.0282 (vs 0.0000 with String Res off) — violates the 'nothing bypasses the master path' contract. The resonance is also a fixed 342.5 Hz sine unrelated to the held pitches.",
-            "Dyn Comp is a per-sample amplitude boost applied whenever |sample| < 0.1 (src/audio/stage.ts:408-415), which also boosts zero-crossing regions of loud notes; it changes the waveform but is not dynamics processing.",
-            "Sustain is correct: per-layer via SUSTPED (src/audio/stage.ts:202-204), damper-up cutoff on release, and reachable from the UI button, Space and MIDI CC64."
-          ]
-        },
-        {
-          "id": "inputsReliability",
-          "rating": 1,
-          "evidence": [
-            "CRITICAL: pointer input on the keybed is dead in the built app. Real mouse press/release at x = 5%, 25%, 50%, 75%, 95% of the keybed (y = 85% height) produced peak PCM 0.0000, zero elements with aria-pressed=true, and document.elementFromPoint returned the inert '.keys-black' wrapper at every position — no .key element occupies the visible keybed. The same session's computer-keyboard press ('z') produced peak 0.0916, proving the measurement path works.",
-            "Computer keyboard mapping works as advertised: 'z' presses 'Key C4 (MIDI 60)' with correct aria-pressed feedback and audible output; unmapped keys ('a') are inert.",
-            "MIDI failure is handled truthfully: with no Web MIDI device the status strip reads 'MIDI unavailable' and no error is thrown (src/piano/inputs.ts MidiInputBinding).",
-            "Stress test: 120 rapid pointerdown/pointerup pairs across 20 keys left 0 keys stuck after 700 ms.",
-            "The labeled fallback exists but is only reachable through an injected loader — src/piano/library.ts:41 defaults loadFn to () => Promise.resolve(), so the shipped app reports 'Piano library ready (sample sets + synthesis)' without loading anything. In fallback, src/audio/stage.ts:207 substitutes the 'grand' table for every type, so the 'basic-piano-fallback' generated voice declared in IMPLEMENTATION_DETAILS.json does not exist as a distinct source.",
-            "Soft and sostenuto pedals are not implemented and not claimed (spec-optional), which is acceptable."
+            "Exactly one AudioContext and one destination, verified by patching AudioNode.prototype.connect before app boot: edges are ScriptProcessorNode->GainNode(A), ScriptProcessorNode->GainNode(B), GainNode->GainNode(master), GainNode->DynamicsCompressorNode, DynamicsCompressorNode->AudioDestinationNode; sampleRate 48000; one app-side connection to AudioDestinationNode. Effect order matches the spec (artifact/src/audio/chain.ts:103-108).",
+            "Master Level is real at the destination: recording tap on the limiter output while holding a note gives peak 0.1256 at the default, 0.0000 with the Master level knob driven to 0, and 0.1572 at max - exactly the 1/0.8 = 1.25 ratio.",
+            "The 'per-layer buses' are a facade: the single drain node connects to BOTH bus gains (artifact/src/audio/graph.ts:123-126) and writes the already-summed mono mix into each, so the two buses carry the identical signal and it is summed twice. Measured destination peak 0.1256 vs engine-side peak 0.0759 x 0.8 master = 0.0607, i.e. exactly 2x. Layer mixing actually happens inside the JS engine; render() also returns only masterL (artifact/src/audio/stage.ts:357), so both output channels get the same samples and every stereo effect collapses to mono.",
+            "Gain staging breaks on ordinary use. The layer level fader stores an integer 0..11 (artifact/src/hardware/store.ts:93) that the bridge feeds to the engine as a linear gain (artifact/src/piano/bridge.ts:66): one ArrowDown on 'Piano layer A level' moves aria-valuetext to '8/11' and rendered rms from 0.02349 to 0.23487 (peak 0.7589, relDiff 9.0). At the top of its travel ('11/11') 22943 of 24000 rendered samples sit at the 0.9 limiter ceiling. Unison at 3 adds +13 dB (rms 0.02349 -> 0.10537, peak 0.3542). At default levels a 12-note chord is clean (peak 0.3259, 0 samples clipped)."
           ]
         }
       ]
     },
     {
-      "id": "effectsAudio",
+      "id": "playability",
       "criteria": [
         {
-          "id": "sharedGraph",
+          "id": "layerBehavior",
+          "scoring": "judged",
           "rating": 2,
           "evidence": [
-            "Verified in Chrome by instrumenting AudioContext and AudioNode.prototype.connect on the served dist build: exactly 1 AudioContext; nodes created = 3 GainNode + 1 DynamicsCompressorNode + 1 ScriptProcessorNode; connections = ScriptProcessorNode->GainNode x2 (layer buses), GainNode->GainNode x2 (buses -> master), GainNode->DynamicsCompressorNode (master -> limiter), DynamicsCompressorNode->AudioDestinationNode; destination count = 1.",
-            "The drain runs: 379 onaudioprocess callbacks over the session, producing non-zero PCM on note-on (peak 0.065 -> 0.084 -> 0.341), so the JS engine really feeds the browser output.",
-            "Ordered chain matches inputs/specs/nord-stage-4.effects.json signalContract.requiredOrder — src/audio/chain.ts:29 CHAIN_ORDER = mod1,mod2,delay,ampEq,compressor,reverb, then shared Rotary, then layer level, then master gain and limiter (src/audio/stage.ts:319-348). dispose() disconnects all five nodes and closes the context (src/audio/graph.ts:168-178).",
-            "The two 'per-layer buses' are decorative in the browser graph: the single drain connects to both bus gains (src/audio/graph.ts:123-124) and both sum into the master, so each bus carries the already-mixed signal (and the mix is summed twice). Real per-layer bussing exists only inside StageEngine.",
-            "Output is mono: StageEngine.render() returns only masterL (src/audio/stage.ts:357) and the drain writes it to both channels (src/audio/graph.ts:145-148), so A-Pan, chorus width and the Rotary's stereo horn/rotor all collapse.",
-            "The AudioWorklet branch (src/audio/graph.ts:26-37, 131-141) registers a processor whose process() returns true without writing output — it would emit silence. It is unreachable in browsers because real AudioContexts have no createAudioWorkletNode method, so it is dead code rather than an active fault.",
-            "String Res is summed after the master gain, so one path does bypass Master Level (see pianoControls)."
+            "Layer enable, level and octave all reach the audio graph: 'Piano layer A on' off renders exact silence (rms 0.00000); 'Piano layer B on' plus one step of its level fader ('1/11') raises rms 0.02349 -> 0.05285; layer A octave up shifts spectral centroid 1357 -> 2771 Hz (one octave).",
+            "Both layers are forced to the same instrument and the same performance settings: artifact/src/piano/bridge.ts:70-76 reads one global 'piano.type-*' set, one KB Touch, Timbre, Unison, Dyn Comp, Soft Release, String Res and one SUSTPED for A and B alike, so B can only ever be A at a different level/octave. There is no per-layer type control on the panel.",
+            "The panel readout disagrees with the applied value: the level fader reports aria-valuenow 0.727 / aria-valuetext '8/11' while the engine applies a gain of 8.0, which is why one arrow key multiplies the output by ten (measured above). Layer B's level defaults to 0, so enabling B alone changes nothing (relDiff 0.0000).",
+            "The 'Piano section on' button is inert - turning it off leaves rendered audio bit-identical (relDiff 0.0000); the bridge never reads 'piano.on', although the piano spec defines it as turning the whole section on or off. The 'Effects focus piano/organ/synth' buttons are likewise unread (reverb-on comparison with focus toggled: relDiff 0.0000). Group mode does work (relDiff 0.1593 with layer B inheriting layer A's To Rotary routing)."
           ]
         },
         {
-          "id": "effectCoverage",
+          "id": "pianoControlDepth",
+          "scoring": "judged",
           "rating": 2,
           "evidence": [
-            "All seven units are genuine per-sample DSP over real PCM, not labels or disconnected nodes (src/audio/effects.ts, 726 lines): Mod 1 (6 types), Mod 2 (6 modulated-delay/phaser types), Delay (interpolated 2 s line with feedback), Amp Sim/EQ (drive + 3-band EQ + cascaded 24 dB filters), Compressor (peak follower, ratio 1..12), Reverb (5-comb Schroeder network), Rotary (speed ramp + tremolo + saturation).",
-            "Measured with effects individually enabled (MIDI 60, 8192 frames): dry rms 0.02322 vs mod1 0.02196, mod2 0.01852, delay 0.01930, reverb 0.01721 — each unit moves the signal.",
-            "Reverb decay ordering follows the spec (src/audio/effects.ts:654 decay 0.95/0.45/0.6/1.6/2.7/4.0 for Room/Booth/Spring/Stage/Hall/Cathedral) and tests/piano-effects.test.ts:124-143 measures a growing tail.",
-            "Mod 1 'Wah' does not sweep: src/audio/effects.ts:212 calls mapExp(200 + xn*amount, 350, 3000), whose 0..1 clamp turns every LFO value into 1, so the cutoff is a constant 3000 Hz (verified for xn = -1, 0, +1). It is a static band-pass, not an LFO-driven sweep.",
-            "The Delay feedback filter does not filter: src/audio/effects.ts:433-440 resets the one-pole before and after every sample, reducing LP to a ~0.02 scalar and HP to a near-passthrough. Measured tail energy for a 200-sample burst at feedback 0.8: filter Off 2.84e+1, LP 8.77e-6 (repeats annihilated), HP 2.67e+1 (unchanged), BP 1.32e+1. The spec's 'each successive repeat passes through the filter again' is not realized.",
-            "Rotary has no parameter bindings at all — rotary.params stays {} for every panel state, so Slow/Fast and Drive never take effect; the unit always runs at its 0.55 Hz default.",
-            "Reverb's Spring-specific damping (src/audio/effects.ts:658) is overwritten on the first line of every process() call (src/audio/effects.ts:669), so Spring differs from the other types only by decay length.",
-            "Compressor at panel defaults never engages: threshold 0.144 vs a measured single-note peak of 0.076 (rms identical to bypass at 0.02322); it only acts on hot multi-note material."
+            "All six named controls measurably move rendered signal versus a warmed-up baseline: KB Touch Light relDiff 0.0621 / Heavy 0.0710, Dyn Comp 3 relDiff 0.5923 (centroid +64 Hz), Timbre max relDiff 0.2090, Unison 1 relDiff 1.1200 and Unison 3 relDiff 3.6661, Soft Release tail rms 0.01541 -> 0.02198 (+43 %), String Res relDiff 1.2001 (centroid -225 Hz).",
+            "Timbre does not behave like its namesake and lacks its required enumeration: the piano spec requires Off/Soft/Mid/Bright (plus Dyno 1/2 for electric), but the panel exposes an unlabelled 6-step knob whose aria-valuetext is a bare index, and the measured response is non-monotonic - full 'bright' gives centroid 1346 Hz (below the 1357 Hz baseline) while the 2/6 position gives 1299 Hz. artifact/src/audio/stage.ts:367 maps it to a single first-order tilt with the default sitting at the darkest end.",
+            "String Res is a fixed 342.5 Hz sine whose gain follows 'any note held' (artifact/src/audio/stage.ts:342), not sympathetic resonance of the held pitches - the same drone appears whatever notes are down. Unison is mostly a level jump: it duplicates voices at full gain (artifact/src/audio/stage.ts:241) for +13 dB rather than a detuned stereo spread, and the output is mono anyway.",
+            "Sustain reaches the engine from both the UI button and the computer keyboard: with focus cleared and Space held, the sustain button reads aria-pressed=true and the post-release tail rms rises 0.01541 -> 0.02304 (+50 %)."
           ]
         },
         {
-          "id": "routingControl",
+          "id": "inputReliability",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "Only 2 of 6 types are selectable on every typed unit. Sweeping each knob through 21 positions via the real hardwareStore and reading the chain params: fx.mod1-type -> {0,1}, fx.mod2-type -> {0,1}, fx.amp-type -> {0,1}, fx.reverb-type -> {0,1}, fx.delay-filter -> {0,1}. Cause: src/piano/bridge.ts:95,96,104,113,101 apply Math.round() to a 0..1 knob value before the modulo. Ring Mod, A-Wah, Wah, Pump, Phaser, Vibe, Ensemble, Spin, JC, Small, LP24, HP24, Spring, Stage, Hall, Cathedral and the HP/BP delay filters are unreachable from the surface.",
-            "The three manual FX focus buttons required by inputs/specs/nord-stage-4.effects.json routing.manualFocusButtons are inert — toggling fx.focus-piano/organ/synth-s1 leaves the layer chain unchanged.",
-            "'Rotary on' is ignored: with fx.rotary-on=false and fx.to-rotary-a=true, layerA.routesToRotary is true and src/audio/stage.ts:324 processes the Rotary anyway.",
-            "What does work: focus follows layer focus, group mode copies the focused chain to the other layer, and Delay/Compressor/Reverb global flags propagate per unit (src/piano/bridge.ts:125-137); per-unit on/off and the all-effects bypass are real (tests/piano-effects.test.ts:173-203 shows bypass output matching the no-effects baseline to <1e-6); dry/wet moves monotonically toward wet; Reverb precedes Rotary for routed layers by construction (src/audio/stage.ts:319-325).",
-            "No tap tempo or master-clock sync for Delay/Mod LFOs, and no To Rotary entry in the Amp/EQ type list (it is a separate button); Delay ping-pong and Rotary stop are spec-optional and absent."
+            "Pointer and touch input to the keybed is completely dead. The rubric's 5x5 elementFromPoint grid at 1440x900, page unscrolled, resolves 0 of 73 keys; every probe point over the keybed returns the '.keys-black' overlay container (position:absolute; inset:0, artifact/src/styles.css:543). Real mouse presses at five points across the keybed produced 0 elements with class 'key pressed' and no note.",
+            "The cause is a unit mismatch: artifact/src/hardware/keys.ts gives keys x in white-key units (0..42, width 1) and artifact/src/components/Keybed.tsx:68 renders them as left: x*100% / width: width*100%. Measured DOM: key MIDI 28 has style left '0%' width '100%' and occupies the entire 1300x235 keybed, MIDI 33 sits at x=3972 px, MIDI 99 at x=54310 px; 1 of 73 key boxes falls inside the keybed rect and 0 are hit-testable. The rendered build shows a blank white slab where the keys should be (identical to artifact/evidence/stage2-desktop.png).",
+            "The computer keyboard path is reliable: the 24-key map (z..m, q..u) plays notes, auto-repeat is suppressed, window blur force-releases, sustain on Space works, and a 12-note chord renders cleanly (peak 0.3259, no clipped samples). Voice stealing is capped at 24 voices per layer.",
+            "Failure is silent rather than visible: no console errors or page errors during the whole interaction pass, the status strip still reads 'Piano library ready (sample sets + synthesis)', and clicking the keybed gives no feedback of any kind. Web MIDI could not be exercised - headless Chromium reports 'MIDI unavailable' in the status strip - so MIDI CC64 remains unverified."
           ]
         }
       ]
     },
     {
-      "id": "systemBehavior",
+      "id": "features",
       "criteria": [
         {
-          "id": "audibleFeedback",
+          "id": "instrumentLibraryCoverage",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "Where a binding is correct, feedback is immediate and coherent: 'z' depresses Key C4 with aria-pressed=true and produces audible PCM in the same frame window; 'Master level' moves 80% -> 40% via arrow keys and scales the master gain; per-unit FX buttons and Layer Effects ON flip aria-checked and change the rendered signal.",
-            "Selection feedback is incoherent for the Piano type row: three type LEDs read aria-checked=true simultaneously while the engine keeps sounding Grand.",
-            "Level feedback is contradictory: the layer A fader exposes aria-valuenow=0.8 and aria-valuetext='1/11' for the same state, and its full-scale position multiplies the layer by 11 into the limiter rather than reaching unity.",
-            "Most effect-type knob positions produce visible aria-valuetext movement (0..8) with no audible change, because the bridge collapses them to two types.",
-            "The keybed gives no feedback at all to pointer or touch — no key visual, no note, no sound.",
-            "The Program OLED shows a static 'A:001 Grand' that never reflects the selected type or model (spec selection.modelNameShownInProgramDisplay), and the model encoder is unbound."
+            "All six types exist as panel buttons and each maps to a playable voice, but only Grand is selectable in practice: the buttons are independent latches, so one click on 'Upright piano type' lights two type LEDs and leaves the audio bit-identical to Grand (relDiff 0.0000, measured above). The spec's 'type button cycles six LEDs' behaviour is absent.",
+            "The bundled WAV assets are never loaded. build/samples/{grand,upright,electric} contain 135 committed .wav files and IMPLEMENTATION_DETAILS.json lists all of them, but there is no fetch(), no decodeAudioData() and no reference to the sample paths anywhere in artifact/src (grep); artifact/src/audio/samples.ts:117 re-synthesises every table in JS at note time. IMPLEMENTATION_DETAILS.json nevertheless says they are 'rendered as committed WAV assets under public/samples'.",
+            "Model selection and the load lifecycle are cosmetic: 'Model selector' is an encoder the bridge never reads, the Program OLED is a static string (artifact/src/components/controls/controls.tsx:238 renders spec.text, unchanged from 'A:001 Grand' before and after a type change), and PianoLibrary's default loader is `() => Promise.resolve()` (artifact/src/piano/library.ts:41), so 'loading' and 'ready' can never reflect a real asset and the labelled fallback can never trigger in the shipped build.",
+            "Grand/Upright/Electric are honestly declared as generated additive tables rather than field recordings, which is the right call under the honesty contract, but the Phase 2 hard gate asks for recorded sample sets and none are present."
           ]
         },
         {
-          "id": "failureStress",
-          "rating": 2,
+          "id": "effectUnitCoverage",
+          "scoring": "judged",
+          "rating": 1,
           "evidence": [
-            "Denied/absent MIDI is reported truthfully as 'MIDI unavailable' with no thrown error; Web Audio construction is wrapped in try/catch so headless environments fall back cleanly (src/App.tsx:55-60).",
-            "Rapid stress (120 pointerdown/up pairs across 20 keys) left zero stuck keys; allNotesOff and dispose clear every owned voice and reset the chains (src/audio/stage.ts:303-306, 477-484).",
-            "Clipping is bounded: a per-sample limiter clamps at 0.9 in the engine (src/audio/stage.ts:465-475) plus a DynamicsCompressor limiter (threshold -3 dB, ratio 20) in the browser graph.",
-            "Console during the full interaction pass at 1440x900 and 390x844: one ScriptProcessorNode deprecation warning and a favicon.ico 404 (no favicon shipped); no page errors and no application errors — consistent with evidence/stage2-capture.json.",
-            "Asset failure cannot actually occur in the shipped build: the default loader is a no-op that immediately reports 'Piano library ready (sample sets + synthesis)' (src/piano/library.ts:41,61), so the fallback path is only exercisable through test injection, and the fallback voice is simply the Grand table rather than a distinct labeled voice.",
-            "Rapid effect changes are safe (parameters are read per block) but not ramped despite the 'All time-varying parameters ramp' comment at src/audio/effects.ts:11 — only the master gain uses setValueAtTime; the spec's click-free parameter requirement is asserted rather than implemented.",
-            "Moving the layer fader off zero jumps the layer gain to 3-11x, driving the limiter into hard gain reduction — an audible stress failure caused by the scale mismatch."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "engineeringQuality",
-      "criteria": [
-        {
-          "id": "audioArchitecture",
-          "rating": 2,
-          "evidence": [
-            "Clean, well-documented module boundaries: samples.ts (source tables) -> stage.ts (voices, layers, master) -> chain.ts (ordered per-layer chain) -> effects.ts (EffectUnit interface with on/params/process/reset) -> graph.ts (browser realization) with bridge.ts as the single panel->engine adapter. 5,491 lines of src+tests, all typechecked.",
-            "Platform boundaries are injectable as required: AudioContextLike factory (src/audio/graph.ts:86-89), Clock and SampleLibrary into StageEngine (src/audio/stage.ts:139), loader into PianoLibrary (src/piano/library.ts:24) — tests run with no device, network or audio output.",
-            "The EffectUnit contract and CHAIN_ORDER make Phase 3 extension (Organ/Synth chains sharing the same units and Rotary) straightforward.",
-            "Architectural weaknesses: master gain is duplicated in both the engine and the graph and can disagree; the per-layer buses in the browser graph carry the same pre-mixed signal (double-summed) so they are not real buses; render() discards the right channel making the whole output mono; the AudioWorklet branch is unreachable dead code that would emit silence if reached; src/piano/lifecycle.ts and src/piano/lifecycle2.ts are near-duplicate note-lifecycle implementations, with App.tsx casting between them via `as unknown as NoteLifecycle`.",
-            "The bridge rebuilds and re-applies both full layer states on every store change (src/piano/bridge.ts:152-155), and buildFocusedChain re-enters buildLayer, so each control move does redundant work."
+            "Every listed type but two per unit is unreachable from the panel. Type knobs store a 0..1 fraction (artifact/src/hardware/store.ts:86) while artifact/src/piano/bridge.ts:95-115 reads them with Math.round(value) % N, so only indices 0 and 1 exist. Measured aria-valuenow saturates at 1.000 for 'Mod 1 effect type', 'Mod 2 effect type', 'Amp/EQ type', 'Reverb type' and 'Delay feedback filter'. Reachable: Mod 1 2/6, Mod 2 2/6, Amp/EQ 2/6, Reverb 2/6, delay filter 2/4 - 12 of the 30 listed selections. Ring Mod, A-Wah, Wah, Pump, Phaser, Vibe, Ensemble, Spin, JC, Small, LP24, HP24, Spring, Stage, Hall, Cathedral, HP and BP feedback filtering can never be selected.",
+            "All seven units are present with on/bypass controls and the documented order (artifact/src/audio/chain.ts:29), and the all-effects bypass genuinely restores the dry path (relDiff 0.0000 with Mod 1 + Reverb enabled). Dry/wet works for Delay and Reverb (Reverb mix max relDiff 1.2043, corr 0.0861).",
+            "Rotary is present as audio but its controls are not wired: 'Rotary on' and 'Rotary speed' at max render byte-identical output to leaving them alone (relDiff 0.0000); only 'To Rotary layer A' engages it, always at the slow speed and a fixed 0.2 drive. The three 'global' toggles and the FX focus buttons produce no measurable difference either (focus toggle relDiff 0.0000).",
+            "Missing parameters from the effects spec: delay tap tempo and Master Clock sync, Mod 1 Master Clock sync, and reverb type character (only decay length differs - artifact/src/audio/effects.ts:669 overwrites the Spring damping override on every block)."
           ]
         },
         {
-          "id": "realBoundaryTests",
-          "rating": 2,
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 0,
           "evidence": [
-            "94 tests across 12 files, all green on re-run (vitest 4.1.9, 2.16 s); tests/feature-matrix.json maps all 20 required Phase 1+2 feature IDs to non-empty files, matching inputs/verification.json (20/20).",
-            "The audio tests are genuinely cross-boundary: tests/piano-effects.test.ts and tests/piano-velocity-controls.test.ts render real PCM through StageEngine and compare RMS for every Mod 1/Mod 2/Amp/Reverb type, bypass, dry/wet and control; tests/piano-library.test.ts checks voice ownership, SUSTPED routing and cleanup to baseline.",
-            "The assertions are too weak to catch the defects this evaluation found. Thresholds are scalar RMS deltas of 1e-5, so a pure gain change passes as 'a distinct type'; the Rotary test (tests/piano-effects.test.ts:145-160) discards its slow/fast variable and admits in a comment that rotary is 'always on when routed'; the delay-filter test accepts `lp !== on || hp !== on`, which passes even though LP annihilates the repeats; the drawbar test (tests/interaction.test.tsx:98-108) asserts only that the value is an integer in 0..8, never that it moved, so the immovable drawbars pass.",
-            "The routing test builds a plain object literal instead of using hardwareStore (tests/piano-effects.test.ts:222-258), writing 'fx.reverb-type': 4 directly — a value the real normalized store can never produce. This is exactly why the knob->type collapse to two types is invisible to the suite.",
-            "The graph test uses a fake context whose ScriptProcessor never runs (tests/piano-effects.test.ts:285-309), so it proves node counts and disconnect calls but never that the drain produces audio.",
-            "No test asserts rendered key geometry (tests/regression.test.tsx only counts .key/.key-white/.key-black elements) and no test asserts pitch against expected frequency (tests/audio.test.ts:34 only asserts 'different notes differ'), which is why a dead keybed and an inverted resample ratio both ship green."
-          ]
-        },
-        {
-          "id": "performanceMaintainability",
-          "rating": 2,
-          "evidence": [
-            "All four gate checks reproduce independently: pnpm test 94/94 pass, tsc --noEmit clean, oxlint clean (5 warnings, 0 errors), vite build emits dist/index.html plus assets with the same hashes as the sealed dist (index-68HOyTKq.js, index-CSpqh0zs.css) — consistent with inputs/verification.json.",
-            "Code is readable and consistently commented, controls carry stable namespaced IDs (piano.*, fx.*, organ.*, synth.*, prog.*), and all 137 interactive elements in the live DOM have accessible names, correct roles (slider/switch/button) and tabIndex >= 0.",
-            "Runtime is stable: no memory or voice growth across the stress pass, released voices prune themselves, unmount disposes the graph and lifecycle.",
-            "Maintenance debt: lifecycle.ts/lifecycle2.ts duplication; dead code including `void sustain` (src/audio/stage.ts:417), `const pan = layer === 'A' ? 0.5 : 0.5` (src/audio/stage.ts:365), an unused `carrier` in Ring Mod (src/audio/effects.ts:192-193), a trailing `void null` in bridge.ts, and Compressor.reset() setting env=1 while the constructor initializes it to 0.",
-            "dist ships 21 MB of WAV assets (135 files) that no code path ever requests, inflating the build for no functional benefit.",
-            "Inherited regression coverage did not hold: the Phase 1 guarantees of an exact rendered keybed, pointer/touch key input and every visible control moving accessibly are all broken in this sealed artifact while the inherited tests still pass."
+            "Nothing is declared unimplemented for Phase 2, yet a great deal is: artifact/IMPLEMENTATION_PLAN.md ticks all five Phase 2 hard gates including 'Every functional piano and effect control measurably changes rendered audio and agrees with its panel feedback' and 'The Phase 1 surface, keybed, and input behavior remain regression-free'. Measured: 0 of 73 keys are pointer-reachable, the type buttons change the panel without changing the audio, and Rotary on/speed, FX focus, Piano section on and 16 of 30 effect types are inert.",
+            "artifact/evidence/stage2-visual-audit.md states 'Keybed: exactly 73 keys ... continuous tiled white keys with black keys centered on seams. Munition counted in the rendered DOM: 73 present.' The DOM count is right and the layout is not - 72 of the 73 key boxes render outside the keybed rect (MIDI 33 at x=3972 px, MIDI 99 at x=54310 px in a 1300 px keybed), which is visible in the artifact's own evidence/stage2-desktop.png as a blank white slab.",
+            "IMPLEMENTATION_DETAILS.json claims the sample sets are 'rendered as committed WAV assets under public/samples'; no code path loads them (no fetch/decodeAudioData in artifact/src). It also describes the upright as 'distinctly brighter' than the grand, while the measured spectral centroid is 159 Hz lower (1198 vs 1357 Hz).",
+            "The honest part: the generated sample tables are explicitly and repeatedly declared as generated rather than field recordings, and Organ/Synth/Program controls are correctly declared as still decorative - which they are."
           ]
         }
       ]
@@ -204,112 +125,81 @@
   ],
   "issues": [
     {
-      "id": "keybed-geometry-collapse",
       "severity": "critical",
-      "title": "Keybed renders as one full-width key; 72 of 73 keys are positioned off-panel",
-      "detail": "src/components/Keybed.tsx:68 converts key coordinates with `left: ${keySpec.x * 100}%` / `width: ${keySpec.width * 100}%`, but src/hardware/keys.ts:38-39 stores x as a white-key index (0..42) and width as 1 white-key unit. Live inline styles are 'left: 0%; width: 100%' ... 'left: 4200%; width: 100%'; the last white key measures x=54699.8 px. Only E1 is visible and no black key renders, at both 1440x900 and 390x844, in this evaluation's captures and in the artifact's own evidence/stage2-desktop.png and evidence/stage2-narrow.png. Fix: divide by the white-key count (x / 43 * 100)."
+      "criterion": "inputReliability",
+      "title": "Keybed is unplayable by pointer or touch: 0 of 73 keys hit-testable",
+      "detail": "The 5x5 elementFromPoint grid at 1440x900 resolves 0 of 73 keys; every point over the keybed hits the '.keys-black' overlay. Key geometry is authored in white-key units (keys.ts: x 0..42, width 1) but rendered as percentages (Keybed.tsx:68 left: x*100%, width: width*100%), so MIDI 28 fills the entire 1300x235 keybed and every other key sits at x = 1301..54310 px. Real mouse presses at five points produce no pressed key and no note. The rendered page shows a blank white slab, matching the artifact's own evidence/stage2-desktop.png. Pointer/touch is the primary input for a browser instrument and it is entirely dead, while the visual audit certifies the keybed as regression-free."
     },
     {
-      "id": "keybed-pointer-input-dead",
       "severity": "critical",
-      "title": "Pointer and touch input on the keybed produce no note, no feedback and no audio",
-      "detail": "Because every key is displaced off-panel, the absolutely positioned '.keys-black' wrapper (inset:0) is the topmost hit target across the whole keybed. Real mouse press/release at 5%, 25%, 50%, 75% and 95% of the keybed width each returned document.elementFromPoint == div.keys-black, 0 elements with aria-pressed=true and peak PCM 0.0000, while a computer-keyboard press in the same session produced peak 0.0916. This regresses the Phase 1 interaction.keys / piano.basic-inputs guarantees and blocks the Phase 2 'recheck all input paths' requirement."
+      "criterion": "instrumentLibraryCoverage",
+      "title": "Piano type buttons change the panel but not the sound",
+      "detail": "The six type buttons are independent latching switches with Grand defaulted on, and bridge.ts:39 typeFrom() returns the first lit entry. Clicking 'Upright piano type' leaves both Grand and Upright aria-checked=true and renders audio bit-identical to Grand (relDiff 0.0000 over 8192 samples); only after separately un-latching Grand does the voice change (relDiff 1.0633). This is a control that reports success while doing nothing - the panel lights, the sound does not follow. Five of the six instruments are therefore unreachable in normal use."
     },
     {
-      "id": "inverted-pitch-ratio",
       "severity": "critical",
-      "title": "Sample playback ratio is inverted, detuning every off-grid note by up to ~400 cents",
-      "detail": "src/audio/stage.ts:236 computes `ratio: tableFreq / desiredFreq` and src/audio/stage.ts:435 advances the read position by that ratio, so a note above its root plays back slower (lower) instead of faster. Measured fundamentals: MIDI 60 -> 214.1 Hz (want 261.6, -347 cents), MIDI 50 -> 120.5 Hz (-342 cents), MIDI 35 -> 50.6 Hz (-343 cents); on-grid roots 28/33/63 are correct. With roots every 5 semitones, four of every five notes are ~3-4 semitones out of tune. Fix: ratio = desiredFreq / tableFreq."
+      "criterion": "effectUnitCoverage",
+      "title": "Only 2 of 6 types per effect unit can be selected (12 of 30 listed selections)",
+      "detail": "Type knobs store a 0..1 fraction (store.ts:86) but bridge.ts reads them as Math.round(value) % N, so aria-valuenow saturating at 1.000 caps every type index at 1. Measured on Mod 1, Mod 2, Amp/EQ, Reverb and the delay feedback filter: only indices 0 and 1 are ever produced. Ring Mod, A-Wah, Wah, Pump, Phaser, Vibe, Ensemble, Spin, JC, Small, LP24, HP24, Spring, Stage, Hall, Cathedral and the HP/BP feedback filters are implemented in effects.ts but cannot be reached from the panel."
     },
     {
-      "id": "piano-type-buttons-not-exclusive",
       "severity": "major",
-      "title": "Piano type buttons latch independently; selection never leaves Grand and multiple type LEDs light",
-      "detail": "The six type controls are independent latching switches (src/hardware/sections.ts:70-75) and src/piano/bridge.ts:39-45 returns the first true entry in PIANO_TYPES order. Clicking 'Upright piano type' then 'Electric piano type' left aria-checked=true on Grand, Upright and Electric at once, with the engine still on Grand. Contradicts inputs/specs/nord-stage-4.piano.json selection.typeButtonCyclesSixLeds and makes five of six instruments unreachable from the panel."
+      "criterion": "signalGraph",
+      "title": "Layer level fader applies a 0..11 integer as a linear gain",
+      "detail": "store.ts:93 normalises a segmented fader to an integer 0..(segments-1); bridge.ts:66 feeds that value to the engine as a linear layer gain. One ArrowDown on 'Piano layer A level' takes the readout to '8/11' and rendered rms from 0.02349 to 0.23487 (peak 0.7589). At full travel ('11/11') 22943 of 24000 rendered samples sit on the 0.9 limiter ceiling. The panel readout and the applied gain disagree by a factor of ~11."
     },
     {
-      "id": "layer-level-scale-mismatch",
       "severity": "major",
-      "title": "Layer level faders send an integer 0..11 into a 0..1 gain",
-      "detail": "src/hardware/store.ts:92-95 normalizes segmented faders to integers 0..segments-1 while src/piano/bridge.ts:66 consumes the value as a 0..1 gain. Measured through the real store: ui 0/0.25/0.5/0.75/1 -> engine level 0/3/6/8/11. Any non-zero fader position drives the layer 3x-11x into the limiter, and the control also exposes contradictory aria-valuenow (0.8) and aria-valuetext ('1/11') on load."
+      "criterion": "effectAudibility",
+      "title": "Tremolo Amount is inverted: maximum amount is an exact bypass",
+      "detail": "effects.ts:185 computes depth = 1-(1-amount)*(0.5+0.5*xn), so amount=1 pins depth to 1. Measured with Mod 1 type=Tremolo, rate max: Amount MAX renders bit-identical to dry (relDiff 0.0000, peak 0.07589 both), Amount MIN modulates (relDiff 0.5180). The effects spec explicitly documents the opposite ('full level at zero amount')."
     },
     {
-      "id": "effect-type-knobs-collapse-to-two-types",
       "severity": "major",
-      "title": "Only 2 of 6 types per effect unit are reachable from the panel",
-      "detail": "src/piano/bridge.ts:95,96,104,113 (and :101 for the delay filter) apply Math.round() to a 0..1 knob value before the modulo, so every type knob resolves to index 0 or 1. Sweeping each control through 21 positions on the real store yields {0,1} for fx.mod1-type, fx.mod2-type, fx.amp-type, fx.reverb-type and fx.delay-filter. Ring Mod, A-Wah, Wah, Pump, Phaser, Vibe, Ensemble, Spin, JC, Small, LP24, HP24, Spring, Stage, Hall, Cathedral and the HP/BP delay filters exist in DSP but cannot be selected."
+      "criterion": "effectUnitCoverage",
+      "title": "Rotary's own On and Speed controls are not connected",
+      "detail": "bridge.ts never writes rotary params and stage.ts:324 applies the shared rotary on To-Rotary routing alone, ignoring rotary.on. Measured: 'To Rotary layer A' alone gives relDiff 0.3357 versus dry; adding 'Rotary on' and driving 'Rotary speed' to maximum gives byte-identical output (relDiff 0.0000). Slow/Fast and Drive are therefore dead controls in a section the phase requires to be functional."
     },
     {
-      "id": "recorded-sample-sets-are-in-process-synthesis",
       "severity": "major",
-      "title": "Grand/Upright/Electric are additive synthesis; the 21 MB of bundled WAVs are never loaded",
-      "detail": "src/audio/samples.ts:62-125 generates every table at call time; no fetch, decodeAudioData or 'samples/' reference exists anywhere in src/ or tests/, so dist/samples (135 WAVs, 21 MB, all served 200) is dead weight. The phase-2 hard gate requiring bundled recorded sample sets is unmet. Provenance is nonetheless honest — IMPLEMENTATION_DETAILS.json states 'generated ... not a field recording' throughout — so this is a fidelity failure, not a truthfulness failure."
+      "criterion": "effectAudibility",
+      "title": "Compressor is inaudible at the engine operating level",
+      "detail": "Its threshold is an absolute 0.18-0.12*amount (effects.ts:588) while a single note peaks at 0.076 pre-master. 'Compressor on' at maximum Amount changes the rendered signal by relDiff 0.0130 (rms 0.02349 -> 0.02290). Fed a hot signal (Amp Twin, max drive) it does compress by -10.2 dB, so the DSP is real but mis-scaled - a player turning the knob hears nothing."
     },
     {
-      "id": "string-res-bypasses-master-gain",
       "severity": "major",
-      "title": "String resonance is summed after the master gain, so Master Level 0 still outputs",
-      "detail": "src/audio/stage.ts:334-347 adds the resonance sine to masterL/masterR after they have been multiplied by masterGain. Measured with setMasterLevel(0) and a held note: peak 0.0400 / rms 0.0282 with String Res on versus 0.0000 with it off. Violates the effects spec's 'nothing bypasses the shared master path'. The resonance is also a fixed 342.5 Hz tone unrelated to the notes being held."
+      "criterion": "declaredGapAccuracy",
+      "title": "Declared provenance does not match the running build",
+      "detail": "IMPLEMENTATION_DETAILS.json lists 135 WAV files and says they are 'rendered as committed WAV assets under public/samples'. No code path loads them: there is no fetch(), decodeAudioData() or sample-path reference anywhere in artifact/src; samples.ts:117 re-synthesises the tables in JS at note time. The same file describes the upright as 'distinctly brighter' than the grand while its measured spectral centroid is 159 Hz lower."
     },
     {
-      "id": "rotary-and-fx-focus-unbound",
-      "severity": "major",
-      "title": "Rotary On/Speed/Drive and the manual FX focus buttons reach no engine state",
-      "detail": "No code path writes Rotary parameters: with fx.to-rotary-a=true and fx.rotary-on=false, engine.rotary.params == {} and src/audio/stage.ts:324-325 processes the Rotary anyway (it checks routesToRotary only). Toggling fx.focus-piano / fx.focus-organ / fx.focus-synth-s1 leaves the serialized layer chain byte-identical. The effects spec lists both manual focus buttons and Rotary Slow/Fast + Drive as required."
-    },
-    {
-      "id": "drawbars-immovable",
-      "severity": "major",
-      "title": "All nine organ drawbars cannot be moved by keyboard or pointer",
-      "detail": "src/components/controls/controls.tsx:129-133 sends a 0..1 fraction to the store while src/hardware/store.ts:82 rounds it to an integer 0..8, so sub-0.5 fractions round back to the current value. Twelve ArrowUp presses and a full-height pointer drag on '16 foot drawbar' both left aria-valuenow at 0. Regresses the Phase 1 'every visible control moves or presses accessibly' gate; tests/interaction.test.tsx:98-108 misses it by asserting only that the value is an integer in range."
-    },
-    {
-      "id": "delay-feedback-filter-not-a-filter",
-      "severity": "major",
-      "title": "Delay feedback filter resets its state every sample, so LP mutes the repeats and HP does nothing",
-      "detail": "src/audio/effects.ts:433-440 calls this.lp.reset() before and after each sample, reducing the one-pole to a scalar multiply of freq/sampleRate (~0.02). Measured tail energy at feedback 0.8: Off 2.84e+1, LP 8.77e-6, HP 2.67e+1, BP 1.32e+1. The spec's 'each successive repeat passes through the filter again, becoming progressively more filtered' is not realized; the existing test passes because it only requires lp or hp to differ from off."
-    },
-    {
-      "id": "mod1-wah-static",
       "severity": "minor",
-      "title": "Mod 1 'Wah' never sweeps",
-      "detail": "src/audio/effects.ts:212 computes mapExp(200 + xn * amount * 1, 350, 3000); mapExp clamps its 0..1 input, so every LFO phase yields the maximum 3000 Hz. Verified for xn = -1, 0, +1. The type behaves as a fixed band-pass rather than the specified 'LFO-driven resonant low-pass sweep'."
+      "criterion": "instrumentBreadth",
+      "title": "Held notes freeze into a DC offset after ~2 s",
+      "detail": "stage.ts:436 clamps the playback position to the last table sample, so a held note stops decaying and outputs a constant value. Successive one-second windows of one held note: rms 0.01954, 0.01690, 0.00913, 0.00912, 0.00912, 0.00912 with peak == |mean| == 0.00912. Usable note length is under two seconds and the master path carries a DC offset while keys are down."
     },
     {
-      "id": "mono-output-and-decorative-buses",
       "severity": "minor",
-      "title": "Browser output is mono and the per-layer buses carry the same pre-mixed signal",
-      "detail": "StageEngine.render() returns only masterL (src/audio/stage.ts:357) and the drain copies it to both channels (src/audio/graph.ts:145-148), so A-Pan, chorus width and the Rotary's stereo rotor collapse. The single drain also connects to both bus GainNodes (src/audio/graph.ts:123-124), which then sum into the master, so each 'per-layer bus' carries the full mix and the mix is summed twice."
+      "criterion": "layerBehavior",
+      "title": "'Piano section on' and the FX focus buttons are inert",
+      "detail": "Turning 'Piano section on' off leaves rendered audio bit-identical (relDiff 0.0000) - the bridge never reads 'piano.on', although the piano spec defines it as turning the whole section on or off. Toggling 'Effects focus piano'/'Effects focus organ' likewise changes nothing (relDiff 0.0000). Both sit among controls the phase makes functional, so their inertness is not visible to a player."
     },
     {
-      "id": "unison-detune-inaudible",
       "severity": "minor",
-      "title": "Unison detune tops out at +/-0.43 cents and is exactly 0 at level 1",
-      "detail": "src/audio/stage.ts:243 yields detune ratios of -0.00025 / 0 / +0.00025 at Unison 3, and at Unison 1 the single added voice has zero detune (a pure duplicate). inputs/specs/nord-stage-4.piano.json requires '1 is subtle, 3 is wide and obviously detuned'."
+      "criterion": "signalGraph",
+      "title": "Per-layer buses and stereo are nominal only",
+      "detail": "graph.ts:123-126 connects the single drain node to both bus gains, so each bus carries the same already-summed mix and it reaches the master twice (destination peak 0.1256 vs engine peak 0.0759 x 0.8 = 0.0607, exactly 2x). stage.ts:357 returns only masterL and the drain copies it to both channels, so A-Pan, chorus width and the rotary all collapse to mono."
     },
     {
-      "id": "timbre-not-stepped",
       "severity": "minor",
-      "title": "Timbre is a continuous tilt with a non-neutral 'Off' and no Dyno modes",
-      "detail": "src/audio/stage.ts:367-368 maps the knob to tilt = (value - 0.5) * 1.4, so the default value 0 ('Off') applies a strong -0.7 high-cut instead of leaving the tone unchanged. The spec's Off/Soft/Mid/Bright steps and the electric-only Dyno 1/Dyno 2 preamp emulations are not modeled."
+      "criterion": "pianoControlDepth",
+      "title": "Timbre is unlabelled and non-monotonic",
+      "detail": "The spec requires Off/Soft/Mid/Bright (plus Dyno 1/2 for electric); the panel exposes a 6-step knob whose aria-valuetext is a bare index. Measured centroid: baseline 1357 Hz, 2/6 position 1299 Hz, maximum ('bright') 1346 Hz - the brightest setting is darker than the default, because stage.ts:367 centres the tilt at 0.5 while the control defaults to 0."
     },
     {
-      "id": "library-loader-is-a-noop",
       "severity": "minor",
-      "title": "The shipped app reports the sample library 'ready' without loading anything",
-      "detail": "src/piano/library.ts:41 defaults the loader to () => Promise.resolve(), so the status strip shows 'Piano library ready (sample sets + synthesis)' with no asset access. The failure branch is only reachable through test injection, and in fallback src/audio/stage.ts:207 substitutes the Grand table for every type, so the 'basic-piano-fallback' generated voice declared in IMPLEMENTATION_DETAILS.json has no distinct implementation."
-    },
-    {
-      "id": "visual-audit-contradicts-its-capture",
-      "severity": "minor",
-      "title": "The visual audit claims a tiled keybed that its own committed screenshots disprove",
-      "detail": "evidence/stage2-visual-audit.md:18-20 states 'exactly 73 keys (43 white / 30 black) ... continuous tiled white keys with black keys centered on seams', while evidence/stage2-desktop.png and evidence/stage2-narrow.png in the same directory show a featureless white slab. The claim appears to be derived from DOM element counts rather than the rendered capture."
-    },
-    {
-      "id": "document-shell-incomplete",
-      "severity": "minor",
-      "title": "No doctype, title, lang or viewport meta; the app renders in quirks mode",
-      "detail": "artifact/index.html is the single line '<div id=\"root\"></div><script type=\"module\" src=\"/src/main.tsx\"></script>', so the built dist/index.html has no document shell. Measured in Chrome: document.compatMode == 'BackCompat', document.title == '', documentElement.lang == '', no meta[name=viewport]. Real mobile browsers would apply a 980 px layout viewport at 390x844. A favicon.ico 404 is the only console error during the interaction pass."
+      "title": "Test suite passes on a clean install but encodes the rendering bug",
+      "detail": "A fresh pnpm install of artifact/ into scratch and `pnpm test` gives 12 files / 94 tests passing, so the gates are portable. They miss these defects because they assert the unit-coordinate model directly (hardware.test.ts:30 expects last.x + last.width === 43, the very value that becomes 4300% in the DOM) and drive the bridge with hand-written store objects using values the real controls never produce ('fx.reverb-type': 4, 'piano.layer-a-level': 1 in piano-effects.test.ts:225-245)."
     }
   ]
 }

@@ -1,176 +1,133 @@
 {
-  "rubricVersion": "1.0.0",
+  "rubricVersion": "2.0.0",
   "runId": "claude-haiku-4-5-20251001",
   "stage": 3,
-  "evaluator": "independent-agent (opus-4.8)",
-  "evaluatedAt": "2026-07-04T00:00:00.000Z",
-  "summary": "This Phase 3 artifact is functionally a Phase 1 surface with a set of unwired engine files bolted on. App.tsx (src/App.tsx:36) instantiates only the Phase 1 PianoVoiceEngine (a single triangle-oscillator voice from IMPLEMENTATION_DETAILS.json line 9); OrganEngine, SynthEngine, and ProgramStore are dead code referenced only in their own files and test files (grep confirms no imports in App.tsx or components). ControlPanel (src/components/control-panel.tsx) is a fully generic renderer where every control merely updates a presentation `value`; App.handleControlChange (src/App.tsx:54-79) special-cases only sustain, so every Organ/Synth/Program/effects/split/scene/morph/clock/transpose/Panic control is a silent no-op fallback that scores 0 on hardware bindings. There is no effects module at all in src/audio/ (only note-lifecycle, organ-engine, synth-engine, synth-voice), a hard regression from the Phase 2 effects that the stage3 audit still claims exist. The Organ engine is the one genuinely distinct engine (additive harmonics with model-specific drawbar maps, src/audio/organ-engine.ts:88-143), but it is unwired, has no rotary, no audible vibrato/chorus, and only 3 factory programs vs the required 8+. The Synth engine offers only 4 pure browser-oscillator waveforms with no Sync/Multi/Super/FM-H categories, no Osc Ctrl, no filter types beyond lowpass, no resonance/drive, hardcoded envelopes, no LFO/glide/unison/vibrato/arp/gate. IMPLEMENTATION_PLAN.md and IMPLEMENTATION_DETAILS.json honestly admit splits/scenes/morphs/clock/transpose/Panic and the entire Program UI are 'type-defined but UI integration pending', but the feature-matrix pads 15+ Phase 3 IDs onto the unrelated Phase 1 note-lifecycle.test.ts, and evidence/stage3-visual-audit.md is a verbatim copy of the Phase 2 audit (titled 'Phase 2 Visual Audit', referencing stage2 PNGs) that falsely describes six working effect units and a Rotary that do not exist in this artifact.",
+  "evaluator": "Stagebench blind evaluator (Phase 3)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-16T00:00:00.000Z",
+  "summary": "Phase 3 is not implemented in the shipped build. A graph census by instrumenting AudioNode.prototype.connect shows one path only: one triangle oscillator per note through a shared 3 kHz lowpass into a 0.3 master gain. OrganEngine, SynthEngine and ProgramStore exist in source but are imported by no component and are absent from build/assets/index-Cmx3s9n6.js (0 hits for localStorage, requestMIDIAccess, createDelay/Convolver/DynamicsCompressor, 'B3', 'Rotary', 'Arpeggiator'). Every control moves and reports state; none changes audio - Piano Type, Layer B Enable and Drawbar 1 each give a 0.000 dB spectral delta, and Master Level at 0 leaves note RMS unchanged. The keybed is broken: all 30 black keys collapse into one 1032px slab and 38 of 73 keys fall outside it. 34 of 75 controls are unreachable at 1440x900 (each section is a 116px overflow pane). At 390x844 the instrument is a 386x125 sliver with no control visible. What works - a stable single piano voice from pointer and computer keyboard, a 54/46 split and 73/43/30 key counts - is Phase 1 scope. evidence/stage3-visual-audit.md claims working effects, reverb, rotary and Master Level, contradicted by measurement.",
   "categories": [
     {
-      "id": "visualRetention",
+      "id": "sound",
       "criteria": [
         {
-          "id": "referenceRetention",
-          "rating": 1,
+          "id": "distinctEngines",
+          "scoring": "judged",
+          "rating": 0,
           "evidence": [
-            "evidence/stage3-desktop.png shows a sparse flat panel with large empty red areas, no end cheeks, no OLED displays, no LED drawbar graphs, and only ~5-6 visible controls per section, far below the dense reference/nord-stage-4-73.jpg surface",
-            "stage3-desktop.png is byte-identical (221536 bytes) to stage1/stage2 desktop captures per ls -la — the surface never changed across three phases",
-            "Keybed labels in the screenshot (B2..A7) do not match the 73-key Stage 4 range, and the chassis is a plain rounded rectangle without the reference's hardware detailing"
+            "Live graph census by instrumenting AudioNode.prototype.connect before app boot: the only edges ever created are OscillatorNode->GainNode->GainNode(envelope)->BiquadFilterNode(lowpass 3000Hz, one shared instance)->GainNode(master 0.3)->AudioDestinationNode. One engine, one waveform ('triangle'), for every note. No second engine is ever instantiated.",
+            "artifact/src/audio/organ-engine.ts (OrganEngine) and artifact/src/audio/synth-engine.ts (SynthEngine) are never imported by App.tsx, keyboard.tsx or control-panel.tsx — grep across src/ finds their only occurrence is their own definition. They are therefore tree-shaken out: build/assets/index-Cmx3s9n6.js contains 0 occurrences of 'B3', 'Rotary', 'Arpeggiator', 'createDelay', 'createConvolver', 'createDynamicsCompressor', 'decodeAudioData'; only 1 createOscillator and 1 createBiquadFilter.",
+            "Behavioural A/B on the served build: held note spectrum captured (analyser, smoothingTimeConstant 0) before and after clicking 'Piano Type', toggling 'Layer B Enable' and dragging 'Drawbar 1' from 0.5 to 1.0. Mean |dB| difference across 124 live bins = 0.000 in every case, against a no-change repeatability of 0.000-0.120 dB. Nothing on the panel selects or alters an engine.",
+            "IMPLEMENTATION_DETAILS.json states 'Organ engine provides B3/Vox/Farf/Pipe models with harmonic differentiation via drawbar spectrum' and 'Synth engine provides Pure waveforms (Sine/Saw/Square/Triangle) with independent oscillators'. Neither is reachable in the shipped build."
           ]
         },
         {
-          "id": "completeHardwareState",
+          "id": "routingIntegration",
+          "scoring": "judged",
           "rating": 0,
           "evidence": [
-            "src/components/control-panel.tsx renders knobs/buttons/faders that only mutate a local presentation `value`; there is no coherent Program/split/scene/morph/Organ/Synth/effect/LED/OLED state driven from real engine state",
-            "Program 'OLED' and Synth 'OLED' are declared as plain buttons (src/model/hardware.ts:151, and synth-display), not functional displays; the screenshot shows no active display content",
-            "No effects, focus, or routing hardware state exists (no effects module in src/audio/), contradicting the visual audit's routing/LED claims"
+            "There is no effects graph to inherit. The full edge list captured at the destination is Osc->Gain->Gain->Biquad->Gain->Destination, repeated once per voice through one shared filter and one shared master gain; no delay, reverb, compressor, amp/EQ, rotary or modulation node is ever constructed.",
+            "No per-layer buses: PianoVoiceEngine (artifact/src/audio/synth-voice.ts) holds a single this.filter created in its constructor and every voice connects into it; App.tsx creates exactly one masterGain at 0.3 and one engine.",
+            "Master Level measured as disconnected: dragging the 'Master Level' knob to aria-valuenow=0 then playing the same key gave RMS 0.02489 versus 0.02487 at the original setting — a 0.08% change, i.e. no effect. App.tsx handleControlChange only acts on control ids containing 'sustain', and no such control exists in the model.",
+            "The effects section renders 12 controls (Effect 1/2 type + bypass + param, Delay Time/Feedback, All Bypass, Layer Focus, Group Toggle, Global Mode); all are inert, and the units the spec requires (amp sim/EQ, compressor, reverb, rotary) have no control at all."
+          ]
+        },
+        {
+          "id": "qualityUnderLoad",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "15 simultaneous notes held via the mapped computer keyboard rendered RMS 0.0801 with peak 0.2090 — well clear of clipping — and the tab stayed responsive throughout (probe completed in 1349ms with no timeout).",
+            "Release is clean: after lifting all 15 keys the analyser returned to RMS 0.00000 within 900ms; window blur while a note was held dropped 0.0183 to 0.00000 within 500ms; a pointer dragged off a held key (mouseleave) released to 0.00000. No stuck voices observed in any probe.",
+            "Musical quality itself is thin: every note is one triangle oscillator with a fixed 50ms linear attack, 100ms decay to 0.7 and a static 3kHz lowpass shared by all voices, so there is no attack transient, no velocity->timbre link and no level compensation. Peak output is only 0.21 with no limiter on the master path (App.tsx sets masterGain 0.3 straight to destination).",
+            "Voice stealing is deterministic (oldest-first at 32 voices, PianoVoiceEngine.voiceHistory) but the voice map is never pruned on release, so released notes stay in this.voices and count against polyphony until re-triggered."
           ]
         }
       ]
     },
     {
-      "id": "featureCompletion",
+      "id": "playability",
       "criteria": [
         {
-          "id": "programWorkflows",
-          "rating": 1,
-          "evidence": [
-            "ProgramStore (src/state/programs.ts) provides 32 slots + 8 Live slots with localStorage round-trip, but is never instantiated in the app (grep shows references only in programs.ts and programs.test.ts)",
-            "No Store As with naming, no dirty-discard on program change, no numeric list view, no dial browsing, and no undo — IMPLEMENTATION_PLAN.md:99-103 lists all program UI as 'type-defined, UI pending'",
-            "Only 3 factory programs (src/state/programs.ts:104-123) vs the spec's required minimum of 8; programs.test.ts:13 asserts only '>= 3'"
-          ]
-        },
-        {
-          "id": "performanceSystems",
+          "id": "stateRoundTrip",
+          "scoring": "judged",
           "rating": 0,
           "evidence": [
-            "IMPLEMENTATION_PLAN.md:52-59 states Splits, Scenes I/II, Wheel/Control-Pedal morphs, Master Clock, Transpose, and Panic are 'Type-Defined (UI Integration Pending)' — none are implemented or exercised",
-            "IMPLEMENTATION_DETAILS.json line 55: 'Splits/Scenes/Morphs/Clock/Transpose/Panic are type-defined but UI integration pending for evaluation.'",
-            "feature-matrix.json maps splits.zones, morph.assignments, scenes.switching to src/tests/note-lifecycle.test.ts, which contains only Phase 1 pointer/keyboard/MIDI/sustain tests (no split/scene/morph assertions)"
+            "artifact/src/state/programs.ts (ProgramStore, FACTORY_PROGRAMS, localStorage persistence) is imported by nothing except its own test file; build/assets/index-Cmx3s9n6.js contains 0 occurrences of 'localStorage'. The program system is not in the shipped build.",
+            "Driven on the served build: clicking 'Program 1' flips only its aria-pressed; the program section's rendered text is unchanged before and after ('PROGRAM AND MORPH / PROGRAM OLED / Program Dial / PROGRAM DIAL / PROGRAM 1 ...'), and Object.keys(localStorage).length is 0 afterwards. Nothing saves, loads or recalls.",
+            "There is no dirty indicator, no program name or number displayed anywhere in the DOM, and no Store As / naming path. The 'PROGRAM OLED' landmark is a 28x28 <button> with no text content.",
+            "12 of the 16 program-section controls (Programs 3-8, Page Up/Down, Live Mode, Layer Scene, Store, Split) are also unreachable by pointer at 1440x900, so even the presentation-level toggles cannot be exercised."
           ]
         },
         {
+          "id": "bindings",
+          "scoring": "judged",
+          "rating": 0,
+          "evidence": [
+            "No sustain control exists. A scan of every aria-label in the rendered page for /sustain|pedal|panic|transpose|split|scene|morph|rotary|arp/ returns only 'Dyn Comp', 'Layer Scene', 'Split' and 'Envelope Sustain' — no sustain pedal, no control pedal, no panic. App.tsx's handleControlChange routes sustain on controlId.includes('sustain'), and no control id matches, so NoteLifecycle.setSustainPedal is unreachable from the UI.",
+            "No Web MIDI: build/assets/index-Cmx3s9n6.js contains 0 occurrences of 'requestMIDIAccess', and no source file calls it. MIDI exists only as NoteLifecycle.midiNoteOn/midiNoteOff methods with no transport, so the MIDI path could not be exercised even with a stub.",
+            "Pitch stick and modulation wheel are rendered by the generic Knob component (createControl type 'wheel' falls through to <Knob> in control-panel.tsx). They rotate and update aria-valuenow but reach no audio parameter — playing the same note after moving them gives an identical spectrum.",
+            "Live Mode is a single inert button, buried at 1440x900 (its centre hit-tests to an ancestor). Working bindings are limited to pointer note-on/off on the visible keys and 16 mapped computer-keyboard notes (z x c v b n m , q w e r t y u i)."
+          ]
+        },
+        {
+          "id": "crossSystemWorkflow",
+          "scoring": "judged",
+          "rating": 0,
+          "evidence": [
+            "There is only one engine in the graph, so 'across all three engines at once' has nothing to coordinate: a note played from any input reaches the same PianoVoiceEngine.",
+            "Split: one 'Split' button, unreachable at 1440x900 and inert; no split-point UI, no zone model in the running app, none of the 11 documented split positions.",
+            "Scenes/transpose/panic: 'Layer Scene' is the only scene control (unreachable, inert); there is no transpose and no panic control anywhere in the DOM.",
+            "This is the one area the artifact declares honestly — IMPLEMENTATION_DETAILS.json notes 'Splits/Scenes/Morphs/Clock/Transpose/Panic are type-defined but UI integration pending for evaluation' — which matches the observed behaviour, but the feature is absent."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
           "id": "organSystem",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "OrganEngine (src/audio/organ-engine.ts:88-143) implements genuine additive harmonics with model-specific drawbar-to-harmonic maps for B3/Vox/Farf/Pipe, plus key click and B3 percussion — but is never imported into App.tsx",
-            "No rotary implementation, no audible vibrato/chorus (vibratoChorus is only a state string), and percussion has no soft/decay/harmonic variation (organ-engine.ts:160-174 is a single fixed decay)",
-            "No test file exercises OrganEngine; feature-matrix organ.engine/models-drawbars/rotary all point to the unrelated note-lifecycle.test.ts"
+            "Nine drawbars render as native vertical range inputs with a fill bar that tracks value (dragging Drawbar 1 moved aria-valuenow 0.5 -> 1 and the .drawbar-bar height with it), plus 'Organ Model', 'Percussion' and 'Vibrato/Chorus' controls. So the organ section is presentation-complete at a coarse level.",
+            "None of it reaches audio: with Drawbar 1 at 1.0 the held-note spectrum is bit-identical to the 0.5 setting (mean |dB| difference 0.000 over 124 bins).",
+            "Model selection does not exist: 'Organ Model' is a single boolean toggle, not a B3/Vox/Farf/Pipe selector, and the strings 'B3', 'Vox', 'Farf' and 'Pipe' appear 0 times in the shipped bundle. There is no rotary speaker control, no key click, no chorus/vibrato depth stages and no level LED ladders.",
+            "Drawbars 6-9, Percussion and Vibrato/Chorus (6 of the organ section's 12 controls) fail the 5x5 elementFromPoint reachability test at 1440x900 — they sit below the 116px clipped section viewport."
           ]
         },
         {
           "id": "synthSystem",
-          "rating": 0,
-          "evidence": [
-            "src/audio/synth-engine.ts:72-78 maps only Sine/Triangle/Saw/Square directly to browser OscillatorType — no Sync/Multi/Super/FM-H categories, no Osc Ctrl, contradicting synth.sources spec",
-            "Only a fixed lowpass filter (synth-engine.ts:64), no LP24/HP/BP, no resonance/drive (IMPLEMENTATION_PLAN.md:94 'resonance type-defined'), hardcoded envelope (lines 86-92), no LFO/glide/unison/vibrato/arp/gate",
-            "SynthEngine is never instantiated in App.tsx and has no dedicated test (synth-voice.test.ts tests the Phase 1 PianoVoiceEngine, not SynthEngine)"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "audioIntegration",
-      "criteria": [
-        {
-          "id": "distinctEngines",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "Only the OrganEngine has genuinely distinct spectra via per-model harmonic maps (organ-engine.ts:92-139); the Synth uses renamed generic browser oscillators (synth-engine.ts:72-78)",
-            "Neither Organ nor Synth is wired into the running app (App.tsx:36 uses PianoVoiceEngine only), so no distinct engine is actually exercised at runtime",
-            "No rendered-audio/analyser test proves any spectral distinction between engines; there are no SynthEngine or OrganEngine test files at all"
+            "The synth section renders 18 controls covering oscillator (waveform/octave/pitch), filter (type/freq/res/drive), a four-stage envelope, LFO rate/amount and a voice-mode knob — a recognisable inventory, all inert.",
+            "SynthEngine (artifact/src/audio/synth-engine.ts, 141 lines with Pure waveforms, filter, voice modes) is imported by nothing and is absent from build/assets/index-Cmx3s9n6.js; the shipped bundle creates exactly one oscillator type ('triangle') and one biquad, both owned by the piano voice.",
+            "No arpeggiator exists in any form: 'Arpeggiator', 'arp', rate/range/direction/hold controls are absent from the DOM and the bundle. No unison, no glide, no vibrato control.",
+            "8 of the 18 synth controls (Filter Drive, all four envelope knobs, LFO Rate, LFO Amount, Voice Mode) are unreachable by pointer at 1440x900."
           ]
         },
         {
-          "id": "sharedRouting",
+          "id": "performanceSystems",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "OrganEngine/SynthEngine accept a shared GainNode and take an injected AudioContext (organ-engine.ts:12-16, synth-engine.ts:20-24), so the design could share one context, but they are never connected to the app's audio graph",
-            "App.tsx builds a single AudioContext -> masterGain -> destination for the piano voice only (App.tsx:25-36); no per-layer buses, no effect chain, no Rotary, no single shared master path across engines",
-            "The Phase 2 effects graph is entirely absent from src/audio/ in Phase 3, so engines cannot route through inherited buses/effects"
+            "Layers have presentation: piano Layer A/B enable, focus, level faders and octave knobs, and synth Layer A/B/C enable buttons, all of which update aria-pressed / aria-valuenow when driven. Toggling 'Layer B Enable' changed aria-pressed false->true.",
+            "None of it routes: after enabling Layer B the held-note spectrum was unchanged (mean |dB| difference 0.000 over 124 bins) and the graph census shows no second layer bus was created. Voice ownership, per-layer level and octave shift have no path to audio.",
+            "Splits and morphs are absent, not merely inert: no split-point control of any kind, and the 'three morph assign buttons' the spec requires in the program section render 0 times — the section is even labelled 'PROGRAM AND MORPH' with no morph control under it.",
+            "Scenes reduce to one 'Layer Scene' button that is unreachable at 1440x900 and toggles nothing beyond its own aria-pressed."
           ]
         },
         {
-          "id": "qualityLoad",
+          "id": "programWorkflows",
+          "scoring": "judged",
           "rating": 1,
           "evidence": [
-            "Only the basic triangle piano voice actually produces sound; layered/split play, arp timing, and multi-engine load cannot be exercised because Organ/Synth are unwired",
-            "stage3-capture.json shows only benign 'slider-vertical' appearance warnings and no page errors, so the minimal running surface is stable",
-            "No latency, voice-limit, or CPU-stability evidence for the full system exists because the full system does not run"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "systemBehavior",
-      "criteria": [
-        {
-          "id": "roundTripIntegration",
-          "rating": 1,
-          "evidence": [
-            "programs.test.ts:44-64 proves plain object serialization round-trips (selectedType, transpose) and localStorage persistence (programs.test.ts:110-121), but only against ProgramStore in isolation, not against live app state",
-            "Because no control writes engine/program state in the app, there is no path to restore Piano/Organ/Synth/effects/splits/scenes/morphs/focus/display state from a program",
-            "Effects, splits, scenes, morphs, and focus are not part of the serialized state used by any running code"
-          ]
-        },
-        {
-          "id": "hardwareBindings",
-          "rating": 0,
-          "evidence": [
-            "src/components/control-panel.tsx wires every control to a generic onValueChange that only updates a presentation value; App.handleControlChange (App.tsx:54-79) special-cases only sustain — the textbook generic no-op fallback that BENCHMARK.md scores 0",
-            "IMPLEMENTATION_PLAN.md:98-109 marks Program/Split/Scene/Morph/Master Clock/Transpose/Panic controls as 'type-defined, UI pending', i.e. bound to nothing",
-            "Organ drawbars/model/percussion and Synth waveform/filter/voice-mode controls exist visually but do not reach OrganEngine/SynthEngine, which are never instantiated"
-          ]
-        },
-        {
-          "id": "workflowIntegration",
-          "rating": 0,
-          "evidence": [
-            "No cross-system workflow exists: layers, zones, splits, scenes, morphs, effects, and clock are unimplemented or unwired (IMPLEMENTATION_DETAILS.json line 55)",
-            "The app renders one piano voice and a decorative panel; there is no engine focus, no split routing, and no morph interpolation to exercise",
-            "feature-matrix.json system.integration points to note-lifecycle.test.ts, which does not test any multi-engine or split/scene/morph integration"
-          ]
-        },
-        {
-          "id": "regressionReliability",
-          "rating": 2,
-          "evidence": [
-            "Inherited Phase 1 note lifecycle is intact and tested (src/tests/note-lifecycle.test.ts covers pointer/keyboard/MIDI/sustain/cleanup), and the basic piano voice still plays",
-            "However Phase 2 effects and the multi-piano library are a regression: no effects module exists in src/audio/ and the piano remains a single synthesized triangle voice (IMPLEMENTATION_DETAILS.json sampleSources: [])",
-            "Surface and responsive behavior are preserved (App.test.tsx:47-58 checks 73 keys / 43 white / 30 black; narrow capture has no page errors), but at Phase 1 fidelity only"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "engineeringQuality",
-      "criteria": [
-        {
-          "id": "architecture",
-          "rating": 1,
-          "evidence": [
-            "Engine classes take injected AudioContext and shared gain (organ-engine.ts, synth-engine.ts), and ProgramState is a clean serializable type, showing some boundary awareness",
-            "But there is no canonical state ownership connecting UI to engines: ControlPanel mutates a flat hardware model while engines are never instantiated, so serialization, effect composition, and one-context routing are aspirational, not realized",
-            "Effects composition from Phase 2 is entirely missing in Phase 3 src, indicating architecture regressed rather than extended"
-          ]
-        },
-        {
-          "id": "testsMaintainability",
-          "rating": 1,
-          "evidence": [
-            "programs.test.ts and note-lifecycle.test.ts are real deterministic tests, but they cover only state serialization and Phase 1 lifecycle; SynthEngine and OrganEngine have no tests despite being new Phase 3 code",
-            "feature-matrix.json dishonestly maps 15+ Phase 3 IDs (splits, scenes, morphs, organ.rotary, synth.sources/filter-envelopes/voice-modes/arp-gate, system.integration, effects.*) to the single unrelated note-lifecycle.test.ts",
-            "No real-boundary audio tests (analyser/signal comparison) exist for any Phase 3 engine, violating the audio test rules in BENCHMARK.md"
-          ]
-        },
-        {
-          "id": "runtimePerformance",
-          "rating": 2,
-          "evidence": [
-            "stage3-capture.json reports no pageErrors and only cosmetic slider-vertical warnings at both 1440x900 and 390x844",
-            "PianoVoiceEngine has real cleanup (synth-voice.ts:184-195) and note-lifecycle.test.ts:140-144 asserts unmount returns voice count to 0",
-            "Because Organ/Synth/effects never run, integrated load, memory, and rapid multi-engine interaction cannot be assessed and are effectively untested"
+            "The program section renders the right nominal inventory: 8 program buttons, page up/down, Live Mode, Layer Scene, Store, Split, a Program Dial encoder and a 'Program OLED' element.",
+            "No workflow works. Clicking 'Program 1' left the program section's rendered text byte-identical and wrote nothing to localStorage (0 keys); the dial is a wheel-driven value with no readout; there is no page indicator, no numeric list view and no Store As naming path.",
+            "The 'Program OLED' is a 28x28 <button> with no text; nothing in the page ever displays a program name, number or bank.",
+            "12 of the 16 program controls fail the reachability hit-test at 1440x900, so most of the presentation cannot even be exercised by a pointer."
           ]
         }
       ]
@@ -179,28 +136,166 @@
   "issues": [
     {
       "severity": "critical",
-      "title": "Organ, Synth, and Program engines are unwired dead code",
-      "detail": "App.tsx (src/App.tsx:36) instantiates only the Phase 1 PianoVoiceEngine. OrganEngine, SynthEngine, and ProgramStore are referenced only in their own files and tests (verified by grep), so none of the Phase 3 audio or program functionality runs in the built artifact."
+      "criterion": "distinctEngines",
+      "title": "Organ, Synth and Program systems are dead code absent from the shipped bundle",
+      "detail": "artifact/src/audio/organ-engine.ts, artifact/src/audio/synth-engine.ts and artifact/src/state/programs.ts are imported by no component (grep across src/ finds each name only at its own definition and, for ProgramStore, in its test). Vite therefore tree-shakes all three: build/assets/index-Cmx3s9n6.js contains 0 occurrences of 'B3', 'Rotary', 'Arpeggiator', 'localStorage', 'decodeAudioData', 'createDelay', 'createConvolver' and 'createDynamicsCompressor', against 1 createOscillator, 1 createBiquadFilter, 3 createGain and 1 destination. The entire Phase 3 scope - Organ engine, Synth engine, 32 programs + 8 Live, splits, scenes, morphs, clock, transpose, Panic - has no presence in the artifact a user runs."
     },
     {
       "severity": "critical",
-      "title": "Generic no-op control bindings",
-      "detail": "src/components/control-panel.tsx binds every control to a generic value setter and App.handleControlChange (App.tsx:54-79) special-cases only sustain. All Organ/Synth/Program/effects/split/scene/morph/clock/transpose/Panic controls are silent no-op fallbacks, which BENCHMARK.md scores 0."
+      "criterion": "keybedFidelity",
+      "title": "All 30 black keys collapse into one 1032px slab and 38 of 73 keys fall outside the keybed",
+      "detail": "Measured at 1440x900: every .black-key returns the identical rect {x:-656, y:474.19, w:1032, h:52.58}. artifact/src/styles/keyboard.css sets .black-key{position:absolute; width:60%; margin-left:-30%} with no left offset and no positioned containing block, so all 30 resolve against the 1720px .keyboard and stack into one bar across the left half of the keybed - visible in evidence/stage3-desktop.png. Separately, 43 white keys at min-width:40px total 1720px inside a 1416px container, so the row runs x=-140..1580 and 8 white keys are clipped away by .instrument{overflow:hidden}. Only 35 of 73 key boxes lie inside the keybed (ratio 0.479), which trips the panel-fidelity hard gate."
     },
     {
       "severity": "critical",
-      "title": "Dishonest evidence and feature matrix",
-      "detail": "evidence/stage3-visual-audit.md is a verbatim copy of the Phase 2 audit (titled 'Phase 2 Visual Audit', citing stage2 PNGs) claiming six working effect units and a Rotary that do not exist in Phase 3 src. feature-matrix.json maps 15+ Phase 3 feature IDs onto the unrelated Phase 1 note-lifecycle.test.ts."
+      "criterion": "routingIntegration",
+      "title": "Sealed evidence claims working effects, reverb, rotary and Master Level that do not exist",
+      "detail": "artifact/evidence/stage3-visual-audit.md (headed 'Phase 2 Visual Audit') documents a full chain 'Piano -> Layer -> Mod1 -> Mod2 -> Delay -> AmpEQ -> Compressor -> Reverb -> [Rotary] -> Layer Level -> Master Limiter -> Destination' and marks Mod1, Mod2, Delay, Amp Sim/EQ, Compressor, Reverb, Rotary, per-unit bypass, dry/wet and 'Master Level knob - Final output volume' each as measurable and working. The measured graph is Osc->Gain->Gain->Biquad->Gain->Destination with no such node ever constructed, and Master Level driven to 0 leaves the rendered note RMS at 0.02489 vs 0.02487. It also claims '390x844: Interface remains inspectable without clipping' where the instrument measures 386x125 with 18px section viewports. This is evidence asserting unimplemented behaviour, which the honesty contract forbids."
     },
     {
       "severity": "major",
-      "title": "Phase 2 effects and piano library regressed",
-      "detail": "No effects module exists in src/audio/ in Phase 3, and the piano is a single synthesized triangle voice (IMPLEMENTATION_DETAILS.json sampleSources: []). Later phases must not regress inherited functionality."
+      "criterion": "hardwareInventory",
+      "title": "34 of 75 panel controls are unreachable by pointer at 1440x900",
+      "detail": ".control-deck is height:54% of a .control-deck-container that is itself 54% of the chassis, so each .section gets a 116px client height against scrollHeight 222-371px, with .section{overflow-y:auto}. By the rubric's 5x5 document.elementFromPoint grid on an unscrolled page, 41/75 controls resolve to themselves: performance 3/3, organ 6/12, piano 8/14, program 4/16, synth 10/18, effects 10/12. Drawbars 6-9, Percussion, KB Touch, Timbre, Programs 3-8, Page Up/Down, Live Mode, Layer Scene, Store, Split, all four envelope knobs, LFO Rate/Amount and All Bypass can only be reached by scrolling an internal pane, which no hardware panel does. Playwright's click() succeeds on all 75 because it performs that scroll."
     },
     {
       "severity": "major",
-      "title": "Synth lacks required waveform categories and only 3 factory programs",
-      "detail": "synth-engine.ts:72-78 offers only 4 pure browser oscillators (no Sync/Multi/Super/FM-H, no Osc Ctrl, no filter types/resonance/drive/envelopes/LFO/arp). src/state/programs.ts ships only 3 factory programs vs the required minimum of 8."
+      "criterion": "chassisGeometry",
+      "title": "Section fractions hard-code the superseded coarse values",
+      "detail": "artifact/src/model/hardware.ts SECTION_CONFIG uses {performance .13, organ .21, piano .15, program .09, synth .21, effects .21}. specs/nord-stage-4.visual.json horizontalSectionsNote records that piano 0.15, program 0.09 and synth 0.21 were corrected on 2026-07-04 because they contradicted the photograph; the current values are 0.085, 0.125 and 0.25. Rendered widths normalised to their 1407.98px sum measure piano 0.1510 (dev 0.0660, 5.5x tolerance), synth 0.2078 (dev 0.0422) and program 0.0943 (dev 0.0307). The artifact's own hardware.test.ts only asserts the fractions sum to 1.0, so the test suite cannot catch this."
+    },
+    {
+      "severity": "major",
+      "criterion": "bindings",
+      "title": "No sustain control and no Web MIDI anywhere in the build",
+      "detail": "No control in the rendered panel has an id or label matching sustain or pedal; App.tsx handleControlChange dispatches sustain on controlId.includes('sustain'), so NoteLifecycle.setSustainPedal is unreachable from the UI even though the class implements it. build/assets/index-Cmx3s9n6.js contains 0 occurrences of 'requestMIDIAccess' and no source file calls it, so the MIDI note/velocity/CC64 path claimed by feature IDs piano.basic-inputs and piano.pedals has no transport - I could not exercise it even with a stub, and report it as absent by source and bundle inspection rather than as a headless-permission limitation."
+    },
+    {
+      "severity": "major",
+      "criterion": "narrowRetention",
+      "title": "Instrument collapses to an unusable 386x125 sliver at 390x844",
+      "detail": "Because .instrument is width:100% with aspect-ratio:3.0951, a 390px viewport yields a 124.7px tall chassis. The deck is then 35.2px total and each .section has clientHeight 18px against scrollHeight 160-953px, hiding every control; the keybed is 25.5px with 9 of 73 keys inside and no visible black key. See scratch/probe-p3-narrow.png."
+    },
+    {
+      "severity": "major",
+      "criterion": "programWorkflows",
+      "title": "feature-matrix.json maps 17 Phase 2/3 feature IDs to a piano note-lifecycle test with no such coverage",
+      "detail": "artifact/tests/feature-matrix.json cites src/tests/note-lifecycle.test.ts as the only test for effects.graph, effects.routing, effects.processing, piano.instrument-library, piano.layers, piano.velocity-controls, piano.fallback, layers.routing, splits.zones, morph.assignments, scenes.switching, organ.engine, organ.models-drawbars, organ.rotary, synth.sources, synth.filter-envelopes, synth.voice-modes, synth.arp-gate and system.integration. That file is 146 lines with describe blocks 'Pointer input', 'Keyboard input', 'MIDI input', 'Sustain pedal', 'Cleanup' and contains no reference to organ, synth, drawbar, rotary, arp, split, morph, scene, reverb or effect. The 38/38 coverage recorded in verification.json is nominal; a green suite is not evidence of any of these behaviours."
+    },
+    {
+      "severity": "minor",
+      "criterion": "chassisGeometry",
+      "title": "Instrument width fraction 0.9861 exceeds the 0.97 ceiling, and the deck plate fills only 29% of the chassis",
+      "detail": ".app drops to 10px padding under @media (max-width:1440px), which matches at exactly 1440, giving a 1420px instrument (0.9861 of the viewport) against the 0.88-0.97 band. Separately, although the 54/46 container split is exact, the visible .control-deck is only 132.6px of the 245.6px deck container and the visible .keyboard-container only 96.2px of the 209.2px keybed container, so about 46% of the chassis renders as empty red filler above and below the keys."
+    },
+    {
+      "severity": "minor",
+      "criterion": "colorFidelity",
+      "title": "Four of six sections lack the dark inset plate the spec requires",
+      "detail": "specs/nord-stage-4.visual.json gives organ, piano, synth and effects the surface 'dark inset plate with red perimeter'. In the build every .section renders a rgba(0,0,0,0.1)->transparent gradient directly over the red chassis, so no inset plate exists. The panelBlueGray reference colour still matches at deltaE 10.92, but only against the neutral rgb(48,48,48) of the knob bodies, not against a plate."
     }
-  ]
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage3",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.54,
+          "keybedFraction": 0.46,
+          "widthFraction": 0.9861,
+          "aspectRatio": 3.0952,
+          "sectionFractionMaxDeviation": 0.066
+        },
+        "evidence": [
+          "Measured in the served build/ at 1440x900 (bundle assets/index-Cmx3s9n6.js confirmed loaded): .instrument getBoundingClientRect = {x:10, y:220.61, w:1420, h:458.78}. widthFraction 1420/1440 = 0.9861 (above the 0.97 ceiling because .app drops to 10px padding at max-width:1440px); aspectRatio 1420/458.78 = 3.0952 against the 3.0951 target.",
+          "Vertical split: .control-deck-container h=245.578 and .keyboard-container-wrapper h=209.188 over the 454.78px content box = 0.5400 / 0.4600 exactly, matching the CSS 54%/46% allocation. Note the *visible* deck plate (.control-deck) is only 132.6px tall and the visible keybed (.keyboard-container) only 96.2px, so ~46% of the chassis is empty red filler; that shows up in the inventory/reachability numbers rather than here.",
+          "Six section widths measured on .control-deck > .section, normalised to their 1407.98px sum: performance 0.1321 (spec 0.14), organ 0.2077 (0.20), piano 0.1510 (0.085), program 0.0943 (0.125), synth 0.2078 (0.25), effects 0.2070 (0.20). Worst deviation = 0.0660 at piano, 5.5x the 0.012 tolerance.",
+          "Cause is in artifact/src/model/hardware.ts SECTION_CONFIG, which hard-codes {performance .13, organ .21, piano .15, program .09, synth .21, effects .21} — exactly the superseded coarse fractions that specs/nord-stage-4.visual.json horizontalSectionsNote records as corrected on 2026-07-04 (piano 0.15, program 0.09, synth 0.21)."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 21,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 41,
+          "controlsTotal": 75,
+          "forbiddenPresent": 3
+        },
+        "evidence": [
+          "Landmark census against visual.json sectionLandmarks, taken from the rendered DOM text/aria inventory of the served build. Present 21/33. Missing: rotary speaker controls and Nord Stage 4 branding (performance); level LED ladders (organ); model selector (piano); primary program OLED and three morph assign buttons (program); single synth OLED, synth layer level controls, arpeggiator controls (synth); amp simulator and EQ, compressor, reverb (effects). The variant photograph nord-stage-4-73.jpg confirms the Rotary Speaker block and the Nord wordmark on the exposed red chassis; neither is rendered.",
+          "The two 'OLED' landmarks are rendered as 28x28 <button> elements labelled 'PROGRAM OLED' and 'SYNTH OLED' with no display surface and no live text — counted absent. No element in the page renders a program name, number, or any live value.",
+          "Reachability by the rubric's method: 5x5 elementFromPoint grid over each of the 75 .control interactive elements at 1440x900, page unscrolled. 41/75 resolve to themselves or a descendant. Per section: performance 3/3, organ 6/12, piano 8/14, program 4/16, synth 10/18, effects 10/12. Unreachable examples: Drawbars 6-9, Percussion, Vibrato/Chorus, KB Touch, Timbre, Programs 3-8, Page Up/Down, Live Mode, Layer Scene, Store, Split, all four envelope knobs, LFO Rate/Amount, Voice Mode, All Bypass.",
+          "Cause: .control-deck is height:54% of a .control-deck-container that is itself 54% of the chassis, giving each .section a 116px client height against scrollHeight 222-371px, with .section{overflow-y:auto}. Playwright's click() succeeds on all 75 because it scrolls those panes; the unscrolled hit-test is what a player actually gets, and the hardware has no scrollbars.",
+          "Forbidden elements present = 3, all one root cause counted once per section that forbids it: computed gridTemplateColumns is '52.69px 52.70px 52.70px 52.70px 52.70px' in organ, synth and effects — a generic equal-width control grid (organ forbidden), a uniform repeated knob matrix (synth forbidden), a single undifferentiated control grid (effects forbidden). No forbidden OLED or duplicate display exists, because no display exists at all."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 35,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.6098
+        },
+        "evidence": [
+          "73 .key nodes rendered, 43 .white-key and 30 .black-key, MIDI 28-100 (E1-E7) — exactly the Stage 4 73 variant split.",
+          "Key boxes measured against the keybed (.keyboard-container, x=12..1428, y=468.19..564.41): only 35 of 73 lie inside it. The 43 white keys are min-width:40px inside a flex row 1720px wide in a 1416px container, so they run from x=-140 to x=1580 and 8 are clipped away by .instrument{overflow:hidden}. Identical count if the whole .instrument box is used as the bound.",
+          "All 30 black keys are degenerate: every one reports the same rect {x:-656, y:474.19, w:1032, h:52.58}. .black-key is position:absolute with width:60% and margin-left:-30% but no containing block or left offset, so all 30 resolve against the 1720px .keyboard and stack into one 1032px slab — visible in the screenshot as a single black bar over the left half of the keybed. None of them is inside the keybed and none is individually clickable.",
+          "blackKeyHeightFraction = 52.578/86.219 = 0.6098 against the 0.61 target (CSS .black-key{height:61%}), the one keybed number that is correct."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "Screenshot of the instrument crop (1420x458) from the served build, colours quantised to 6 bits/channel, surfaces covering >=0.25% of the crop kept (27 surfaces), CIE76 deltaE in Lab against visual.json referenceColors.",
+          "chassisMid #851a25 -> rgb(120,32,40) dE 8.11; chassisDark #5a0c13 -> rgb(104,28,36) dE 6.87; panelBlueGray #3c424d -> rgb(48,48,48) dE 10.92; keyBlack #0b0b0b -> rgb(12,12,12) dE 0.30; keyWhite #dcdcdc -> rgb(220,220,220) dE 0.00. All five within 12, so 5/5.",
+          "Caveat worth recording: panelBlueGray only matches because knob bodies happen to sit at neutral rgb(48,48,48) at 1.54% coverage. There is no dark inset plate anywhere — organ, piano, synth and effects all sit directly on the red chassis instead of the 'dark inset plate with red perimeter' the spec requires — so the colour hit is incidental rather than a correct surface."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 1,
+        "evidence": [
+          "Every control is one of five generic primitives from artifact/src/styles/panel.css: a 32px radial-gradient circle with a 2px indicator (knob, also used for the pitch stick and mod wheel), a 28x28 rounded rect (button), a native <input type=range> with appearance:slider-vertical (fader and drawbar), and a 32px circle containing overflowing text (encoder, which renders 'Program Dial' spilling out of a 32px disc — visible in the desktop screenshot).",
+          "There are no LED ladders, no LED rings, no OLED treatment and no silkscreen: the only display-like elements are two 28x28 buttons labelled 'PROGRAM OLED' and 'SYNTH OLED'. The active state is a flat red gradient (#d32f2f->#b71c1c) with no lamp or bezel.",
+          "Legends are 7px uppercase #bbb on the red chassis, with word-break:break-word; in the rendered build at 1440x900 the second line of two-line labels is cut off by the 116px section viewport ('LAYER A OCTAVE', 'DRAWBAR 6-9' and the whole lower half of every section are clipped mid-glyph).",
+          "No material differentiation: organ, piano, synth and effects all sit directly on the red chassis (.section background is rgba(0,0,0,0.1)->transparent) instead of the 'dark inset plate with red perimeter' the spec requires for four of the six sections."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 1,
+        "evidence": [
+          "Control positions do track their own parameter: driving 'Piano Type' moved aria-pressed false->true and applied the .active red fill; dragging 'Drawbar 1' moved aria-valuenow 0.5->1 and the .drawbar-bar height; knob rotation is computed as value*270-135 in control-panel.tsx and faders are controlled inputs.",
+          "But the panel never shows what the instrument is doing, because the parameters are not connected to anything: the same three interactions produced a 0.000 dB spectral change in the rendered signal. Position tracking is self-referential.",
+          "No display reads a live value anywhere: document.body.innerText contains no program name/number, no model name, no octave value, no dB reading — only static uppercase control labels. The two 'OLED' landmarks are empty buttons.",
+          "No LED follows an active layer or section: there are no LED elements, and the only state indication is the button's own red fill. 34 of 75 controls cannot be reached to be driven at all at 1440x900."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 0,
+        "evidence": [
+          "Measured at 390x844 on the served build: .instrument is 386x124.7 px — a horizontal sliver occupying 15% of the viewport height, floating in the middle of an otherwise empty page (screenshot scratch/probe-p3-narrow.png).",
+          "The deck collapses to 35.2px total. Each .section reports clientHeight 18px against scrollHeight 160-953px, so roughly 98% of the organ and synth sections is clipped away; not a single knob, button, fader or drawbar is visible, only the truncated section headings ('PERFORM', 'PROGR', 'LAYER').",
+          "The keybed collapses to 25.5px tall and 9 of 73 keys fall inside it; no black key is visible at all. The instrument is neither recognisable as a Nord Stage 4 nor playable.",
+          "The artifact's own evidence/stage3-visual-audit.md claims '390x844 (mobile/narrow): Interface remains inspectable without clipping', which the measurement contradicts."
+        ]
+      }
+    ]
+  }
 }

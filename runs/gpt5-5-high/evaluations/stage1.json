@@ -1,195 +1,163 @@
 {
-  "rubricVersion": "1.0.0",
+  "rubricVersion": "2.0.0",
   "runId": "gpt5-5-high",
   "stage": 1,
   "stageName": "Complete surface and basic piano",
   "status": "complete",
-  "evaluator": "independent-agent (opus-4.8)",
-  "evaluatedAt": "2026-07-04T00:00:00.000Z",
-  "summary": "A compact, honest, and well-structured Phase 1 submission. The desktop capture is a faithful recreation of the Stage 4 73: one continuous red chassis at the correct 3.0951 aspect ratio, a 73-key E1-E7 keybed (43 white / 30 black, verified in hardware.ts and asserted in tests), all six sections in the documented order at the documented widths (13/21/15/9/21/21), nine organ drawbars with green LED ladders, blue-green OLEDs limited to Program and Synth, a wood-toned pitch stick, and white legends on dark inset panels. The basic piano is a genuine live-synthesized triangle-wave voice with velocity scaling, per-voice release envelopes, sustain hold/release, bounded 18-voice polyphony, and deterministic released-first/oldest voice stealing, all fed through one note lifecycle shared by pointer (with per-pointerId tracking), computer keyboard (repeat-suppressed, spacebar sustain), and Web MIDI (note/velocity plus CC64), with blur/disconnect/unmount all-notes-off cleanup. Honesty is exemplary: IMPLEMENTATION_DETAILS.json declares the voice as generated Web Audio synthesis with no sample claims, the Synth OLED literally reads 'Decorative / No synth audio', the status strip states 'Panel controls decorative in Phase 1', and no control fakes state. Weaknesses are modest: the surface reproduces grouping and density but not the reference's fine legend text and control-shape detail; decorative knobs/faders only step forward on activation rather than dragging; the entire test suite lives in a single file with real but shallow coverage (the audio engine is asserted via a fake node so signal is not measured, and multitouch-independence and the MIDI note-on path are exercised only in-app, not unit-tested); and hardware.ts line 179 has a dead no-op ternary. At 390x844 the whole instrument is retained without clipping but is very dense and its legends are barely legible.",
-  "score": 78.3,
-  "rawScore": 78.3,
+  "evaluator": "blind-evaluator-phase1",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-16T00:00:00.000Z",
+  "summary": "An honest, convincing Phase 1 surface let down on the two things a player tests first. The panel reads unmistakably as a Nord Stage 4 (73 keys E1-E7, 43/30, six sections, nine drawbars with LED ladders, Program and Synth the only OLEDs), all four input paths reach one shared note lifecycle (pointer with strike-position velocity, independent two-finger touch, computer keyboard with repeat suppression, Web MIDI note/velocity/CC64 plus denied/absent/disconnect states), and the honesty contract holds under measurement: driving Master Level from 72 to 0 left the sounding note at RMS 0.0993, unchanged, and the declared generated triangle synthesis is exactly what the build does. But the voice never decays (RMS 0.0584 constant from 1.0 s to 9.6 s) and twenty voices clip the destination at peak sample 1.34, and every black key is drawn one white key too far left, so the key at the C4/D4 boundary is D#4. Four Program controls (Split, three Morph assigns) sit below their overflow:hidden section and are invisible and unhittable; 44 of 101 legends truncate to ellipsis. All four gates reproduce on a clean install and the rebuilt bundle hashes match build/ exactly.",
+  "score": 70.5,
+  "rawScore": 70.5,
   "categories": [
     {
-      "id": "visualFidelity",
-      "label": "Complete visual fidelity",
-      "weight": 45,
-      "score": 75,
-      "contribution": 33.8,
+      "id": "sound",
+      "label": "Sound",
+      "weight": 25,
+      "score": 70,
+      "contribution": 17.5,
       "criteria": [
         {
-          "id": "silhouetteGeometry",
-          "label": "Silhouette, chassis, and geometry",
-          "weight": 30,
-          "rating": 3,
-          "score": 75,
+          "id": "pianoVoice",
+          "label": "Piano voice",
+          "weight": 60,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "instrument-shell uses aspect-ratio 3.0951 matching the variant's 9013x2912 instrument bounds; desktop capture shows one continuous red chassis with rounded end cheeks and top/bottom rails.",
-            "keyboard built from E1 (midi 28) to E7 (midi 100) = 73 keys, 43 white / 30 black, verified in hardware.ts and asserted in App.test.tsx.",
-            "Deck/keybed split rendered as 6% top rail + 48% deck (=54%) over 41% keybed + 5% bottom rail (=46%) per visual-audit.md.",
-            "Section order and fractions [performance 0.13, organ 0.21, piano 0.15, program 0.09, synth 0.21, effects 0.21] match the spec and render at those widths in the capture."
+            "Voice is audible, pitched correctly and dependable across the keybed. Tapping the destination of the page's own AudioContext with an AnalyserNode (scratch/probe-p1-audio.mjs): silence RMS 0.0000, held C4 RMS 0.0993; dominant bin for C3 140.6 Hz and C5 515.6 Hz at 23.4 Hz bin resolution, i.e. 130.8 Hz and 523.3 Hz within one bin.",
+            "Attack and release behave: after note-off the tail falls from RMS 0.0586 to 0.0000 within ~700 ms, and release length tracks velocity (pianoEngine.ts finishVoice, 0.24 + velocity*0.12 s).",
+            "Decay does NOT behave. A single held note measured at 0.30-0.60 s = RMS 0.0692, 1.0-1.3 s = 0.0584, 2.0-2.3 s = 0.0584, 4.0-4.3 s = 0.0584, 9.3-9.6 s = 0.0584 (scratch/probe-p1-envelope.json). The envelope ramps to 58% of peak at 0.42 s and then holds level indefinitely — an organ-like sustain, not a piano decay.",
+            "Timbre is one bare triangle OscillatorNode per note straight into ctx.destination (artifact/src/pianoEngine.ts:119-131) — no harmonic layering, no filter, no stereo, no per-register variation from E1 to E7.",
+            "No gain staging: 20 voices at velocity 127 produced peak absolute sample 1.3407 at the destination (>1.0, i.e. hard clipping) with destination RMS 0.6026. Every voice connects directly to ctx.destination with no master bus or limiter."
           ]
         },
         {
-          "id": "hardwareInventory",
-          "label": "Complete hardware inventory and placement",
-          "weight": 35,
-          "rating": 3,
-          "score": 75,
+          "id": "sourceHonesty",
+          "label": "Declared source honesty",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
           "evidence": [
-            "All six sections present with distinct landmarks: Organ has nine drawbars + LED ladders + model buttons, Piano has type buttons + model encoder + layer faders, Program has dial/eight program buttons/scene/store/split/morph, Synth has source/osc/filter/env/LFO/arp controls, Effects has focus + mod/delay/amp-EQ/comp/reverb/rotary.",
-            "OLEDs correctly limited to Program and Synth; App.test.tsx asserts Program and Synth OLEDs exist and Organ OLED does not.",
-            "decorativeControls inventory has stable dotted IDs (e.g. piano.grand, synth.filter-cutoff) with section-scoped naming; each renders with data-control-id.",
-            "Density and grouping approximate the photo but omit finer landmarks and exact legends of the real panel (e.g. Rotary Speaker cluster, Morph Assign row detail), a limited-gap deviation acknowledged in visual-audit.md."
-          ]
-        },
-        {
-          "id": "materialsTypography",
-          "label": "Materials, color, typography, and displays",
-          "weight": 20,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Red metal gradient chassis, dark inset section panels, black indexed knobs, fader/drawbar caps, green LED ladders, and blue-green OLED displays are all visible in stage1-desktop.png.",
-            "Wood-toned pitch stick and 'nord stage 4 / hammer action 73' brand block rendered in the Performance area, matching the reference red-on-red branding.",
-            "White legends label controls; OLEDs use the characteristic teal-on-dark text ('A:11 / Nord Stage 4' and 'OSC SAMPLE / Decorative').",
-            "Fidelity is strong at a distance but printed legend text is generic/truncated versus the dense original silkscreen, a materials-and-typography gap rather than a structural error."
-          ]
-        },
-        {
-          "id": "responsiveRetention",
-          "label": "Narrow retention",
-          "weight": 15,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Narrow sizing uses 96vw at 390x844 (~374px wide) per visual-audit.md; stage1-narrow.png shows the complete chassis, all six sections, and full keybed with no clipping or lost controls.",
-            "stage1-capture.json records zero console messages and zero page errors at both 1440x900 and 390x844.",
-            "Whole instrument fits in the first narrow viewport (no vertical scroll needed to see it), keeping it inspectable.",
-            "At narrow width the panels are extremely dense and legends are barely legible, limiting practical inspection of individual control state."
+            "IMPLEMENTATION_DETAILS.json declares 'live Web Audio synthesis only ... generated triangle-wave piano-like voice', generatedSources 1, sampleSources 0. Exercising the build confirms it: instrumenting AudioContext showed exactly one createOscillator + one createGain per note (40 oscillators for 40 notes played), oscillator.type 'triangle', and zero network requests for audio assets — build/ contains only index.html, one CSS and one JS file, no audio media at all.",
+            "The running page states the same thing to the user: the status strip reads 'Audio: generated synthesis' and 'Panel controls decorative in Phase 1'.",
+            "The declared fallback is real, not decorative text: with window.AudioContext removed the page reports 'Playable fallback: audio output unavailable in this browser' / 'Audio: fallback', keys still depress (aria-pressed true) and no error is thrown (scratch/probe-p1-labels.json noAudioContext).",
+            "Minor overclaim: before any user gesture the AudioContext is 'suspended' yet the status already reads 'Generated piano ready'. The first note does resume it and does sound, so nothing is faked, but 'ready' precedes the ability to make sound."
           ]
         }
       ]
     },
     {
-      "id": "basicPiano",
-      "label": "Basic Piano functionality",
-      "weight": 25,
-      "score": 81.3,
-      "contribution": 20.3,
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 55,
+      "score": 75,
+      "contribution": 41.3,
       "criteria": [
         {
-          "id": "unifiedInputs",
-          "label": "Unified playable inputs",
-          "weight": 35,
+          "id": "inputCoverage",
+          "label": "Input coverage",
+          "weight": 40,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Pointer down/up/cancel/lostPointerCapture all route through startKey/endKey; registerPointer tracks per-pointerId keys so independent touches release only their own note.",
-            "Computer keys map a central range (a,w,s,e... -> C3..E5) with event.repeat suppression and heldComputerKeys guard; spacebar is sustain; onKeyDown ignores modifier/Tab combos.",
-            "Web MIDI parses 0x90/0x80 note on/off with value 0 handling and CC64 sustain; requestMIDIAccess absence, denial (.catch), and onstatechange disconnect each set truthful midiStatus and trigger cleanupAll.",
-            "App.test.tsx exercises the pointer and keyboard paths, but multitouch independence and the live MIDI note-on path are covered only in-app, not by unit tests."
+            "Pointer: real mouse down/up on key-C4 produced RMS 0.0993 and aria-pressed true/false; velocity is taken from the y position within the key — pressing at 2% of key height gave RMS 0.0549 and at 98% gave 0.1215 (2.2x).",
+            "Touch: CDP Input.dispatchTouchEvent with two independent touch points held key-C3 and key-G3 simultaneously (both aria-pressed true, RMS 0.1149); lifting finger 1 released only key-C3 and left key-G3 sounding — genuine independent multi-touch.",
+            "Computer keyboard: page.keyboard.down('a') pressed key-C3 (aria-pressed true, RMS 0.0935); holding the key created exactly 1 oscillator, so auto-repeat is suppressed; keyup released it. A focused key also responds to Enter (RMS 0.0865).",
+            "Web MIDI: with a fake MIDIAccess injected the strip read '1 MIDI input connected'; 0x90/60/100 pressed key-C4 and sounded (RMS 0.0848), 0x80 released it to silence, CC64 127 held the note after note-off (RMS 0.0581) and CC64 0 released it. Denied ('MIDI permission denied or unavailable'), absent ('Web MIDI unavailable in this browser') and disconnect ('MIDI ready - no inputs connected', all voices stopped) are all reported truthfully.",
+            "Simplification a player notices: the computer-key map covers only 17 white keys C3-E5 and no black keys at all — hardware.ts maps a,w,s,e,d,f,t,g,y,h,u,j,k,o,l,p,; onto C3,D3,E3,...,D5,E5, so the upper 'black key' row of the QWERTY layout plays white notes and 56 of the 73 keys are unreachable from the computer keyboard."
           ]
         },
         {
           "id": "voiceLifecycle",
-          "label": "Voice lifecycle and performance",
-          "weight": 40,
+          "label": "Voice lifecycle",
+          "weight": 35,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "pianoEngine.ts scales gain by velocity**1.65, applies attack + decay ramps on note-on and an exponential release (0.24 + velocity*0.12) on note-off, with sustain deferring release into a sustained set until CC/off.",
-            "Bounded polyphony (maxVoices 18) with stealIfNeeded sorting released-first then oldest startedAt; engine test with maxVoices 2 asserts a third note increments stolenVoices to 1.",
-            "allNotesOff and dispose finish every voice and clear sustained; window blur, MIDI disconnect, and effect-cleanup on unmount all call cleanupAll; engine test advances timers and confirms activeVoices returns to 0.",
-            "Panel controls remain decorative during play; changeControl only mutates presentation state and never touches the engine."
+            "Velocity reaches the signal: MIDI velocity 10 gave destination RMS 0.0244 and velocity 127 gave 0.1203 (4.9x) on the same note; pointer velocity from strike position gave 0.0549 vs 0.1215.",
+            "Sustain is real and symmetric across inputs: with space held, releasing the key left RMS 0.0616 ringing versus 0.0002 for the identical note without sustain; releasing space dropped it to 0.0000. MIDI CC64 behaves the same (0.0581 held, 0.0000 after CC64 0).",
+            "Polyphony and deterministic stealing: 24 MIDI notes fired one per animation frame left exactly 18 live oscillators (maxVoices 18), 24 created, oldest-and-already-released voices stolen first (pianoEngine.ts stealIfNeeded sorts released-first then by startedAt).",
+            "Cleanup: dispatching window blur while 18 voices were sounding took the destination to RMS 0.0000 and cleared every aria-pressed key; a MIDI statechange with the input removed did the same (RMS 0.0893 -> 0.0000, 0 pressed keys). Unmount cleanup exists in App.tsx:265-269 but could not be triggered from outside the built page.",
+            "Held-note behaviour is the weak point: the voice holds at constant level indefinitely (RMS 0.0584 unchanged from 1.0 s to 9.6 s), and 20 simultaneous voices at full velocity clip the destination at peak sample 1.3407 — the lifecycle has no headroom management."
           ]
         },
         {
-          "id": "honestBasicSource",
-          "label": "Basic source and status honesty",
+          "id": "controlBoundary",
+          "label": "Control feel & decorative boundary",
           "weight": 25,
-          "rating": 4,
-          "score": 100,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
           "evidence": [
-            "IMPLEMENTATION_DETAILS.json declares a single generated triangle-wave OscillatorNode voice through a per-voice GainNode envelope, sampleSources empty, license 'Candidate-authored code; no external audio assets' - matching pianoEngine.ts exactly.",
-            "PianoStatus supports loading/ready/fallback/error; ensureContext reports 'Generated piano ready' on success and a labeled 'Playable fallback' when no AudioContext or start fails, asserted by the fallback unit test.",
-            "Status strip prints 'Audio: generated synthesis' when ready and never claims a recorded or Nord piano source.",
-            "One dependable audible voice with velocity and detune; no false readiness claim - the honesty contract is fully satisfied."
+            "Controls genuinely move and report state: synth.filter-cutoff went aria-valuenow 58 -> 90 under four ArrowUp presses and its face carries a real rotation transform (matrix(-0.309017, 0.951057, ...) = 108deg); piano.layer-a-level's fader cap moved from y 280.91 to 286.36 with aria-valuenow 42 / aria-valuetext '42 percent'; organ.percussion toggled aria-pressed true with class 'control control-button is-active' (red LED face).",
+            "Nothing fakes success. Driving performance.master-level from 72 to 84 and then down to 0 left the sounding note completely unchanged: RMS 0.0993 before and 0.0993 at master 0, and no panel control produced any audio at all (knob-only interaction window measured RMS 0.0000).",
+            "Inertness is stated, not hidden: every control's accessible name ends '... decorative control', the status strip reads 'Panel controls decorative in Phase 1', and a screen-reader-only description says 'Panel controls update presentation state only.'",
+            "Focus is visible and keyboard-operable: :focus-visible resolves to a 2px rgb(255,224,107) outline, and Enter/Space/Arrow/Home/End all drive value changes (App.tsx:53-75).",
+            "Two deductions. (a) Four Program controls (program.split, program.morph-wheel, program.morph-pedal, program.morph-aftertouch) are laid out below their section's overflow:hidden box (control top 446.7-472.2 vs section bottom 448.5) so they neither move nor press for a pointer — the 5x5 elementFromPoint grid finds no hit on any of them at 1440x900, while they still take keyboard focus. (b) Knobs, faders and drawbars are native <button> elements carrying aria-valuenow/valuemin/valuemax, which role=button does not support, so assistive tech will not announce the values these controls report visually."
           ]
         }
       ]
     },
     {
-      "id": "interaction",
-      "label": "Surface interaction and honesty",
-      "weight": 15,
-      "score": 86.3,
-      "contribution": 12.9,
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 20,
+      "score": 58.8,
+      "contribution": 11.8,
       "criteria": [
         {
-          "id": "physicalInteraction",
-          "label": "Control movement and feedback",
-          "weight": 55,
-          "rating": 3,
-          "score": 75,
+          "id": "panelControlCoverage",
+          "label": "Required Phase 1 controls present",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "Every decorative control renders as a <button> with pointerDown activation and full keyboard handling (Enter/Space toggle, Arrow keys nudge +/-0.08, Home/End to 0/1) in ControlView.",
-            "Controls expose --value CSS var and is-active class so buttons light, knobs/encoders turn, and faders/drawbars slide their cap; keys depress via aria-pressed and is-active.",
-            "App.test.tsx moves the Program Dial from aria-valuenow 42 to 50 with ArrowRight and toggles Live Mode aria-pressed true via pointerDown.",
-            "Knobs and faders step forward on activation rather than supporting pointer-drag, so movement is coarse though present and accessible."
+            "The surface is substantially complete: 101 controls with stable data-control-id values across the six documented sections, nine physical drawbars with 8-step LED ladders, both layer faders per section, pitch stick and mod wheel, and exactly two primary OLEDs, in Program and Synth ('Program / Morph primary OLED', 'Synth primary OLED', no others in the DOM).",
+            "Required section landmarks are otherwise met: organ model switches + percussion + vibrato, six piano type selectors + model encoder + KB Touch/Timbre/Soft Release/String Res, program dial + eight program buttons + page nav + Live/Scene/Store, synth oscillator/filter/ADSR/LFO/arp, and effects mod 1, mod 2, delay, amp drive, 3-band EQ, compressor, reverb and layer focus.",
+            "Missing landmark: the Performance band has no Rotary Speaker block. Its only controls are master-level, pitch-stick, mod-wheel, organ-level, octave-down, octave-up, transpose; the two controls matching /rotary/ in the whole page are organ.rotary-speed and effects.rotary, so the block the visual spec and the variant photograph place on the exposed red chassis below Master Level is absent.",
+            "Four Program landmarks are rendered but clipped out of sight: program.split and the three morph assign buttons sit at y 446.7-493.4 while their section's overflow:hidden box ends at y 448.5, so at 1440x900 nothing of them is visible or hit-testable (5x5 elementFromPoint grid: 97/101 controls reachable, the four misses are exactly these). organ.sustain-pedal is half clipped at the same boundary. At 390x844 this worsens to 83/101 reachable, with the entire lower Program block plus synth.arp-run and synth.mono cut off.",
+            "Identifiability is weak: 44 of 101 silkscreen legends are ellipsis-truncated at the rendered 4.9px font ('Organ drawbar 1', 'Piano Layer A Level', 'Program Button 3' etc. all render as 'ORGAN...', 'PIANO LAYER A ...'), so on the panel itself many controls can only be told apart by their accessible name. Every section is also laid out as one uniform equal-cell grid (.control-grid, grid-template-columns repeat(N, 1fr)), which the visual spec lists as forbidden for organ ('generic equal-width control grid'), synth ('uniform repeated knob matrix') and effects ('single undifferentiated control grid')."
           ]
         },
         {
-          "id": "decorativeBoundary",
-          "label": "Decorative-control boundary",
-          "weight": 45,
-          "rating": 4,
-          "score": 100,
-          "evidence": [
-            "changeControl only updates controlState; no decorative control calls the piano engine or any audio/program/effect state.",
-            "Synth OLED text reads 'Decorative / No synth audio' and the Program OLED shows a static 'Phase 1 Piano' label rather than reporting unimplemented behavior as working.",
-            "Status strip permanently states 'Panel controls decorative in Phase 1' and an sr-only Decorative contract note says only the keybed and sustain input are functional.",
-            "Only keybed note input and sustain (keyboard spacebar / MIDI CC64) produce audio; the boundary is honored in both code and evidence."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "engineeringQuality",
-      "label": "Engineering quality",
-      "weight": 15,
-      "score": 75,
-      "contribution": 11.3,
-      "criteria": [
-        {
-          "id": "structureTests",
-          "label": "Data structure and tests",
-          "weight": 55,
+          "id": "pianoFeatureCoverage",
+          "label": "Required piano feature IDs",
+          "weight": 35,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Clean separation: hardware.ts (typed sections/controls/keys with stable IDs), pianoEngine.ts (injectable AudioContext, note lifecycle), App.tsx (React input wiring) - input and audio concerns are decoupled.",
-            "Tests are real behavioral assertions: keybed geometry, full control inventory presence by accessible name, decorative movement, pointer/keyboard lifecycle, and engine polyphony/stealing/sustain/cleanup with fake timers.",
-            "The audio engine test uses a FakeAudioContext/FakeNode, so it proves voice/state logic but not measured signal; acceptable for a Phase 1 basic voice but shallow.",
-            "All coverage lives in a single App.test.tsx even though feature-matrix.json maps all 11 IDs to it, and hardware.ts line 179 has a dead 'black ? whiteIndex : whiteIndex' no-op ternary."
+            "piano.basic-note-lifecycle, piano.basic-inputs and piano.basic-sustain-polyphony are all exercised live in the published build, not just claimed: note on/off through pointer, two-finger touch, computer keyboard, Enter on a focused key and MIDI; velocity 10 vs 127 -> RMS 0.0244 vs 0.1203; sustain via space and CC64 -> 0.0616 vs 0.0002 without; 24 notes -> 18 live voices with oldest-first stealing; blur and MIDI disconnect -> RMS 0.0000 and every key released.",
+            "piano.basic-status-cleanup is real: 'Generated piano ready' / 'Playable fallback: audio output unavailable in this browser' / 'Audio: fallback' with AudioContext removed, plus four distinct MIDI states (connected / no inputs / denied / unavailable) all observed by driving the build.",
+            "Gaps a knowledgeable player notices: the declared 'loading' state is never actually observable (the engine flips to 'ready' at mount even though the context is still suspended), and the voice has no decay stage at all (constant RMS 0.0584 from 1.0 s to 9.6 s), so the piano-shaped part of the lifecycle is missing.",
+            "Test backing is thin for the IDs claimed. tests/feature-matrix.json maps all 11 required IDs to the single file src/App.test.tsx (8 tests), whose audio assertions run entirely against a hand-written FakeAudioContext with no signal at all — contrary to the task's audio test rules ('a state-only test with fakes is not enough'; prove output differs from silence, velocity moves output in the expected direction). There is no test for MIDI input, multi-touch, or velocity response anywhere in the artifact."
           ]
         },
         {
-          "id": "runtime",
-          "label": "Runtime quality",
-          "weight": 45,
-          "rating": 3,
-          "score": 75,
+          "id": "declaredGapAccuracy",
+          "label": "Declared gaps are accurate",
+          "weight": 25,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "stage1-capture.json reports empty consoleMessages and pageErrors arrays at both desktop and narrow viewports.",
-            "Cleanup is thorough: voice timers cleared, nodes disconnected, engine disposed on unmount, and cleanupAll on blur/MIDI statechange prevents stuck notes.",
-            "package.json exposes non-interactive test/typecheck/lint/build (build runs tsc --noEmit && vite build) with a committed pnpm-lock.yaml and declared packageManager pnpm@11.7.0.",
-            "AudioContext resume is invoked on note-on to satisfy autoplay gating, and status transitions cover ready/fallback for degraded environments."
+            "What is declared decorative really is decorative, verified by measurement rather than by reading: with performance.master-level driven from 72 to 0 the sounding note's level was unchanged (RMS 0.0993 -> 0.0993), and a knob-only interaction window measured RMS 0.0000. IMPLEMENTATION_DETAILS.json's audio strategy (generated triangle synthesis, 0 sample sources) matches the instrumented build exactly.",
+            "The declared exceptions are also true: keyboard sustain and MIDI CC64 do reach the engine, and the labelled fallback and MIDI denied/disconnected states are all reachable and honest.",
+            "Undeclared gaps, though. Neither IMPLEMENTATION_DETAILS.json nor evidence/stage1-visual-audit.md mentions that program.split and the three morph assign buttons are clipped outside their section and cannot be operated, nor that the Performance band's Rotary Speaker block is absent, nor that all 30 black keys are drawn one white key to the left of their true position.",
+            "The visual audit makes claims the build contradicts. It states 'Narrow sizing target is 96vw at 390 x 844 ... with no intended clipping and the entire instrument kept inspectable', but at 390x844 the 5x5 hit-test finds 18 of 101 controls unreachable (all of the lower Program block, synth.arp-run, synth.mono) with control legends rendered at 3.4px. It also asserts 'Program includes ... Split, and three Morph assignment buttons' as an inventory check, which is true of the DOM but not of anything a user can see or press.",
+            "It also claims 'Section widths are rendered from the documented fractions: Performance 13%, Organ 21%, Piano 15%, Program/Morph 9%, Synth 21%, Layer Effects 21%', while specs/nord-stage-4.visual.json documents 0.14 / 0.20 / 0.085 / 0.125 / 0.25 / 0.20. Measured section widths as a fraction of the chassis are 0.109 / 0.176 / 0.126 / 0.076 / 0.176 / 0.176. Note in fairness that the spec file records that these fractions were corrected on 2026-07-04 (the same day this phase was sealed) and that the artifact's piano/program/synth values match the superseded ones exactly, so the deviation is plausibly a spec-timing artefact rather than a false claim."
           ]
         }
       ]
     }
   ],
+  "runAxis": null,
   "technicalGate": {
     "passed": true,
     "scoreCap": null,
@@ -198,28 +166,28 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "durationMs": 5409,
+        "durationMs": 4835,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "durationMs": 1588,
+        "durationMs": 1022,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "durationMs": 753,
+        "durationMs": 832,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "durationMs": 1395,
+        "durationMs": 1307,
         "detail": "Passed"
       },
       {
@@ -232,16 +200,56 @@
   },
   "issues": [
     {
-      "severity": "minor",
-      "description": "hardware.ts line 179 contains a dead no-op ternary (black ? whiteIndex : whiteIndex) that always returns whiteIndex regardless of the condition; harmless but a code smell."
+      "severity": "critical",
+      "title": "Every black key is drawn one white key too far left, so the key you see is not the note you hear",
+      "detail": "hardware.ts gives each black key the whiteIndex of the white key BEFORE it and styles.css positions it at that index (--black-left: whiteIndex/43, .piano-key.black left: calc(var(--black-left) - 100%/43*0.32)). Measured at 1440x900: all 30 black keys sit one white key left of their true slot, and 12 of them straddle an E-F or B-C boundary where a real keyboard has no black key at all (e.g. key-Gs1 sits between E1 and F1, key-Cs4 between B3 and C4). document.elementFromPoint at the C4/D4 boundary — where a player reads C#4 — returns key-Ds4, 'D#4 piano key', midi 63. Pitch order and count are correct, so it is purely a placement fault, but it breaks the see/hear correspondence across the whole keybed and is instantly visible to anyone who knows a keyboard."
+    },
+    {
+      "severity": "major",
+      "title": "Program section clips four required controls outside an overflow:hidden box",
+      "criterion": "panelControlCoverage",
+      "detail": "The Program plate ends at y 448.5 while program.split (446.7-467.9), program.morph-wheel, program.morph-pedal (446.7-467.9) and program.morph-aftertouch (472.2-493.4) are laid out below it; .section has overflow:hidden, so none of them is visible and the 5x5 elementFromPoint grid finds no reachable point on any of the four (97/101 controls reachable at 1440x900). organ.sustain-pedal is half clipped at the same boundary. They remain in the tab order, so keyboard focus can land on a control the user cannot see. Cause is fixed-percentage grid rows (.grid-program grid-auto-rows 13% for 7 rows inside a 92%-tall grid) rather than a layout that fits its content."
+    },
+    {
+      "severity": "major",
+      "title": "The piano voice never decays",
+      "criterion": "pianoVoice",
+      "detail": "pianoEngine.noteOn ramps gain to peak at +12 ms, down to 58% of peak at +420 ms, and then schedules nothing further, so a held note holds forever. Measured at the AudioContext destination: RMS 0.0692 at 0.3-0.6 s, 0.0584 at 1.0-1.3 s, and still 0.0584 at 9.3-9.6 s. Release works (tail to 0.0000 in ~700 ms after note-off), but sustained tone with no decay reads as an organ, not a piano, and is the single largest gap between this voice and 'one dependable, musical basic piano voice'."
+    },
+    {
+      "severity": "major",
+      "title": "No gain staging: polyphony clips the output",
+      "criterion": "voiceLifecycle",
+      "detail": "Each voice connects its own GainNode straight to ctx.destination (pianoEngine.ts:131); there is no master bus, no headroom scaling with voice count and no limiter. Twenty voices at MIDI velocity 127 measured peak absolute sample 1.3407 at the destination (RMS 0.6026), i.e. sustained hard clipping whenever a full chord is played loudly."
     },
     {
       "severity": "minor",
-      "description": "All tests reside in a single App.test.tsx; the audio engine is asserted through a fake node (state logic only, no measured signal), and multitouch independence plus the live MIDI note-on path are exercised only in-app rather than in dedicated unit tests."
+      "title": "Rotary Speaker block missing from the Performance band",
+      "criterion": "panelControlCoverage",
+      "detail": "specs/nord-stage-4.visual.json lists 'rotary speaker controls' as a required Performance landmark and locates it on the exposed red chassis below Master Level in the variant photograph. The Performance section renders only master-level, pitch-stick, mod-wheel, organ-level, octave-down, octave-up and transpose; the only rotary-named controls in the page are organ.rotary-speed and effects.rotary."
     },
     {
       "severity": "minor",
-      "description": "At 390x844 the full instrument is retained without clipping but panels are very dense and legends are barely legible, limiting practical per-control inspection."
+      "title": "Value-bearing controls use role=button with unsupported ARIA value attributes",
+      "criterion": "controlBoundary",
+      "detail": "Knobs, encoders, faders, drawbars and wheels are native <button> elements carrying aria-valuenow/aria-valuemin/aria-valuemax/aria-valuetext (App.tsx:78-89). role=button does not support those properties, so assistive technology will announce 'Master Level decorative control, button' and drop the value the control visibly reports. role=slider (or an <input type=range>) would carry the same behaviour accessibly."
+    },
+    {
+      "severity": "minor",
+      "title": "Computer-keyboard map covers 17 white keys and no black keys",
+      "criterion": "inputCoverage",
+      "detail": "hardware.ts maps a,w,s,e,d,f,t,g,y,h,u,j,k,o,l,p,; onto C3,D3,E3,F3,G3,A3,B3,C4...E5 — all naturals. The upper QWERTY row, which on every other software keyboard maps to accidentals, plays white notes here, and 56 of the 73 keys cannot be played from the computer keyboard at all."
+    },
+    {
+      "severity": "minor",
+      "title": "Audio-behaviour tests assert only against fake nodes",
+      "criterion": "pianoFeatureCoverage",
+      "detail": "tests/feature-matrix.json maps all 11 required Phase 1 IDs to the one file src/App.test.tsx. Its engine tests run against a hand-written FakeAudioContext whose AudioParams just store the last value, so nothing proves output differs from silence, that velocity moves output in the expected direction, or that release changes duration — which TASK.md's audio test rules require explicitly. There is no test at all for Web MIDI input, multi-touch, or velocity response, though all three are claimed under piano.basic-inputs."
+    },
+    {
+      "severity": "minor",
+      "title": "Narrow viewport collapses the instrument rather than adapting it",
+      "detail": "At 390x844 the whole instrument renders 374x121 px: keybed 49 px tall, white keys 7.6 px wide, control legends at 3.4px, the smallest control 5.5 px on its short edge, and 18 of 101 controls unreachable by the 5x5 hit-test (the whole lower Program block plus synth.arp-run and synth.mono). Nothing clips off the document (scrollWidth 390 = innerWidth) and the chassis stays continuous, but the panel is not usable at that size."
     }
   ]
 }

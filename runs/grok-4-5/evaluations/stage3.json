@@ -1,265 +1,392 @@
 {
-  "rubricVersion": "1.0.0",
+  "rubricVersion": "2.0.0",
   "runId": "grok-4-5",
   "stage": 3,
   "stageName": "Complete Stage 4 system",
   "status": "complete",
-  "evaluator": "Opus 4.8 evaluator",
-  "evaluatedAt": "2026-07-10T06:56:07.000Z",
-  "summary": "A genuinely comprehensive Phase 3 that turns the whole instrument on: a full 32-slot + 8-Live program system with store/store-as/dirty/edit-discard/pages/dial/list, splits (11 positions, up to 4 zones, crossfades), scenes I/II, Wheel/Control-Pedal morphs, master clock/tap/transpose/Panic, a four-model organ (B3/Vox/Farf/Pipe1 with per-model harmonic weights, nine drawbars, percussion, key-click, vibrato/chorus, rotary), and a three-layer analog synth (Pure/Sync/Multi/Super/FM-H with category-correct topologies, LP12/LP24/HP/BP filters, amp+filter envelopes, LFO, poly/mono/legato/glide/unison/vibrato, deterministic arp order). All engines share one AudioContext through per-engine buses, ordered effect chains, a shared rotary, and a master gain+limiter into a single destination — structurally verified (contexts.length===1). Nearly every control is bound and the spec-excluded controls are honestly listed as unsupported, and IMPLEMENTATION_DETAILS.json truthfully labels the baked PCM sample sets, live synthesis, and generated impulses. The dominant weakness is test rigor: every audio test runs against a mock AudioContext (jsdom, no OfflineAudioContext), so 'audible' claims are proven only through synthetic signature/energy proxies (organModelSignature hardcoded class offsets, waveformSignature category-id hashes, analytic measureEnergy fallback) rather than rendered spectra at a real Web Audio boundary — exactly the state-only-with-fakes pattern the task deems insufficient for audible behavior. Secondary gaps: the arpeggiator computes deterministic step order but is not actually time-scheduled to play, the oscillator (pitch) envelope is stored but not applied to audio, perf-pitch-stick is classed functional yet has no binding (silent no-op), Store-As shortcuts interactive naming, and the desktop capture shows the Program/Synth sections' bottom controls clipped with some label overlap.",
-  "score": 78.3,
-  "rawScore": 78.3,
+  "evaluator": "stagebench-blind-evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-08-16T00:00:00.000Z",
+  "summary": "A Stage 4 that genuinely makes sound, undermined by a layout that hides half of it and a program layer that does not persist. Organ, Piano and Synth are three real engines (centroids 236/337/1275 Hz), all 14 synth waveforms and all four organ models are distinct, and delay, reverb, mod, amp, compressor and bypass each measurably change the render for every engine through one AudioContext and one destination. Splits, scenes, transpose, master level, panic, sustain and MIDI all behave when measured. Against that: 74 of 161 controls lay out below their section's overflow:hidden clip and no pointer can reach them; the deck got 0.476 of the chassis instead of 0.54 because an inline flex:6 overrides the stylesheet; all 54 bundled sample WAVs are malformed so the build permanently runs the labeled fallback; Store never captures engine edits and morphs never reach audio (both from the same dead syncEngineToProgram); the arpeggiator is never instantiated; the pitch stick is declared functional and does nothing; the Synth OLED never updates. Keybed and colours are exact: 73/43/30 keys, 0.61 black-key height, 5/5 reference colours at deltaE 0.",
+  "score": 60.8,
+  "rawScore": 60.8,
   "categories": [
     {
-      "id": "visualRetention",
-      "label": "Final visual fidelity",
-      "weight": 5,
-      "score": 75,
-      "contribution": 3.8,
+      "id": "sound",
+      "label": "Sound",
+      "weight": 45,
+      "score": 68.8,
+      "contribution": 31,
       "criteria": [
         {
-          "id": "referenceRetention",
-          "label": "Reference and regression retention",
-          "weight": 50,
+          "id": "distinctEngines",
+          "label": "Distinct engine character",
+          "weight": 40,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "evidence/stage3-desktop.png (1440x900): continuous red chassis, keybed, all six labeled sections (PERFORMANCE CONTROLS, ORGAN, PIANO, PROGRAM AND MORPH, SYNTH, LAYER EFFECTS), NORD STAGE 4 branding, drawbar LED graphs, Program OLED ('1.1 Concert Grand'), Synth OLED ('Saw'), and an honesty footer listing spec-excluded controls.",
-            "evidence/stage3-narrow.png (390x844): full chassis and all six sections retained (compressed, not reflowed), keybed intact, no horizontal overflow, status line + honesty footer present.",
-            "Fidelity gaps: in the desktop capture the Program section (scene/store row) and Synth section bottom controls are clipped by the deck's lower edge, and some effect knob labels overlap ('Mod 2 Rate Mod 2 Amou...', 'Delay Feedb.. Delay Mix').",
-            "evidence/stage3-visual-audit.md documents 73 keys (E1-E7), 54/46 deck/keybed split, and six sections at documented fractional widths (inherited from Phase 1-2)."
+            "Three genuinely different engines reach the tap on AudioNode.prototype.connect at the destination (1 AudioContext, 1 AudioDestinationNode, 549 edges/460 nodes). Same note (C4, computer keyboard) after a warm-up note: piano rms 0.0629 / spectral centroid 337 Hz, organ 0.0727 / 236 Hz, synth 0.0601 / 1275 Hz; pairwise cosine 0.40, 0.20, -0.11.",
+            "Organ models are four distinct voices, not presets: B3 centroid 236 Hz (rms 0.0727), Vox 462 Hz (0.0650), Farf 716 Hz (0.1255), Pipe 276 Hz (0.0507); worst pairwise cosine 0.22. All 14 required synth waveforms render differently - zero pairs exceeded cosine 0.995 or 0.9 identical samples, and siblings separate (Sync Saw zcr 958 vs Sync Square 492; Multi Saw 1182 vs Multi Saw 8ve 1766; Super Saw centroid 1059 vs Super Square 824).",
+            "Held notes are live, not pre-rendered buffers: a 4.2 s held organ note holds rms 0.0943 flat for the whole hold before release, and the synth holds 0.0519.",
+            "Regression: the three declared recorded piano sets never load. Every one of the 54 bundled WAVs has audioFormat 257 and channels 0 in its fmt chunk, decodeAudioData rejects them (EncodingError, reproduced by fetching ./samples/grand/r60_v1.wav in the page), and the build permanently reports data-audio-status=fallback. Grand and Electric are then only recipe variants of one synthesiser (cosine 0.93 between them)."
           ]
         },
         {
-          "id": "completeHardwareState",
-          "label": "Complete hardware state fidelity",
-          "weight": 50,
+          "id": "routingIntegration",
+          "label": "Effects & routing integration",
+          "weight": 35,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "src/state/control-bindings.ts drives hardwareStore.setValue for exclusive LED groups: organ model buttons (b3/vox/farf/pipe), synth voice-mode (poly/mono/legato), FX focus buttons (syncFxFocusButtons), program buttons 1-8, scene 1/2.",
-            "Program OLED shows page.button + name + dirty 'E' (program-store.ts displayLabel); Synth OLED shows waveform name; drawbars present live 0-8 values as LED graphs (visible in stage3-desktop.png).",
-            "Splits/scenes/morphs/rotary/percussion state all flow through engine setters that update section state reflected in the panel; focus state updates layer/FX focus LEDs.",
-            "No live browser run was performed, so LED/OLED updates were confirmed by binding-code and static capture rather than interactive observation."
+            "The shared chain reaches all three engines, tested per engine with FX FOCUS on that engine's layer. Delay on + mix 100: piano post-note tail rms goes 0.0001 -> 0.0363, organ 0.00001 -> 0.0551, synth 0.0005 -> 0.0442. Adding reverb, then Mod 1, then Amp Sim + drive, then Compressor changed the render again every time for every engine (e.g. organ rms 0.0435 -> 0.0063 -> 0.0272 -> 0.0242 -> 0.0491).",
+            "Bypass is real and restores the dry signal: after the full chain, Effects Bypass returns piano to rms 0.0517 / centroid 336 with a dead tail (0.0003) against the dry 0.0509 / 335, and the same for organ (0.0545 vs 0.0544) and synth (0.0463 vs 0.0454).",
+            "One context, one destination, no per-engine escape hatch: the connect census recorded exactly 1 AudioDestinationNode and 1 AudioContext (48 kHz, state running); orphan nodes that never reach the destination are 20 OscillatorNodes and 14 GainNodes, all of which terminate on AudioParams (44 param edges), i.e. modulation, not dead units.",
+            "Gain staging fails under load: 16 keys held together produced peak 1.1812 at the tapped master output, above full scale, despite IMPLEMENTATION_DETAILS declaring 'master gain + limiter'."
+          ]
+        },
+        {
+          "id": "qualityUnderLoad",
+          "label": "Musical quality under load",
+          "weight": 25,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "16 simultaneous keyboard notes: all sounded (rms 0.1753), the AudioContext stayed 'running', the page stayed responsive (a 50 ms timer measured 50.5 ms after the stress), and the console logged no errors in any probe session. But peak hit 1.1812 - the master output clips rather than limits.",
+            "Main-thread cost per note-on measured with performance.now() around a dispatched keydown: 8.6, 9.9, 12.0, 10.9, 11.2, 11.9 ms - roughly a dropped frame per note, and pressing the 16-note chord took 98 ms of key dispatch.",
+            "Polyphony is correct: a three-note chord rendered all three partials (Goertzel magnitudes 0.0350 at C4, 0.0354 at E, 0.0349 at G), so there is no rebuild-per-note-on that steals the previous voice, and moving a knob mid-note left the note sounding with the context still 'running'."
           ]
         }
       ]
     },
     {
-      "id": "featureCompletion",
-      "label": "Complete feature system",
-      "weight": 35,
-      "score": 75,
-      "contribution": 26.3,
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 20,
+      "score": 48.8,
+      "contribution": 9.8,
       "criteria": [
         {
-          "id": "programWorkflows",
-          "label": "Programs and Live Mode",
-          "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "id": "stateRoundTrip",
+          "label": "Program & state round-trip",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 1,
+          "score": 25,
           "evidence": [
-            "src/state/program-store.ts implements 32 slots (4 pages x 8), selectProgram/pageUp/pageDown/dialBrowse, numeric list view (setListView/displayLabel), two-press Store (storePress/confirmStore), Store As with naming (storeAsPress/setStoreName), truthful dirty flag ('E'), edit-discard on program change (loadSlot resets working+baseline), and 8 auto-storing Live slots (markDirty in liveMode).",
-            "tests/programs-roundtrip.test.ts, programs-navigation.test.ts, programs-store-live.test.ts, programs-undo-cancel.test.ts all present and pass (part of 121 passing tests).",
-            "Gap: control-bindings program-store-as immediately confirms with the current name (storeAsPress -> setStoreName(currentName) -> confirmStore) rather than exposing interactive keystroke naming; and most factory slots beyond 0-7 are named placeholders (visual audit)."
+            "Program state does not round-trip. On slot 1.2 (Studio Upright) I switched the piano type to Clav and lowered Level A: the render moved to rms 0.0413 / centroid 881 Hz (matching the Clav reference capture at 887 Hz). Store (press, confirm), then away to 1.4 and back to 1.2, and the render came back at rms 0.0808 / centroid 335 Hz - the edit was neither stored nor even retained.",
+            "Root cause in source: state/control-bindings.ts defines syncEngineToProgram() (which would call programStore.replaceWorking(engine.captureProgramSound())) but the only reference to it in the file is the statement `void syncEngineToProgram` at line 1004. programStore.confirmStore() clones this.working, so nothing an engine control touches is ever saved.",
+            "The dirty flag is correspondingly untruthful for those edits: data-dirty stayed '0' and the OLED kept reading '1.2 Studio Upright' with no ' E' marker after the type and level edits, while program-level edits that do go through programStore (split, scene) did flip it to '1' and '1.3 Tine Stack E'.",
+            "What does work: 32 slots over 4 pages (Page Up moved 1.1 -> 2.1), 8 Live slots (Live Mode showed 'Live 1'), store/store-as modes with a visible 'STORE -> 1' prompt, and program recall reapplying the slot's own sound."
           ]
         },
         {
-          "id": "performanceSystems",
-          "label": "Layers, splits, scenes, and morphs",
-          "weight": 25,
+          "id": "bindings",
+          "label": "Performance controls & bindings",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Working bindings measured on rendered audio: Master Level 0.75 -> 0.25 took rms 0.0638 -> 0.0220 and back to 0.0658; Transpose stepped the Goertzel peak exactly +1 semitone (261.63 -> 277.18 Hz) then +2 (293.67 Hz) and returned to 261.63 after wrapping; Panic cut two held notes to silence within ~500 ms; sustain via Space extended the tail (rms still 0.0032 at 1.4 s vs 0.0000 by 0.4 s without it) and was not swallowed once focus was cleared.",
+            "Web MIDI works when the API is available: with navigator.requestMIDIAccess stubbed, data-midi-state became 'connected' and a 0x90/60/100 message set #key-60 aria-pressed=true, 0x80 released it. Headless Chromium itself reports 'denied', so this path is measured only through the stub.",
+            "The pitch stick is inert while being declared functional. isFunctionalControl() returns true for perf-pitch-stick and it is absent from IMPLEMENTATION_DETAILS.unsupportedControls, but applyControlToEngine has no branch for it; driving it to aria-valuenow=100 during a held note left the fundamental at 261.626 Hz (no bend at all).",
+            "Reachability limits every binding: 74 of the 161 controls cannot be operated with a pointer at 1440x900 (5x5 elementFromPoint grid, zero hits), including every piano type selector and the whole filter/envelope/LFO/arp bank. They remain keyboard-focusable (fx-reverb-on takes focus, tabIndex 0), which is how I drove them."
+          ]
+        },
+        {
+          "id": "crossSystemWorkflow",
+          "label": "Cross-system workflows",
+          "weight": 30,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "Splits: SPLIT_POSITIONS length 11 (splits-zones.test.ts), resolveZoneBounds yields up to 4 zones from 3 editable points, crossfade Off/6/12 via layerZoneGain; note routing across piano/organ/synth uses layerZoneGain in piano-engine.ts noteOn.",
-            "Scenes I/II toggle only layer-enable masks without cloning sound params (program-store.ts setScene/captureSceneEnables; scenes-switching.test.ts verifies params preserved).",
-            "Morphs: beginMorphAssign/assignMorph/clearMorph for Wheel and Control Pedal, interpolateMorph linear blend, zero-range assignment auto-removed (program-store.ts).",
-            "Master clock (setMasterClock 30-300 + tapTempo), transpose (+/-6, applied as playMidi offset in noteOn), Panic (engine.panic clears voices + sustain).",
-            "Gaps: engine.applyMorphValues only interpolates a limited set of numeric paths (piano/organ/synth levels, synth filterFreq/lfoRate/oscCtrl, organ drawbars); layerZoneGain crossfade logic has redundant/overlapping branches."
+            "Splits are real. On program 1.7 Split Keys (synth in zone 1 below C4, piano in zones 2-4) a low note (MIDI 40) rendered rms 0.1003 / centroid 277 Hz with the split on and rms 0.1550 / centroid 164 Hz with it off, i.e. the split genuinely removes the piano from the lower zone; the high note (MIDI 64) stayed piano-only at 0.0649 / 437 Hz.",
+            "Layer Scenes return different layer vectors: on 1.8 Layer Pad, Scene I rendered rms 0.0593 / centroid 439 Hz and Scene II rms 0.0130 / centroid 969 Hz, and switching back to Scene I restored 0.0566 / 440 Hz.",
+            "Transpose and Panic act across engines from one control (see bindings evidence), and no probe session produced a console error while switching engines, programs, scenes and splits.",
+            "The panel does not follow these workflows: the SPLIT button read aria-pressed=false while program 1.7 had loaded with split on, and stayed true after moving to 1.5 which has it off."
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 35,
+      "score": 57.5,
+      "contribution": 20.1,
+      "criteria": [
         {
           "id": "organSystem",
-          "label": "Complete Organ system",
-          "weight": 23,
+          "label": "Organ system",
+          "weight": 30,
+          "scoring": "judged",
           "rating": 3,
           "score": 75,
           "evidence": [
-            "src/model/organ-types.ts modelHarmonicWeights returns genuinely different vectors per model (B3 [1,0.7,0.9,...] vs Pipe1 [0.85,0.4,1,...] vs Vox [0.9,0.5,0.8,...] vs Farf [1,1,1,0,0.9,0,...]); src/audio/organ-engine.ts sets distinct osc types (Vox square/saw, Farf square, Pipe/B3 sine).",
-            "Nine drawbars via effectiveDrawbars (Farf treated as on/off registers >=0.5; B3 Bass limited to 16'/8'); percussion on/soft/fast/third as single-trigger B3-only (percArmed); key click for B3/Vox; vibrato/chorus C1-C3/V1-V3 via detune LFO (vibratoDepth).",
-            "Two layers share one organ effect chain (chainOrgan) into master; rotary slow/fast/stop with morphable level; focus + octave shift bound.",
-            "tests/organ-engine.test.ts, organ-models-drawbars.test.ts, organ-rotary.test.ts pass; however B3/Vox/Farf/Pipe distinctness is asserted only via organModelSignature (hardcoded per-model class offsets B3=1/Vox=2.5/Farf=4/Pipe=3.2), not rendered audio."
+            "Drawbars shape the spectrum: pushing drawbar 1 in (0.80 -> 0) took the organ from rms 0.0755 / centroid 241 Hz to 0.0554 / 394 Hz, and pulling drawbar 9 fully out (0.30 -> 1.0) moved the centroid 234 -> 275 Hz. Each drawbar also drives an 8-segment LED ladder that tracks its value (value 80 -> 7 of 8 segments lit).",
+            "B3, Vox, Farf and Pipe are four distinct engines (centroids 236/462/716/276 Hz, worst pairwise cosine 0.22). Percussion On changed the render (rms 0.0747 -> 0.0840, centroid 231 -> 313 Hz, cosine 0.25) and To Rotary changed it again (cosine 0.011, centroid 234 -> 249 Hz).",
+            "Placement and reach: the Rotary Speaker block (speed/stop/drive) is rendered inside the Organ section, while the spec note and reference/nord-stage-4-73.jpg put it on the exposed red performance band. 14 of the 33 organ controls - all four percussion buttons, vibrato/chorus, both rotary buttons, drive and key click - are clipped out of the section and unreachable by pointer.",
+            "Rotary Speed toggling produced only a marginal difference (centroid 249.4 -> 252.7 Hz, rms unchanged), so the slow/fast switch is at best subtle."
           ]
         },
         {
           "id": "synthSystem",
-          "label": "Complete Synth system",
-          "weight": 27,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "src/audio/synth-engine.ts builds category-correct topologies: Sync (hard-sync ratio second osc), Multi (detuned saws + octave), Super (5-osc spread), FM-H (2-op FM modG->carrier.frequency), Pure (osc + pulse approximation); three independent layers A/B/C with own buses/chains.",
-            "Filters LP12/LP24/HP/BP with kb tracking (cutoffHz/kbTrackAmount), resonance (Q), drive; amp + filter envelopes applied via real param automation; LFO with 5 waves, 3 destinations (Osc Pitch/Filter Freq/Osc Ctrl), clock sync (lfoRateHz); poly/mono/legato with voice stealing + glide, unison spread, vibrato On/Wheel.",
-            "arpSteps is a genuinely deterministic pure function (Up/Down/Up-Down/seeded-Random, range octaves), tested in synth-arp-gate.test.ts.",
-            "Gaps: the oscillator (pitch) envelope oscEnv is stored and round-tripped but not applied to audio in spawnSynthVoice; the arpeggiator only computes step order and stores run/hold/rate state — there is no real-time note scheduler that actually plays the arp (acknowledged in stage3-visual-audit.md 'live scheduling is state-level')."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "audioIntegration",
-      "label": "Audio quality and integration",
-      "weight": 30,
-      "score": 83.8,
-      "contribution": 25.1,
-      "criteria": [
-        {
-          "id": "distinctEngines",
-          "label": "Distinct engine behavior",
-          "weight": 35,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Code inspection confirms genuinely distinct node graphs, not renamed generic oscillators: organ models differ by harmonic-weight vectors and osc waveform (organ-types.ts modelHarmonicWeights, organ-engine.ts), synth categories differ by real FM/hard-sync/multi-detune/super-spread construction (synth-engine.ts spawnSynthVoice).",
-            "Weakness: distinctness is never exercised/measured at a real audio boundary. Tests assert distinctness via synthetic constants — organModelSignature (hardcoded class offsets) and waveformSignature (categoryId + string char/length hashes) — which would pass even if all engines rendered identically (organ-models-drawbars.test.ts asserts only sig[i][0] != sig[j][0]; synth-sources.test.ts likewise).",
-            "measureEnergy's OfflineAudioContext render path is dead in the jsdom test env, so effect/type energy tests run the analytic string-hash proxy instead of real rendering (piano-engine.ts lines 1285-1332)."
-          ]
-        },
-        {
-          "id": "sharedRouting",
-          "label": "Inherited graph and effects integration",
-          "weight": 35,
-          "rating": 4,
-          "score": 100,
-          "evidence": [
-            "src/audio/piano-engine.ts buildGraph creates exactly one AudioContext and wires per-engine buses -> ordered effect chains (createChain: Mod1->Mod2->Delay->Amp/EQ->Comp->Reverb) -> layer levels; organ buses (A/B) share chainOrgan; three synth buses feed chainSynthA/B/C.",
-            "A single shared rotary instance is fed by every chain's toRotary tap; all chains + rotaryMix converge on master -> limiter (DynamicsCompressor, threshold -3, ratio 12) -> ctx.destination (one destination).",
-            "tests/system-integration.test.ts asserts contexts.length===1 after init with all three sections active, and getGraphInfo reports hasMaster/hasLimiter/singleContext true; organ-engine.test.ts asserts a single context and shared organ chain.",
-            "Organ and Synth explicitly route through the inherited Phase-2 graph with no separate AudioContext, satisfying the hard gate."
-          ]
-        },
-        {
-          "id": "qualityLoad",
-          "label": "Musical quality, latency, and load",
+          "label": "Synth system",
           "weight": 30,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Voice management: piano maxPolyphony 48 with oldest-voice stealing; mono/legato synth steals prior layer voice; release uses scheduled amp ramps then setTimeout stop/disconnect (organ/synth/piano stop functions disconnect all nodes).",
-            "Cleanup to baseline is proven: allNotesOff/panic clear voices+organVoices+synthVoices maps and held/sustained sets, resetOrganPercussion; system-integration.test.ts confirms getTotalVoiceCount()===0 after panic.",
-            "Gaps: arp is not time-scheduled so rhythmic/latency behavior cannot be exercised; musical quality, clicks, clipping, and CPU stability could not be measured (no live audio render — jsdom mocks only). Per-note piano synthesizeBuffer (1.4s) is moderate but unmeasured under load."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "systemBehavior",
-      "label": "Full-system behavior",
-      "weight": 20,
-      "score": 82.5,
-      "contribution": 16.5,
-      "criteria": [
-        {
-          "id": "roundTripIntegration",
-          "label": "Canonical state round-trip",
-          "weight": 30,
-          "rating": 4,
-          "score": 100,
-          "evidence": [
-            "captureProgramSound/applyProgramSound + cloneProgramSound serialize and restore piano, organ, synth, effects (chains), split, scenes, morph, masterClockBpm/kbSync, and transpose (piano-engine.ts, program-types.ts).",
-            "tests/programs-roundtrip.test.ts writes custom piano type, organ model+drawbars, synth waveform+filter, reverb mix, split point+crossfade, morph assignment, BPM 140, transpose 3 into a slot, selects away, reloads, and asserts every field restores; a second test round-trips through the engine (applyProgramSound -> captureProgramSound -> store -> reload) for organ model B3.",
-            "Master Level is intentionally excluded from program state and this is truthfully documented in IMPLEMENTATION_DETAILS.json notes.",
-            "Section focus fields (piano.focus/organ.focus/synth.focus/effects.layerFocus) are part of the cloned state and thus restore; display labels derive from restored state."
-          ]
-        },
-        {
-          "id": "hardwareBindings",
-          "label": "Required hardware bindings",
-          "weight": 30,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "src/state/control-bindings.ts binds nearly all piano/organ/synth/program/effects/performance controls (continuous applyControlToEngine + button applyButtonToEngine ladders); isFunctionalControl + UNSUPPORTED_CONTROLS (program-morph-aft, perf-hold, perf-mono) enforce the honesty boundary.",
-            "tests/hardware-bindings.test.ts verifies non-excluded piano/organ/synth/program/effects controls are functional and each unsupported id both exists in CONTROLS (src/model/hardware.ts) and returns isFunctionalControl false.",
-            "Honesty gap: perf-pitch-stick is classified functional (isFunctionalControl returns true, in FUNCTIONAL_PREFIXES) but has NO handler in applyControlToEngine — pitch bend is a silent no-op that is not listed as unsupported. program-dial and synth-osc-shape also have partial/proxy handling.",
-            "The bindings audit test checks categorization only, not that each control produces measurable audible change."
-          ]
-        },
-        {
-          "id": "workflowIntegration",
-          "label": "Cross-system workflows",
-          "weight": 25,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "tests/system-integration.test.ts exercises a combined flow: select a split factory program, apply to engine, switch Scene II, assign a Wheel morph and interpolate, set master clock 128 + transpose 2 — all against one engine/context.",
-            "noteOn dispatches to piano+organ+synth simultaneously with per-layer layerZoneGain split routing and shared transpose offset (piano-engine.ts), so engines truly play as one system.",
-            "Cross-system state (programs/scenes/zones/morphs/clock/focus) is centralized in ProgramSoundState and applied through applyProgramSound.",
-            "Full cross-system audible interaction was not rendered (mock context), so integration is verified structurally and via state assertions."
-          ]
-        },
-        {
-          "id": "regressionReliability",
-          "label": "Inherited regression reliability",
-          "weight": 15,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "tests/feature-matrix.json maps all 38 required Phase 1+2+3 IDs to non-empty test files; verification.json records coveredFeatures 38 / requiredFeatures 38.",
-            "Inherited Phase 1-2 tests retained and green: regression-chassis, regression-phase1, regression-phase2, visual-*, interaction-*, accessibility, piano-* (library/layers/velocity/pedals/fallback), effects-* (graph/routing/processing). Full suite: 39 files, 121 tests pass (re-run confirmed).",
-            "Piano sample library, two layers, full effect chain, and master level preserved (regression-phase2.test.ts + retained buildGraph wiring).",
-            "Note: piano 'sample' sets are offline-baked generated PCM honestly declared as not-recordings (IMPLEMENTATION_DETAILS.json) — a carried-over Phase-2 fidelity limitation, but handled honestly and still functional."
-          ]
-        }
-      ]
-    },
-    {
-      "id": "engineeringQuality",
-      "label": "Engineering quality",
-      "weight": 10,
-      "score": 66.3,
-      "contribution": 6.6,
-      "criteria": [
-        {
-          "id": "architecture",
-          "label": "System architecture",
-          "weight": 40,
-          "rating": 3,
-          "score": 75,
-          "evidence": [
-            "Clear layering: src/model/ (typed hardware + organ/synth/program types), src/audio/ (piano/organ/synth engines, effects-chain, sample-library), src/state/ (program-store, hardware-store, control-bindings, engine-registry), src/components/, src/input/.",
-            "Canonical serializable state (ProgramSoundState) with cloneProgramSound; one-context routing and effect composition centralized in PianoEngine.buildGraph; injectable boundaries (createContext, requestAccess, fetchImpl, useInlineSamples) documented in IMPLEMENTATION_DETAILS.json.",
-            "Maintainability concerns: PianoEngine is a ~1380-line multi-engine 'god class'; control-bindings.ts is a ~1088-line if/else ladder; measureEnergy duplicates the effect topology as a separate proxy graph; crossfade helpers have redundant/dead branches."
-          ]
-        },
-        {
-          "id": "testsMaintainability",
-          "label": "Tests and maintainability",
-          "weight": 35,
+          "scoring": "judged",
           "rating": 2,
           "score": 50,
           "evidence": [
-            "Broad, deterministic coverage (39 files, 121 tests, all mapped feature IDs) and a genuinely rigorous deterministic arpSteps test.",
-            "Core weakness: no test crosses a real Web Audio boundary. vitest env is jsdom with a hand-written MockAudioContext (src/test/mock-audio.ts) whose params only store the last-set value; OfflineAudioContext is unavailable so measureEnergy always runs the analytic string-hash fallback.",
-            "Audible claims are therefore proven by synthetic proxies: organModelSignature/waveformSignature/filterSignature return constructed constants, and 'distinct energy' tests compare analytic-proxy numbers — the task explicitly states a state-only test with fakes is insufficient where behavior is claimed audible.",
-            "Voice-count and state assertions are meaningful for graph/state behavior but do not validate spectra, gain staging, or effect DSP output."
+            "The oscillator set is complete and honest: all 14 spec waveforms exist in ALL_REQUIRED_WAVEFORMS and each renders differently (no pair above cosine 0.995), with category-correct Osc Ctrl in source (FM depth oscCtrl*600, sync ratio 1+oscCtrl*4, detune, super width). The four filter types separate (HP rms 0.0017, BP 0.0021, LP12 0.0769, LP24 0.0734 at cutoff 1688 Hz), Filter Freq moved the centroid 924 -> 705 Hz, and Unison changed the render again (705 -> 636 Hz).",
+            "The arpeggiator is dead code. arpSteps() in src/audio/synth-engine.ts is referenced only by its own module and tests/synth-arp-gate.test.ts; nothing in the app instantiates or schedules it, and the only runtime use of arpOn is `if (ls.arpHold && ls.arpOn) continue` in piano-engine. Measured: three held notes for 2.6 s with ARP ON produced the same flat sustained envelope as ARP OFF (per-100 ms rms 0.150, 0.149, 0.149, 0.144 ... with arp on; 0.151, 0.150, 0.148, 0.142 ... with it off) - no rhythmic steps at all.",
+            "LP12 and LP24 are the same single BiquadFilterNode ('lowpass' for both in filterConfig) differing only by Q +2, so there is no 24 dB/oct slope; and HP/BP at the default cutoff leave the instrument ~35 dB down, which a player will read as silence.",
+            "22 of the 38 synth controls - the entire filter, envelope, LFO and arp knob bank plus the voice-mode buttons - are laid out below the section clip box and cannot be reached by pointer."
           ]
         },
         {
-          "id": "runtimePerformance",
-          "label": "Runtime performance",
+          "id": "performanceSystems",
+          "label": "Layers, splits, scenes & morphs",
           "weight": 25,
-          "rating": 3,
-          "score": 75,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
           "evidence": [
-            "Cleanup verified in tests: stop functions disconnect all oscs/gains/filters/sources; dispose disconnects master/limiter/buses; voice maps return to 0 after allNotesOff/panic.",
-            "Reasonable resource discipline: polyphony cap + stealing, mono voice steal, scheduled release with bounded setTimeout stop.",
-            "Could not verify live console cleanliness, render stability, or CPU/memory under sustained integrated interaction because the app was not driven in a real browser (headless, no audible render); assessment is based on source and the passing deterministic suite."
+            "Layers, splits and scenes work in audio (see crossSystemWorkflow: split low note 0.1003/277 Hz vs 0.1550/164 Hz; Scene I 0.0593/439 Hz vs Scene II 0.0130/969 Hz), and layer focus drives the FX focus buttons correctly (Organ Layer B set fx-focus-organ-b aria-pressed=true).",
+            "Morphs never reach audio. I ran the full assign flow twice. Wheel -> piano Level A: wheel 0 rendered rms 0.0718, wheel 100 rendered 0.0706 (-1.6%) where the assigned destination was a 35% level cut. Wheel -> organ drawbar 1 (the only destination applyControlToEngine actually records): wheel 0 rms 0.082733, wheel 100 rms 0.082735, centroid 235 -> 238 Hz, while directly moving that drawbar moves rms by 27% and the centroid by 150 Hz.",
+            "Root cause: programStore.assignMorph writes into programStore.working.morph, but PianoEngine.applyMorphValues reads this.programSound.morph on the engine, and the only function that would copy engine/program state across (syncEngineToProgram) is never called. assignMorph is also only wired for organ-drawbar-* controls, so no other destination can even be assigned from the panel."
+          ]
+        },
+        {
+          "id": "programWorkflows",
+          "label": "Programs & Live Mode",
+          "weight": 15,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "The program section is structurally complete and navigable: 32 slots across 4 pages (Page Up moved the OLED from '1.1 Concert Grand' to '2.1 Program 2.1', Page Down back), 8 factory sounds that really differ (1.4 B3 Full recalled an organ at centroid 295 Hz vs 1.2 Studio Upright at 335 Hz), a two-press Store flow that displays 'STORE -> 1', Store As, and Live Mode toggling the OLED to the Live bank.",
+            "But storage is hollow: a piano type + level edit stored into slot 1.2 came back as the original sound after leaving and returning (rms 0.0413/881 Hz stored, 0.0808/335 Hz recalled), and data-dirty never left '0' for those edits. Program recall also leaves the panel behind - after recalling 1.2 (Upright) the piano-type LEDs still showed Electric lit and Grand dark.",
+            "Cosmetic: the Live Mode display renders the bank and the slot name doubled ('Live 1 Live 1')."
           ]
         }
       ]
     }
   ],
+  "runAxis": {
+    "id": "panelFidelity",
+    "label": "Panel fidelity",
+    "weight": 40,
+    "scoredAgainst": "stage3",
+    "rawScore": 69.3,
+    "score": 40,
+    "hardGate": {
+      "tripped": [
+        "chassisGeometry.deckFraction"
+      ],
+      "scoreCap": 40
+    },
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "label": "Chassis, silhouette & geometry",
+        "weight": 20,
+        "scoring": "computed",
+        "score": 79.7,
+        "measurements": [
+          {
+            "id": "deckFraction",
+            "label": "Deck vertical allocation",
+            "weight": 26,
+            "value": 0.4759,
+            "score": 21.8
+          },
+          {
+            "id": "keybedFraction",
+            "label": "Keybed vertical allocation",
+            "weight": 16,
+            "value": 0.4738,
+            "score": 100
+          },
+          {
+            "id": "widthFraction",
+            "label": "Instrument width fraction of viewport",
+            "weight": 20,
+            "value": 0.94,
+            "score": 100
+          },
+          {
+            "id": "aspectRatio",
+            "label": "Instrument aspect ratio",
+            "weight": 18,
+            "value": 3.0951,
+            "score": 100
+          },
+          {
+            "id": "sectionFractionMaxDeviation",
+            "label": "Worst of the six section-fraction deviations",
+            "weight": 20,
+            "value": 0.0072,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Measured in the served build at 1440x900 (bundle assets/index-BSpxIJH3.js): chassis bounding box 1353.59 x 437.33 px -> widthFraction 0.9400 (in [0.88,0.97]) and aspectRatio 3.09514 vs 3.0951 target (inline aspect-ratio: 3.0951/1 on .instrument).",
+          "Vertical split: top rail 6.95 px + control deck 201.17 px = 208.13 px -> deckFraction 0.4759 vs 0.54 target (6.4 pts low, 2.6x tolerance); keybed 200.25 px + bottom rail 6.95 px = 207.20 px -> keybedFraction 0.4738. The remaining 21 px (4.8% of the chassis) is an app status strip that belongs to neither region, so the two named allocations sum to 0.950 rather than 1.0.",
+          "Cause: ControlDeck.tsx renders <div class=control-deck style={{flex: 6}}>, and the inline shorthand overrides the stylesheet's flex:0 0 calc(var(--deck-frac)*100%). getComputedStyle on .control-deck returns flex-basis 0%, flex-grow 6 (vs the keybed's flex-basis 46%, flex-grow 0), so the deck receives only leftover space instead of its declared 54%.",
+          "Six horizontal section widths measured on [data-section-slot] as fractions of chassis width: performance 0.1360 (0.14), organ 0.1943 (0.20), piano 0.0826 (0.085), program 0.1214 (0.125), synth 0.2428 (0.25), effects 0.1943 (0.20); worst deviation 0.0072 (synth), inside the 0.012 tolerance."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "label": "Hardware inventory & placement",
+        "weight": 24,
+        "scoring": "computed",
+        "score": 51.6,
+        "measurements": [
+          {
+            "id": "requiredLandmarksPresent",
+            "label": "Required section landmarks rendered in their own section",
+            "weight": 30,
+            "value": 32,
+            "score": 97
+          },
+          {
+            "id": "controlsReachable",
+            "label": "Controls a pointer can actually operate",
+            "weight": 60,
+            "value": 87,
+            "score": 29.2
+          },
+          {
+            "id": "forbiddenPresent",
+            "label": "Forbidden elements present",
+            "weight": 10,
+            "value": 2,
+            "score": 50
+          }
+        ],
+        "evidence": [
+          "Reachability by the specified method: 161 [data-control-id] elements, each hit-tested on a 5x5 grid (10/30/50/70/90% of the bounding box) with document.elementFromPoint at 1440x900, page unscrolled. 87 controls had at least one grid point resolve to themselves or a descendant; 74 had zero. Per section unreachable: organ 14/33, piano 19/24, program 6/23, synth 22/38, effects 13/35, performance 0/8.",
+          "The 74 are laid out below their section's clip box (.deck-section has overflow:hidden; sections end at y=432.34) - e.g. organ-perc-fast box y 452.5-474.5, piano-type-grand, synth-filter-freq, fx-reverb-on. elementFromPoint over them returns the section element, .control-deck, or piano keys, never the control. Every piano type selector, every synth filter/envelope/LFO/arp knob and the whole reverb/compressor block are unoperable by pointer.",
+          "Landmarks: 32 of 33 sectionLandmarks entries render inside their own section (organ 4/4, piano 5/5, program 7/7, synth 6/6, effects 6/6). Missing: performance 'rotary speaker controls' - organ-rotary-speed, organ-rotary-stop and organ-drive are rendered in the organ section instead of the exposed red performance band, which the spec note and reference/nord-stage-4-73.jpg both place at x~0.10-0.13 of the instrument width.",
+          "Forbidden present = 2: (a) synth 'wide display spanning the section' - #synth-oled measures 316.69 px across a 328.69 px section (96.3%); (b) effects 'single undifferentiated control grid' - all 35 Layer Effects controls sit in one .section-controls flex-wrap flow with no unit grouping for Mod 1/Mod 2/Delay/Amp/Comp/Reverb."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "label": "Keybed fidelity",
+        "weight": 18,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "keysInsideKeybed",
+            "label": "Keys whose box falls inside the keybed",
+            "weight": 46,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "keyCount",
+            "label": "Total keys",
+            "weight": 18,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "whiteKeys",
+            "label": "White keys",
+            "weight": 8,
+            "value": 43,
+            "score": 100
+          },
+          {
+            "id": "blackKeys",
+            "label": "Black keys",
+            "weight": 8,
+            "value": 30,
+            "score": 100
+          },
+          {
+            "id": "blackKeyHeightFraction",
+            "label": "Black-key height fraction",
+            "weight": 20,
+            "value": 0.61,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "73 [data-key-midi] elements rendered, MIDI 28-100 (E1-E7, the variant's E-to-E range); 43 data-key-color=white, 30 black - exactly the stage-4-73 entry.",
+          "All 73 key boxes fall inside the keybed rect (x 44.20-1395.80, y 440.45-640.70): white keys span x 61.42-1378.56 y 446.86-628.89, black keys x 111.95-1356.20; zero keys outside. White key 30.62 x 182.03 px, black key 18.98 x 111.03 px -> black height fraction 0.6100 (target 0.61) and black/white width ratio 0.620.",
+          "Detail deviation (not part of the measured set): Keybed.tsx computes per-pitch-class black offsets then discards them (`void offset`), placing every black key at a uniform 0.65 white-key offset, so C#/D# and F#/G#/A# groups are evenly spaced rather than in the hardware's 2+3 pattern."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "label": "Chassis & plate colour fidelity",
+        "weight": 8,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "referenceColorsMatched",
+            "label": "Reference colours matched within deltaE 12",
+            "weight": 100,
+            "value": 5,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Screenshot of the served build cropped to the chassis (1353x437) and quantised; for each referenceColors entry I took the nearest rendered surface with >=200 px of area and computed CIE76 deltaE: chassisMid #851a25 dE 0.0 (1062 px), chassisDark #5a0c13 dE 0.0 (7777 px), panelBlueGray #3c424d dE 0.0 (7873 px), keyBlack #0b0b0b dE 0.0 (2370 px), keyWhite #dcdcdc dE 0.0 (5150 px).",
+          "All five spec colours are declared verbatim as CSS custom properties in build/assets/index-CWfTsTCe.css (--chassis-mid:#851a25; --chassis-dark:#5a0c13; --panel:#3c424d; --key-black:#0b0b0b; --key-white:#dcdcdc) and each appears as a large flat area in the render, so 5/5 match inside deltaE 12."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "label": "Materials, legends & displays",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 2,
+        "score": 50,
+        "evidence": [
+          "Real hardware detail is present in places: nine drawbars with 8-segment green LED ladders that track value, conic-gradient knob caps with an indicator that rotates with the parameter (--knob-rot went to 135deg at value 100), red LEDs on every button that light with state, and both OLEDs rendered as glowing mint-on-near-black monospace (--oled-fg #7dffd4 over #0a1a18).",
+          "Legends are frequently unreadable at rendered size because .ctrl-btn-label caps at 48 px with text-overflow: ellipsis - the Layer Effects section shows four adjacent buttons all reading 'FX Focus Or...' / 'FX Focus Pi...' / 'FX Focus Sy...', and the panel also shows 'Piano Sectio...', 'Organ A Oct...', 'Mod 2 Amou...'. Four focus buttons that cannot be told apart are worse than no label.",
+          "Materials and grouping are generic: every section is one .section-controls flex-wrap of identically styled 28x22 px buttons and 26 px knobs with no unit blocks, no silkscreen dividers and no distinction between the Layer Effects units; and black keys sit at a uniform 0.65 white-key offset because Keybed.tsx computes per-pitch-class offsets and then discards them (`void offset`), so the 2+3 grouping of the hardware is missing."
+        ]
+      },
+      {
+        "id": "panelState",
+        "label": "Panel state & displays",
+        "weight": 14,
+        "scoring": "judged",
+        "rating": 2,
+        "score": 50,
+        "evidence": [
+          "Control-level feedback is solid: radio groups are exclusive (selecting Electric set piano-type-grand aria-pressed=false, electric=true; the same for organ models), FX focus follows the selected layer, a real mouse drag on the Level A fader moved aria-valuenow 85 -> 10, a knob drag moved 75 -> 100 and rotated the cap, drawbar LEDs light 7 of 8 at value 80, and a real pointer press on a key set aria-pressed=true plus .is-pressed, released on mouse-up.",
+          "Displays do not read live values. The Synth OLED stayed 'Saw' through two waveform changes and a layer-focus change while the rendered audio changed each time (centroids 1153, 1236, 1259 Hz); data-piano-type stayed 'Grand' after selecting Electric. Both only refresh when the program store emits, because Instrument subscribes to programStore and engine status but not to hardwareStore.",
+          "The panel does not track program state either: recalling program 1.2 (Upright) left the Electric LED lit and Grand dark, Level A frozen at its previous 55, and the SPLIT button read false while program 1.7 loaded with the split on, then stayed true after moving to a program with it off.",
+          "The Program OLED is the one display that does work - it shows bank.slot, the program name and an ' E' dirty marker for program-level edits."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "label": "Narrow-viewport retention",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 2,
+        "score": 50,
+        "evidence": [
+          "At 390x844 (plain viewport) the instrument stays recognizable and nothing overflows horizontally: instrument 386.1 x 438.9 px, 99% of the viewport width, document scrollWidth 390 (no horizontal scroll), all 73 keys rendered and visible, both OLEDs and the NORD STAGE 4 branding legible.",
+          "The silhouette collapses: the @media (max-width:500px) rule sets width 180vw / min-height 52vh, and because .app-shell is a flex row the box shrinks back to 386 px, giving a measured aspect ratio of 0.88 against the hardware's 3.095. The deck gets 123 px of the 439 px and each section shows only about three controls before its overflow:hidden clip, so the panel is a label strip rather than a usable surface.",
+          "On an actual phone it is worse: build/index.html contains no <meta name=viewport>, so under mobile emulation Chromium lays the page out at 980 CSS px and the instrument lands at y=911 in a 2120 px document - the user has to scroll a screen and a half to find it."
+        ]
+      }
+    ]
+  },
   "technicalGate": {
     "passed": true,
     "scoreCap": null,
@@ -268,28 +395,28 @@
         "id": "test",
         "label": "test",
         "passed": true,
-        "durationMs": 10864,
+        "durationMs": 4177,
         "detail": "Passed"
       },
       {
         "id": "typecheck",
         "label": "typecheck",
         "passed": true,
-        "durationMs": 1823,
+        "durationMs": 1194,
         "detail": "Passed"
       },
       {
         "id": "lint",
         "label": "lint",
         "passed": true,
-        "durationMs": 44534,
+        "durationMs": 29811,
         "detail": "Passed"
       },
       {
         "id": "build",
         "label": "build",
         "passed": true,
-        "durationMs": 2418,
+        "durationMs": 2203,
         "detail": "Passed"
       },
       {
@@ -301,13 +428,81 @@
     ]
   },
   "issues": [
-    "All audio tests run against a mock AudioContext (jsdom, no OfflineAudioContext); 'audible' behavior is proven via synthetic signature/energy proxies rather than rendered spectra — organModelSignature uses hardcoded per-model class offsets and waveformSignature uses category-id/string hashes, so the distinctness tests would pass even if engines rendered identically.",
-    "measureEnergy's OfflineAudioContext render path is dead in the test environment, so effect/type 'energy' distinctness tests execute the analytic string-hash fallback (piano-engine.ts ~L1285-1332), not real DSP.",
-    "The arpeggiator computes deterministic step order (arpSteps) and stores run/hold/rate/sync/range/direction state but is never time-scheduled to actually play notes rhythmically (acknowledged in stage3-visual-audit.md).",
-    "The synth oscillator (pitch) envelope oscEnv is stored and round-tripped but not applied to audio in spawnSynthVoice.",
-    "perf-pitch-stick is classified functional (isFunctionalControl true) yet has no binding in applyControlToEngine — pitch bend is a silent no-op that is not listed among unsupported controls.",
-    "control-bindings program-store-as auto-confirms with the current program name rather than exposing interactive keystroke naming.",
-    "stage3-desktop.png shows the Program section (store/scene row) and Synth section bottom controls clipped by the deck edge, with some effect-knob labels overlapping.",
-    "Piano Grand/Upright/Electric 'sample sets' are offline-baked generated PCM, honestly declared as not recordings (satisfies the honesty contract) but a carried-over deviation from the Phase-2 'recorded sample set' intent."
+    {
+      "severity": "critical",
+      "criterion": "hardwareInventory",
+      "title": "74 of 161 controls are unreachable by a pointer",
+      "detail": "At 1440x900, unscrolled, a 5x5 elementFromPoint grid over each control's box found zero hits for 74 controls (organ 14/33, piano 19/24, program 6/23, synth 22/38, effects 13/35). .deck-section has overflow:hidden and the sections end at y=432.34, while e.g. organ-perc-fast sits at y 452.5-474.5 and the whole reverb/compressor block, every piano type selector and the entire synth filter/envelope/LFO/arp bank sit below that. Points over them resolve to the section element, .control-deck, or piano keys. They are still keyboard-focusable, so the instrument is operable but not playable with a mouse."
+    },
+    {
+      "severity": "critical",
+      "criterion": "stateRoundTrip",
+      "title": "Program Store never captures engine edits, and morphs never reach audio",
+      "detail": "state/control-bindings.ts defines syncEngineToProgram() but references it only as the statement `void syncEngineToProgram` (line 1004), so nothing a piano/organ/synth/effects control touches ever enters programStore.working. Measured: type change to Clav on slot 1.2 rendered rms 0.0413/centroid 881 Hz; after Store, leaving to 1.4 and returning, the slot rendered 0.0808/335 Hz. The same disconnect makes morphs inert - assignMorph writes programStore.working.morph while PianoEngine.applyMorphValues reads its own this.programSound.morph, and a wheel sweep 0->100 with a drawbar destination assigned changed rms by 0.000002 (0.082733 -> 0.082735). Phase 3 hard gates for program round-trip and for morphs observable in audio both fail."
+    },
+    {
+      "severity": "critical",
+      "criterion": "distinctEngines",
+      "title": "All 54 bundled sample WAVs are malformed; the build always runs the fallback voice",
+      "detail": "scripts/generate-samples.mjs writes the channel count at byte offset 21 instead of 22 (`buf.writeUInt16LE(1, 21)`), so every file has audioFormat 257 and numChannels 0. Chromium's decodeAudioData rejects all of them (EncodingError, reproduced directly on ./samples/grand/r60_v1.wav, HTTP 200, 39734 bytes), the loader aborts each family on its first file, and data-audio-status is 'fallback' for the whole session. The status bar does say so honestly, but IMPLEMENTATION_DETAILS declares sample playback as the strategy for Grand/Upright/Electric and the Phase 2 requirement for three bundled recorded sample sets is not met in the shipped build."
+    },
+    {
+      "severity": "major",
+      "criterion": "chassisGeometry",
+      "title": "Deck gets 0.476 of the chassis instead of 0.54 because an inline flex overrides the stylesheet",
+      "detail": "ControlDeck.tsx renders style={{flex: SECTION_LAYOUT.length}} on .control-deck, and that shorthand beats the stylesheet's `flex: 0 0 calc(var(--deck-frac) * 100%)`. getComputedStyle returns flex-basis 0% / flex-grow 6 for the deck against flex-basis 46% / flex-grow 0 for the keybed, so the deck receives leftover space only: 201.17 px + 6.95 px top rail = 0.4759 of the 437.33 px chassis. This is what pushes 74 controls off the deck, and it also leaves 21 px (4.8%) of chassis height to a status strip that belongs to neither region."
+    },
+    {
+      "severity": "major",
+      "criterion": "synthSystem",
+      "title": "The arpeggiator is never instantiated",
+      "detail": "arpSteps() is exported from src/audio/synth-engine.ts and imported only by tests/synth-arp-gate.test.ts; no scheduler, clock or note generator exists in the app, and the only runtime reference to arpOn is `if (ls.arpHold && ls.arpOn) continue` in piano-engine.ts. Holding three notes for 2.6 s with ARP ON produced the same flat sustained envelope as ARP OFF (0.150/0.149/0.149/0.144 vs 0.151/0.150/0.148/0.142 per 100 ms) with no steps, while the button lights up as if engaged."
+    },
+    {
+      "severity": "major",
+      "criterion": "bindings",
+      "title": "The pitch stick is declared functional but does nothing",
+      "detail": "isFunctionalControl() returns true for perf-pitch-stick and IMPLEMENTATION_DETAILS.unsupportedControls lists only program-morph-aft, perf-hold and perf-mono, but applyControlToEngine has no branch for the stick. Driving it to aria-valuenow=100 during a held C4 left the Goertzel peak at 261.626 Hz - no bend, against the spec's +/-2 semitone range. A control that reports itself functional and silently does nothing is exactly what the honesty contract forbids."
+    },
+    {
+      "severity": "major",
+      "criterion": "panelState",
+      "title": "Displays and panel state do not follow the instrument",
+      "detail": "The Synth OLED stayed 'Saw' across two waveform changes that audibly changed the render (centroids 1153/1236/1259 Hz) and only refreshes on a program-store emit, because Instrument subscribes to programStore and engine status but not hardwareStore; data-piano-type is stale the same way. Program recall does not write back to the panel either: after recalling 1.2 Studio Upright the Electric LED was still lit, Level A still read 55, and the SPLIT button disagreed with the loaded program in both directions."
+    },
+    {
+      "severity": "major",
+      "title": "The test suite asserts on a parallel offline approximation, not the shipped graph",
+      "detail": "PianoEngine.measureEnergy() builds a separate OfflineAudioContext render with hand-written 'simple effect proxies for measurement' (its own delay/tremolo/mix nodes) and, when OfflineAudioContext is missing, returns a fabricated scalar (`if (this.effects.rotary.on) e *= 1.12 + this.effects.rotary.drive * 0.1`); typeSignature() similarly returns a hard-coded per-type vector. Six test files and 35 call sites (effects-processing, effects-routing, piano-instrument-library, piano-layers, piano-velocity-controls, regression-phase2) assert on those instead of the live chain, and the sample loader is tested through bakeTestLibrary()'s inline synthesis, which is why 54 undecodable WAVs shipped with every gate green."
+    },
+    {
+      "severity": "major",
+      "criterion": "qualityUnderLoad",
+      "title": "Master output clips above full scale under load",
+      "detail": "Sixteen keys held together produced peak 1.1812 at the node feeding AudioDestinationNode (rms 0.1753), i.e. hard clipping on a two-hand chord, although IMPLEMENTATION_DETAILS declares 'master gain + limiter -> destination'. Note-on also costs 8.6-12.0 ms of main thread each (six measurements around dispatched keydowns)."
+    },
+    {
+      "severity": "minor",
+      "criterion": "hardwareInventory",
+      "title": "Rotary Speaker block is in the Organ section, and two forbidden layouts are present",
+      "detail": "organ-rotary-speed, organ-rotary-stop and organ-drive render inside the Organ plate; the spec note and reference/nord-stage-4-73.jpg place the Rotary Speaker block on the exposed red performance band at about x 0.10-0.13 of the instrument width. Separately, #synth-oled spans 316.69 px of a 328.69 px section (96.3%), which the spec forbids as a 'wide display spanning the section', and all 35 Layer Effects controls sit in one undifferentiated flex-wrap flow with no per-unit grouping."
+    },
+    {
+      "severity": "minor",
+      "title": "The published index.html is a fragment, so the page renders in quirks mode and has no viewport meta",
+      "detail": "build/index.html is three lines - a module script, a stylesheet link and <div id=root> - with no doctype, <html> or <head>. document.compatMode reads 'BackCompat' in the served build at every viewport I measured. The missing <meta name=viewport> also means a real 390 px phone lays the page out at 980 CSS px, putting the instrument at y=911 of a 2120 px document. All measurements in this assessment were taken on those exact bits."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Button legends truncate to ambiguity",
+      "detail": ".ctrl-btn-label caps at 48 px with text-overflow: ellipsis, so the Layer Effects section shows four adjacent buttons reading 'FX Focus Or...', 'FX Focus Pi...', 'FX Focus Sy...' with no way to tell layer A from layer B, and the panel elsewhere shows 'Piano Sectio...', 'Organ A Oct...' and 'Mod 2 Amou...'."
+    },
+    {
+      "severity": "minor",
+      "criterion": "synthSystem",
+      "title": "LP12 and LP24 are the same filter",
+      "detail": "filterConfig() returns 'lowpass' for both and the only difference is Q + 2 for LP24 on the single BiquadFilterNode, so there is no 24 dB/oct slope. Measured LP12 rms 0.0769 vs LP24 0.0734 at cutoff 1688 Hz - they differ, but not as a doubled slope would."
+    }
   ]
 }
