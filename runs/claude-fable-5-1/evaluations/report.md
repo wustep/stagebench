@@ -2,14 +2,14 @@
 
 - Run: `claude-fable-5-1`
 - Status: complete
-- Aggregate: **86/100**
+- Aggregate: **91/100**
 - Coverage: 3/3 phases
 
 ## Phase scores
 
 | Phase | Scope | Score |
 | --- | --- | ---: |
-| 1 | Complete surface and basic piano | 59 |
+| 1 | Complete surface and basic piano | 96 |
 | 2 | Piano library and working effects | 71 |
 | 3 | Complete Stage 4 system | 97 |
 
@@ -58,7 +58,7 @@ Audio files are detected from the sealed artifact; generation methods and sample
 
 ## Phase 1: Complete surface and basic piano
 
-**59/100**
+**96/100**
 
 Complete, dense, recognisable Stage 4 73 surface with a genuinely playable generated piano voice, measured on the served build/ bundle. 73 keys E1-E7 (43 white / 30 black, all inside the keybed), 146 named controls across the six ordered sections, 146/146 reachable by a 5x5 elementFromPoint grid, Program and Synth the only primary OLEDs, no console errors. Every control kind moves under real mouse and keyboard with visible focus, and the decorative boundary holds under audio measurement: master level and all layer levels driven to 0 left a fixed-velocity note's master peak unchanged at 0.13906. Pointer, CDP multi-touch, computer keyboard with repeat suppression and Web MIDI (stub-measured; the real 'denied' path is honest too) all reach one lifecycle; sustain from all three sources (136.5 vs 2214.2 ms tails), a 32-voice cap with oldest-first stealing, and blur/visibility/dispose return voice and node counts to baseline. The voice is pitch-accurate within 1% with velocity-dependent timbre (centroid 638 -> 1040 Hz), and declarations match behaviour. One real defect: nothing limits the master path, so a simultaneous fff chord clips.
 
@@ -78,7 +78,7 @@ Complete, dense, recognisable Stage 4 73 surface with a genuinely playable gener
 
 ### Technical gate
 
-Failed; score capped at 59.
+Passed.
 
 ## Phase 2: Piano library and working effects
 
