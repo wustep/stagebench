@@ -1,0 +1,146 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-fable-5-1",
+  "stage": 1,
+  "evaluator": "stagebench blind evaluator (claude-opus-5)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-02T13:22:59Z",
+  "summary": "Complete, dense, recognisable Stage 4 73 surface with a genuinely playable generated piano voice, measured on the served build/ bundle. 73 keys E1-E7 (43 white / 30 black, all inside the keybed), 146 named controls across the six ordered sections, 146/146 reachable by a 5x5 elementFromPoint grid, Program and Synth the only primary OLEDs, no console errors. Every control kind moves under real mouse and keyboard with visible focus, and the decorative boundary holds under audio measurement: master level and all layer levels driven to 0 left a fixed-velocity note's master peak unchanged at 0.13906. Pointer, CDP multi-touch, computer keyboard with repeat suppression and Web MIDI (stub-measured; the real 'denied' path is honest too) all reach one lifecycle; sustain from all three sources (136.5 vs 2214.2 ms tails), a 32-voice cap with oldest-first stealing, and blur/visibility/dispose return voice and node counts to baseline. The voice is pitch-accurate within 1% with velocity-dependent timbre (centroid 638 -> 1040 Hz), and declarations match behaviour. One real defect: nothing limits the master path, so a simultaneous fff chord clips.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Real audio measured at the engine master node of the served build/ bundle (index-8R3W0bYO.js, sha256 verified against build/assets over http://127.0.0.1:4171): silence peak 0.000 vs a single C4 at v100 peak 0.136 — output is non-silent and only sounds on note-on.",
+            "Pitch is correct across the whole 73-key range: DFT of the actual AudioBuffer handed to each voice gives 41.59 Hz vs 41.20 expected (MIDI 28), 164.90 vs 164.81 (52), 659.58 vs 659.26 (76), 1319.17 vs 1318.51 (88) — under 1% everywhere, the small sharpening consistent with the declared inharmonicity model.",
+            "Velocity changes timbre, not just level: spectral centroid of the rendered buffer is 637.8 Hz at v32 vs 1039.5 Hz at v112, and master peak rises monotonically 0.0415 / 0.0881 / 0.1364 / 0.1822 at v20 / v60 / v100 / v127.",
+            "Decay and release behave: two-stage decay measured on the buffer (rms 0.1876 in the first 100 ms vs 0.0429 at 1.0-1.2 s at v112); buffer length shortens with pitch (4.00 s at MIDI 28-64, 3.34 s at 76, 2.65 s at 88); key-up tail 136.5 ms vs 2214.2 ms with sustain held (audible RMS > 0.004 threshold).",
+            "Note-on latency measured 5.3 ms from bus.noteOn to first audible sample (ctx.baseLatency 0.010 s) — plays responsively.",
+            "Defect: no headroom or limiter on the master path (engine master gain fixed at 0.800). A simultaneous 7-note fff chord (48/52/55/60/64/67/72 at v127) peaks at 2.464 with 4392 sampled values at or above full scale, i.e. hard clipping at the destination; re-measured after warm-up and confirmed reproducible. A staggered pedalled arpeggio of the same notes stays at 0.947. The voice itself is also honestly additive rather than piano-sampled, so its character is simplified in ways a pianist would notice."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares 'Generated buffers only ... no recorded samples are bundled or fetched'. Verified against the build, not the text: build/assets contains exactly two files (index-8R3W0bYO.js, index-AKmTqF9T.css) and the page issued no other requests — there is no audio asset to be a recording.",
+            "The sounding voice really is the declared additive model: a live voice's source.buffer for A4 has an exact 440.0 Hz fundamental with the described inharmonic partial series, peak 0.618, duration 3.74 s, generated at runtime at ctx.sampleRate 44100 with nothing loaded.",
+            "The declared 3 velocity layers with representative velocities 32/72/112 are observable — timbre steps between layers (centroid 637.8 -> 1039.5 Hz) while loudness still varies continuously inside a layer (v100 peak 0.1364 vs v127 0.1822).",
+            "The declared second source ('Fallback triangle tone ... only used when the piano renderer throws ... labelled as fallback') is real and correctly gated: forcing the renderer to throw in the running build put the engine in state 'fallback', produced a voice of kind 'fallback', and labelled it in both the status strip ('Audio: fallback') and the Program OLED ('Voice: fallback tone'). It never appears otherwise.",
+            "Nothing in the running UI describes the voice as a recording: the Program OLED reads 'Voice: generated tone' and the ready message is 'Ready: generated additive piano voice (not a recording).'"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Pointer, driven with a real mouse (not synthetic pointerdown): mouse.down on the C4 key gave held [60] and a sounding voice; mouse.up gave held []. Strike position maps to velocity — lastNote '60@56' striking the top of the key vs '60@123' at the bottom.",
+            "Glissando and cancel both work on real pointer input: dragging across the keybed produced the trail 60 -> 62 -> 64 -> 65 with exactly one note held at a time and none stuck at release; a pointercancel while held released [60] -> [].",
+            "Independent multi-touch measured with CDP Input.dispatchTouchEvent (not a framework helper): two touch points gave held [64, 67]; releasing only point 2 left [64]; releasing the last left []. The two fingers are tracked independently.",
+            "Computer keyboard: keydown 'a' gave held [60], an injected repeat:true keydown left held [60] with still exactly 1 non-releasing voice (auto-repeat suppressed), keyup released it. Z/X shift the mapping (status hint C4-F5 -> C5-F6 -> C3-F4) and Shift sustains.",
+            "Web MIDI reaches the same lifecycle (stub-measured: navigator.requestMIDIAccess stubbed via addInitScript because headless Chromium exposes no device). Channel-agnostic note on 0x92/72/110 -> held [72] and 'note on 72 vel 110'; velocity honoured (lastNote '76@20' vs '76@120'); CC64 held a released note (sustained:true) and CC64=0 released it; CC123 released both held notes; port disconnect moved state to 'disconnected' and released the device's note.",
+            "The denied path is real, not stubbed: in unmodified headless Chromium the status strip reads 'MIDI: denied — MIDI access was denied; keyboard and pointer input still work.' with a Request MIDI button, and pointer/keyboard input still play."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Velocity mapping is monotonic and reaches the audio graph: measured master peaks 0.0415 / 0.0881 / 0.1364 / 0.1822 at v20 / v60 / v100 / v127 on the same note, with timbre changing across layers as well.",
+            "Sustain works from all three sources and changes duration: audible tail 136.5 ms on key-up vs 2214.2 ms with sustain down. UI #sustain-pedal (aria-pressed true, 'Sustain: down'), Shift on the computer keyboard, and MIDI CC64 all set bus sustain, hold released notes as sustained:true, and release them on pedal-up.",
+            "Deterministic voice stealing at the declared 32-voice cap: after 32 notes (MIDI 40..71) activeVoices = 32; a 33rd note (90) left activeVoices = 32 with the oldest (40) gone and 41..71 plus 90 remaining — oldest-first, exactly as declared.",
+            "All-notes-off / blur / visibility / disconnect all stop owned voices: bus.releaseAll() took 32 voices to 0; a window blur while holding a keyboard note took held [64] -> [] with 0 sounding; a visibilitychange to hidden while holding a key with Shift down took held [60], sustain true, 1 sounding -> held [], sustain false, 0 sounding, and cleared the key's aria-pressed; a MIDI port disconnect released the device's note.",
+            "Node accounting returns to baseline: engine metrics before dispose were created 7 / cleaned 0 / live 7 with 3 voices; after dispose, created 7 / cleaned 7 / live 0, cachedBuffers 0, hasContext false, contextState 'closed'. After a 32-voice burst plus all-notes-off, liveNodes returned to the 1-node (master gain) baseline it started from.",
+            "Limitation: pointer velocity is confined to 48..127 by the strike-position map, so a mouse or touch cannot play softer than v48; MIDI and the internal bus reach the full 1..127."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All 146 panel controls (26 knobs, 9 drawbars, 7 faders, 5 dials, 1 wheel, 1 pitch stick, 97 buttons) carry a stable id, a role (49 slider / 97 button) and an accessible name; zero had a missing name and zero sliders lacked aria-valuenow.",
+            "Every control kind moves under a real mouse and under the keyboard: fader organ.layer-a.level dragged 78 -> 100; knob performance.master-level dragged 7 -> 10 with --angle 60deg -> 150deg; drawbar organ.drawbar.16 dragged 7 -> 8 ('8 of 8'); mod wheel dragged to 0.44 ('44%'); dial piano.model ArrowUp 0 -> 15 degrees; ArrowUp/ArrowDown/End on sliders moved and clamped correctly (7 -> 7.1 -> 6.9 -> 10).",
+            "The spring-back pitch stick was re-measured while held rather than after release: ArrowRight held gives 0.05 / '+5%' / --bend 1.1deg and a pointer drag gives 1 / '+100%' / 22deg, each returning to 0 / 'centre' on release — correct hardware behaviour, not a dead control.",
+            "State is reported: all 97 buttons expose aria-pressed or data-value; piano.type cycles data-value 0..5 and wraps, with an aria-describedby live region reading 'Grand selected' -> 'Upright selected'. Focus is visible — real Tab traversal shows a 2px solid rgb(255,210,63) outline on every focused control.",
+            "The decorative boundary is honest and provable in audio: with a warm-up note before and after each state change, the master peak for a fixed v100 note was 0.13906 at baseline and 0.13906 after driving performance.master-level, organ.layer-a/b.level, organ.percussion.volume and piano.layer-b.level to 0 (0.13821 for piano.layer-a.level, within run-to-run noise), and engine master gain stayed 0.800. No panel control secretly touches audio, and none fakes success.",
+            "The decorative status is declared in the running UI, not just in a file: the page banner reads 'Panel controls are decorative.' and the Synth OLED reads 'Decorative / No synth engine runs yet'. It is declared globally rather than per control."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All six sections render in the documented order (performance, organ, piano, program, synth, effects) with 146 controls distributed 7 / 24 / 14 / 28 / 40 / 33 — dense and section-specific, not a uniform grid.",
+            "Every sectionLandmarks entry in specs/nord-stage-4.visual.json is rendered inside its own section: performance has master level, the rotary block (drive/organ/stop-mode/speed), pitch stick, mod wheel and 'nord stage 4 / HAMMER ACTION 73' branding; organ has nine physical drawbars (organ.drawbar.16 ... .1), level LED ladders, model switches and percussion volume/decay/harmonic/on; piano has layer levels, type and model selectors, timbre and the detail switches (acoustics, unison, kb-touch, dyn-comp); program has the OLED, large dial, eight program buttons, page prev/next, live-mode, layer-scene, store, split and three morph assign buttons; synth has the OLED, three layer levels, oscillator, filter, envelope, LFO and arpeggiator controls; effects has two mod groups, amp sim + EQ, delay, compressor, reverb and layer focus.",
+            "Program and Synth are the only primary OLEDs: exactly two elements carry data-display='primary' (program.oled, synth.oled), one in program and one in synth, zero in the other four sections.",
+            "Reachability measured, not inferred: a 5x5 elementFromPoint grid across each control's bounding box at 1440x900 unscrolled resolved to the control or a descendant for 146/146 controls and 73/73 keys — nothing is rendered but buried.",
+            "The keybed matches the assigned Stage 4 73 variant exactly: 73 keys, 43 white / 30 black, E1 to E7, all 73 boxes inside the keybed bounds, black-key height fraction 0.6100 against the specified 0.61. Rendered at 1440x900 with no console errors during the whole interaction pass."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "tests/feature-matrix.json maps all 11 required Phase 1 IDs to named test files, and each file is real and non-empty (3.9-8.6 KB, 13 files, 72.8 KB total) — no ID points at a stub.",
+            "The four piano IDs were exercised in the running build, not just in tests. piano.basic-note-lifecycle: note on/off, repeated retrigger, overlapping notes, all-notes-off and node cleanup verified (created 7 / cleaned 7 / live 0 after dispose).",
+            "piano.basic-inputs: pointer with position-derived velocity (56 vs 123), independent CDP multi-touch ([64,67] -> [64] -> []), mapped computer keyboard with repeat suppression, and MIDI note/velocity/CC64 plus the denied and disconnected states all reached the same NoteBus lifecycle.",
+            "piano.basic-sustain-polyphony: sustain transitions measured audibly (136.5 ms vs 2214.2 ms tails), 32 concurrent voices, oldest-first stealing (40 dropped for 90), velocity response 0.0415 -> 0.1822.",
+            "piano.basic-status-cleanup: all four states observed live — idle on load, loading (warm bank 0/8) then ready ('Ready: generated additive piano voice (not a recording).'), error with AudioContext removed ('Audio unavailable: Web Audio is not available in this browser. Keys still show presses; nothing sounds.' — and keys still pressed, aria-pressed true, held [60]), and fallback when the renderer throws. Blur, visibilitychange and disconnect each stopped every owned voice."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Every audio claim in IMPLEMENTATION_DETAILS.json was checked by exercising the build and held: generated buffers only with no bundled or fetched samples (build/assets holds only the JS and CSS); the fallback oscillator only on renderer failure and labelled; polyphony capped at 32 with oldest-voice stealing; 3 velocity layers; warm-up bank of 8 notes (warmTotal 8, C4-C5); lazy per-note rendering with an LRU cache (cachedBuffers stayed <= 64).",
+            "The central Phase 1 claim — 'every physical panel control is decorative in Phase 1 and changes presentation state only' — is true under audio measurement: driving master level and every layer level to 0 left the fixed-velocity master peak unchanged at 0.13906 and engine master gain at 0.800.",
+            "The input claims are accurate: the declared mapping A W S E D F T G Y H U J K O L P ; ' = C4..F5 matches the status hint and plays, Z/X shift the base (C5-F6 / C3-F4), Shift sustains, auto-repeat is suppressed, blur and visibility-hidden release everything, and MIDI covers note on/off with velocity on any channel plus CC64/CC120/CC123 and disconnect.",
+            "Nothing undeclared was found missing: every required Phase 1 landmark, control kind, key, feature ID and status state is present, and no control claims a function it does not perform.",
+            "One inaccuracy, cosmetic: with AudioContext unavailable the Program OLED still reads 'Voice: generated tone' even though nothing can sound; the adjacent line does read 'Audio error' and the status strip carries the full honest message."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "pianoVoice",
+      "title": "Simultaneous chords clip the master output",
+      "detail": "There is no headroom or limiter on the master path: engine master gain is fixed at 0.800 and each voice is peak-normalised to about 0.72 x the velocity curve, so in-phase attacks sum past full scale. Measured at the master node of the served build after a warm-up pass: a simultaneous 7-note fff chord (MIDI 48/52/55/60/64/67/72 at v127) peaks at 2.464 with 4392 sampled values at or above 1.0, which the destination hard-clips. A single note peaks at 0.484 and a staggered pedalled arpeggio of the same notes at 0.947, so the defect is specific to simultaneous onsets - exactly the way a piano is played. Re-measured across separate runs and reproducible. Re-confirmed on a second independent tap of the master GainNode via a ScriptProcessor sink (scratch/rv8-clip.mjs): the same 7-note chord peaked at 1.762 with 606 of 49,152 sampled values at or above full scale, against 0.576 for a single v127 note and 0.000 in silence; the exact peak varies with where the capture window falls across the onset, the clipping does not."
+    },
+    {
+      "severity": "minor",
+      "criterion": "voiceLifecycle",
+      "title": "Pointer and touch cannot play below velocity 48",
+      "detail": "Keybed velocity is derived from the strike position as round(48 + 79 * fraction), so the softest note reachable with a mouse or a finger is v48 (measured lastNote '60@56' at the top of the key, '60@123' at the bottom). MIDI and the internal note bus reach the full 1..127, and the computer keyboard sends a fixed v96, so the restriction only affects on-screen play; it still costs about a third of the available dynamic range for the instrument's primary input."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "Program OLED reports a voice while audio is in the error state",
+      "detail": "With window.AudioContext removed, the engine correctly reports state 'error' with the message 'Audio unavailable: Web Audio is not available in this browser. Keys still show presses; nothing sounds.', and the OLED's own next line reads 'Audio error'. But the line above it still reads 'Voice: generated tone', naming a voice that cannot sound. The status strip is fully honest; only this one OLED line is stale in the error state."
+    }
+  ]
+}

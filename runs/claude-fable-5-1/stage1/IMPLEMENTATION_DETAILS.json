@@ -1,0 +1,46 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "Generated buffers only. One piano-like voice is synthesized at runtime by additive synthesis (src/audio/pianoRenderer.ts) into Float32 AudioBuffers per note and velocity layer, played through AudioBufferSourceNode -> per-voice GainNode -> master GainNode -> destination. No recorded samples are bundled or fetched. Nothing is described as a recording.",
+    "generatedSources": [
+      {
+        "name": "Generated additive piano voice",
+        "kind": "generated-buffer",
+        "generator": "src/audio/pianoRenderer.ts (renderPianoNote)",
+        "description": "Up to 28 inharmonic partials (f_n = n·f0·sqrt(1+B·n²)) with a hammer-position comb filter, velocity-dependent brightness (partial roll-off exponent), two-stage exponential decay (prompt sound + aftersound), a 2 ms attack ramp and a 9 ms seeded-noise hammer thump. Peak-normalized then scaled by the velocity loudness curve. Deterministic for identical inputs.",
+        "velocityLayers": 3,
+        "layerRepresentativeVelocities": [32, 72, 112],
+        "rootNotes": "every key is rendered at its own pitch (no pitch shifting); buffers are rendered lazily on demand and kept in an LRU cache of 64, with a warm-up bank of C4–C5 rendered right after the audio context starts",
+        "bufferLength": "up to 4 s (bass) down to about 1.5 s (treble), at the audio context sample rate",
+        "license": "Original code written for this candidate; no third-party audio material."
+      },
+      {
+        "name": "Fallback triangle tone",
+        "kind": "live-synthesis",
+        "generator": "src/audio/engine.ts (fallbackVoice, OscillatorNode)",
+        "description": "Only used when the piano renderer throws. A triangle OscillatorNode with a 5 ms attack and 2.5 s exponential decay through the same per-voice gain and master path. The status strip and program display label this state as 'fallback'.",
+        "license": "Original code written for this candidate."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "Web Audio is created lazily on the first key press or the Start audio button; status is reported as idle, loading (warm-up bank rendering), ready, error (no AudioContext available) or fallback (renderer failure).",
+      "Sustain (UI pedal button, Shift key, MIDI CC64) is the only panel-independent audio behaviour; every physical panel control is decorative in Phase 1 and changes presentation state only.",
+      "Polyphony is capped at 32 voices; the oldest sounding voice is stolen deterministically with a 20 ms release. Note release is a 300 ms exponential ramp; retriggered notes release in 30 ms; all-notes-off uses 80 ms.",
+      "Tests never touch real audio output, MIDI devices or the network: the audio context, MIDI access and timers are injected (src/audio/boundaries.ts) and faked in tests (src/audio/fakeAudio.ts); audible relationships are proved on rendered sample data through src/audio/offlineRender.ts."
+    ]
+  },
+  "inputs": {
+    "pointer": "pointerdown/up/cancel with per-pointer tracking, glissando across keys, independent multi-touch, velocity from the strike position on the key",
+    "computerKeyboard": "physical key codes A W S E D F T G Y H U J K O L P ; ' = C4..F5 (base shifts with Z/X, clamped to the keybed), Shift = sustain, auto-repeat suppressed, blur/visibility-hidden releases everything",
+    "midi": "Web MIDI note on/off with velocity on any channel, CC64 sustain, CC120/123 all notes off; unsupported / requesting / ready / denied / error / disconnected states, disconnect releases the device's notes"
+  },
+  "evidence": {
+    "captureHarness": "scripts/capture.mjs (playwright-core driving the locally installed Chrome; the parent capture harness was not available in this workspace)",
+    "directory": "evidence/",
+    "files": ["evidence/stage1-desktop.png", "evidence/stage1-narrow.png", "evidence/stage1-capture.json", "evidence/stage1-visual-audit.md"]
+  }
+}

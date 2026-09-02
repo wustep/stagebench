@@ -1,0 +1,102 @@
+{
+  "version": 3,
+  "runId": "claude-fable-5-1",
+  "stage": 2,
+  "verifiedAt": "2026-09-02T11:27:20.070Z",
+  "passed": true,
+  "artifactDigest": "7c4e341840eee070fb81ad61632f705555268ffc52892dd2b0b8430a9a35ce59",
+  "artifactFiles": 588,
+  "materials": {
+    "specs/benchmark-phases.json": {
+      "version": "2.0.0",
+      "digest": "2399bffa9bf89a628cbbc7e71037f280c10ba9256fa9e6935e82e5e0820ebfb3"
+    },
+    "specs/nord-stage-4.visual.json": {
+      "version": "1.4.0",
+      "digest": "f4a30f7fdc221056d345e37b51a525ee12ae4574791bebbb0ac2d40ac9acceac"
+    },
+    "specs/nord-stage-4.variants.json": {
+      "version": "1.0.0",
+      "digest": "983746df59536a485c44e5d77e508860391f178d2b84525768c4ce3e2eb167f6"
+    },
+    "bench/rubric.json": {
+      "version": "2.0.0",
+      "digest": "bec85b6f8c7f76ebb110032f3055f9319b0db78205cb6030e5f6564a960f1c0f"
+    }
+  },
+  "phaseContract": {
+    "specs": [
+      "specs/nord-stage-4.visual.json",
+      "specs/nord-stage-4.piano.json",
+      "specs/nord-stage-4.effects.json"
+    ],
+    "hardGates": 5
+  },
+  "featureMatrix": {
+    "coveredFeatures": 20,
+    "requiredFeatures": 20
+  },
+  "implementationDetails": {
+    "audioStrategy": "One AudioContext. Piano notes are AudioBufferSourceNodes playing either recorded, bundled Ogg Vorbis one-shots (Grand, Upright, Electric, Clav, Digital, Misc models — decoded at runtime with @wasm-audio-decoders/ogg-vorbis) or generated buffers (the Additive Piano model and the fallback voice, rendered by src/audio/pianoRenderer.ts). Each voice feeds a per-voice GainNode → per-layer bus GainNode → LayerChain AudioWorkletNode (Timbre EQ, String Res, Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb — pure TypeScript DSP in src/dsp/) → layer level GainNode → optionally the shared Rotary AudioWorkletNode (To Rotary) → master GainNode (Master Level) → master limiter AudioWorkletNode → destination. If AudioWorklet is unavailable the same DSP classes run in a ScriptProcessorNode. Recorded samples, generated buffers and the live fallback oscillator are always labelled as what they are.",
+    "generatedSources": 3,
+    "sampleSources": 8
+  },
+  "checks": [
+    {
+      "id": "test",
+      "command": "pnpm run test",
+      "passed": true,
+      "durationMs": 10762,
+      "detail": "Passed"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm run typecheck",
+      "passed": true,
+      "durationMs": 3017,
+      "detail": "Passed"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm run lint",
+      "passed": true,
+      "durationMs": 551,
+      "detail": "Passed"
+    },
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "passed": true,
+      "durationMs": 3533,
+      "detail": "Passed"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence/stage2-desktop.png",
+      "passed": true,
+      "detail": "evidence/stage2-desktop.png · 1440x900"
+    },
+    {
+      "id": "evidence/stage2-narrow.png",
+      "passed": true,
+      "detail": "evidence/stage2-narrow.png · 390x844"
+    },
+    {
+      "id": "evidence/stage2-visual-audit.md",
+      "passed": true,
+      "detail": "evidence/stage2-visual-audit.md"
+    },
+    {
+      "id": "evidence/stage2-capture.json",
+      "passed": true,
+      "detail": "evidence/stage2-capture.json"
+    },
+    {
+      "id": "dist/index.html standards mode",
+      "advisory": true,
+      "passed": true,
+      "detail": "dist/index.html opens with <!doctype html>, so the browser measures it in standards mode"
+    }
+  ]
+}
