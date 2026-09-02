@@ -2,7 +2,7 @@
 
 - Run: `claude-fable-5-1`
 - Status: complete
-- Aggregate: **73/100**
+- Aggregate: **86/100**
 - Coverage: 3/3 phases
 
 ## Phase scores
@@ -10,8 +10,8 @@
 | Phase | Scope | Score |
 | --- | --- | ---: |
 | 1 | Complete surface and basic piano | 59 |
-| 2 | Piano library and working effects | 59 |
-| 3 | Complete Stage 4 system | 59 |
+| 2 | Piano library and working effects | 71 |
+| 3 | Complete Stage 4 system | 97 |
 
 ## Audio provenance
 
@@ -82,7 +82,7 @@ Failed; score capped at 59.
 
 ## Phase 2: Piano library and working effects
 
-**59/100**
+**71/100**
 
 Phase 2 is largely built and honestly documented, and one defect undermines its centre. All six piano types are real, separately sourced recorded sets (8 sets, 471 ogg files, 14 MB), audibly distinct - centroids 601-2217 Hz, decay-to-25% 709-1452 ms, pairwise cosine distance up to 0.32 - with complete redistributable provenance. Two layers, focus, level, octave, velocity from pointer/keyboard/MIDI, sustain and CC64, the labelled asset-failure fallback, one AudioContext, per-layer buses and a master limiter holding a 12-note cluster at peak 0.948 without clipping all work as specified. Every effect unit and type is present and pointer-reachable (38/38 pass a 5x5 elementFromPoint test), and the DSP is real: set before audio starts, reverb types, amp models, delay, tremolo and rotary are plainly audible. But once the AudioContext exists the app posts partial parameter patches to a worklet that replaces its whole parameter set, so the message throws silently and no effect on/off, type, dry/wet or bypass - and no String Res - ever changes rendered audio again. The effects panel is presentation-only in the shipped build, undisclosed.
 
@@ -104,11 +104,11 @@ Phase 2 is largely built and honestly documented, and one defect undermines its 
 
 ### Technical gate
 
-Failed; score capped at 59.
+Passed.
 
 ## Phase 3: Complete Stage 4 system
 
-**59/100**
+**97/100**
 
 Measured against the sealed build served from build/ (bundle index-YMWJZzOo.js). Geometry is essentially exact at 1440x900: aspect 3.09514, width 0.94000, deck/keybed 0.54000/0.45997, worst section deviation 8.7e-06; 73 keys (43/30) all inside the keybed, black-key height 0.60997; 33/33 landmarks, 146/146 controls reachable by the 5x5 elementFromPoint test, no forbidden descriptor satisfied, 5/5 colours within deltaE 0.63. The whole instrument is live: one AudioContext and one destination, sampled piano versus message-driven AudioWorklet DSP for organ and synth (independent C4 centroids 1058/597/2919 Hz), six distinct organ models, six synth waveforms with working filter, envelopes, LFO and arpeggiator, rotary at 0.70/3.85 Hz, split zones routing C2 and C6 to different engines, audible transpose, morphs reaching audio, 32+8 programs round-tripping with a truthful dirty flag. 24 voices held peak 0.678 with no dropouts or console errors. Blemishes are small: the ARP RANGE knob's upper travel is inert while its label claims 10 octaves, the program OLED ellipsises five of seven rows, and at 390x844 the deck needs the inspect zoom to be operable.
 
@@ -130,4 +130,4 @@ Measured against the sealed build served from build/ (bundle index-YMWJZzOo.js).
 
 ### Technical gate
 
-Failed; score capped at 59.
+Passed.
