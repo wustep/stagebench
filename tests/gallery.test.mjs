@@ -34,6 +34,7 @@ test('every runs.json entry conforms to the generated RunEntry projection', () =
     assert.ok(runStatuses.has(run.status), `${run.id}: invalid status "${run.status}"`)
     assert.equal(typeof run.startedAt, 'string', `${run.id}: startedAt`)
     assert.ok(run.score === null || typeof run.score === 'number', `${run.id}: score`)
+    assert.ok(run.panelVisuals === null || typeof run.panelVisuals === 'number', `${run.id}: panelVisuals`)
     assert.ok(run.reportPath === null || typeof run.reportPath === 'string', `${run.id}: reportPath`)
     assert.ok(Array.isArray(run.stages) && run.stages.length > 0, `${run.id}: stages`)
     for (const stage of run.stages) {

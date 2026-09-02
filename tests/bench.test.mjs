@@ -354,6 +354,7 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     // The gallery score is the aggregate: panel axis + phase-weighted remainder,
     // so it is not the phase score.
     assert.equal(entry.score, expected)
+    assert.equal(entry.panelVisuals, evaluation.runAxis.score)
     assert.equal(entry.stages[0].score, 75)
     assert.equal(entry.telemetry.costUsd, 12.5)
     assert.equal(entry.telemetry.totalTokens, 1_500_000)
@@ -389,6 +390,7 @@ test('pre-v4 run records project into frozen legacy registry entries', () => {
   assert.equal(legacy.legacy, true)
   assert.equal(legacy.status, 'legacy')
   assert.equal(legacy.score, 96)
+  assert.equal(legacy.panelVisuals, null)
   assert.equal(legacy.reportPath, '/reports/old-run/index.html')
   assert.equal(legacy.telemetry.wallTimeSeconds, 16031)
   assert.equal(legacy.telemetry.outputTokens, 848941)

@@ -4,7 +4,11 @@
 //
 // Every run lays the instrument out differently, so the crop is found in the
 // DOM rather than hard-coded: locate the keyboard (the element with the most
-// key-shaped children), then walk up to the painted chassis that contains it.
+// key-shaped children), then prefer a named instrument chassis (`#instrument`
+// / `.instrument*`) and otherwise the outermost ancestor that still wraps the
+// keyboard without covering the whole page. Paint is not required — a
+// transparent chassis wrapper is the correct crop, not the painted keybed
+// inside it.
 import fs from 'node:fs'
 import path from 'node:path'
 import { serveDirectory } from './capture.mjs'
@@ -32,12 +36,6 @@ function findInstrumentRect() {
     const rect = rectOf(element)
     return rect.width > 0 && rect.height > 0
   }
-  const isPainted = (element) => {
-    const style = getComputedStyle(element)
-    const background = style.backgroundColor
-    const transparent = !background || background === 'transparent' || /,\s*0\s*\)$/.test(background)
-    return !transparent || style.backgroundImage !== 'none'
-  }
   // Piano keys: tall, narrow, and all siblings of one another.
   const isKeyShaped = (element) => {
     const rect = rectOf(element)
@@ -58,14 +56,28 @@ function findInstrumentRect() {
   // An octave's worth of keys is the floor for trusting the detection.
   if (!keyboard || keyCount < 12) return null
 
-  // Climb to the outermost painted ancestor that still reads as the instrument
-  // rather than the page — that is the chassis holding panel plus keyboard.
+  // A chassis named instrument (id or class) that still wraps the keyboard
+  // and is under MAX_SHARE is the full panel+keybed, even when its own
+  // background is transparent. Prefer that over a painted keybed-inner.
+  const isInstrumentNamed = (element) => {
+    const names = [element.id, ...element.classList]
+    return names.some((name) => name === 'instrument' || name.startsWith('instrument-') || name.startsWith('instrument_'))
+  }
+
+  let namedExact = null
+  let namedLoose = null
+  // Outermost ancestor under MAX_SHARE — do not require paint, so an unpainted
+  // wrapper still wins over a painted keybed. Page-sized ancestors are skipped.
   let chassis = keyboard
   for (let node = keyboard; node && node !== document.body; node = node.parentElement) {
     const rect = rectOf(node)
     if (rect.width * rect.height > viewportArea * MAX_SHARE) break
-    if (isPainted(node)) chassis = node
+    chassis = node
+    if (node.id === 'instrument') namedExact = node
+    else if (isInstrumentNamed(node)) namedLoose = node
   }
+  if (namedExact) chassis = namedExact
+  else if (namedLoose) chassis = namedLoose
 
   const rect = rectOf(chassis)
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, keyCount }
