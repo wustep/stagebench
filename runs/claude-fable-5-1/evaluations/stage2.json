@@ -1,0 +1,249 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-fable-5-1",
+  "stage": 2,
+  "stageName": "Piano library and working effects",
+  "status": "complete",
+  "evaluator": "stagebench blind evaluator (Claude Opus 5)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-02T14:11:41.000Z",
+  "summary": "Phase 2 is largely built and honestly documented, and one defect undermines its centre. All six piano types are real, separately sourced recorded sets (8 sets, 471 ogg files, 14 MB), audibly distinct - centroids 601-2217 Hz, decay-to-25% 709-1452 ms, pairwise cosine distance up to 0.32 - with complete redistributable provenance. Two layers, focus, level, octave, velocity from pointer/keyboard/MIDI, sustain and CC64, the labelled asset-failure fallback, one AudioContext, per-layer buses and a master limiter holding a 12-note cluster at peak 0.948 without clipping all work as specified. Every effect unit and type is present and pointer-reachable (38/38 pass a 5x5 elementFromPoint test), and the DSP is real: set before audio starts, reverb types, amp models, delay, tremolo and rotary are plainly audible. But once the AudioContext exists the app posts partial parameter patches to a worklet that replaces its whole parameter set, so the message throws silently and no effect on/off, type, dry/wet or bypass - and no String Res - ever changes rendered audio again. The effects panel is presentation-only in the shipped build, undisclosed.",
+  "score": 71.1,
+  "rawScore": 71.1,
+  "categories": [
+    {
+      "id": "sound",
+      "label": "Sound",
+      "weight": 55,
+      "score": 57.5,
+      "contribution": 31.6,
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "label": "Instrument breadth & character",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "All six PIANO types select a real recorded set from build/samples (8 sets, 471 .ogg files, 14 MB, verified Ogg Vorbis headers). Measured on C4 through the served build (127.0.0.1:4172, bundle assets/index-CJ47vIsg.js matching build/assets), spectral centroid and decay-to-25%: Grand 803 Hz / 759 ms, Upright 672 Hz / 1089 ms, Electric (Wurlitzer EP200) 749 Hz / >1600 ms, Clav (Harpsichord) 2217 Hz / 891 ms, Digital (TX81Z) 1832 Hz / 1452 ms, Misc (Marimba) 601 Hz / 709 ms.",
+            "Pairwise log-spectrum cosine distance between the six types ranges 0.062-0.324 (Grand vs Upright 0.114, Grand vs Electric 0.111, Upright vs Clav 0.319) - no two types render identically; band energy above 2.5 kHz is 0.055 for Grand vs 0.258 for Clav.",
+            "Provenance is per-set and independent: build/samples/*/manifest.json + LICENSES.md cite Salamander Grand V3 (CC-BY-3.0), FreePats Upright KW (CC0), Greg Sullivan E-Pianos Wurlitzer/Pianet T/CP80 (CC-BY-3.0), VCSL TX81Z/Harpsichord/Marimba (CC0); Grand root notes are minor thirds from A0 (021,024,027...108) with 4 velocity layers, matching the declared recording.",
+            "Held to 3, not 4: every set is 1-channel (mono) at 44.1 kHz with 3-semitone root spacing and 3-4 velocity layers (build/samples/*/manifest.json, verified for all 8 sets), so there is no stereo image and no per-note release samples - simplification a knowledgeable player would notice against the hardware."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "label": "Effect audibility & correctness",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 1,
+          "score": 25,
+          "evidence": [
+            "CRITICAL: no effect control changes rendered audio once the AudioContext exists. Measured at the master-limiter output (analyser tapped on the node that connects to ctx.destination), Mod 1 = Tremolo, amount 10, rate 8, toggled ON then OFF live gives byte-for-byte identical envelopes (rms 0.02706 on vs 0.02713/0.02708 off) with no amplitude modulation at all.",
+            "Same result for every other unit driven live from the panel with a real mouse: Delay ON with dry/wet 8.3 and feedback 10 -> rms 0.03375 vs 0.03405 before (no repeats); Reverb ON at dry/wet 10 -> rms 0.03478 vs 0.03405; Mod 2 six types, Amp seven models, Compressor amount 10: log-spectrum cosine distance to the unbypassed baseline 0.0000-0.0005 in all 25 live cases.",
+            "The DSP itself is genuine: when the same panel settings are made BEFORE audio starts (so they ride the one full parameter push), every unit is clearly audible and idiomatic - Reverb Room/Booth/Spring/Cath give rms 0.0057/0.0155/0.0378/0.0064 with Spring's dispersed 'boing' tail lasting past 2.2 s; Amp EQ-only/Small/JC/Twin give rms 0.0490/0.0637/0.0461/0.0557 (centroids 1474/1543/1387/1502); LP24 centroid 672 vs HP24 2654; Delay produces visible repeats; Layer Effects OFF is bit-identical to dry.",
+            "Root cause observed by hooking AudioWorkletNode.port.postMessage in the running build: after the initial full push the app posts partial patches such as {\"mod1\":{...}} (artifact/src/audio/engine.ts:601 setChain -> rt.processor.setParams(patch)), while the worklet's LayerChain.setParams (artifact/src/dsp/chain.ts) replaces the whole parameter set and dereferences p.timbre.family first, so the message throws inside the worklet and nothing is applied. The failure is silent - zero console errors during the whole pass.",
+            "The test double hides it: artifact/src/audio/fakeAudio.ts:115 mergeParams(this.params, params) merges patches, so tests/effects.processing and tests/effects.routing pass against behaviour production does not have."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "label": "Signal graph & gain staging",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "One AudioContext for the whole session (instrumented constructor count = 1 after start, after type switches, and after 120 stress notes) with exactly one live connection into ctx.destination (master limiter worklet); the pre-worklet master gain link is disconnected when the processors are built.",
+            "Per-layer buses confirmed behaviourally: layer B level fader at 0 returns rms to the A-only value exactly (0.03735 vs 0.03708) and at 100 raises it to 0.06591; Master Level 2 vs 7 gives rms 0.00360 vs 0.02396.",
+            "Gain staging holds under load: a 12-note cluster at Master Level 10 peaks at 0.9482 with zero samples above 0.999 (limiter threshold 0.95); 120 rapid notes over 5 s produced no clipping and no console/page errors, status stayed 'Audio: ready'.",
+            "Documented order is implemented in artifact/src/dsp/chain.ts CHAIN_ORDER (timbre, stringRes, mod1, mod2, delay, ampEq, compressor, reverb) with reverb before the shared Rotary; To Rotary re-routes on the main thread and does change the audio live (rms 0.02669 vs 0.03413 dry, preconfigured).",
+            "Held to 3, not 4: the per-layer chain node cannot be reconfigured once it is running - after the single full push at artifact/src/audio/engine.ts:440 every later update is a partial patch that the worklet's LayerChain.setParams rejects, so the graph is correctly built but its layer stage is frozen for the life of the context."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 20,
+      "score": 85,
+      "contribution": 17,
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "label": "Two-layer piano behaviour",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Enable/level/octave all reach the audio live: A only rms 0.03708 -> A+B 0.04587 -> B level 0 0.03735 -> B level 100 0.06591 -> B off 0.03710; octave up/down on the focused B layer moves the composite centroid 832 -> 931 -> 661 while A is unchanged.",
+            "Focus follows the layer and the panel follows focus: enabling layer B moves focus to B and the FX FOCUS Piano LEDs switch (data-lit A=true,B=false -> A=false,B=true); Shift + Piano focus lights both (Group), Organ/Synth focus buttons move the lit LED.",
+            "Each layer owns its own model: with B enabled the status strip reads 'A: Salamander C5 rec ready · B: Salamander C5 rec ready' and switching type on the focused layer only changes that layer's headline.",
+            "Layer-specific effects cannot be demonstrated because no live effect edit reaches the graph (see effectAudibility)."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "label": "Detailed piano controls",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Six of the seven required controls measurably change rendered audio live: KB Touch Light rms 0.02630 vs Medium 0.02352 (centroid 1233 vs 1028); Dyn Comp Off/1/2/3 on an identical soft pointer stroke gives rms 0.01731/0.02118/0.02584/0.03123; Timbre Bright moves the centroid 838 -> 943; Unison 3 rms 0.03179 -> 0.02352 with centroid 833 -> 1028; Soft Release lengthens the release to -14 dB from 84 ms to 124 ms; Master Level 2 vs 7 rms 0.00360 vs 0.02396.",
+            "String Res does not: with acoustics = String resonance vs Off, both configured before audio start, a three-note chord renders identically (rms 0.04805 vs 0.04802, peak 0.5776 both, log-spectrum cosine distance 0.0000). The per-note update artifact/src/audio/engine.ts:936 setChain(id, {stringRes}) is a patch without a timbre key, so it is dropped by the same worklet defect and the resonator never receives a held string.",
+            "Velocity reaches the voice from every input: pointer y-position 0.08/0.5/0.95 on C4 gives rms 0.01807/0.02985/0.04432; MIDI velocities 20/64/110 give 0.00765/0.01592/0.02894.",
+            "Rated 2 because a required control is inert, not merely simplified: the rubric guidance names string resonance among the controls that must measurably change the rendered signal, and it does not (cosine distance 0.0000). The other six are measurable, so the shortfall is one missing landmark rather than a broken category."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "label": "Input reliability & failure behaviour",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Three input paths all drive one lifecycle in the served build: real mouse on [data-midi] keys (velocity 48-127 by y), computer keyboard (A W S E D...), and Web MIDI through an injected MIDIAccess - note on/off, velocity, and CC64 sustain all register ('Sustain: down', voices held after note-off, released on CC64 0).",
+            "Failures are visible and honest: with /samples/** aborted the status reads 'A: Salamander C5 fallback fallback', 'Audio: fallback', the TYPE LED block gains is-flashing and the generated voice still plays (rms 0.01927) - the library never reports ready. With MIDI unavailable the strip reads 'MIDI: denied' with an explanation.",
+            "Stress and cleanup: 120 notes at 25 notes/s across 18 keys produced 0 console errors, 0 clipped samples and left status 'Audio: ready'; a window blur while a key is held clears 'Keys: C4' to 'Keys: none' and residual output falls to rms 0.00017.",
+            "Sustain is audible and gated: with Shift held the 0.7-1.5 s tail rises from 0.00001 to 0.01474."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 25,
+      "score": 90,
+      "contribution": 22.5,
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "label": "Required piano instruments",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "All six required types are selectable from the TYPE button and each loads a real bundled set - cycling the button gave 'ready' with a recorded model for Grand (Salamander C5), Upright (Kawai Upright KW), Electric (Wurlitzer EP200), Clav (Flemish Harpsichord), Digital (TX81Z FM Piano), Misc (Marimba), each producing distinct audio (see instrumentBreadth).",
+            "More than one model per type is present via the MODEL dial: build/samples/index.json lists 8 sets including three Electric models (Wurlitzer EP200, Hohner Pianet T, Yamaha CP80); IMPLEMENTATION_DETAILS.json adds a generated Additive Piano as a second Digital model, declared as generated-buffer, not a recording.",
+            "Offline and complete: every set is served from build/samples with a per-set manifest.json; aborting those requests is the only way to break loading, and it degrades to the labelled fallback rather than to silence."
+          ]
+        },
+        {
+          "id": "effectUnitCoverage",
+          "label": "Required effect units and types",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Every required unit and type exists on the panel with a stable id: Mod 1 (RM, Trem, A-Pan, A-Wah, Wah, Pump), Mod 2 (Chorus, Flanger, Phaser, Vibe, Ensemble, Spin), Delay (tempo, feedback, dry/wet, filter Off/HP/BP/LP, tap, Shift = Ping Pong, Shift+On = Global), Amp Sim/EQ (EQ only, Small, JC, Twin, To Rotary, LP filter, HP filter plus Drive/Bass/Mid/Freq/Treble), Compressor (amount, Shift = Fast, Shift+On = Global), Reverb (Room, Booth, Spring, Stage, Hall, Cath, tone, dry/wet, Global) and the shared Rotary (speed, drive, organ routing, stop mode).",
+            "All 38 effect/rotary/master control ids resolve in the DOM and all 38 pass a 5x5 document.elementFromPoint hit-test at 1440x900 with the page unscrolled - none are buried.",
+            "Routing modes are reachable and reflected: Shift+Piano focus lights both Piano FX LEDs (Group), Shift+Delay ON lights the delay GLOBAL LED, Shift+Amount lights the compressor FAST LED, Shift+Filter lights PING PONG, Amp model 'To rotary' lights the Rotary ON LED, and four taps on TAP/SET moved the delay tempo from 5 to 2.",
+            "Reachable is not the same as effective here: operating any of these while the instrument is running leaves the audio unchanged (see effectAudibility)."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "label": "Declared gaps are accurate",
+          "weight": 20,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "The declared-unsupported list in IMPLEMENTATION_DETAILS.json is accurate where it is checkable: the PED NOISE LED stays off, Shift on a selector does not cycle it (Variations/Chorale), the delay Chor/Vibe/Ens/Flam/Space selector changes only presentation, and the rotary organ button and mod wheel do nothing.",
+            "Source honesty is strong: recorded sets, the generated Additive Piano (generated-buffer) and the fallback oscillator (live-synthesis) are separately labelled with licences, root notes and velocity layers, and the running build's status strip repeats the distinction ('recorded samples' vs 'fallback').",
+            "Undeclared gap: controls.functional claims 'effects.mod1.*, effects.mod2.*, effects.delay.*, effects.amp.*, effects.comp.*, effects.reverb.*' and 'piano.acoustics (Soft Release / String Res)' are functional, and audio.strategy describes the full live chain, but in this build no effect control and no String Res change alters rendered audio after the AudioContext exists (measured above). Nothing in the artifact discloses this.",
+            "evidence/stage2-visual-audit.md reports the effects as working, but its 'in-browser DSP proof' runs the worklet in a fresh OfflineAudioContext - the one path that does receive a complete parameter object - and its panel pass checks only that the edits 'were applied to the focused chain' in state, never that the audio changed."
+          ]
+        }
+      ]
+    }
+  ],
+  "runAxis": null,
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 38207,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 2999,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 553,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 3574,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      },
+      {
+        "id": "lint-coverage",
+        "label": "Lint covers candidate sources",
+        "advisory": true,
+        "passed": true,
+        "scannedDependencies": false,
+        "detail": "Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate's own sources."
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "critical",
+      "criterion": "effectAudibility",
+      "title": "No effect parameter, type or bypass reaches the audio once the AudioContext exists",
+      "detail": "After the first full parameter push, InstrumentController/EffectsEngine send only a diff patch (artifact/src/audio/engine.ts:601, instrumentController.ts:490-500) while the worklet's LayerChain.setParams replaces the whole ChainParams and reads p.timbre.family first (artifact/src/dsp/chain.ts), so every patch throws inside the AudioWorklet and is discarded. Measured in the served build: Mod 1 Tremolo amount 10 on/off gives identical envelopes (rms 0.02706 vs 0.02713); Delay ON with feedback 10 and dry/wet 8.3 adds no repeats (0.03375 vs 0.03405); Reverb ON at dry/wet 10 changes nothing (0.03478 vs 0.03405); 25 live unit/type/bypass changes all land within cosine distance 0.0005 of the baseline. The same settings applied before audio starts are plainly audible, so the DSP is correct and only unreachable. This defeats the Phase 2 hard gates on measurable change, per-unit bypass and dry/wet."
+    },
+    {
+      "severity": "critical",
+      "criterion": "pianoControlDepth",
+      "title": "String Res never produces sympathetic resonance",
+      "detail": "The per-note held-string update is sent as setChain(id, {stringRes}) (artifact/src/audio/engine.ts:936), a patch with no timbre key, so it hits the same worklet defect and the resonator is never told which strings are undamped. Acoustics = String resonance vs Off, both set before audio start, render a three-note chord identically (rms 0.04805 vs 0.04802, peak 0.5776 both, log-spectrum cosine distance 0.0000). String Res is a required Phase 2 control."
+    },
+    {
+      "severity": "major",
+      "criterion": "declaredGapAccuracy",
+      "title": "IMPLEMENTATION_DETAILS and the visual audit claim effect controls that do not work",
+      "detail": "controls.functional lists every effect unit and piano.acoustics as functional and audio.strategy describes the live chain, with no declared gap. evidence/stage2-visual-audit.md's DSP proof runs the worklet in a fresh OfflineAudioContext (the one path that gets a complete parameter object) and its panel pass verifies only canonical state, so neither document is contradicted by its own evidence while the shipped build is."
+    },
+    {
+      "severity": "major",
+      "title": "The test double diverges from the real worklet, so the suite cannot see the defect",
+      "detail": "artifact/src/audio/fakeAudio.ts:115 merges parameter patches (mergeParams) while the production worklet replaces them, and the parameter message throws silently inside the AudioWorkletGlobalScope with no console error and no onprocessorerror. tests/effects.processing and tests/effects.routing therefore pass against behaviour the built app does not have, and nothing in the running build reports the failure."
+    },
+    {
+      "severity": "minor",
+      "criterion": "instrumentBreadth",
+      "title": "All sample sets are mono",
+      "detail": "build/samples/*/manifest.json declares channels: 1 for all eight sets at 44.1 kHz with 3-semitone root spacing and 3-4 velocity layers, so the recorded pianos have no stereo image before the effects; a knowledgeable player would notice this against the hardware."
+    }
+  ]
+}

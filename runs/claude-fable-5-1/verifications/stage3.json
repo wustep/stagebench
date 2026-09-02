@@ -1,0 +1,105 @@
+{
+  "version": 3,
+  "runId": "claude-fable-5-1",
+  "stage": 3,
+  "verifiedAt": "2026-09-02T13:02:01.998Z",
+  "passed": true,
+  "artifactDigest": "456a978759d2f423bb5f00602dc7f374ed66ec27aa2983f125962eb47d1957ec",
+  "artifactFiles": 622,
+  "materials": {
+    "specs/benchmark-phases.json": {
+      "version": "2.0.0",
+      "digest": "2399bffa9bf89a628cbbc7e71037f280c10ba9256fa9e6935e82e5e0820ebfb3"
+    },
+    "specs/nord-stage-4.visual.json": {
+      "version": "1.4.0",
+      "digest": "f4a30f7fdc221056d345e37b51a525ee12ae4574791bebbb0ac2d40ac9acceac"
+    },
+    "specs/nord-stage-4.variants.json": {
+      "version": "1.0.0",
+      "digest": "983746df59536a485c44e5d77e508860391f178d2b84525768c4ce3e2eb167f6"
+    },
+    "bench/rubric.json": {
+      "version": "2.0.0",
+      "digest": "bec85b6f8c7f76ebb110032f3055f9319b0db78205cb6030e5f6564a960f1c0f"
+    }
+  },
+  "phaseContract": {
+    "specs": [
+      "specs/nord-stage-4.visual.json",
+      "specs/nord-stage-4.piano.json",
+      "specs/nord-stage-4.effects.json",
+      "specs/nord-stage-4.programs.json",
+      "specs/nord-stage-4.organ.json",
+      "specs/nord-stage-4.synth.json"
+    ],
+    "hardGates": 5
+  },
+  "featureMatrix": {
+    "coveredFeatures": 38,
+    "requiredFeatures": 38
+  },
+  "implementationDetails": {
+    "audioStrategy": "One AudioContext for the whole instrument. Piano notes are AudioBufferSourceNodes playing either recorded, bundled Ogg Vorbis one-shots (Grand, Upright, Electric, Clav, Digital, Misc models — decoded at runtime with @wasm-audio-decoders/ogg-vorbis) or generated buffers (the Additive Piano model and the fallback voice, rendered by src/audio/pianoRenderer.ts). The Organ (both layers, B3 / Vox / Farf / Pipe 1 / Pipe 2 / B3 Bass) and each Synth layer (A / B / C, Analog + FM-H) are LIVE SYNTHESIS: pure TypeScript DSP (src/dsp/organ.ts, src/dsp/synth.ts) hosted in AudioWorkletNodes that receive note events and the canonical program parameters — no samples, no recordings. Every source feeds its layer chain (LayerChain AudioWorkletNode: Timbre EQ, String Res, Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb — src/dsp/) → level GainNode → optionally the one shared Rotary AudioWorkletNode (organ via the ORGAN button, piano / synth via To Rotary) → master GainNode (Master Level) → master limiter AudioWorkletNode → destination. If AudioWorklet is unavailable the same DSP classes run in a ScriptProcessorNode. Recorded samples, generated buffers and live synthesis are always labelled as what they are.",
+    "generatedSources": 5,
+    "sampleSources": 8
+  },
+  "checks": [
+    {
+      "id": "test",
+      "command": "pnpm run test",
+      "passed": true,
+      "durationMs": 19159,
+      "detail": "Passed"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm run typecheck",
+      "passed": true,
+      "durationMs": 3576,
+      "detail": "Passed"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm run lint",
+      "passed": true,
+      "durationMs": 523,
+      "detail": "Passed"
+    },
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "passed": true,
+      "durationMs": 4066,
+      "detail": "Passed"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence/stage3-desktop.png",
+      "passed": true,
+      "detail": "evidence/stage3-desktop.png · 1440x900"
+    },
+    {
+      "id": "evidence/stage3-narrow.png",
+      "passed": true,
+      "detail": "evidence/stage3-narrow.png · 390x844"
+    },
+    {
+      "id": "evidence/stage3-visual-audit.md",
+      "passed": true,
+      "detail": "evidence/stage3-visual-audit.md"
+    },
+    {
+      "id": "evidence/stage3-capture.json",
+      "passed": true,
+      "detail": "evidence/stage3-capture.json"
+    },
+    {
+      "id": "dist/index.html standards mode",
+      "advisory": true,
+      "passed": true,
+      "detail": "dist/index.html opens with <!doctype html>, so the browser measures it in standards mode"
+    }
+  ]
+}
