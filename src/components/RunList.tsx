@@ -9,6 +9,7 @@ import type { PhaseNumber } from '../run-utils'
 import { floorScore, getRunTitle, getThumbPath } from '../run-utils'
 import type { RunEntry } from '../types'
 import {
+  bestByTierPanel,
   bestByTierPhase,
   formatDate,
   formatDuration,
@@ -77,6 +78,8 @@ export const RunList = memo(function RunList({
         // with a four-phase protocol keep their own aligned grid.
         const sectorsStyle = { '--sectors': phaseList.length } as CSSProperties
         const tokens = run.telemetry?.totalTokens ?? run.telemetry?.inputTokens ?? null
+        const panel = run.panelVisuals
+        const bestPanel = panel !== null && panel === bestByTierPanel.get(resultClass.id)
         return (
         <Fragment key={run.id}>
         {resultClass.id !== previousClass && (
@@ -102,6 +105,7 @@ export const RunList = memo(function RunList({
               <span>Model</span>
               <span>Harness</span>
               {phaseList.map((name, phaseIndex) => <span key={name}>0{phaseIndex + 1} · {name}</span>)}
+              <span>Panel Visuals</span>
               <span className="num">Tokens</span>
               <span className="num">Time</span>
               <span className="num">Score</span>
@@ -170,6 +174,14 @@ export const RunList = memo(function RunList({
                 </div>
               )
             })}
+            <div
+              aria-label={panel !== null ? `Panel visuals ${floorScore(panel)} out of 100${bestPanel ? ', best of the field' : ''}` : 'Panel visuals unavailable'}
+              className={`sector sector-panel${bestPanel ? ' is-best' : ''}${panel === null ? ' is-na' : ''}`}
+            >
+              <b>{panel !== null ? String(floorScore(panel)) : '—'}</b>
+              <span aria-hidden="true" className="sector-bar"><i style={{ width: `${panel !== null ? Math.min(100, Math.max(0, panel)) : 0}%` }} /></span>
+              <small aria-hidden="true">Panel Visuals</small>
+            </div>
             <span className="cell-num">{tokens !== null ? formatTokens(tokens) : '—'}</span>
             <span className="cell-num">{run.telemetry?.wallTimeSeconds != null ? formatDurationCompact(run.telemetry.wallTimeSeconds) : '—'}</span>
             <div className="total" aria-label={run.score !== null ? `Score ${floorScore(run.score)} out of 100` : undefined}>

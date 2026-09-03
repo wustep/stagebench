@@ -34,6 +34,7 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
     startedAt: raw.startedAt,
     updatedAt: raw.updatedAt,
     score: raw.score ?? null,
+    panelVisuals: typeof raw.panelVisuals === 'number' ? raw.panelVisuals : null,
     reportPath: raw.reportPath ?? null,
     telemetry,
     previewPath: raw.previewPath ?? null,
@@ -195,3 +196,17 @@ function buildBestByTierPhase(orderedRuns: RunEntry[]) {
 
 export const rankByRun = buildRankByRun(visibleRuns)
 export const bestByTierPhase = buildBestByTierPhase(visibleRuns)
+
+// Best run-level panel score in each tier, so the Panel Visuals cell can
+// light up the same way a phase sector does for the field's fastest split.
+function buildBestByTierPanel(orderedRuns: RunEntry[]) {
+  const best = new Map<string, number>()
+  for (const run of orderedRuns) {
+    if (run.panelVisuals === null) continue
+    const tierId = getResultClass(run).id
+    best.set(tierId, Math.max(best.get(tierId) ?? -1, run.panelVisuals))
+  }
+  return best
+}
+
+export const bestByTierPanel = buildBestByTierPanel(visibleRuns)

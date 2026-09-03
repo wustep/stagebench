@@ -390,6 +390,9 @@ export function registryEntry(run) {
     startedAt: run.startedAt,
     updatedAt: run.updatedAt,
     score: run.evaluation?.score ?? null,
+    // Protocol 2.0 panel-fidelity axis, scored once per run (not per phase).
+    // Null on legacy/v1 records that have no run axis.
+    panelVisuals: typeof run.evaluation?.runAxis?.score === 'number' ? run.evaluation.runAxis.score : null,
     // The rubric that produced the score, not the one current when the run was
     // created. Scores from different rubrics are not comparable, so the gallery
     // ranks them in separate tiers rather than in one list.
@@ -420,7 +423,7 @@ function reindexCachePath(root) {
 // but not changes to the projection itself — a new field silently kept its old
 // shape until something touched the run. Bump this whenever registryEntry's
 // output shape changes.
-const REGISTRY_PROJECTION_VERSION = 2
+const REGISTRY_PROJECTION_VERSION = 3
 
 function readReindexCache(root) {
   try {

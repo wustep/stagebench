@@ -43,6 +43,8 @@ export type RawRunEntry = {
   startedAt: string
   updatedAt: string
   score: number | null
+  /** Run-level panel-fidelity axis (protocol 2.0+). Null on legacy/v1 records. */
+  panelVisuals?: number | null
   reportPath?: string | null
   telemetry?: Partial<Telemetry> | null
   previewPath?: string | null
@@ -69,6 +71,8 @@ export type RunEntry = {
   startedAt: string
   updatedAt: string
   score: number | null
+  /** Run-level panel-fidelity axis (protocol 2.0+). Null on legacy/v1 records. */
+  panelVisuals: number | null
   reportPath: string | null
   telemetry: Telemetry | null
   previewPath: string | null
