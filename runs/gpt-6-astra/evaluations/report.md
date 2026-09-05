@@ -1,4 +1,4 @@
-# GPT-6 Astra high (Codex 20xx) — Stagebench evaluation
+# GPT-6 Astra High — Stagebench evaluation
 
 - Run: `gpt-6-astra`
 - Status: complete
