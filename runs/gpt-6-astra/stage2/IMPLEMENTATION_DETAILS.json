@@ -1,0 +1,178 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "One AudioContext with one stereo AudioWorklet. Original synthesized models for all six types; Grand/Upright/Electric explicitly labeled playable fallbacks because no recorded assets were supplied in inputs/. Recorded-library hard gate is NOT satisfied.",
+    "sampleSources": [],
+    "sampleLibrary": {
+      "manifest": "src/library.ts: bundledManifest (empty)",
+      "status": "fallback",
+      "recordedFiles": [],
+      "rootNotes": [],
+      "velocityLayers": [],
+      "licenses": [],
+      "missingRequiredSets": [
+        "Grand",
+        "Upright",
+        "Electric"
+      ],
+      "loader": "Injectable fetch/decode, validates provenance, selects nearest root and interpolates velocity layers when authorized recorded assets exist. No files are fetched with the empty supplied manifest."
+    },
+    "generatedSources": [
+      {
+        "name": "Grand synthesis fallback",
+        "source": "src/dsp.ts: InstrumentDSP.source",
+        "license": "Original implementation and generated output under MIT; see LICENSE. No recordings.",
+        "files": [
+          "src/dsp.ts"
+        ],
+        "method": "Six decaying, mildly inharmonic additive partials",
+        "rootNotes": "Exact MIDI frequency with continuous pitch bend; no recorded root notes.",
+        "velocityLayers": "Continuous touch curve, velocity-dependent synthesis for Electric/Digital, and independent dynamic compression."
+      },
+      {
+        "name": "Upright synthesis fallback",
+        "source": "src/dsp.ts: InstrumentDSP.source",
+        "license": "Original implementation and generated output under MIT; see LICENSE. No recordings.",
+        "files": [
+          "src/dsp.ts"
+        ],
+        "method": "Brighter partial spectrum and stronger inharmonicity",
+        "rootNotes": "Exact MIDI frequency with continuous pitch bend; no recorded root notes.",
+        "velocityLayers": "Continuous touch curve, velocity-dependent synthesis for Electric/Digital, and independent dynamic compression."
+      },
+      {
+        "name": "Tine synthesis fallback",
+        "source": "src/dsp.ts: InstrumentDSP.source",
+        "license": "Original implementation and generated output under MIT; see LICENSE. No recordings.",
+        "files": [
+          "src/dsp.ts"
+        ],
+        "method": "Fundamental with transient seventh harmonic",
+        "rootNotes": "Exact MIDI frequency with continuous pitch bend; no recorded root notes.",
+        "velocityLayers": "Continuous touch curve, velocity-dependent synthesis for Electric/Digital, and independent dynamic compression."
+      },
+      {
+        "name": "Clav synthesis",
+        "source": "src/dsp.ts: InstrumentDSP.source",
+        "license": "Original implementation and generated output under MIT; see LICENSE. No recordings.",
+        "files": [
+          "src/dsp.ts"
+        ],
+        "method": "Bright rapidly decaying plucked harmonics",
+        "rootNotes": "Exact MIDI frequency with continuous pitch bend; no recorded root notes.",
+        "velocityLayers": "Continuous touch curve, velocity-dependent synthesis for Electric/Digital, and independent dynamic compression."
+      },
+      {
+        "name": "Digital synthesis",
+        "source": "src/dsp.ts: InstrumentDSP.source",
+        "license": "Original implementation and generated output under MIT; see LICENSE. No recordings.",
+        "files": [
+          "src/dsp.ts"
+        ],
+        "method": "Velocity-sensitive FM with decaying modulation index",
+        "rootNotes": "Exact MIDI frequency with continuous pitch bend; no recorded root notes.",
+        "velocityLayers": "Continuous touch curve, velocity-dependent synthesis for Electric/Digital, and independent dynamic compression."
+      },
+      {
+        "name": "Mallet synthesis",
+        "source": "src/dsp.ts: InstrumentDSP.source",
+        "license": "Original implementation and generated output under MIT; see LICENSE. No recordings.",
+        "files": [
+          "src/dsp.ts"
+        ],
+        "method": "Three noninteger-ratio partials with separate decay rates",
+        "rootNotes": "Exact MIDI frequency with continuous pitch bend; no recorded root notes.",
+        "velocityLayers": "Continuous touch curve, velocity-dependent synthesis for Electric/Digital, and independent dynamic compression."
+      }
+    ],
+    "signalPath": "Owned stereo voices -> per-layer summed bus -> Mod 1 -> Mod 2 -> Delay with filter inside feedback loop -> Amp/EQ/24dB filter -> Compressor -> Reverb -> shared Rotary phase/speed when To Rotary selected (separate layer histories) -> each layer level -> shared master gain -> tanh soft limiter -> one stereo worklet output -> one AudioContext destination",
+    "polyphony": 64,
+    "polyphonyPerLayer": 32,
+    "stealing": "Inherited deterministic released, sustained, oldest-held priority within each layer; source-instance ownership retained.",
+    "releaseSeconds": 0.22,
+    "softReleaseSeconds": 0.48,
+    "status": "Idle, loading, context ready or error/retry. Library status separately remains fallback when recordings are absent or fail. OLED reports recordings unavailable; selected recorded-type LED flashes. The app never reports the primary recorded library ready when fallback is active.",
+    "effects": {
+      "implementation": "Original deterministic DSP, shared unchanged between browser AudioWorklet and rendered signal tests. Approximation of the documented effect families, not vendor DSP.",
+      "types": "Every type in inputs/specs/nord-stage-4.effects.json is selectable. EQ-only and To Rotary share their local EQ processing; To Rotary additionally uses the shared downstream rotor.",
+      "rotary": "One shared smoothly accelerating horn/bass rotor clock; separate stereo history per layer allows required post-rotary layer levels.",
+      "ramps": "10ms smoothing of effect parameters, bypass, levels and master; 20ms crossfade on effect type changes; 5ms voice stealing stop ramp; rotary speed accelerates over approximately 650ms.",
+      "groupGlobal": "Piano group edits both chains. Delay/Compressor/Reverb global copies current settings and targets both Piano chains. Organ/Synth are inactive and contribute no sources this phase."
+    },
+    "notes": [
+      "There are no bundled recordings. The recorded Grand/Upright/Electric hard gate remains unmet under the input-only constraint.",
+      "Soft/sostenuto pedal, half pedaling and pedal noise are not implemented or claimed.",
+      "String resonance is additive sympathetic resonance when other voices or the pedal are held, not a recording.",
+      "All notes naturally decay and are retired after 12 seconds at the latest.",
+      "The inherited Phase 1 BrowserAudio and tests remain intact as historical regression fixtures; the production app uses LayerAudio and LayeredPianoEngine.",
+      "All-effects stop clears voice and delay/reverb history. The worklet owns no application timers. Disposal closes the context, port and callbacks."
+    ]
+  },
+  "hardware": {
+    "keys": 73,
+    "whiteKeys": 43,
+    "blackKeys": 30,
+    "midiRange": [
+      28,
+      100
+    ],
+    "range": "E1\u2013E7",
+    "action": "Hammer action (hardware variant designation; browser keys are pointer/keyboard inputs)",
+    "panelControlCount": 155,
+    "data": "src/hardware.ts",
+    "presentationState": "Original ID inventory and geometry preserved. Piano/effects/master/pitch/rotary bindings read canonical InstrumentState; other controls retain isolated presentation state. Accessible expandable details expose controls missing from the compact inherited surface.",
+    "sectionFractions": [
+      0.14,
+      0.2,
+      0.085,
+      0.125,
+      0.25,
+      0.2
+    ],
+    "geometryPrecedence": "Visual spec v1.4 and photo override the obsolete fractions in the phase prompt.",
+    "primaryOLEDs": [
+      "program",
+      "synth"
+    ],
+    "narrowInspection": "Full instrument overview at 94% width; Inspect surface enlarges to 1400px in an independently scrollable viewport."
+  },
+  "boundaries": {
+    "audio": "LayerAudioBoundary, AudioContext and AudioWorkletNode factories, injectable sample loader. Production InstrumentDSP is also invoked directly for deterministic rendered tests. Message barriers synchronize browser offline rendering.",
+    "midi": "RequestMidi and MidiAccess interfaces injected into InputController.",
+    "events": "Window target injected into InputController.attach; pure input methods available for device-free tests.",
+    "timing": "DSP sample clock; injected clock for tap tempo; no application timers.",
+    "storage": "No storage reads or writes; all state is in memory."
+  },
+  "unsupported": [
+    "Recorded Grand/Upright/Electric sample sets: missing from supplied inputs; labeled synthesis fallback provided.",
+    "Organ and Synth engines, programs, Live, splits, zones, scenes, morphs, transpose and master program clock controls.",
+    "Piano pedal noise, half pedaling, Triple Pedal hardware, soft/sostenuto pedal, size classes, INFO, Sound Manager and preset library.",
+    "Effect variations, reverb Chorale, delay feedback-loop special effects and Analog, Pump/Wah pedal modes, rotary close mic, stop mode/angle and morph assignment.",
+    "Aftertouch, Extern/Aux KB/MIDI menus and Nord hardware integration."
+  ],
+  "evidence": {
+    "browserCommand": "pnpm test:browser (Phase 2 harness preserving inherited geometry, input and basic rendered-audio checks)",
+    "browser": "Playwright 1.58.2, Chromium 145.0.7632.6",
+    "captureHarness": "Workspace-local reproduction of the parent capture module read in this session; see tests/parent-harness/PROVENANCE.md. No external workspace reads are required to run it.",
+    "files": [
+      "evidence/stage1-desktop.png",
+      "evidence/stage1-narrow.png",
+      "evidence/stage1-capture.json",
+      "evidence/stage1-visual-audit.md",
+      "evidence/browser-pass.json",
+      "evidence/stage2-desktop.png",
+      "evidence/stage2-narrow.png",
+      "evidence/stage2-capture.json",
+      "evidence/stage2-visual-audit.md",
+      "evidence/stage2-browser-pass.json"
+    ]
+  },
+  "completion": {
+    "sealed": false,
+    "recordedLibraryHardGate": "unmet: no source recordings in inputs/",
+    "softwareGates": "See evidence/stage2-gates.json"
+  }
+}

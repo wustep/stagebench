@@ -1,0 +1,66 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "One original piano-like additive synthesis voice, rendered into generated mono buffers at note onset and played through Web Audio. No recorded samples and no network audio assets.",
+    "sampleSources": [],
+    "generatedSources": [{
+      "name": "Basic additive piano",
+      "source": "src/audio.ts: pianoSignal",
+      "license": "Original implementation; generated waveform code and output released under MIT (LICENSE). No third-party recordings.",
+      "files": ["src/audio.ts"],
+      "sampleRate": 22050,
+      "durationSeconds": 8,
+      "rootNotes": "Generated at the exact incoming MIDI pitch, rather than transposed from a recorded root.",
+      "velocityLayers": "None; continuous velocity gain (velocity/127)^1.6.",
+      "method": "Six additive partials with slight inharmonicity, harmonic-dependent exponential decay, a 4 ms attack and 60 ms buffer-tail fade; partials above 45% of sample rate omitted. Up to 16 note buffers cached."
+    }],
+    "signalPath": "Generated AudioBufferSource -> per-voice velocity/release GainNode -> fixed 0.32 master GainNode -> AudioContext destination",
+    "polyphony": 32,
+    "stealing": "Oldest released voice first, then oldest sustained voice, then oldest held voice. Ownership uses input source and instance tokens.",
+    "releaseSeconds": 0.22,
+    "status": "Idle before user input; loading during audio activation; ready only after a running AudioContext; error and retry if activation fails. Synthesis is the primary source, not a recording or an undisclosed fallback. No sample loading or sample fallback is claimed.",
+    "notes": [
+      "Piano timbre is an approximation, not the Nord Piano Library or a recorded acoustic piano.",
+      "Held/sustained notes decay naturally and end after eight seconds. Sustain postpones the damper release; it does not loop the waveform.",
+      "UI sustain, keyboard Space and per-device/channel MIDI CC64 are combined independently.",
+      "All panel controls including Master Level are presentation-only. The audio master is fixed at 0.32.",
+      "Browser OfflineAudioContext tests render this actual audio graph and verify non-silence, continuous velocity response, release and sustain duration. Fake boundaries separately verify deterministic ownership and node/listener cleanup."
+    ]
+  },
+  "hardware": {
+    "keys": 73,
+    "whiteKeys": 43,
+    "blackKeys": 30,
+    "midiRange": [28, 100],
+    "range": "E1–E7",
+    "action": "Hammer action (hardware variant designation; browser keys are pointer/keyboard inputs)",
+    "panelControlCount": 155,
+    "data": "src/hardware.ts",
+    "presentationState": "Normalized ID-to-number model, isolated from the PianoEngine.",
+    "sectionFractions": [0.14, 0.2, 0.085, 0.125, 0.25, 0.2],
+    "geometryPrecedence": "Visual spec v1.4 and photo override the obsolete fractions in the phase prompt.",
+    "primaryOLEDs": ["program", "synth"],
+    "narrowInspection": "Full instrument overview at 94% width; Inspect surface enlarges to 1400px in an independently scrollable viewport."
+  },
+  "boundaries": {
+    "audio": "AudioBoundary injected into PianoEngine; AudioContext factory injected into BrowserAudio.",
+    "midi": "RequestMidi and MidiAccess interfaces injected into InputController.",
+    "events": "Window target injected into InputController.attach; pure input methods available for device-free tests.",
+    "timing": "AudioContext currentTime through the injected context; no application timers.",
+    "storage": "No storage reads or writes; all state is in memory."
+  },
+  "unsupported": [
+    "All panel audio and system behavior, including Master Level, wheels, Organ, Synth, Piano selectors/details, Layer Effects, Programs, scenes, morphs, split, transpose and panel Shift.",
+    "Multiple piano models, recorded samples, layering, audible effects, soft/sostenuto/half-pedal and pedal noise.",
+    "Aftertouch, Extern/Aux KB/MIDI menus, preset library, sample downloads and Nord hardware integration."
+  ],
+  "evidence": {
+    "browserCommand": "pnpm test:browser (after pnpm build)",
+    "browser": "Playwright 1.58.2, Chromium 145.0.7632.6",
+    "captureHarness": "Workspace-local reproduction of the parent capture module read in this session; see tests/parent-harness/PROVENANCE.md. No external workspace reads are required to run it.",
+    "files": ["evidence/stage1-desktop.png", "evidence/stage1-narrow.png", "evidence/stage1-capture.json", "evidence/stage1-visual-audit.md", "evidence/browser-pass.json"]
+  }
+}

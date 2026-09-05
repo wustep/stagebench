@@ -1,0 +1,492 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-6-astra",
+  "stage": 3,
+  "stageName": "Complete Stage 4 system",
+  "status": "complete",
+  "evaluator": "stagebench blind evaluator (Claude Opus 5)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-05T07:40:00.000Z",
+  "summary": "Measured against build/ at 1440x900 in Chromium; every computed number was re-measured independently and reproduced. Geometry is near exact: deck 0.53998 / keybed 0.46002, width 0.94002, aspect 3.09511, worst section deviation 0.000007 on the deck span (0.0075 on full chassis width, still in tolerance); 73 keys (43/30) all inside the keybed, black-key height 0.60999; 5/5 reference colours within deltaE 4.2; 33/33 landmarks in-section, 155/155 controls reachable by 5x5 elementFromPoint, 0 forbidden descriptors. Behaviour is real: one AudioContext; piano decays to 0.318 of onset after 1.1 s while organ (1.148) and synth (1.178) sustain; drawbars, filter types, three envelopes, LFO and a clock-synced arp all move the signal; 4 split zones route exactly; an 11-field program round-trips losslessly; MIDI note/velocity/CC64/CC1 work; Panic silences. Deductions: the three acoustic pianos are declared synthesis fallbacks, LP24 is no steeper than LP12, legends overprint in all six sections, pointer strike position carries no velocity, rotary Fast is shallower than Slow, and the 390 px deck is fully operable only via Inspect surface.",
+  "score": 88.5,
+  "rawScore": 88.5,
+  "categories": [
+    {
+      "id": "sound",
+      "label": "Sound",
+      "weight": 45,
+      "score": 90,
+      "contribution": 40.5,
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "label": "Distinct engine character",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Solo'd each engine and held C4: piano RMS falls to 0.336 of its onset value after 1.1 s while organ (1.106) and synth (1.179) sustain or grow - three different synthesis models, not one voice relabelled.",
+            "Spectral centroid on the same C4 differs by an octave and a half between engines: piano 559.5 Hz, organ 657.6 Hz, synth 2935.1 Hz (analyser tap on the single AudioContext destination, scratch/p_e4.mjs).",
+            "Within the organ, all six models are spectrally separated with full drawbars: B3 1044.1 Hz, B3 Bass 905.6, Vox 1654.3, Farf 2405.2, Pipe 1 1235.0, Pipe 2 1322.8 Hz centroid.",
+            "All 14 synth waveforms render differently - 0 of 91 pairs were spectrally identical (cosine distance threshold 1e-5); centroids run 311.7 Hz (Sine) to 7227.4 Hz (White Noise).",
+            "Rated 3 rather than 4: the three acoustic piano types are declared synthesis fallbacks, not the required recorded sets - IMPLEMENTATION_DETAILS.json has sampleSources: [] and missingRequiredSets [Grand, Upright, Electric], src/dsp.ts builds Grand from six decaying inharmonic partials, and the panel prints 'Grand synthesis fallback'. The engines are genuinely different (re-measured: piano held-note ratio 0.318 vs organ 1.148 and synth 1.178; centroids 560.9 / 729.6 / 2941.4 Hz), but the piano voice is a detail a knowledgeable player distinguishes from the hardware immediately."
+          ]
+        },
+        {
+          "id": "routingIntegration",
+          "label": "Effects & routing integration",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "window.__ctxs.length === 1 after full exercise: a single AudioContext, and every engine's output reached the one tapped destination node.",
+            "Reverb wet=1.0 shifted the rendered spectrum of every engine in turn with its FX focus selected: piano centroid 564.9 -> 580.4, organ 875.7 -> 498.3, synth 3213.6 -> 3029.5 Hz.",
+            "All six units measurably change output when enabled (max RMS vs 0.07889 dry baseline: mod2 0.0499, delay 0.0436, compressor 0.0175, reverb 0.0118) and every listed type within each unit differs (only 1 near-identical pair, among the delay filter types).",
+            "Global 'All effects on' bypass is honoured: with mod1+delay+reverb engaged, toggling it changed the spectrum (cosine distance 0.00278)."
+          ]
+        },
+        {
+          "id": "qualityUnderLoad",
+          "label": "Musical quality under load",
+          "weight": 25,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "24 simultaneous notes (MIDI 48-71) held for 1.2 s peaked at 0.15676 with no sample above 1.0 - no clipping - and every voice released to exactly 0.000000 RMS afterwards.",
+            "Measured note-on to first audible sample at 6.3 ms (pointerdown to first |sample| > 0.002 on the destination tap).",
+            "No console errors or page errors were emitted across roughly 25 separate driving sessions covering every section; ctx.state stayed 'running' throughout."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 20,
+      "score": 91.3,
+      "contribution": 18.3,
+      "criteria": [
+        {
+          "id": "stateRoundTrip",
+          "label": "Program & state round-trip",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Edited 11 fields across four subsystems (synth filter/waveform/enable, organ drawbar/model/enable, split enable/point/crossfade/zone range, transpose, master BPM), stored to slot 2.1, navigated to 1.5 - where all 11 read different values - and returned: 0 of 11 mismatched (scratch/p_rt2.mjs).",
+            "Dirty flag is truthful: the program OLED reads '1.1 Concert Grand' clean and '1.1 Concert Grand E' after one parameter edit, and the E clears on store.",
+            "Unstored edits are discarded on regular program change (filter 0.33 -> 0.8) and 'Undo discarded edit' restores exactly 0.33; Live slots instead auto-store (filter 0.17 survived a slot switch and return with no Store press).",
+            "Persistence lands in localStorage key 'stage4-programs-v1' (349824 bytes) as declared in IMPLEMENTATION_DETAILS.json boundaries.storage."
+          ]
+        },
+        {
+          "id": "bindings",
+          "label": "Performance controls & bindings",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Swept all 155 panel controls with real focus + key/pointer input on a freshly loaded page: 8 are declared spec-excluded and labelled 'Unsupported: ...', and 124 of the remaining 147 changed observable state on a single interaction; every one of the residual 23 was verified operable by drag or PageUp/Home/End.",
+            "Injected a fake MIDI port: note on/off works (0.084674 -> 0.000000), velocity maps 20 -> 0.006471 and 127 -> 0.123461 RMS, CC64 holds a released note (0.042984) and drops it on pedal-up (0.000000), CC1 drives the panel mod-wheel readout to '100 percent'.",
+            "Defect: pointer velocity is fixed - striking key 60 at 15% and at 95% of its height both produced max RMS 0.079361, so strike position carries no dynamics even though MIDI velocity does.",
+            "Defect: quantised panel controls ignore a single arrow key because their step (1 of 100) is smaller than one detent - the nine organ drawbars, synth oscillator, arp range and program dial all read unchanged after ArrowRight/ArrowUp and only move on PageUp/Home/End or drag."
+          ]
+        },
+        {
+          "id": "crossSystemWorkflow",
+          "label": "Cross-system workflows",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "With splits at C4/C5/C6 and the synth layer restricted to one zone at a time, note routing was exact across 12 probe notes: zone 1 sounded only for MIDI 40/55/59, zone 2 only 61/66/71, zone 3 only 73/78/83, zone 4 only 85/92/99 (scratch/p_zone4.mjs).",
+            "All 11 documented split positions are present (C2,F2,C3,F3,C4,F4,C5,F5,C6,F6,C7) and the three crossfade widths attenuate progressively at the boundary: note 57 max RMS 0.07914 (Off) / 0.05052 (+/-6) / 0.03741 (+/-12).",
+            "Scene II toggles layer enablement without duplicating sound parameters: Synth A enabled in Scene I, disabled in Scene II, and both states survived switching back and forth; the OLED header follows ('PROGRAM . SCENE I' -> 'SCENE II').",
+            "Transpose is audible and correctly clamped to the hardware's +/-6 range (input min=-6 max=6): -5 semitones moved C4 to a measured 196.49 Hz against 196.00 expected. Panic dropped a hold-latched arpeggio from 0.004061 to 0.000000 mean RMS with all three engines active."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 35,
+      "score": 85,
+      "contribution": 29.8,
+      "criteria": [
+        {
+          "id": "organSystem",
+          "label": "Organ system",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Nine drawbars each reach the audio graph: all nine at 0 gives 0.002547 max RMS, 8' alone gives 0.032325 at centroid 1252.6 Hz and 1' alone 0.032182 at centroid 3037.1 Hz.",
+            "Six models are spectrally distinct (centroids 906-2405 Hz, see distinctEngines) and B3 Bass is both darker and quieter (0.04597 vs 0.09680 max RMS), matching its 16'/8'-only registration.",
+            "Percussion, Soft/Fast/Third and the six vibrato/chorus modes all alter the rendered spectrum (percussion off 1010.2 Hz -> on 925.7 -> +third 847.7 Hz centroid; C1 1197.8 down to V2 1018.4 Hz).",
+            "Rotary is routed and audible but weakly modelled: with Organ To Rotary and Rotary On, mean level rises 0.0504 -> 0.0701 and envelope modulation depth goes 0.0053 (bypassed) -> 0.038 at 2.8 Hz (slow) -> 0.0039 (stopped), but Fast measured *less* modulation than Slow (0.0074) and the slow rate is well above a Leslie chorale."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "label": "Synth system",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Filter types are genuinely different at a fixed 0.55 cutoff: 0-400 Hz band energy is 1.320e-4 for LP12 but 1.599e-7 for HP and 1.009e-6 for BP, with centroids 1182.7 / 1073.3 / 6221.5 / 2740.7 Hz for LP12/LP24/HP/BP.",
+            "Cutoff sweeps the spectrum (centroid 315.3 -> 385.8 -> 1429.7 -> 3795.6 Hz for 0.05/0.3/0.6/1.0), resonance lifts it 3572.8 -> 4711.2 Hz, and keyboard tracking inverts the C3/C6 relationship (1519.8/901.0 Hz off vs 501.6/1028.9 Hz at full).",
+            "All three envelopes act: amp attack 0.005 s vs 1.5 s gives early-window RMS 0.033656 vs 0.000939, and release 0.05 s vs 2.0 s gives post-release tails of 0.005855 vs 0.036299.",
+            "LFO destinations are separated (envelope modulation depth Off 0.0064, Osc Pitch 0.0293, Osc Ctrl 0.0051, Filter Freq 0.0113 - the last detected at 7.05 Hz against the 7 Hz set rate), unison's four settings change timbre (centroids 2999/2524/2864/3162 Hz), and the arp is deterministic: 120 BPM gave 499 ms median gaps, 240 BPM gave 249 ms, and under master-clock sync at 180 BPM the 1/8 subdivision produced 169 ms against 166 ms expected.",
+            "Rated 3 rather than 4: re-measured at a fixed 0.55 cutoff on a saw, 2-9 kHz stopband energy is 6.018e-6 for LP12 and 9.043e-6 for LP24, so the 24 dB/oct type is no steeper than the 12 dB/oct one. Everything else the synth spec requires is present and observable (filter drive Off/1/2/3, keyboard tracking Off/1-3/2-3/1, five LFO waveforms, three envelopes with velocity, arp subdivisions with master sync), so the shortfall is a simplification a synth player would notice, not a missing element."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "label": "Layers, splits, scenes & morphs",
+          "weight": 25,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Seven layers are individually enabled, focused, levelled and octave-shifted (Piano A/B, Organ A/B, Synth A/B/C); piano octave -1/0/+1 moved a measured C4 to 130.55 / 261.09 / 523.53 Hz.",
+            "Split zones and crossfades verified exactly across 12 notes and three widths (see crossSystemWorkflow), and 14 per-layer first/last-zone inputs bound to real routing.",
+            "Morph reaches its destination and clears: assigning Wheel to layers.A.level end=0.1 made wheel 0 give 0.048071 max RMS and wheel 127 give 0.034559, and 'Clear Wheel' restored 0.048071 at wheel 127. Thirty morph destinations are exposed and every control carries a data-morph indicator attribute (155 of 155).",
+            "Scenes toggle layer enable state only, and both scenes' states persist through switching (verified on Synth A)."
+          ]
+        },
+        {
+          "id": "programWorkflows",
+          "label": "Programs & Live Mode",
+          "weight": 15,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "32 slots across 4 pages of 8 (1.1-1.8 factory through 4.1-4.8 User 25-32) with wraparound from page 4 back to page 1; the 8 factory programs are audibly different (1.1 Concert Grand 0.07889 vs 1.6 Super Saw Pad 0.014451 max RMS).",
+            "Store is a two-step destination browse then confirm ('STORE: SELECT DESTINATION' in the OLED, audition on browse), Store As offers naming, and Undo restores a discarded edit; all verified by driving the build.",
+            "Live Mode exposes 8 auto-storing slots ('Live Concert Grand' ... 'Live FM Tine Stack'), the OLED header switches to 'LIVE . SCENE I', and an edit made in a Live slot persisted across a switch away and back with no Store press.",
+            "Page navigation, the program dial and the Numeric list view are all present and operable from the panel (program-page-previous/next, program-program-dial, program-prog-view)."
+          ]
+        }
+      ]
+    }
+  ],
+  "runAxis": {
+    "id": "panelFidelity",
+    "label": "Panel fidelity",
+    "weight": 40,
+    "scoredAgainst": "stage3",
+    "rawScore": 96,
+    "score": 96,
+    "hardGate": {
+      "tripped": [],
+      "scoreCap": null
+    },
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "label": "Chassis, silhouette & geometry",
+        "weight": 20,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "deckFraction",
+            "label": "Deck vertical allocation",
+            "weight": 26,
+            "value": 0.53998,
+            "score": 100
+          },
+          {
+            "id": "keybedFraction",
+            "label": "Keybed vertical allocation",
+            "weight": 16,
+            "value": 0.46002,
+            "score": 100
+          },
+          {
+            "id": "widthFraction",
+            "label": "Instrument width fraction of viewport",
+            "weight": 20,
+            "value": 0.94002,
+            "score": 100
+          },
+          {
+            "id": "aspectRatio",
+            "label": "Instrument aspect ratio",
+            "weight": 18,
+            "value": 3.09511,
+            "score": 100
+          },
+          {
+            "id": "sectionFractionMaxDeviation",
+            "label": "Worst of the six section-fraction deviations",
+            "weight": 20,
+            "value": 0.00001,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Measured .instrument at 1440x900 in Chromium against build/: 1353.625 x 437.34375 px at x=43.1875, y=129. Width fraction 1353.625/1440 = 0.94002 (inside 0.88-0.97); aspect 3.09511 vs 3.0951 specified.",
+          "Deck/keybed boundary is the top of .keybed at y=365.15625: deck 236.15625/437.34375 = 0.53998 (target 0.54). Keybed is taken as the spec's 'keybedIncludingBottomRail' - 201.1875/437.34375 = 0.46002, so deck+keybed = 1. The .keybed element alone is 192.42 px = 0.43998, also inside the +/-0.025 band, so the reading does not change the score.",
+          "The six [data-section] elements measured left to right give fractions of the 1312.97 px section span of 0.14000 / 0.20000 / 0.08499 / 0.12500 / 0.25001 / 0.20000 against the spec's 0.14 / 0.20 / 0.085 / 0.125 / 0.25 / 0.20 - worst deviation 0.000007, reported as 1e-05. Section span and the sum of section widths are identical here; against the full instrument width (1353.63 px; the plates are inset ~40 px) the worst deviation is 0.0075, still inside the 0.012 band, so the criterion passes on either denominator.",
+          "Page height 900 = viewport height: the instrument is visible with no vertical scroll at desktop, as presentation.instrumentVisibleWithoutVerticalScrollAtDesktop requires."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "label": "Hardware inventory & placement",
+        "weight": 24,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "requiredLandmarksPresent",
+            "label": "Required section landmarks rendered in their own section",
+            "weight": 30,
+            "value": 33,
+            "score": 100
+          },
+          {
+            "id": "controlsReachable",
+            "label": "Controls a pointer can actually operate",
+            "weight": 60,
+            "value": 155,
+            "score": 100
+          },
+          {
+            "id": "forbiddenPresent",
+            "label": "Forbidden elements present",
+            "weight": 10,
+            "value": 0,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "All 33 sectionLandmarks entries render inside their own [data-section] element: performance 5/5 (master level knob, rotary speaker block on bare red chassis, wooden pitch stick, modulation wheel, 'nord stage 4 / 73 . HAMMER ACTION' branding), organ 4/4 (nine drawbars organ-drawbar-16..-1, green level LED ladders, model switches with B3/VOX/FARF/PIPE1/PIPE2, percussion on/soft/fast/third), piano 5/5, program 7/7 (primary OLED, dial, 8 program buttons, page nav, Live Mode + Layer Scene, store + split, three morph assign), synth 6/6 (single OLED, A/B/C levels, oscillator, filter, envelopes, LFO + arp), effects 6/6 (MOD 1 and MOD 2 groups, AMP/EQ, delay, compressor, reverb, focus column). Verified against inputs/reference/nord-stage-4-73.jpg; no disagreement with the photograph was found.",
+          "Reachability: for each of the 155 [data-control-id] elements I hit-tested a 5x5 grid across its border box with document.elementFromPoint at 1440x900, page unscrolled - 155 of 155 resolved to the control or a descendant on at least one grid point. No framework click helper was used. Smallest control box measured 14.7 x 78.4 px (a drawbar); none was under 2 px or outside the viewport.",
+          "forbiddenDetection applied literally against the rendered DOM: displayElements found are exactly one .oled per section in program (86.5 px = 0.527 of section) and synth (92.6 px = 0.282 of section, below the 0.5 'wide' threshold), and zero in performance, organ, piano and effects - so 'OLED display', 'wide OLED display', 'wide display spanning the section' and 'multiple primary displays' are all unsatisfied.",
+          "The grid rules are unsatisfied too: organ carries 11 drawbar-like controls (h >= 3w), which the 'generic equal-width control grid' rule excludes; the piano band has only 2 such controls against the 6 the 'drawbar bank' rule needs; synth's 8 same-size controls sit at four distinct row centres (207/238/241/282 px) with column pitches 29/29/127/32/29/29 px, so no regular grid; effects has 0 controls matching both median width and height. Pixel-sampling the performance band gives a dark-inset-plate coverage of 0.049 (organ 0.774, piano 0.732, synth 0.795, effects 0.781), far under the 0.8 that 'full dark inset plate' requires. forbiddenPresent = 0."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "label": "Keybed fidelity",
+        "weight": 18,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "keysInsideKeybed",
+            "label": "Keys whose box falls inside the keybed",
+            "weight": 46,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "keyCount",
+            "label": "Total keys",
+            "weight": 18,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "whiteKeys",
+            "label": "White keys",
+            "weight": 8,
+            "value": 43,
+            "score": 100
+          },
+          {
+            "id": "blackKeys",
+            "label": "Black keys",
+            "weight": 8,
+            "value": 30,
+            "score": 100
+          },
+          {
+            "id": "blackKeyHeightFraction",
+            "label": "Black-key height fraction",
+            "weight": 20,
+            "value": 0.60999,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "73 [data-midi] elements render, MIDI 28 to 100 inclusive - E1 to E7, the Stage 4 73 range - split 43 white / 30 black by class, matching the variant entry exactly.",
+          "Every key box falls inside the .keybed rect (77.02, 365.16, 1285.97 x 192.42): 73 of 73 with a 0.5 px tolerance, no key clipped or escaping.",
+          "White keys measure 29.90625 x 192.421875 px and black keys 18.53125 x 117.375 px, giving a black-key height fraction of 117.375/192.421875 = 0.60999 against the 0.61 +/-0.03 target and a black/white width ratio of 0.6196.",
+          "The same 73/73 holds at 390x844, so the keybed does not reflow into or out of its bounds at the narrow profile."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "label": "Chassis & plate colour fidelity",
+        "weight": 8,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "referenceColorsMatched",
+            "label": "Reference colours matched within deltaE 12",
+            "weight": 100,
+            "value": 5,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Sampled every pixel inside the instrument rect of a 1440x900 screenshot of build/ (10074 distinct colours) and took the nearest surface with an area of at least 80 px for each reference colour, CIE76 in Lab.",
+          "chassisMid #851a25 -> rgb(133,26,37) deltaE 0.00; chassisDark #5a0c13 -> rgb(88,11,20) deltaE 1.55; panelBlueGray #3c424d -> rgb(61,66,76) deltaE 0.74; keyBlack #0b0b0b -> rgb(6,10,9) deltaE 1.30; keyWhite #dcdcdc -> rgb(222,222,214) deltaE 4.20. All five inside deltaE 12, so 5 of 5 matched."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "label": "Materials, legends & displays",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 3,
+        "score": 75,
+        "evidence": [
+          "Materials are genuinely modelled at 3x device scale: knobs carry rotating pointers over radial tick fans (a 70% -> 30% master-level move repainted 42.3% of the knob's pixels), faders and drawbars have moulded caps with alternating light/dark drawbar colouring, and both OLEDs render on a dark glass fill - the synth one draws a live waveform glyph beside 'ANALOG . A / Saw / LP12 . POLY'.",
+          "LED ladders are real per-control ladders, not decoration: the organ and synth level faders each carry a graduated green ladder and each drawbar its own red ladder, and lit-class counts move with state (synth section 27 -> 30 lit when Synth A is enabled).",
+          "Legends are frequently overprinted at rendered size in every one of the six sections: 192 of the 272 text leaves are set below 6 px (median 3.45 px), and 40 pairs of label boxes overlap geometrically at 1440x900. Measured examples: 'SOFT RELEASE' (x 512.9, w 26.4) and 'STRING RESONANCE' (x 528.7) share a row and overlap by 10.6 px, rendering as 'SOFT RELESTARSIEG RESONANCE' in a 3x capture; 'OCTAVE DOWN'/'OCTAVE UP', 'WHEEL MORPH'/'AFTERTOUCH MORPH'/'CONTROL PEDAL MORPH'/'SPLIT ON' and 'MASTER CLOCK'/'TRANSPOSE' collide the same way.",
+          "The collisions are overprints, not clips: every label is white-space:nowrap with overflow:visible and scrollWidth equal to its width, so no text is truncated by its own box and none escapes the chassis ('EFFECTS VARIATION' ends at x=1380.2 against a chassis right edge of 1396.8). What a knowledgeable player sees is legible knob caps, drawbar caps, LED ladders and OLEDs over a silkscreen layer that is unreadable wherever labels land on top of each other."
+        ]
+      },
+      {
+        "id": "panelState",
+        "label": "Panel state & displays",
+        "weight": 14,
+        "scoring": "judged",
+        "rating": 4,
+        "score": 100,
+        "evidence": [
+          "The synth OLED tracks parameters live: changing waveform, voice mode and filter type moved it from 'ANALOG . A / Saw / LP12 . POLY' to 'Super Saw' and 'MONO' and to 'HP' / 'LP24' / 'BP' as each type was selected.",
+          "The program OLED reads live program name, scene, tempo and effect target ('PROGRAM . SCENE I / 1.1 Concert Grand / 120 BPM . FX Piano') and follows state changes - '144 BPM' after a clock edit, 'LIVE . SCENE I' in Live Mode, 'SCENE II' after a scene toggle, an 'E' suffix while edits are pending, and 'STORE: SELECT DESTINATION' during a store. It also carries the truthful 'Grand synthesis fallback' library line.",
+          "LED and control positions follow the model rather than the click: lit-element counts per section change with layer enables (synth 27/65 -> 30/65), the active piano type is highlighted amber in the GRAND/UPRIGHT/ELECTRIC/CLAV/DIGITAL/MISC block, and every drawbar's aria-label reports its detent ('Organ: Drawbar 8 . 8 / 8' -> '0 / 8' when driven from the detail panel), so panel and audio state stay in step in both directions.",
+          "All 155 controls expose data-morph indicator state and accessible names carrying live values (e.g. 'Performance: Master level . 30 percent' after a 40-step decrement), and CC1 from MIDI moved the panel wheel readout to '100 percent' without any pointer interaction."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "label": "Narrow-viewport retention",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 3,
+        "score": 75,
+        "evidence": [
+          "At 390x844 there is no clipping or collapse: document.scrollWidth is 390 (equal to the viewport, so no horizontal overflow), the instrument renders 366.6 x 118.5 px fully inside the fold, all six sections stay in order at the same relative widths, all 73 keys remain inside the keybed, and no page errors were raised.",
+          "The instrument stays recognisable - red chassis, six dark plates, branding, full 73-key keybed - and remains playable by touch and by the mapped computer keyboard, which the on-page legend documents.",
+          "But the deck compresses to 50.5 px tall, which makes the silkscreen unreadable and drops pointer reachability from 155/155 to 138/155 under the same 5x5 elementFromPoint hit-test, so the deck is effectively presentation-only in the default view.",
+          "That is mitigated rather than ignored: an 'Inspect surface' control re-lays the instrument at 1400 px inside an independently scrollable container (verified: .instrument width becomes 1400 while document.scrollWidth stays 390), restoring legible legends and operable controls, and toggles back via 'Fit instrument'."
+        ]
+      }
+    ]
+  },
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 11219,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 2889,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 491,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 3256,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      },
+      {
+        "id": "lint-coverage",
+        "label": "Lint covers candidate sources",
+        "advisory": true,
+        "passed": true,
+        "scannedDependencies": false,
+        "detail": "Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate's own sources."
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "distinctEngines",
+      "title": "Piano Grand/Upright/Electric are synthesis fallbacks, not recorded sample sets",
+      "detail": "IMPLEMENTATION_DETAILS.json declares sampleSources: [] and missingRequiredSets: [Grand, Upright, Electric], and the running build confirms it - the program OLED reads 'Grand synthesis fallback' and the status line 'Piano recordings unavailable'. This is the inherited Phase-2 piano.instrument-library requirement left unmet because no source recordings were supplied. It is declared honestly and labelled in the UI rather than faked, so it costs breadth rather than integrity, but the three acoustic piano types are additive/FM syntheses."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Silkscreen legends overprint each other across all six sections",
+      "detail": "At 1440x900 the deck sets 192 of its 272 text leaves below 6 px (median 3.45 px) and 40 pairs of label boxes overlap. Measured: 'SOFT RELEASE' (x 512.9 w 26.4) overlaps 'STRING RESONANCE' (x 528.7) by 10.6 px and renders as 'SOFT RELESTARSIEG RESONANCE'; 'OCTAVE DOWN'/'OCTAVE UP', the program morph row, 'MASTER CLOCK'/'TRANSPOSE' and several effects labels collide with neighbouring knobs the same way. The labels are nowrap with overflow:visible, so they overprint rather than truncate, and none overflows the chassis edge."
+    },
+    {
+      "severity": "minor",
+      "criterion": "bindings",
+      "title": "Pointer strike position carries no velocity",
+      "detail": "Dispatching pointerdown on key 60 at 15% and at 95% of the key height produced an identical 0.079361 max RMS. MIDI velocity works correctly (20 -> 0.006471, 127 -> 0.123461), so the dynamics path exists but is not driven from pointer geometry."
+    },
+    {
+      "severity": "minor",
+      "criterion": "bindings",
+      "title": "Quantised panel controls appear inert to a single arrow key",
+      "detail": "The nine organ drawbars, synth-oscillator, synth-arp-range and program-program-dial are input[type=range] with min 0, max 100, step 1, but quantise the value to a detent (drawbars to 9 positions). A single ArrowRight or ArrowUp therefore rounds back to the same detent and the control reads unchanged; PageUp/PageDown, Home/End and pointer drag all work. Keyboard operability is technically present but not discoverable at the documented step."
+    },
+    {
+      "severity": "minor",
+      "criterion": "organSystem",
+      "title": "Rotary speed states are weakly differentiated",
+      "detail": "Re-measured with Organ To Rotary and Rotary On: bypassed 2.75 Hz / depth 0.0059, Slow 2.80 Hz / 0.0317, Fast 4.15 Hz / 0.0119, Stopped 0.30 Hz / 0.0147. The rate does rise from Slow to Fast and Stop removes the rotation, so the effect is routed and differentiated, but Fast modulates a third as deeply as Slow and the Slow rate sits well above a Leslie chorale (~0.8 Hz), so the two speeds do not read as slow and fast by ear."
+    },
+    {
+      "severity": "minor",
+      "criterion": "synthSystem",
+      "title": "LP24 is not steeper than LP12",
+      "detail": "At a fixed 0.55 cutoff on a saw, 2-9 kHz band energy re-measured 6.018e-6 for LP12 and 9.043e-6 for LP24 - the 24 dB/oct type passes slightly more stopband energy than the 12 dB/oct one, so the two lowpass slopes are not differentiated. The other filter types are correct (HP low-band 1.629e-7 vs LP12 1.320e-4). This is why synthSystem is rated 3."
+    },
+    {
+      "severity": "minor",
+      "title": "evidence/stage3-evidence-status.json contradicts the sealed evidence set",
+      "detail": "That file lists stage3-desktop.png, stage3-narrow.png and stage3-capture.json under captures.missingFiles with status 'missing', but all three are present in the sealed artifact and inputs/verification.json records them as passing with a 1440x900 and a 390x844 capture. The self-report understates rather than overstates what exists (the captures were taken by the sealing harness after the artifact's own audit was written), so it is a staleness wrinkle, not a false claim of completion."
+    },
+    {
+      "severity": "minor",
+      "criterion": "chassisGeometry",
+      "title": "Section fractions are exact against the deck span, ~0.0075 out against the full chassis width",
+      "detail": "The six section plates are inset about 40 px inside the 1353.63 px instrument, so the section span is 1312.97 px. Against that span the fractions are 0.14000/0.20000/0.08499/0.12500/0.25001/0.20000 (worst deviation 0.000007). Against the full instrument width they are 0.13579/0.19399/0.08244/0.12125/0.24250/0.19399 (worst deviation 0.0075). Both are inside the 0.012 tolerance, so the score is unaffected, but the reported 1e-05 is the span-based reading, not a denominator-independent one."
+    }
+  ]
+}
