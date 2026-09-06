@@ -1,4 +1,4 @@
-# Muse Spark 1.3 (OpenCode) — Stagebench evaluation
+# Muse Spark 1.3 — Stagebench evaluation
 
 - Run: `muse-spark-1-3`
 - Status: complete
