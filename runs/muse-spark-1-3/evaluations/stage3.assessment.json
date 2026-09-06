@@ -1,0 +1,299 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "muse-spark-1-3",
+  "stage": 3,
+  "evaluator": "stagebench-blind-evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-06T01:40:00Z",
+  "summary": "Phase 3 delivers a very large, well-organised state layer but its two headline engines never reach audio. With an organ or synth layer enabled and the piano off (states verified during the note), the StageEngine context renders rms 0.004 and no voice node starts; every configuration produces only the Phase-1 buffer plus, when a Piano layer is on, the same piano sample. Two AudioContexts run, and the ctx0 path answers to neither Master Level nor any section enable. Transpose and morph assignment are display-only. What does work is solid: 32-slot programs with a truthful dirty flag, two-step Store, per-slot recall, pages, dial, list view and Live slots; splits, zones, crossfades and scenes at the state layer; MIDI (stub), sustain and Panic; and the inherited Phase-2 effect chain, which measurably reshapes the piano (reverb 7.2 dB, amp/EQ 5.6 dB). Panel fidelity is undermined by geometry and layout: aspect ratio 1.77 vs 3.0951, and 369 of 573 controls unreachable at 1440x900 because each section clips at 400 px. Keybed (73/43/30, all inside), section fractions and all five reference colours are exact.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "distinctEngines",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "Organ produces no audio in the served build. With p3-organ-A-on=true and p2-piano-section-on/p2-piano-A-on=false (aria-pressed verified immediately before AND during the held note), an AudioBufferSourceNode.start/OscillatorNode.start instrument records only the Phase-1 ctx0 buffer (len 70560) and nothing at all in the StageEngine context; its analyser tap reads rms 0.0036 (noise floor) vs 0.0755 for a piano note. scratch/probe-last-e0786.mjs, scratch/probe-nodes3-e0786.mjs.",
+            "Synth is the same: p3-synth-A-on=true with the piano off yields ctx1 rms 0.0041 and zero voice nodes. Selecting B3/Vox/Farf/Pipe-1 or Sine/Square/White-Noise (real mouse clicks, aria-selected confirmed 'true' each time) never changes the node trace - every configuration starts the identical pair of buffers only when a Piano layer is on (len 110250, playbackRate 1.1225, identical rms/max fingerprint).",
+            "The Piano engine itself is real and musical: sample playback with velocity-mapped level, note-off release and per-note playbackRate (MIDI 64 -> 1.0595, MIDI 60 -> 1.1225). Only one of the three required engines reaches the audio graph, so the Phase 3 hard gate 'B3, Vox, Farf, Pipe organ engines and the required Synth source categories are audibly distinct' fails outright.",
+            "Toggling p3-organ-A-on or p3-synth-A-on silently flips p2-piano-section-on and p2-piano-A-on back to true (observed on every attempt), so what an operator hears after 'enabling the organ' is the piano."
+          ]
+        },
+        {
+          "id": "routingIntegration",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "Two AudioContexts run concurrently, not one. An AudioContext subclass counter reports 2 instances, both state 'running' at 44100 Hz, each with its own destination edge: ctx0 GainNode->AudioDestinationNode (Phase-1 voice, no limiter) and ctx1 DynamicsCompressorNode->AudioDestinationNode. scratch/probe-ctx-e0786.mjs. This contradicts IMPLEMENTATION_DETAILS.json ('ONE AudioContext, one destination; nothing bypasses master') and the Phase 3 hard gate 'no separate AudioContext'.",
+            "The ctx0 path bypasses master control: with every section and layer disabled (states verified during the note) ctx0 still renders rms 0.0896, and driving perf-master-level from 7 to 0 takes ctx1 to rms 0.0000 while ctx0 keeps sounding. Every note is therefore rendered twice, once outside the master gain/limiter.",
+            "The inherited Phase 2 chain itself is genuinely wired and audible: instrumented connect() shows GainNode->BiquadFilter->Delay->Gain (feedback), Gain->WaveShaper->BiquadFilter (amp/EQ), BiquadFilter->DynamicsCompressor, DynamicsCompressor->Convolver->Gain, Gain->StereoPanner. A/B on a piano note gives mean spectral deltas of reverb 7.19 dB, ampEQ 5.63, mod1 5.65, comp 5.54, delay 4.88, mod2 4.54 dB. scratch/probe-fx-e0786.mjs.",
+            "Organ and Synth never enter that chain, so 'every engine inherits the shared effects graph' holds for one engine only."
+          ]
+        },
+        {
+          "id": "qualityUnderLoad",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "Stable under play: across nine separate Playwright sessions driving hundreds of control changes and held notes, the console recorded zero errors and zero pageerrors, and no probe timed out. Three simultaneous computer keys (a/e/g) raised ctx1 rms from 0.064 to 0.091 with no dropouts.",
+            "Panic works: with a note held, focusing [data-testid=\"panic\"] and pressing Enter drops ctx0 to rms 0.00000 and ctx1 to 0.00378 within 300 ms. Note-off via the MIDI stub likewise drops ctx1 from 0.0756 to 0.0044.",
+            "Cost: because two contexts run, every note is synthesised twice and the louder of the two (ctx0, rms 0.087-0.19) answers to neither the master level knob nor any section enable, so gain staging under load is not controllable."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "stateRoundTrip",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Full round-trip verified on the running build: from slot 1.1 I enabled organ layer A, raised Master Clock 120->125 and turned Split on; the program line went '1.1 Stage Grand' -> '1.1 E Stage Grand'. Store is a truthful two-step (flash 'Store: select destination for “Stage Grand”' then 'Stored “Stage Grand” to 1.1') and clears the E. Selecting 1.2 restored organA=false/bpm=120/split=false; returning to 1.1 restored organA=true/bpm=125/split=true. scratch/probe-prog-e0786.mjs.",
+            "32 slots are real: the list view renders 32 named entries ('1.1 Stage Grand', '1.2 Upright Ballad', '1.3 Tine Stack', ...); page 3 swaps the eight slot buttons to p3-slot-16..23; the dial browses (aria-valuetext '1.5', line '1.5 Vox Farf Split'); Live Mode shows L1/L2 and carries edits between Live slots without an explicit store.",
+            "Deduction: the hardware primary OLED never follows. [data-testid=\"program-display\"] stays 'A:11 Stage Grand' and program-aux stays 'PAGE 1' while the actual program is 1.5 on page 3, so the instrument's main display contradicts its own state. Nothing persists across a reload (localStorage empty), which the spec does not require."
+          ]
+        },
+        {
+          "id": "bindings",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "Morph assignment does not work end to end. p3-morph-wheel-arm latches correctly ('Wheel morph assign (latched, move a destination)', aria-pressed=true) and p3-morph-targets lists Piano A level as a destination, but moving p2-piano-A-level while armed - by real mouse click and by ArrowUp - leaves p3-morph-wheel-count at '0 destinations', and driving perf-mod-wheel from 0 to 10 leaves Piano A level at 'Level 10' unchanged. scratch/probe-morph2-e0786.mjs.",
+            "Five selector groups are pointer-only: the organ-model, synth-waveform, program-list and related listbox options are rendered with onPointerDown and no key handler (artifact/src/components/stage3panels.tsx:241,474,499,558,679), so page.keyboard.press on them changes nothing; several are also pointer-blocked (clicking p3-synth-A-wave-Sine/Saw/FM at the box centre resolves to .ctl-knobface).",
+            "Working bindings do exist: sustain via the keyboard, [data-testid=\"panic\"], Master Level (7->0 takes ctx1 to rms 0), Master Clock (120->125 BPM), split points (C3->F3) and crossfade (Off->±6), and Web MIDI through a stubbed requestMIDIAccess - status reads 'MIDI connected (1 input)' and a 0x90/64/100 message starts a voice at playbackRate 1.0595, cleared by 0x80 [stub-measured, no hardware].",
+            "Transpose is display-only: driving p3-transpose to '+6 st' (readout reads 'Transpose +6 · Clock 120 BPM', so the control itself tracks) leaves the rendered note unchanged in pitch - the ctx1 analyser peak stays 172.3 Hz for MIDI 52 and 323.0 Hz for MIDI 64, and the sample playbackRate stays 0.9439/1.0595, identical to +0 st. scratch/rev-pitch-4194.mjs."
+          ]
+        },
+        {
+          "id": "crossSystemWorkflow",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "'Across all three engines at once' cannot hold: Organ and Synth emit no audio (ctx1 rms 0.0036/0.0041 with their layers enabled and the piano off), so splits, scenes and transpose can only ever affect the piano.",
+            "Transpose does not reach audio at all - at '+6 st' the sounding peak for MIDI 52/64 stays 172.3/323.0 Hz, the +0 values (scratch/rev-pitch-4194.mjs). Panic does work (ctx0 rms 0.00000, ctx1 0.00378 with a note held).",
+            "Split and scene state is genuinely editable and observable: p3-split-low-pos steps C3->F3 across the 11 documented positions, p3-split-low-xfade steps Off->±6, seven per-layer zone steppers exist, and pressing p3-scene-2 flips p3-organ-A-on from true to false while leaving piano A enabled.",
+            "State integrity is broken by a coupling bug: enabling p3-organ-A-on or p3-synth-A-on reverts p2-piano-section-on and p2-piano-A-on to true, so a cross-engine setup cannot be held.",
+            "Splits do not gate audio either: with p3-split-on and p3-split-low-active latched, the low split point moved to F4 and Piano A zoned to Z2-Z4 (above the split), MIDI 40 still starts a full-level piano voice (ctx1 rms 0.080, 1 voice) - identical to the note above the split (rms 0.070). The split system is state and LEDs only. scratch/rev-split2-4194.mjs."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "organSystem",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "Inventory is complete on the panel: two layers each with 9 drawbar steppers carrying 9-segment .ctl-leds graphs (p3-organ-A-drawbar-1..9, aria-valuenow reaches 0 with ArrowDown), six model options (B3, B3 Bass, Vox, Farf, Pipe 1, Pipe 2, aria-selected updates on click), percussion on/soft/fast/third, key click, vibrato/chorus C1-C3 and V1-V3, and p3-organ-rotary routing.",
+            "None of it is audible. In the isolated Organ-only state the analyser tap on the StageEngine destination reads rms 0.0036 and the node instrument records no oscillator and no buffer in that context; pulling all nine drawbars to 0 leaves the reading unchanged because there is no organ voice to change. Percussion, key click, vibrato and rotary toggles likewise leave the trace identical. scratch/probe-nodes3-e0786.mjs, scratch/probe-last-e0786.mjs.",
+            "Layer B's whole strip (p3-organ-B-drawbar-1 at y=524.1 and everything below) lies outside its section's 400 px overflow:hidden box, so it is not pointer-operable either."
+          ]
+        },
+        {
+          "id": "synthSystem",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "Three layers are modelled with the full required surface: 14 waveform options per layer including Pulse 33/10, Sync Saw/Square, Multi Saw, Multi Saw 8ve, Super Saw/Square and an FM 2-op algorithm; Osc Ctrl, coarse/fine, four filter types with freq/res/env-amount/tracking/drive, three envelopes with velocity, LFO wave/dest/rate/amount/sync, voice mode/priority/glide/unison/vibrato, and arp mode/run/rate/sync/range/direction/hold.",
+            "No synth voice is ever rendered. With p3-synth-A-on=true and the piano off, ctx1 rms is 0.0041 and no AudioBufferSourceNode or OscillatorNode starts in that context; closing p3-synth-A-filter-freq by 30 steps changes nothing, and p3-synth-A-arp-run latching to aria-pressed=true produces no retriggering in the trace.",
+            "Waveform options carry only onPointerDown (artifact/src/components/stage3panels.tsx:679) so they are keyboard-inoperable, and at 1440x900 several resolve to an overlapping .ctl-knobface under the pointer."
+          ]
+        },
+        {
+          "id": "performanceSystems",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "Splits and scenes are real at the state layer but not in audio: split points step through the documented positions (C3->F3), crossfade steps Off->±6, seven zone lo/hi steppers exist and 11 p3-split-led-* render, and Scene II flips per-layer enables (p3-organ-A-on true->false); yet with split on, the low split active at F4 and Piano A zoned Z2-Z4, a note at MIDI 40 below the split still sounds at full level (ctx1 rms 0.080). scratch/rev-split2-4194.mjs.",
+            "Morphs fail: with p3-morph-wheel-arm latched, moving Piano A level by pointer and by keyboard leaves p3-morph-wheel-count at '0 destinations', and perf-mod-wheel 0->10 produces no change in any listed destination; the pedal morph behaves the same. The arm buttons are additionally pointer-unreachable at 1440x900.",
+            "Layer routing exists for all seven layers (enable/focus/level/octave/effect target) but only the two piano layers reach audio, so 'morph sources reaching their destinations' and layer routing across engines are not demonstrable."
+          ]
+        },
+        {
+          "id": "programWorkflows",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Storage, recall, navigation and Live Mode all behave on the running build: dirty 'E' appears on edit and clears on a confirmed store; Store/Store As are a two-step destination-select with a truthful flash; slot recall restores organ enable, clock BPM and split state per slot; page buttons swap the eight slot buttons to p3-slot-16..23; the dial browses to '1.5 Vox Farf Split'; the numeric list view renders all 32 named slots; Live Mode shows L1/L2 and auto-carries edits.",
+            "Deduction: the Phase-1 program OLED [data-testid=\"program-display\"] is frozen at 'A:11 Stage Grand' and program-aux at 'PAGE 1' while the live program is 1.5 on page 3, and Store As naming is reachable only through the internally scrolled p3-program-panel (clientHeight 78 vs scrollHeight 232)."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "critical",
+      "criterion": "distinctEngines",
+      "title": "Organ and Synth engines produce no audio",
+      "detail": "With an organ or synth layer enabled and the piano section disabled (aria-pressed verified during the held note), the StageEngine context renders rms 0.0036/0.0041 and no AudioBufferSourceNode or OscillatorNode starts in it. Selecting any of the six organ models or fourteen synth waveforms (aria-selected confirmed) leaves the node trace byte-identical. The only voices ever produced are the Phase-1 buffer (len 70560) and the piano sample (len 110250), and the latter only when a Piano layer is on. This fails the Phase 3 hard gate on audibly distinct organ and synth sources."
+    },
+    {
+      "severity": "critical",
+      "criterion": "routingIntegration",
+      "title": "Two AudioContexts; the Phase-1 path bypasses the master limiter and Master Level",
+      "detail": "An AudioContext counter records 2 running instances with separate destination edges (ctx0 GainNode->destination, ctx1 DynamicsCompressor->destination). With every section and layer off, ctx0 still renders rms 0.0896, and Master Level 7->0 silences ctx1 while ctx0 keeps sounding. IMPLEMENTATION_DETAILS.json states 'ONE AudioContext, one destination; nothing bypasses master', which the built app contradicts."
+    },
+    {
+      "severity": "critical",
+      "criterion": "hardwareInventory",
+      "title": "369 of 573 controls are not pointer-operable at 1440x900",
+      "detail": "Each deck section computes to overflow:hidden with a fixed 400 px box (y 45-445). 325 controls have layout boxes below y=445 (e.g. p3-organ-B-drawbar-1 at y=524.1) where elementFromPoint returns .keybed or .pkey, and 44 more inside the box are overpainted by sibling .p2-toggle/.p2-panel nodes. Scrolling every internal container to its end raises reachability only from 204 to 205, so the p2-panel overflow-y the visual audit relies on does not recover them."
+    },
+    {
+      "severity": "critical",
+      "criterion": "chassisGeometry",
+      "title": "Instrument aspect ratio 1.77 against the variant's 3.0951",
+      "detail": "main.instrument measures 1382.39 x 781 px at 1440x900; the most generous chassis-only crop (y 21-751) still gives 1.894. The width fraction (0.960) and the 54/46 deck split (0.5544/0.4456) are in tolerance, so the chassis is roughly 1.75x too tall for its width. The artifact's own visual audit checks width fraction and section fractions but never the aspect ratio."
+    },
+    {
+      "severity": "major",
+      "criterion": "bindings",
+      "title": "Morph assignment never records a destination",
+      "detail": "p3-morph-wheel-arm latches ('latched, move a destination', aria-pressed=true) and p3-morph-targets lists Piano A level, but moving that stepper by real mouse click and by ArrowUp leaves p3-morph-wheel-count at '0 destinations', and perf-mod-wheel 0->10 changes nothing. The pedal morph behaves identically. Both arm buttons are additionally pointer-unreachable."
+    },
+    {
+      "severity": "major",
+      "criterion": "crossSystemWorkflow",
+      "title": "Transpose is display-only",
+      "detail": "Driving p3-transpose to '+6 st' updates the control and the readout but leaves the rendered note's playbackRate at 1.1225, exactly the +0 value."
+    },
+    {
+      "severity": "major",
+      "criterion": "crossSystemWorkflow",
+      "title": "Enabling an organ or synth layer silently re-enables the piano",
+      "detail": "Toggling p3-organ-A-on or p3-synth-A-on flips p2-piano-section-on and p2-piano-A-on back to true on every attempt, so a user cannot hold an organ- or synth-only configuration and any audition of those engines is actually the piano."
+    },
+    {
+      "severity": "major",
+      "criterion": "panelState",
+      "title": "Both primary OLEDs are frozen",
+      "detail": "program-display stays 'A:11 Stage Grand' and program-aux 'PAGE 1' while the live program is 1.5 on page 3; synth-display stays 'Saw Sync' regardless of the selected waveform."
+    },
+    {
+      "severity": "major",
+      "criterion": "narrowRetention",
+      "title": "Layer-effects section is unreachable at 390x844",
+      "detail": "The instrument lays out 560 px wide in a 390 px viewport with scrollWidth 390 and no horizontal scroll; the effects band (x 460.8-561.0) is entirely off-screen and pointer reachability falls to 87/573."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Phase-3 panel headings overprint the Phase-1 section titles",
+      "detail": "In the 1440x900 capture the section titles ORGAN, PIANO, PROGRAM, SYNTH and LAYER EFFECTS are overlaid by the p3 panel headings and adjacent knob legends, and control labels truncate mid-word ('Piano layer A le...')."
+    },
+    {
+      "severity": "minor",
+      "criterion": "hardwareInventory",
+      "title": "forbiddenDetection 'OLED display' fires on a prose label in the effects band",
+      "detail": "[data-testid=\"p3-unsupported-menu:prog-view-modes\"] has the accessible name 'Prog View multi-modes (extra credit): programs spec optional; the display shows slot, name, and edit state.' The word 'display' in that name satisfies the spec's displayElement attribute rule, so the effects section trips the rule although the 252.7x2.5 px element is a text line, not a display. Reported as a spec-rule disagreement; counted once per the literal instruction."
+    },
+    {
+      "severity": "major",
+      "criterion": "crossSystemWorkflow",
+      "title": "Split points and layer zones never reach the audio path",
+      "detail": "With p3-split-on and p3-split-low-active latched, p3-split-low-pos moved to F4 and p3-zone-pianoA-lo/hi set to Z2/Z4 (upper zones only), MIDI 40 - below the split and outside the layer's zone - still starts a piano voice at full level (ctx1 rms 0.080, one voice started), indistinguishable from MIDI 80 above the split. Split state, LEDs and crossfade steppers update correctly, so the split system is display-and-state only."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage3",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.5544,
+          "keybedFraction": 0.4456,
+          "widthFraction": 0.96,
+          "aspectRatio": 1.77,
+          "sectionFractionMaxDeviation": 0.009
+        },
+        "evidence": [
+          "At 1440x900 main.instrument (data-testid=\"instrument\") measures 1382.39 x 781 px at (28.8,12): widthFraction 1382.39/1440 = 0.9600 (inside 0.88-0.97), but aspectRatio 1382.39/781 = 1.770 against the variant's 3.0951 +/-0.06 - the chassis is rendered roughly 1.75x too tall. Even the most generous crop (top rail top y=21 to keybed bottom y=751, h=730) gives 1.894.",
+          "Vertical allocation is in tolerance: deck incl. top rail = 445-12 = 433 px -> 0.5544 (target 0.54 +/-0.025); keybed incl. bottom rail/status strip = 793-445 = 348 px -> 0.4456 (target 0.46 +/-0.025).",
+          "Six section border-box widths over the 1360.39 px deck: performance 188.88 (0.1388 vs 0.14), organ 264.69 (0.1946 vs 0.20), piano 119.39 (0.0878 vs 0.085), program 169.92 (0.1249 vs 0.125), synth 327.84 (0.2410 vs 0.25), effects 264.67 (0.1946 vs 0.20). Worst deviation 0.0090 (synth), inside the 0.012 tolerance. Order matches the spec.",
+          "Measured from build/ served by vite preview --port 4193 --strictPort; served bundle assets/index-Bg81WZ6L.js matches build/assets/index-Bg81WZ6L.js (363257 bytes). scratch/probe-geom-e0786.mjs."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 33,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 204,
+          "controlsTotal": 573,
+          "forbiddenPresent": 1
+        },
+        "evidence": [
+          "All 33 sectionLandmarks entries render inside their own section box at 1440x900 (scratch/probe-lm2-e0786.mjs + probe-lm3-e0786.mjs): e.g. #organ-drawbar-1..9 plus .ctl-leds level ladders (5- and 9-segment) in the organ band, #program-display (ctl-oled primary, 100.4x24) and #program-dial in program, one #synth-display (57.2x49.2) in synth, #perf-master-level/#perf-pitch-stick/#perf-mod-wheel/#perf-rotary-* and the 'nord stage 4' brandblock on the exposed red performance band.",
+          "Reachability, 5x5 document.elementFromPoint grid per control, page unscrolled, no framework click helper: 204 of 573 controls reachable (35.6%). Every deck section computes to overflow:hidden with a 400 px box (y 45-445), and 325 controls have layout boxes below y=445 - e.g. #p3-organ-B-drawbar-1 at y=524.1 and #p3-synth-B-* rows - where elementFromPoint returns .keybed or .pkey. A further 44 in-box controls (e.g. #p3-slot-1..7, #p3-store, #p3-live-mode, #p3-split-*) are overpainted by sibling .p2-toggle/.p2-panel nodes. scratch/controls2-e0786.json.",
+          "forbiddenDetection applied literally: performance largest dark plate covers 0.008 of the band (rule needs 0.8) and holds no displayElement; organ has 9 drawbar-like controls and only 4 of 104 widths within 5% of median, so no 'generic equal-width control grid'; piano has 0 controls >=3x taller than wide; program has one displayElement >=0.5 of the largest area, so no 'multiple primary displays'; synth's widest displayElement is 0.175 of the section and its 15 uniform-size controls have row pitches 22/108/144/202/163 px, so no matrix. The effects band trips 'OLED display': [data-testid=\"p3-unsupported-menu:prog-view-modes\"] carries the accessible name 'Prog View multi-modes ... the display shows slot, name, and edit state', is 252.7x2.5 px at y=386.4 inside the section clip and hit-tests visible. Count 1 - a rule artifact from prose text, reported as a spec disagreement."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 73,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.6289
+        },
+        "evidence": [
+          "73 [data-midi] key elements at 1440x900: 43 data-white=\"true\", 30 data-white=\"false\"; MIDI 28 (E1) to 100 (E7), the E-to-E range the stage-4-73 variant specifies. All 73 boxes fall inside the keybed box (39.80,451,1360.39x300) - keysInsideKeybed 73/73 = 1.00.",
+          "Median white key 31.39 x 289 px, median black key 19.47 x 181.77 px: blackKeyHeightFraction 181.77/289 = 0.6289 vs target 0.61 +/-0.03 (dev 0.019, in tolerance); black/white width ratio 0.620. scratch/probe-keybed-e0786.mjs."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "Histogram of the rendered 1440x900 screenshot cropped to the instrument (29,12)-(1411,793), surfaces >=0.02% of area: chassisMid #851a25 exact (8.01% of area), chassisDark #5a0c13 exact (0.25%), keyBlack #0b0b0b exact (1.84%), keyWhite #dcdcdc exact (0.71%) - CIE76 deltaE 0.00 for each.",
+          "panelBlueGray #3c424d nearest rendered surface #3b414c, deltaE 0.44 (0.36% of area). 5 of 5 reference colours inside deltaE 12. scratch/color-e0786.py."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 1,
+        "evidence": [
+          "Real hardware materials are present and correctly coloured: knob and fader caps, 9-segment .ctl-leds drawbar ladders, .ctl-oled primary/aux panes with green-on-dark treatment, and chassis fills that match the spec exactly (#851a25, #5a0c13, #0b0b0b, #dcdcdc at deltaE 0.00).",
+          "Silkscreen legibility fails at rendered size. In the 1440x900 capture (scratch/desk-e0786.png) the Phase-1 section titles are overprinted by the Phase-3 panel headings - 'ORGAN' sits under 'ORGAN · LAYERS A/B · SHARED CHAIN', 'PIANO' under 'PIANO · LAYERS A/B', 'SYNTH' under 'SYN… LAYER1 · B/C · OV… CHAINS' - and knob legends collide with button rows across the organ, piano, program, synth and effects bands.",
+          "Labels are truncated mid-word at their rendered widths ('Piano layer A le…', 'Organ layer A pi…', 'Program slot 1') and the Phase-3 rows render at ~13-14 px control height with sub-7 px type, so most of the deck reads as coloured blocks rather than legible legends."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "Much of the panel does track state: every Stepper exposes live aria-valuenow/aria-valuetext (Master Clock '120 BPM'->'125 BPM', transpose '+0 st'->'+3 st' with readout 'Transpose +3 · Clock 125 BPM', split 'C3'->'F3', crossfade 'Off'->'±6'), toggles carry aria-pressed, keys set aria-pressed=true under a real pointer, the status rail reports 'Piano ready', 'Library ready' and MIDI state, and p3-program-display shows the live slot, name and dirty flag.",
+          "Both primary OLEDs are static. [data-testid=\"program-display\"] stays 'A:11 Stage Grand' and program-aux 'PAGE 1' while the live program is 1.5 on page 3, and [data-testid=\"synth-display\"] stays 'Saw Sync' regardless of the selected waveform - the two displays a player actually reads never show what the instrument is doing.",
+          "The inherited Phase-1 hardware controls (organ-drawbar-1..9, organ-model-1..5, piano-type-1..6, synth-osc-*, fx-*) are a second, decoupled copy that does not follow the Phase-3 state, and p2-piano-section-on spontaneously reverts to true whenever an organ or synth layer is enabled, so control positions and parameters disagree."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 1,
+        "evidence": [
+          "At 390x844 the instrument lays out 560 px wide inside a 390 px viewport while document.documentElement.scrollWidth stays 390 and window.scrollTo(2000,0) leaves scrollX at 0: the layer-effects section (x 460.8 to 561.0) is entirely off-screen and unreachable, and the synth section is cut at x=390. scratch/probe-morph-e0786.mjs, scratch/narrow-e0786.png.",
+          "Pointer reachability collapses to 87 of 573 controls (15.2%) at that width, against 204/573 at 1440x900, measured with the same unscrolled 5x5 elementFromPoint grid.",
+          "What survives is recognisable - all 73 keys render inside a 538 px keybed at 12.27 px per white key, the red chassis, brand block and performance band are intact, and the page does not scroll vertically - but the instrument is clipped rather than adapted."
+        ]
+      }
+    ]
+  }
+}
