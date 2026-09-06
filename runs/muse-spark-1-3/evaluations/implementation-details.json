@@ -1,0 +1,1497 @@
+{
+  "version": 1,
+  "runId": "muse-spark-1-3",
+  "generatedAt": "2026-09-06T01:18:17.841Z",
+  "description": "Generated from phase package manifests, detected audio assets, and benchmark-authored audio provenance.",
+  "phases": [
+    {
+      "phase": 1,
+      "phaseName": "Complete surface and basic piano",
+      "status": "complete",
+      "artifactPath": "runs/muse-spark-1-3/stage1",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Phase 1 ships one basic piano voice as live additive synthesis: each note renders a deterministic generated PCM buffer (fundamental + 5 decaying partials, hammer transient, exponential envelope) through buffer-source -> per-note gain -> master gain -> destination. No recorded samples are used or claimed anywhere.",
+        "generatedSources": [
+          {
+            "name": "basic-piano-note",
+            "kind": "generated PCM buffer (additive synthesis, rendered at note-on)",
+            "renderer": "src/audio/dsp.ts renderPianoNote",
+            "partials": "1 + 2 + 3 + 4.01 + 5.02 + 6.03 with per-partial decay multipliers",
+            "sampleRate": "context rate (44100 in tests)",
+            "notes": "Velocity scales peak gain; sustain selects the longer tail; one voice per pitch with deterministic oldest-sustained-first stealing at 16 voices."
+          }
+        ],
+        "sampleSources": [],
+        "detectedFiles": [],
+        "notes": [
+          "No recorded, bundled, or redistributable sample sets are used in Phase 1; sampleSources is therefore empty. Recorded Grand/Upright/Electric sets are Phase 2 scope.",
+          "Master bus fixed at 0.8 gain; every voice connects through it — nothing bypasses the master path.",
+          "Status contract: idle -> loading -> ready on success; error with message on context failure; fallback (labeled silent tracking) when no AudioContext exists."
+        ]
+      }
+    },
+    {
+      "phase": 2,
+      "phaseName": "Piano library and working effects",
+      "status": "complete",
+      "artifactPath": "runs/muse-spark-1-3/stage2",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Phase 2 keeps the Phase 1 basic voice untouched and adds the StageEngine: two piano layers (enable/focus/level/octave/SUSTPED/PSTICK, KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res) playing bundled multi-root/multi-velocity sample sets for Grand/Upright/Electric or honest live synthesis for Clav/Digital/Misc, through per-layer chains (Mod1, Mod2, Delay with in-loop feedback filter, Amp Sim/EQ with To Rotary, Compressor, Reverb) into a shared Rotary, layer level, master gain (Master Level) and limiter, on ONE AudioContext. Offline deterministic mirrors in src/audio/render.ts let tests cross the audio boundary without audio output.",
+        "generatedSources": [
+          {
+            "name": "basic-piano-note",
+            "kind": "generated PCM buffer (additive synthesis, rendered at note-on, Phase 1 voice preserved)",
+            "renderer": "src/audio/dsp.ts renderPianoNote",
+            "partials": "1 + 2 + 3 + 4.01 + 5.02 + 6.03 with per-partial decay multipliers",
+            "sampleRate": "context rate (44100 in tests)",
+            "notes": "Velocity scales peak gain; sustain selects the longer tail; one voice per pitch with deterministic oldest-sustained-first stealing at 16 voices."
+          },
+          {
+            "name": "clav-d6-synth",
+            "kind": "live honest synthesis (picked-string burst + short decay), rendered per note",
+            "renderer": "src/audio/render.ts renderSynthVoice(kind=clav) / live buffer in src/audio/stageEngine.ts",
+            "sampleRate": "context rate",
+            "notes": "Clavinet-D6 character; synthesis is spec-allowed for Clav and never described as a recording."
+          },
+          {
+            "name": "digital-stage-synth",
+            "kind": "live honest synthesis (layered detuned stack + bell partial), rendered per note",
+            "renderer": "src/audio/render.ts renderSynthVoice(kind=digital) / live buffer in src/audio/stageEngine.ts",
+            "sampleRate": "context rate",
+            "notes": "Digital piano character; synthesis is spec-allowed for Digital and never described as a recording."
+          },
+          {
+            "name": "marimba-synth",
+            "kind": "live honest synthesis (sine + 4th-partial mallet transient), rendered per note",
+            "renderer": "src/audio/render.ts renderSynthVoice(kind=misc) / live buffer in src/audio/stageEngine.ts",
+            "sampleRate": "context rate",
+            "notes": "Mallet/marimba character; synthesis is spec-allowed for Misc and never described as a recording."
+          },
+          {
+            "name": "reverb-impulses",
+            "kind": "generated deterministic decay noise used as convolver IRs (Room/Booth/Spring/Stage/Hall/Cathedral recipes)",
+            "renderer": "src/audio/graph.ts buildLayerChain buildIr / src/audio/render.ts reverbIr",
+            "sampleRate": "context rate",
+            "notes": "Decay length grows Booth < Room < Stage < Hall < Cathedral; Spring adds resonant sine bursts. Generated, not recorded spaces."
+          }
+        ],
+        "sampleSources": [
+          {
+            "name": "Studio Concert Grand (bundled synthetic-studio sample set, original, CC0-1.0)",
+            "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+            "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+            "files": [
+              "public/samples/grand/grand.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+              "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+            ],
+            "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. 15 roots (MIDI 28..98 step 5, worst-case pitch-shift +/-3 st) x 3 velocity layers (soft=vel 40, mid=80, loud=115) with real timbre differences (upper partials open and ring longer on harder strokes). Stretched-partial stack, long decay, bright top. Loader: src/audio/samples.ts loadSampleLibrary over injected fetch/decode."
+          },
+          {
+            "name": "Studio Upright (bundled synthetic-studio sample set, original, CC0-1.0)",
+            "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+            "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+            "files": [
+              "public/samples/upright/upright.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+              "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+            ],
+            "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. Same 15 roots x 3 layers. Rolled-off highs, faster decay, +/-3-cent double course on fundamental + 2nd partial, woody boosted 2nd partial. Audibly distinct from Grand by construction (proven on shipped bytes in src/piano-library.test.ts)."
+          },
+          {
+            "name": "Stage Tine EP (bundled synthetic-studio sample set, original, CC0-1.0)",
+            "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+            "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+            "files": [
+              "public/samples/electric/electric.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+              "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+            ],
+            "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. Same 15 roots x 3 layers. Tine-bar recipe: strong fundamental + 2nd, fast-decaying high ping partial, short click attack, long even sustain. Audibly distinct from both acoustics (proven on shipped bytes)."
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/electric.28.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.28.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.28.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.33.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.33.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.33.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.38.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.38.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.38.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.43.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.43.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.43.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.48.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.48.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.48.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.53.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.53.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.53.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.58.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.58.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.58.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.63.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.63.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.63.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.68.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.68.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.68.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.73.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.73.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.73.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.78.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.78.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.78.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.83.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.83.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.83.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.88.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.88.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.88.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.93.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.93.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.93.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.98.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.98.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.98.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.28.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.28.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.28.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.33.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.33.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.33.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.38.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.38.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.38.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.43.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.43.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.43.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.48.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.48.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.48.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.53.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.53.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.53.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.58.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.58.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.58.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.63.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.63.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.63.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.68.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.68.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.68.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.73.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.73.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.73.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.78.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.78.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.78.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.83.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.83.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.83.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.88.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.88.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.88.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.93.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.93.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.93.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.98.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.98.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.98.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.28.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.28.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.28.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.33.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.33.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.33.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.38.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.38.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.38.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.43.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.43.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.43.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.48.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.48.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.48.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.53.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.53.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.53.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.58.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.58.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.58.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.63.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.63.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.63.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.68.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.68.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.68.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.73.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.73.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.73.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.78.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.78.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.78.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.83.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.83.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.83.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.88.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.88.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.88.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.93.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.93.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.93.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.98.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.98.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.98.soft.wav",
+            "bytes": 110294
+          }
+        ],
+        "notes": [
+          "Honesty: the three bundled sets are ORIGINAL synthetic-studio bounces created by scripts/generate-samples.mjs — they are multi-root, multi-velocity, bundled (offline) sample assets, but they are NOT acoustic piano recordings and are never described as such (the manifest origin field and the UI/panel copy say 'synthetic-studio').",
+          "Signal order per layer: voice -> Mod1 -> Mod2 -> Delay (feedback filter in the regeneration loop, repeats only) -> Amp Sim/EQ -> Compressor -> Reverb -> [shared Rotary when To Rotary] -> layer level -> master gain -> limiter -> destination. One AudioContext, one destination; nothing bypasses master.",
+          "Fallback contract: any fetch/decode failure (or missing AudioContext) enters a labeled, playable synth fallback ('Sample fallback — synth voices in use'); the primary library is never reported ready on that path, the type selector keeps working, and the program display flags the missing model.",
+          "Still decorative in Phase 2: Organ audio, Synth audio, Programs/splits/scenes/morphs, and every control under the piano/effects specs' excluded lists."
+        ]
+      }
+    },
+    {
+      "phase": 3,
+      "phaseName": "Complete Stage 4 system",
+      "status": "complete",
+      "artifactPath": "runs/muse-spark-1-3/stage3",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Phase 3 completes the instrument on the SAME single AudioContext: the Phase 1 basic voice and Phase 2 piano/effects graph are untouched (lazy Phase 3 extension keeps the Phase 2 node shape byte-identical until first organ/synth use). Organ (2 layers, one shared chain) and Synth (3 layers, own chains) join the master gain/limiter/destination path. Canonical serializable programs (32 slots + 8 auto-storing Live) round-trip every supported parameter; splits/zones/crossfades, scenes, Wheel/Pedal morphs, Master Clock, Transpose, and Panic are live. Offline deterministic mirrors (organRender/synthRender/render) let tests cross the audio boundary without audio output.",
+        "generatedSources": [
+          {
+            "name": "basic-piano-note",
+            "kind": "generated PCM buffer (additive synthesis, rendered at note-on, Phase 1 voice preserved)",
+            "renderer": "src/audio/dsp.ts renderPianoNote",
+            "partials": "1 + 2 + 3 + 4.01 + 5.02 + 6.03 with per-partial decay multipliers",
+            "sampleRate": "context rate (44100 in tests)",
+            "notes": "Velocity scales peak gain; sustain selects the longer tail; one voice per pitch with deterministic oldest-sustained-first stealing at 16 voices."
+          },
+          {
+            "name": "clav-d6-synth",
+            "kind": "live honest synthesis (picked-string burst + short decay), rendered per note",
+            "renderer": "src/audio/render.ts renderSynthVoice(kind=clav) / live buffer in src/audio/stageEngine.ts",
+            "sampleRate": "context rate",
+            "notes": "Clavinet-D6 character; synthesis is spec-allowed for Clav and never described as a recording."
+          },
+          {
+            "name": "digital-stage-synth",
+            "kind": "live honest synthesis (layered detuned stack + bell partial), rendered per note",
+            "renderer": "src/audio/render.ts renderSynthVoice(kind=digital) / live buffer in src/audio/stageEngine.ts",
+            "sampleRate": "context rate",
+            "notes": "Digital piano character; synthesis is spec-allowed for Digital and never described as a recording."
+          },
+          {
+            "name": "marimba-synth",
+            "kind": "live honest synthesis (sine + 4th-partial mallet transient), rendered per note",
+            "renderer": "src/audio/render.ts renderSynthVoice(kind=misc) / live buffer in src/audio/stageEngine.ts",
+            "sampleRate": "context rate",
+            "notes": "Mallet/marimba character; synthesis is spec-allowed for Misc and never described as a recording."
+          },
+          {
+            "name": "reverb-impulses",
+            "kind": "generated deterministic decay noise used as convolver IRs (Room/Booth/Spring/Stage/Hall/Cathedral recipes)",
+            "renderer": "src/audio/graph.ts buildLayerChain buildIr / src/audio/render.ts reverbIr",
+            "sampleRate": "context rate",
+            "notes": "Decay length grows Booth < Room < Stage < Hall < Cathedral; Spring adds resonant sine bursts. Generated, not recorded spaces."
+          },
+          {
+            "name": "organ-b3-tonewheel",
+            "kind": "live honest synthesis (per-partial oscillator stack, 9 B3 ratios + body shimmer, single-triggered shared percussion envelope, click transient, scanner vibrato/chorus bus)",
+            "renderer": "src/audio/organVoices.ts buildOrganVoice/buildPercBus/buildVibBus / offline mirror src/audio/organRender.ts",
+            "sampleRate": "context rate",
+            "notes": "B3/B3 Bass (16+8 only) tonewheel engine. Generated, not sampled."
+          },
+          {
+            "name": "organ-vox-transistor",
+            "kind": "live honest synthesis (squarish transistor partials + filtered/unfiltered mix drawbar)",
+            "renderer": "src/audio/organVoices.ts / offline mirror src/audio/organRender.ts renderVoxNote",
+            "sampleRate": "context rate",
+            "notes": "Audibly distinct from B3 by construction (proven in src/organ.test.ts). Generated, not sampled."
+          },
+          {
+            "name": "organ-farfisa-registers",
+            "kind": "live honest synthesis (reedy sawtooth register stack, on/off past half)",
+            "renderer": "src/audio/organVoices.ts / offline mirror src/audio/organRender.ts renderFarfNote",
+            "sampleRate": "context rate",
+            "notes": "Audibly distinct register behavior (proven in src/organ.test.ts). Generated, not sampled."
+          },
+          {
+            "name": "organ-pipe-flue",
+            "kind": "live honest synthesis (near-sine flue ranks + chiff transient; Pipe 2 brighter principal registration)",
+            "renderer": "src/audio/organVoices.ts / offline mirror src/audio/organRender.ts renderPipeNote",
+            "sampleRate": "context rate",
+            "notes": "Audibly distinct from tonewheel/transistor engines (proven in src/organ.test.ts). Generated, not sampled."
+          },
+          {
+            "name": "synth-analog-fm-voices",
+            "kind": "live honest synthesis (14 required waves across Pure/Sync/Multi/Super/FM-H with category-correct Osc Ctrl, resonant filters, ADR envelopes, LFO, mono/legato/priority/glide, deterministic arp/gate)",
+            "renderer": "src/audio/synthVoices.ts renderLiveSynthVoice / offline mirror src/audio/synthRender.ts",
+            "sampleRate": "context rate",
+            "notes": "Categories audibly distinct with per-category Osc Ctrl (proven in src/synth.test.ts). Generated, not sampled."
+          }
+        ],
+        "sampleSources": [
+          {
+            "name": "Studio Concert Grand (bundled synthetic-studio sample set, original, CC0-1.0)",
+            "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+            "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+            "files": [
+              "public/samples/grand/grand.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+              "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+            ],
+            "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. 15 roots (MIDI 28..98 step 5, worst-case pitch-shift +/-3 st) x 3 velocity layers (soft=vel 40, mid=80, loud=115) with real timbre differences (upper partials open and ring longer on harder strokes). Stretched-partial stack, long decay, bright top. Loader: src/audio/samples.ts loadSampleLibrary over injected fetch/decode."
+          },
+          {
+            "name": "Studio Upright (bundled synthetic-studio sample set, original, CC0-1.0)",
+            "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+            "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+            "files": [
+              "public/samples/upright/upright.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+              "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+            ],
+            "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. Same 15 roots x 3 layers. Rolled-off highs, faster decay, +/-3-cent double course on fundamental + 2nd partial, woody boosted 2nd partial. Audibly distinct from Grand by construction (proven on shipped bytes in src/piano-library.test.ts)."
+          },
+          {
+            "name": "Stage Tine EP (bundled synthetic-studio sample set, original, CC0-1.0)",
+            "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+            "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+            "files": [
+              "public/samples/electric/electric.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+              "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+            ],
+            "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. Same 15 roots x 3 layers. Tine-bar recipe: strong fundamental + 2nd, fast-decaying high ping partial, short click attack, long even sustain. Audibly distinct from both acoustics (proven on shipped bytes)."
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/electric.28.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.28.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.28.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.33.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.33.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.33.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.38.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.38.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.38.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.43.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.43.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.43.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.48.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.48.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.48.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.53.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.53.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.53.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.58.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.58.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.58.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.63.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.63.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.63.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.68.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.68.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.68.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.73.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.73.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.73.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.78.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.78.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.78.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.83.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.83.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.83.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.88.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.88.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.88.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.93.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.93.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.93.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.98.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.98.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/electric/electric.98.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.28.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.28.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.28.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.33.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.33.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.33.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.38.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.38.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.38.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.43.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.43.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.43.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.48.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.48.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.48.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.53.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.53.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.53.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.58.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.58.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.58.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.63.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.63.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.63.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.68.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.68.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.68.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.73.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.73.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.73.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.78.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.78.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.78.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.83.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.83.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.83.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.88.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.88.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.88.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.93.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.93.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.93.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.98.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.98.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/grand/grand.98.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.28.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.28.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.28.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.33.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.33.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.33.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.38.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.38.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.38.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.43.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.43.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.43.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.48.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.48.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.48.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.53.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.53.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.53.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.58.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.58.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.58.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.63.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.63.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.63.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.68.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.68.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.68.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.73.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.73.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.73.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.78.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.78.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.78.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.83.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.83.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.83.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.88.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.88.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.88.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.93.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.93.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.93.soft.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.98.loud.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.98.mid.wav",
+            "bytes": 110294
+          },
+          {
+            "path": "public/samples/upright/upright.98.soft.wav",
+            "bytes": 110294
+          }
+        ],
+        "notes": [
+          "Honesty: the three bundled sets are ORIGINAL synthetic-studio bounces created by scripts/generate-samples.mjs — they are multi-root, multi-velocity, bundled (offline) sample assets, but they are NOT acoustic piano recordings and are never described as such (the manifest origin field and the UI/panel copy say 'synthetic-studio').",
+          "Signal order per chain: voice -> Mod1 -> Mod2 -> Delay (feedback filter in the regeneration loop, repeats only) -> Amp Sim/EQ -> Compressor -> Reverb -> [shared Rotary when routed] -> layer level -> master gain -> limiter -> destination. Six chains (Piano A/B, Organ shared, Synth A/B/C) + one Rotary on ONE AudioContext, one destination; nothing bypasses master. Organ voices route per-layer into the shared chain; synth voices render per note into their own chains.",
+          "Fallback contract: any fetch/decode failure (or missing AudioContext) enters a labeled, playable synth fallback ('Sample fallback — synth voices in use'); the primary library is never reported ready on that path, the type selector keeps working, and the program display flags the missing model.",
+          "Phase 3 honesty: every non-excluded control is bound (full table in evidence/stage3-binding-audit.md); the only decorative hardware control is Aftertouch morph (programs-spec excluded). Claimed optionals that work: single-level program-change undo, Solo audition, Rotary Stop, amp sustain-level knob. Master Level, pitch bend, wheel/pedal positions, rotary speed/drive, and all-bypass are live performance state, truthfully not stored in programs."
+        ]
+      }
+    }
+  ]
+}

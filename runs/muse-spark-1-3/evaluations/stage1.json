@@ -1,0 +1,454 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "muse-spark-1-3",
+  "stage": 1,
+  "stageName": "Complete surface and basic piano",
+  "status": "complete",
+  "evaluator": "stagebench-eval-run-e0786bb17c9c-stage1",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-05T22:05:00.000Z",
+  "summary": "Structurally faithful, geometrically broken. At 1440x900 the six sections, 33/33 landmarks, 73/43/30 keybed, all 5 reference colours and 186/186 reachable controls are exact, and no forbidden descriptor fires. But the instrument renders 1382x781 - aspect 1.770 against the 3.0951 specified - so the silhouette is a squat slab, not a Stage 4. Audio is honest live additive synthesis (no assets in the build) with correct velocity scaling and verified blur/panic cleanup, yet it clips hard (v127 peak 1.02, 8 notes 3.05, 20 notes 4.45 at the destination tap) and has no release envelope: note-off calls source.stop(), RMS 0.156 to 0 in <60ms. Touch note-off never fires - press tags source 'touch', onPointerUp hardcodes 'pointer' - leaving stuck notes on a hard-gated input path that the 'multi-touch' test does not actually exercise. At 390x844, 64 of 186 controls miss unscrolled and 17 stay unreachable at every rail-scroll position, below overflow:hidden section clips - contradicting the audit's 'everything stays reachable' claim. Legends render at 6px with 31-34 truncated and 8 overlapping pairs.",
+  "score": 67,
+  "rawScore": 67,
+  "categories": [
+    {
+      "id": "sound",
+      "label": "Sound",
+      "weight": 25,
+      "score": 70,
+      "contribution": 17.5,
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "label": "Piano voice",
+          "weight": 60,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Tapped the master->destination connection with an AnalyserNode in the served build/: silence baseline peak 0.00000, MIDI note 60 at velocity 30 peak 0.22658 / RMS 0.07905, velocity 127 peak 1.02345 / RMS 0.35830 - correct direction, but a single fortissimo note already exceeds full scale.",
+            "Polyphonic clipping measured at the same tap: 8 simultaneous notes peak 3.04952, 20 notes peak 4.44500 (about +13 dBFS). src/audio/engine.ts fixes master gain at 0.8 with no limiter or per-voice normalisation.",
+            "No release envelope. 20ms RMS trace of MIDI note 60 held 404ms then released: 0.4222 at 61ms decaying naturally to 0.1563 at 404ms, then 0.1133 / 0.0525 / 0.0000 by 465ms - a hard cut, because PianoEngine.noteOff calls source.stop() with no ramp (src/audio/engine.ts:146-160). Every key release clicks; there is no damper tail.",
+            "The held-note decay itself is piano-like and plays across the whole keybed (pointer peak 0.61441, computer key 'g' peak 0.73312), so the voice is dependable and musical apart from level and release."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "label": "Declared source honesty",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares live additive synthesis into generated PCM buffers with sampleSources: []. Verified against the published build, not the text: build/assets contains only index-g-sx2MVP.js and index-_wzo8FHM.css - no audio files, no data: URIs (grep -c 'data:image' = 0 in both).",
+            "Exercised the graph: the AudioNode.connect tap fired exactly once ('master->dest tapped'), context state 'running', and every note reaches the analyser, matching the declared buffer-source -> per-note gain -> master gain -> destination path.",
+            "The declared partial recipe (1 + 2 + 3 + 4.01 + 5.02 + 6.03 with per-partial decay multipliers) matches src/audio/dsp.ts PARTIALS exactly, and the rendered tone's fast upper-partial decay is consistent with it. Nothing recorded is used or claimed."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 55,
+      "score": 65,
+      "contribution": 35.8,
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "label": "Input coverage",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Pointer, computer keyboard and Web MIDI each reach a full note lifecycle in the running build: mouse down/up on key-e4-64 gave peak 0.61441 and aria-pressed true->false; keydown 'a' gave 0.73312 and released on keyup; an injected navigator.requestMIDIAccess produced 'MIDI connected (1 input).' with 0x90/0x80 note on/off, velocity scaling (0.227 vs 1.023) and CC64 sustain holding then flushing key-c4-60.",
+            "Denied MIDI is honest: with no MIDI in the browser the status rail reads 'MIDI access denied - keybed and computer keys still play.' (data-status=denied), and both other inputs kept working.",
+            "TOUCH RELEASE IS BROKEN. Two CDP Input.dispatchTouchEvent points on key-c4-60 and key-g4-67 both went down independently, but after touchEnd on both, document still reported aria-pressed=true for both keys and the voices kept running. Cause: onPointerDown tags the source as 'touch' when pointerType==='touch', while onPointerUp/onPointerCancel/onLostPointerCapture hardcode 'pointer' (artifact/src/components/sections.tsx), so NoteManager.release deletes a source that is not in the set and returns early. Every touch press is a stuck note until PANIC or blur.",
+            "The rubric criterion names three paths (pointer, computer keyboard, Web MIDI) and all three pass a full lifecycle. Touch enters through the Phase 1 feature-ID contract in TASK.md - interaction.keys ('pointer/touch/keyboard key press, release, and cancel/blur behavior') and piano.basic-inputs ('independent multi-touch') - and it is materially broken, which is what holds this at 2 rather than 3: on a touch device every note is stuck."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "label": "Voice lifecycle",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Velocity mapping measured at the destination tap: v30 peak 0.22658 -> v127 peak 1.02345 (monotonic, ~4.5x).",
+            "Sustain works from both sources: holding Space then playing 's' kept key-d4-62 aria-pressed after keyup and released it on Space up; MIDI CC64=127 held key-c4-60 through a 0x80 note-off and CC64=0 released it.",
+            "Cleanup verified audibly, not just in state: after 20 held notes (tap peak 4.445) a window blur event left 0 keys pressed and a measured tap peak of 0.0000; the PANIC button likewise took 3 held notes to 0 keys and peak 0.0000.",
+            "Deterministic stealing exists (pickStealVictim: oldest sustained first, tie-broken on noteId, maxVoices 16) but is invisible and inconsistent on the surface - 20 simultaneous MIDI notes leave 20 keys aria-pressed while only 16 voices can be sounding. Sustain engaged after note-on also only sets a flag; the buffer was already rendered at the shorter 1.6s length."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "label": "Control feel & decorative boundary",
+          "weight": 25,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Every panel control moves and reports state. Measured in the build: #perf-master-level aria-valuenow 7->8 with the pointer face rotating rotate(54deg)->rotate(81deg); #organ-drawbar-1 8->7 on ArrowDown with the cap moving bottom 80%->71%; #organ-model-2 aria-pressed false->true and its LED lighting. All 113 controls carry role slider/button, aria-label, tabIndex 0, and a focus-visible outline (2px solid #ffd75e, styles.css:134).",
+            "The decorative boundary is truthful and I measured it rather than trusting the declaration: stepping Master Level from 7 up to its maximum left the tapped output peak for an identical MIDI note unchanged at 0.7525. It moves and does nothing, exactly as declared.",
+            "Displays never fake success - the program OLED holds static 'A:11 Stage Grand' and does not invent a program change when the dial is turned.",
+            "Feel is simplified: a pointer-down is a single discrete +1 step (shift for -1); there is no drag-to-turn on knobs or drag-to-slide on faders/drawbars, and 'Home' decrements by one instead of jumping to minimum, which is non-standard slider semantics."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 20,
+      "score": 68.8,
+      "contribution": 13.8,
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "label": "Required Phase 1 controls present",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "113 operable panel controls plus 3 display elements render across all six sections, and all 33 sectionLandmarks entries are present in their own section (performance 5, organ 4, piano 5, program 7, synth 6, effects 6) - counted from the rendered DOM at 1440x900.",
+            "The Program/Synth OLED gate holds: exactly 2 elements carry data-primary-oled='true'; performance and effects contain zero display elements; program-aux area is 845px2 against program-display's 2410px2 (0.35 ratio, below the 0.5 'multiple primary displays' threshold).",
+            "Density is well short of the photograph. reference/nord-stage-4-73.jpg shows several hundred discrete legends and switches per plate; the artifact renders 6 controls in performance, 28 in organ, 18 in piano, 22 in program, 20 in synth, 19 in effects (113 total, displays excluded). The reduction is one control standing in for a group rather than whole blocks being absent - the Rotary Speaker speed/stop/drive block, the per-section On/Off rows and the FX layer-focus buttons are all present. What a player would actually miss is granularity: a single piano-octave knob instead of an octave up/down pair, one fx-eq-treble knob instead of the three-band EQ, one reverb-decay knob instead of the type/mix row, and no per-knob LED ladders beside the drawbars."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "label": "Required piano feature IDs",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "All 11 required Phase 1 feature IDs map to non-empty test files in artifact/tests/feature-matrix.json, and inputs/verification.json records coveredFeatures 11 of requiredFeatures 11 with test/typecheck/lint/build all passing at seal time (I could not re-run them offline - the artifact ships no node_modules).",
+            "Each ID is exercisable in the running build, not just in vitest: key press/release/cancel, decorative control movement, accessible roles/values, note on/off/all-notes-off, all four input paths, sustain + polyphony + stealing, honest ready/denied status text, and a clean chassis at both 1440x900 and 390x844 with zero console errors across every interaction pass I ran.",
+            "One ID is over-claimed. src/inputs.test.tsx:42-53 ('tracks independent multi-touch presses') calls fireEvent.pointerDown/pointerUp with no pointerType, so it exercises the mouse branch only; the real touch branch it claims to cover is the one that is broken in the build."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "label": "Declared gaps are accurate",
+          "weight": 25,
+          "scoring": "judged",
+          "rating": 2,
+          "score": 50,
+          "evidence": [
+            "Most declarations check out against behaviour: 'no recorded samples' (build carries no audio assets), 'master bus fixed at 0.8, nothing bypasses it' (single tapped master->destination edge), the idle/loading/ready/error/fallback status contract, and 'panel controls are presentation state only' (Master Level measurably inert).",
+            "The audit self-reports its own deck/keybed deviation and the prompts-vs-spec section-width conflict, which is the right instinct, and its section-width numbers match mine (max delta 0.009).",
+            "But evidence/stage1-visual-audit.md asserts for the narrow profile that 'everything stays reachable and no key or control clips'. Measured at 390x844: the deck sections are overflow-y hidden with scrollHeight 552 vs clientHeight 398 (organ), 494/398 (piano), 537/398 (program), 432/398 (effects), and 17 controls - including organ-level-a/b, piano-octave and piano-detail-4/5/6 - never resolve to an elementFromPoint hit at any rail-scroll position. That claim is false. (A further 47 controls miss only because they are panned off-screen unscrolled; those are recoverable and are not counted here.)",
+            "Two further defects go undeclared anywhere: the touch note-off failure and the >0 dBFS clipping. Nothing declared as unimplemented turned out to work, but undeclared things are missing."
+          ]
+        }
+      ]
+    }
+  ],
+  "runAxis": {
+    "id": "panelFidelity",
+    "label": "Panel fidelity",
+    "weight": 40,
+    "scoredAgainst": "stage1",
+    "rawScore": 81.4,
+    "score": 81.4,
+    "hardGate": {
+      "tripped": [],
+      "scoreCap": null
+    },
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "label": "Chassis, silhouette & geometry",
+        "weight": 20,
+        "scoring": "computed",
+        "score": 82,
+        "measurements": [
+          {
+            "id": "deckFraction",
+            "label": "Deck vertical allocation",
+            "weight": 26,
+            "value": 0.5544,
+            "score": 100
+          },
+          {
+            "id": "keybedFraction",
+            "label": "Keybed vertical allocation",
+            "weight": 16,
+            "value": 0.4379,
+            "score": 100
+          },
+          {
+            "id": "widthFraction",
+            "label": "Instrument width fraction of viewport",
+            "weight": 20,
+            "value": 0.96,
+            "score": 100
+          },
+          {
+            "id": "aspectRatio",
+            "label": "Instrument aspect ratio",
+            "weight": 18,
+            "value": 1.77,
+            "score": 0
+          },
+          {
+            "id": "sectionFractionMaxDeviation",
+            "label": "Worst of the six section-fraction deviations",
+            "weight": 20,
+            "value": 0.009,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Measured in the served build at 1440x900: .instrument box 1382.391 x 781 at (28.797, 12). widthFraction = 1382.391/1440 = 0.9600 (inside 0.88-0.97). aspectRatio = 1382.391/781 = 1.7700 against the specified 3.0951 - a deviation of 1.325, more than 22x the 0.06 tolerance. The chassis is far too tall for its width; no reading rescues it (excluding the status rail gives 1.870, deck+keybed alone 1.958).",
+          "Vertical partition of the 781px instrument: top padding + .toprail (21-39) + gap + .deck (45-445) = 12->445 = 433px deck-including-top-rail = 0.5544 (target 0.54, inside +/-0.025); .keybed 451->751 plus the bottom rail to the chassis edge at 793 = 342px = 0.4379 (target 0.46, inside tolerance by 0.003). Taking the bare content bands instead (400 and 300 of 781) gives 0.512 / 0.384, which is what the candidate's own audit reports as '~51%' and '~38%'.",
+          "Six section fractions of the 1360.391px deck, in order: performance 188.875 = 0.13884 (spec 0.14), organ 264.688 = 0.19457 (0.20), piano 119.391 = 0.08776 (0.085), program 169.922 = 0.12491 (0.125), synth 327.844 = 0.24099 (0.25), effects 264.672 = 0.19456 (0.20). Worst deviation is synth at 0.00901, inside the 0.012 tolerance.",
+          "No page overflow at desktop: documentElement scrollWidth 1440 and scrollHeight 900, so the instrument is fully visible without vertical scroll."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "label": "Hardware inventory & placement",
+        "weight": 24,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "requiredLandmarksPresent",
+            "label": "Required section landmarks rendered in their own section",
+            "weight": 30,
+            "value": 33,
+            "score": 100
+          },
+          {
+            "id": "controlsReachable",
+            "label": "Controls a pointer can actually operate",
+            "weight": 60,
+            "value": 186,
+            "score": 100
+          },
+          {
+            "id": "forbiddenPresent",
+            "label": "Forbidden elements present",
+            "weight": 10,
+            "value": 0,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "All 33 sectionLandmarks entries render inside their own section at 1440x900: performance 5 (perf-master-level, the perf-rotary-speed/stop/drive block, perf-pitch-stick, perf-mod-wheel, the 'nord stage 4 / HAMMER ACTION 73' brandblock); organ 4 (9 organ-drawbar-N in one .drawbank row, LED ladders on organ-level-a/b, 5 organ-model-N, 4 organ-perc-N); piano 5; program 7 (program-display, a 30x30 program-dial that is the largest control in the band, 8 program-slot-N, page up/down, Live Mode + Layer Scene A/B, Store + Split, 3 program-morph-N); synth 6; effects 6.",
+          "Reachability hit-tested per the rubric method - a 5x5 elementFromPoint grid over each bounding box at 1440x900 unscrolled, no framework click helper: 186 of 186 controls (113 panel controls with [data-kind] plus all 73 keys) had at least one grid point resolve to the control or a descendant. Zero unreachable, zero buried.",
+          "forbiddenPresent = 0, computed by applying each forbiddenDetection rule literally to the rendered DOM. performance: 0 display elements, largest dark plate covers 0.008 of the band (rule needs >=0.8). organ: 0 display elements; widths are not within 5% of their median and 9 drawbar-like controls (>=3x taller than wide) are present, so the equal-width-grid rule cannot fire. piano: 0 display elements and 0 controls at least 3x taller than wide, so no drawbar bank. program: program-aux is 0.35 of program-display's area, below the 0.5 'multiple primary displays' threshold. synth: synth-display is 0.175 of section width, below 0.5; the 'uniform repeated knob matrix' rule also fails - 12 controls share width/height within 5% of the 16x16 medians, but their column pitches run 4,6,4,21,12,11,9,33,8,10,41, nowhere near a regular grid. effects: 0 display elements, only 10 of 19 controls uniform and row pitches 96/25, plus 4 grouped .subgroup blocks under two group titles, so no single undifferentiated grid.",
+          "Spec-vs-photograph check: the Rotary Speaker block does sit on the exposed red chassis in the performance band as sectionLandmarks says the photograph shows, so no disagreement to report. Density is much lower than reference/nord-stage-4-73.jpg, but that is a fidelity gap, not a missing landmark."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "label": "Keybed fidelity",
+        "weight": 18,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "keysInsideKeybed",
+            "label": "Keys whose box falls inside the keybed",
+            "weight": 46,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "keyCount",
+            "label": "Total keys",
+            "weight": 18,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "whiteKeys",
+            "label": "White keys",
+            "weight": 8,
+            "value": 43,
+            "score": 100
+          },
+          {
+            "id": "blackKeys",
+            "label": "Black keys",
+            "weight": 8,
+            "value": 30,
+            "score": 100
+          },
+          {
+            "id": "blackKeyHeightFraction",
+            "label": "Black-key height fraction",
+            "weight": 20,
+            "value": 0.6059,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Counted from the rendered DOM at 1440x900: 73 .pkey elements, 43 with data-white=true and 30 with data-white=false, spanning key-e1-28 to key-e7-100 (MIDI 28-100 inclusive = 73) - exactly the Stage 4 73 E-to-E range in specs/nord-stage-4.variants.json.",
+          "All 73 key boxes fall inside the .keybed box (39.797, 451, 1360.391 x 300) with a 0.5px epsilon; zero keys escape on any edge, at either viewport.",
+          "Black-key geometry: 19.469 x 181.766 against a white key of 31.391 x 289. blackKeyHeightFraction = 181.766/300 = 0.6059 (target 0.61 +/-0.03), and black-key width is 0.6202 of a white key. Pressed state is real: mouse-down on key-c4-60 set aria-pressed=true and class 'pkey white down', released on mouse-up."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "label": "Chassis & plate colour fidelity",
+        "weight": 8,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "referenceColorsMatched",
+            "label": "Reference colours matched within deltaE 12",
+            "weight": 100,
+            "value": 5,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Decoded the 1440x900 render of build/ and sampled every surface covering at least 0.02% of pixels (412 distinct fills), then took the CIE76 nearest for each referenceColors entry: chassisMid #851a25 -> #851a25 deltaE 0.00 (6.66% coverage); chassisDark #5a0c13 -> #5a0c13 deltaE 0.00; panelBlueGray #3c424d -> #3b414c deltaE 0.44; keyBlack #0b0b0b -> #0b0b0b deltaE 0.00; keyWhite #dcdcdc -> #dcdcdc deltaE 0.00.",
+          "All five land far inside the deltaE 12 threshold, and the colours are painted in CSS rather than sampled from the reference: build/assets contains no image files and no data: URIs, so presentation.allowReferenceImageAsRenderedBackground is not being violated."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "label": "Materials, legends & displays",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 2,
+        "score": 50,
+        "evidence": [
+          "Silkscreen legends are not legible at rendered size. .ctl-legend computes to font-size 6px with white-space nowrap, overflow hidden and max-width 52px: 31 of the 113 legends are truncated (scrollWidth > clientWidth), including every organ drawbar legend, and 8 pairs of legends physically overlap each other in the organ drawbar row - visible in the render as 'gan drawOrgan drawOrgan draw'.",
+          "Legend nomenclature is generic rather than the hardware's. The artifact prints 'Organ drawbar 1 16'', 'Rotary speaker slow fast'; the reference photo silkscreens the footage marks (16', 5 1/3', 8'...) and short caps like ROTARY SPEAKER / SLOW-FAST / STOP under grouped rules.",
+          "Cap and ladder treatment is present but thin: drawbars get a track plus a coloured cap, faders and knobs get a rotating pointer, buttons get an LED - but only 6 LED ladders exist in the whole deck (the six layer-level faders), where the reference carries multi-segment ladders beside the organ drawbars, the piano and synth level faders and the morph rows.",
+          "OLED treatment is the strongest detail: #program-display renders 9px Courier New in #b9f4e8 on #06110f, reading as a real Nord display, and the section plates hit the specified #3c424d family. But the deck reads flat next to the photograph - no screw heads, no plate bevels, no wood end cheeks, and knob faces are 14-18px dots rather than fluted caps."
+        ]
+      },
+      {
+        "id": "panelState",
+        "label": "Panel state & displays",
+        "weight": 14,
+        "scoring": "judged",
+        "rating": 2,
+        "score": 50,
+        "evidence": [
+          "Control positions do track their own parameters, measured live: #perf-master-level aria-valuenow and data-value 7->8 with the pointer transform rotate(54deg)->rotate(81deg); #organ-drawbar-1 8->7 on ArrowDown with the cap bottom 80%->71%; #program-dial 10->12 with rotate(-30.4839deg); buttons flip aria-pressed and light their LED.",
+          "The keybed mirrors live audio state for mouse, computer keyboard and MIDI: aria-pressed and the .down class follow note-on/note-off from all three, and the status rail truthfully reads 'Piano ready: Piano ready (synthesized basic voice).' with data-status=ready plus a separate honest MIDI line.",
+          "Displays do not read live values: turning the program dial twice (10 -> 12) left #program-display at the hardcoded 'A:11 Stage Grand' and #program-aux at 'PAGE 1'. In a Phase-1-only artifact this is largely what the honesty contract demands - there are no live program values to show, and inventing one would be faking success - so it is weighted lightly here. What does count against the panel as presentation state is that no LED follows an active selection at all: the organ model buttons are independent toggles with no exclusivity, and pressing organ-model-1 then organ-model-2 leaves both reading aria-pressed=true.",
+          "The panel also misreports what is sounding. Sending 20 simultaneous MIDI notes leaves 20 keys aria-pressed while the engine's 16-voice ceiling has stolen 4, and a touch press leaves its key permanently lit after release. The surface shows keys down that are not playing."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "label": "Narrow-viewport retention",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 2,
+        "score": 50,
+        "evidence": [
+          "At 390x844 the instrument stays recognizable and does not collapse: the chassis renders 560 x 802 with all six sections in order, all 73 keys present and none clipped or sub-pixel, documentElement scrollWidth 390 and scrollHeight 844 so the page itself never overflows, and .page provides 194px of horizontal rail scroll that does reach the synth and effects plates.",
+          "But 17 of 186 controls are unreachable at every scroll position. Each .deck-section is overflow-y hidden at a fixed 398px client height while its content is taller: organ scrollHeight 552, program 537, piano 494, effects 432. The 5x5 elementFromPoint grid resolved 122 of 186 controls unscrolled; sweeping the .page rail across its full 0-194px range recovers 47 of the 64 misses (they were merely panned off-screen), leaving 17 permanently clipped: organ-on-a/b, organ-level-a/b, piano-detail-4/5/6, piano-octave, program-fn-6..10, program-morph-1/2/3 and fx-on-7.",
+          "The casualties include required landmarks: organ-level-a and organ-level-b (the organ level LED ladders) render at y=498 and y=549, below the deck bottom at y=445 and behind the keybed; piano-detail-4/5/6 and piano-octave, and the program morph row, are clipped the same way.",
+          "Section legends degrade too - .section-title and .ctl-legend both overflow their boxes at this width (scrollWidth 88 vs clientWidth 62 on the first title), so the plate nomenclature is cut mid-word."
+        ]
+      }
+    ]
+  },
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 3528,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 1989,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 75562,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 2476,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      },
+      {
+        "id": "lint-coverage",
+        "label": "Lint covers candidate sources",
+        "advisory": true,
+        "passed": true,
+        "scannedDependencies": true,
+        "detail": "Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate's own sources. Its output cites node_modules, so the gate also lints vendored dependencies and its result turns partly on code the candidate did not write."
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "critical",
+      "criterion": "chassisGeometry",
+      "title": "Instrument aspect ratio 1.770 against the specified 3.0951",
+      "detail": "The .instrument box renders 1382.391 x 781 at 1440x900. Width fraction (0.960) and the six section fractions (worst deviation 0.009) are all inside tolerance, but the chassis is 781px tall where 3.0951 would put it at ~447px, so the silhouette reads as a squat slab rather than a Stage 4. The deck band is fixed at 400px and the keybed at 300px in CSS; the visual audit records the keybed decision as a deliberate playability trade but does not acknowledge the resulting aspect failure."
+    },
+    {
+      "severity": "critical",
+      "criterion": "inputCoverage",
+      "title": "Touch note-off never fires - every touch press is a stuck note",
+      "detail": "artifact/src/components/sections.tsx tags a press with source 'touch' when e.pointerType === 'touch', but onPointerUp, onPointerCancel and onLostPointerCapture all call onRelease(midi, 'pointer'). NoteManager.release then deletes a source that is not in the held note's set, sees sources.size still 1 and returns early, so the note is never released. Reproduced with CDP Input.dispatchTouchEvent: two touch points on key-c4-60 and key-g4-67 both sounded, and after touchEnd on both, aria-pressed stayed true and the voices kept running until PANIC. Touch is named in the Phase 1 hard gate, and the test that claims to cover it (src/inputs.test.tsx:42-53) fires pointerDown with no pointerType, so it exercises the mouse branch only."
+    },
+    {
+      "severity": "major",
+      "criterion": "narrowRetention",
+      "title": "17 of 186 controls are clipped and unreachable at 390x844",
+      "detail": "Each .deck-section is overflow-y hidden at clientHeight 398 while content runs to scrollHeight 552 (organ), 537 (program), 494 (piano) and 432 (effects). A 5x5 elementFromPoint grid resolves 122 of 186 controls unscrolled; sweeping the .page rail across its whole 0-194px range recovers 47 of the 64 misses, leaving 17 unreachable at any scroll position. Casualties include required landmarks: organ-level-a/b (the organ level LED ladders) render at y=498/549, below the deck bottom at y=445, and piano-octave, piano-detail-4/5/6 and the three program morph buttons clip the same way. evidence/stage1-visual-audit.md states the narrow profile keeps 'everything stays reachable and no key or control clips', which the measurement contradicts."
+    },
+    {
+      "severity": "major",
+      "criterion": "pianoVoice",
+      "title": "Output clips hard - single note at v127 peaks 1.02, 20 notes peak 4.45",
+      "detail": "Measured with an AnalyserNode tapped onto the master->destination edge in the published build: velocity 127 on one note peaks 1.02345, 8 simultaneous notes 3.04952, 20 notes 4.44500. src/audio/engine.ts sets master gain to a fixed 0.8 with no limiter, no per-voice normalisation and no scaling by voice count, so the six summed partials clip the destination on any loud or polyphonic passage."
+    },
+    {
+      "severity": "major",
+      "criterion": "pianoVoice",
+      "title": "No release envelope - note-off is a hard stop",
+      "detail": "PianoEngine.noteOff calls source.stop() and disconnects immediately with no gain ramp. A 20ms RMS trace of MIDI note 60 held 404ms shows a natural decay to 0.1563 at the moment of release, then 0.1133, 0.0525 and 0.0000 within ~60ms - a discontinuity at audible amplitude, so every key release produces a click and there is no damper tail. The spec's 'release' behaviour is only modelled by rendering a longer buffer when sustain is already down at note-on."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "Panel shows keys down that are not sounding",
+      "detail": "The engine steals at 16 voices (pickStealVictim, oldest sustained first) but the UI holds every pressed pitch: 20 simultaneous MIDI notes leave 20 keys aria-pressed while at most 16 voices exist. Combined with the touch stuck-note bug, the keybed's visual state is not a reliable report of what is playing."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Legends render at 6px, 31 truncated and 8 overlapping",
+      "detail": ".ctl-legend is font-size 6px with nowrap, overflow hidden and max-width 52px. 31-34 of 113 legends (34 on the reviewer's remeasure) have scrollWidth greater than clientWidth, and 8 pairs overlap in the organ drawbar row, rendering as run-together text in the desktop capture. Legend text is also generic ('Organ drawbar 1 16''') where the reference silkscreens footage marks alone."
+    }
+  ]
+}

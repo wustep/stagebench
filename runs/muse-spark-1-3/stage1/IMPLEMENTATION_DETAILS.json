@@ -1,0 +1,24 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "audio": {
+    "strategy": "Phase 1 ships one basic piano voice as live additive synthesis: each note renders a deterministic generated PCM buffer (fundamental + 5 decaying partials, hammer transient, exponential envelope) through buffer-source -> per-note gain -> master gain -> destination. No recorded samples are used or claimed anywhere.",
+    "generatedSources": [
+      {
+        "name": "basic-piano-note",
+        "kind": "generated PCM buffer (additive synthesis, rendered at note-on)",
+        "renderer": "src/audio/dsp.ts renderPianoNote",
+        "partials": "1 + 2 + 3 + 4.01 + 5.02 + 6.03 with per-partial decay multipliers",
+        "sampleRate": "context rate (44100 in tests)",
+        "notes": "Velocity scales peak gain; sustain selects the longer tail; one voice per pitch with deterministic oldest-sustained-first stealing at 16 voices."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "No recorded, bundled, or redistributable sample sets are used in Phase 1; sampleSources is therefore empty. Recorded Grand/Upright/Electric sets are Phase 2 scope.",
+      "Master bus fixed at 0.8 gain; every voice connects through it — nothing bypasses the master path.",
+      "Status contract: idle -> loading -> ready on success; error with message on context failure; fallback (labeled silent tracking) when no AudioContext exists."
+    ]
+  }
+}

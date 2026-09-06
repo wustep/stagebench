@@ -1,0 +1,84 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 2,
+  "audio": {
+    "strategy": "Phase 2 keeps the Phase 1 basic voice untouched and adds the StageEngine: two piano layers (enable/focus/level/octave/SUSTPED/PSTICK, KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res) playing bundled multi-root/multi-velocity sample sets for Grand/Upright/Electric or honest live synthesis for Clav/Digital/Misc, through per-layer chains (Mod1, Mod2, Delay with in-loop feedback filter, Amp Sim/EQ with To Rotary, Compressor, Reverb) into a shared Rotary, layer level, master gain (Master Level) and limiter, on ONE AudioContext. Offline deterministic mirrors in src/audio/render.ts let tests cross the audio boundary without audio output.",
+    "generatedSources": [
+      {
+        "name": "basic-piano-note",
+        "kind": "generated PCM buffer (additive synthesis, rendered at note-on, Phase 1 voice preserved)",
+        "renderer": "src/audio/dsp.ts renderPianoNote",
+        "partials": "1 + 2 + 3 + 4.01 + 5.02 + 6.03 with per-partial decay multipliers",
+        "sampleRate": "context rate (44100 in tests)",
+        "notes": "Velocity scales peak gain; sustain selects the longer tail; one voice per pitch with deterministic oldest-sustained-first stealing at 16 voices."
+      },
+      {
+        "name": "clav-d6-synth",
+        "kind": "live honest synthesis (picked-string burst + short decay), rendered per note",
+        "renderer": "src/audio/render.ts renderSynthVoice(kind=clav) / live buffer in src/audio/stageEngine.ts",
+        "sampleRate": "context rate",
+        "notes": "Clavinet-D6 character; synthesis is spec-allowed for Clav and never described as a recording."
+      },
+      {
+        "name": "digital-stage-synth",
+        "kind": "live honest synthesis (layered detuned stack + bell partial), rendered per note",
+        "renderer": "src/audio/render.ts renderSynthVoice(kind=digital) / live buffer in src/audio/stageEngine.ts",
+        "sampleRate": "context rate",
+        "notes": "Digital piano character; synthesis is spec-allowed for Digital and never described as a recording."
+      },
+      {
+        "name": "marimba-synth",
+        "kind": "live honest synthesis (sine + 4th-partial mallet transient), rendered per note",
+        "renderer": "src/audio/render.ts renderSynthVoice(kind=misc) / live buffer in src/audio/stageEngine.ts",
+        "sampleRate": "context rate",
+        "notes": "Mallet/marimba character; synthesis is spec-allowed for Misc and never described as a recording."
+      },
+      {
+        "name": "reverb-impulses",
+        "kind": "generated deterministic decay noise used as convolver IRs (Room/Booth/Spring/Stage/Hall/Cathedral recipes)",
+        "renderer": "src/audio/graph.ts buildLayerChain buildIr / src/audio/render.ts reverbIr",
+        "sampleRate": "context rate",
+        "notes": "Decay length grows Booth < Room < Stage < Hall < Cathedral; Spring adds resonant sine bursts. Generated, not recorded spaces."
+      }
+    ],
+    "sampleSources": [
+      {
+        "name": "Studio Concert Grand (bundled synthetic-studio sample set, original, CC0-1.0)",
+        "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+        "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+        "files": [
+          "public/samples/grand/grand.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+          "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+        ],
+        "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. 15 roots (MIDI 28..98 step 5, worst-case pitch-shift +/-3 st) x 3 velocity layers (soft=vel 40, mid=80, loud=115) with real timbre differences (upper partials open and ring longer on harder strokes). Stretched-partial stack, long decay, bright top. Loader: src/audio/samples.ts loadSampleLibrary over injected fetch/decode."
+      },
+      {
+        "name": "Studio Upright (bundled synthetic-studio sample set, original, CC0-1.0)",
+        "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+        "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+        "files": [
+          "public/samples/upright/upright.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+          "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+        ],
+        "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. Same 15 roots x 3 layers. Rolled-off highs, faster decay, +/-3-cent double course on fundamental + 2nd partial, woody boosted 2nd partial. Audibly distinct from Grand by construction (proven on shipped bytes in src/piano-library.test.ts)."
+      },
+      {
+        "name": "Stage Tine EP (bundled synthetic-studio sample set, original, CC0-1.0)",
+        "source": "scripts/generate-samples.mjs (deterministic seeded synthesis; re-running `pnpm samples` reproduces these bytes)",
+        "license": "CC0-1.0 (original work created by this repository generator; NOT an acoustic piano recording)",
+        "files": [
+          "public/samples/electric/electric.{28,33,38,43,48,53,58,63,68,73,78,83,88,93,98}.{soft,mid,loud}.wav (45 files)",
+          "public/samples/manifest.json (provenance: tool, seeds, roots, layers, license, origin)"
+        ],
+        "notes": "16-bit mono WAV at 22050 Hz, 2.5 s each. Same 15 roots x 3 layers. Tine-bar recipe: strong fundamental + 2nd, fast-decaying high ping partial, short click attack, long even sustain. Audibly distinct from both acoustics (proven on shipped bytes)."
+      }
+    ],
+    "notes": [
+      "Honesty: the three bundled sets are ORIGINAL synthetic-studio bounces created by scripts/generate-samples.mjs — they are multi-root, multi-velocity, bundled (offline) sample assets, but they are NOT acoustic piano recordings and are never described as such (the manifest origin field and the UI/panel copy say 'synthetic-studio').",
+      "Signal order per layer: voice -> Mod1 -> Mod2 -> Delay (feedback filter in the regeneration loop, repeats only) -> Amp Sim/EQ -> Compressor -> Reverb -> [shared Rotary when To Rotary] -> layer level -> master gain -> limiter -> destination. One AudioContext, one destination; nothing bypasses master.",
+      "Fallback contract: any fetch/decode failure (or missing AudioContext) enters a labeled, playable synth fallback ('Sample fallback — synth voices in use'); the primary library is never reported ready on that path, the type selector keeps working, and the program display flags the missing model.",
+      "Still decorative in Phase 2: Organ audio, Synth audio, Programs/splits/scenes/morphs, and every control under the piano/effects specs' excluded lists."
+    ]
+  }
+}
