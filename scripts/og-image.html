@@ -15,16 +15,10 @@
         src: url('../node_modules/@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2') format('woff2');
       }
 
+      /* Tokens copied from src/App.css so the card matches the gallery header. */
       :root {
-        --chassis-hi: #a63440;
-        --chassis-mid: #912a35;
-        --chassis-dark: #892531;
-        --chassis-edge: #78202b;
-        --chassis-shadow: #591822;
-        --chassis-deep: #681d26;
-        --black: oklch(18% 0.01 30);
         --white: oklch(98% 0 0);
-        --red-led: oklch(65% 0.25 29);
+        --rail: #1a1414;
       }
 
       * { box-sizing: border-box; }
@@ -36,221 +30,126 @@
         overflow: hidden;
       }
 
+      /* The gallery's .instrument-header background, with its bottom shade
+         deepened so the card settles into the keybed instead of glowing. */
       body {
         position: relative;
         color: var(--white);
         font-family: 'Manrope Variable', sans-serif;
         -webkit-font-smoothing: antialiased;
         background:
-          radial-gradient(70% 90% at 88% -12%, oklch(52% 0.18 25 / .55), transparent 62%),
-          radial-gradient(90% 60% at 50% 112%, oklch(42% 0.15 25 / .5), transparent 70%),
-          var(--black);
+          radial-gradient(110% 95% at 30% -20%, oklch(57% 0.18 25), transparent 64%),
+          linear-gradient(180deg, transparent 35%, oklch(23% 0.09 25 / .75)),
+          linear-gradient(90deg, #5f1923, #79232c 18% 82%, #5f1923);
+      }
+
+      /* Fine grain dithers the gradients so they don't band in the PNG. */
+      body::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        opacity: .07;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        pointer-events: none;
       }
 
       .copy {
         position: absolute;
-        top: 64px;
+        top: 70px;
         left: 80px;
       }
 
+      /* .header-eyebrow at card scale. */
       .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 12px;
-        padding: 9px 18px 9px 15px;
-        border: 2px solid color-mix(in oklch, var(--white) 26%, transparent);
+        display: inline-block;
+        padding: 9px 18px;
+        border: 2px solid color-mix(in oklch, var(--white) 30%, transparent);
         border-radius: 999px;
-        color: color-mix(in oklch, var(--white) 80%, transparent);
-        font: 800 21px/1 'Barlow Condensed', sans-serif;
+        color: color-mix(in oklch, var(--white) 78%, transparent);
+        font: 800 20px/1 'Barlow Condensed', sans-serif;
         letter-spacing: .16em;
         text-transform: uppercase;
       }
 
-      .eyebrow i {
-        width: 11px;
-        height: 11px;
-        border-radius: 50%;
-        background: var(--red-led);
-        box-shadow: 0 0 10px oklch(65% 0.25 29 / .9);
-      }
-
       h1 {
-        margin: 22px 0 0 -6px;
-        font: 800 184px/.86 'Barlow Condensed', sans-serif;
-        letter-spacing: -.028em;
+        margin: 24px 0 0 -4px;
+        font: 800 188px/.86 'Barlow Condensed', sans-serif;
+        letter-spacing: -.035em;
       }
 
       p {
-        margin: 22px 0 0;
-        color: color-mix(in oklch, var(--white) 84%, transparent);
-        font-size: 40px;
-        font-weight: 600;
+        margin: 26px 0 0;
+        color: color-mix(in oklch, var(--white) 88%, transparent);
+        font-size: 34px;
+        font-weight: 500;
+        line-height: 1.3;
         letter-spacing: -.01em;
       }
 
-      p b {
-        color: var(--white);
-        font-weight: 750;
-      }
-
-      p span {
-        margin: 0 .28em;
-        color: var(--red-led);
-      }
-
-      /* Toy chassis cropped by the bottom edge, same palette as the gallery. */
-      .chassis {
-        position: absolute;
-        left: 48px;
-        right: 48px;
-        top: 404px;
-        height: 290px;
-        border-radius: 26px;
-        background: linear-gradient(180deg, var(--chassis-hi) 0%, var(--chassis-mid) 40%, var(--chassis-dark) 75%, var(--chassis-edge) 100%);
-        box-shadow:
-          inset 0 2px color-mix(in oklch, var(--white) 30%, transparent),
-          0 -18px 60px oklch(42% 0.15 25 / .35);
-      }
-
-      .controls {
-        position: absolute;
-        left: 30px;
-        right: 30px;
-        top: 0;
-        height: 66px;
-        display: flex;
-        align-items: center;
-        gap: 22px;
-      }
-
-      .knob {
-        position: relative;
-        width: 38px;
-        height: 38px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 38% 30%, #4a505c, #16181d 68%);
-        box-shadow:
-          0 3px 6px oklch(4% 0 0 / .65),
-          inset 0 1px 1px oklch(100% 0 0 / .28);
-      }
-
-      .knob::after {
-        content: '';
-        position: absolute;
-        top: 5px;
-        left: 50%;
-        width: 3px;
-        height: 11px;
-        margin-left: -1.5px;
-        border-radius: 2px;
-        background: oklch(95% 0.015 60);
-        transform-origin: 50% 14px;
-        transform: rotate(var(--turn));
-      }
-
-      .leds {
-        display: flex;
-        gap: 9px;
-        margin-left: 6px;
-      }
-
-      .leds i {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #57181a;
-        box-shadow: inset 0 1px 1px oklch(0% 0 0 / .5);
-      }
-
-      .leds i.on {
-        background: #ff5340;
-        box-shadow: 0 0 9px oklch(65% 0.25 29 / .9);
-      }
-
-      .oled {
-        margin-left: auto;
-        padding: 10px 18px;
-        border-radius: 7px;
-        background: #05080c;
-        box-shadow:
-          inset 0 0 12px oklch(0% 0 0 / .9),
-          inset 0 0 0 1px #0e1218,
-          0 0 8px oklch(78% 0.06 240 / .14);
-        color: #dbeeff;
-        font: 400 20px/1 ui-monospace, 'DejaVu Sans Mono', monospace;
-        letter-spacing: .04em;
-        text-shadow: 0 0 7px oklch(88% 0.05 240 / .4);
-      }
-
-      .keybed {
-        position: absolute;
-        left: 24px;
-        right: 24px;
-        top: 66px;
-        bottom: 0;
-        padding-top: 7px;
-        border-radius: 10px 10px 0 0;
-        background: linear-gradient(180deg, #2a0c11, #3a1016);
-      }
-
+      /* The toy keybed, cropped by the bottom edge. */
       .keys {
-        position: relative;
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -14px;
+        height: 132px;
         display: flex;
-        height: 100%;
-        gap: 3px;
-        padding: 0 3px;
+        padding-top: 6px;
+        border-top: 10px solid #591822;
+        background: var(--rail);
+        box-shadow:
+          inset 0 6px 7px oklch(0% 0 0 / .6),
+          0 -1px oklch(100% 0 0 / .1),
+          0 -24px 48px -12px oklch(14% 0.06 25 / .5);
       }
 
       .white {
+        position: relative;
         flex: 1;
-        border-radius: 0 0 6px 6px;
-        background: linear-gradient(180deg, #e9e2d6 0%, #fff8ec 14%, #fbf3e6 100%);
-        box-shadow: inset 0 -3px #e6d8c4;
+        border-left: 1px solid oklch(24% 0.01 60 / .4);
+        border-radius: 0 0 5px 5px;
+        background: linear-gradient(180deg, #d8d8d5 0%, #f2f2ef 5%, #f6f6f3 55%, #f1f1ee 90%, #d9d8d4 96%, #b9b8b4 100%);
+        box-shadow: inset 0 -4px 4px oklch(0% 0 0 / .12);
       }
+
+      .white:first-child { border-left: 0; }
 
       .black {
         position: absolute;
+        z-index: 2;
         top: 0;
-        height: 98px;
-        border-radius: 0 0 5px 5px;
-        background: linear-gradient(180deg, #37302c, #1e1916 88%, #3b3430);
-        box-shadow: 0 4px 6px oklch(14% 0.02 29 / .55);
+        right: -27%;
+        width: 54%;
+        height: 61%;
+        border-radius: 0 0 4px 4px;
+        background: linear-gradient(180deg, #2b2b2b 0%, #111 25%, #0a0a0a 78%, #070707 100%);
+        box-shadow:
+          0 2px 3px oklch(0% 0 0 / .55),
+          inset 1px 0 1px oklch(100% 0 0 / .1),
+          inset -1px 0 1px oklch(100% 0 0 / .1);
       }
     </style>
   </head>
   <body>
     <div class="copy">
-      <span class="eyebrow"><i></i>Unofficial fan project</span>
+      <span class="eyebrow">Unofficial fan project</span>
       <h1>StageBench</h1>
-      <p><b>Nord Stage 4</b><span>·</span>model recreations compared</p>
+      <p>Coding agents rebuild the Nord Stage 4<br />as a playable browser instrument.</p>
     </div>
-    <div class="chassis">
-      <div class="controls">
-        <span class="knob" style="--turn: -50deg"></span>
-        <span class="knob" style="--turn: 10deg"></span>
-        <span class="knob" style="--turn: 55deg"></span>
-        <span class="leds"><i class="on"></i><i></i><i></i></span>
-        <span class="oled">SELECT MODEL</span>
-      </div>
-      <div class="keybed"><div class="keys" id="keys"></div></div>
-    </div>
+    <div class="keys" id="keys"></div>
     <script>
+      // C-to-C octaves: a black key follows every white key except E and B.
       const keys = document.getElementById('keys')
       const WHITE_KEYS = 29
       for (let i = 0; i < WHITE_KEYS; i++) {
         const key = document.createElement('div')
         key.className = 'white'
-        keys.append(key)
-      }
-      // C-to-C octaves: a black key follows every white key except E and B.
-      const pitch = (keys.clientWidth - 6 + 3) / WHITE_KEYS
-      const blackWidth = pitch * 0.58
-      for (let i = 0; i < WHITE_KEYS - 1; i++) {
-        if (i % 7 === 2 || i % 7 === 6) continue
-        const key = document.createElement('div')
-        key.className = 'black'
-        key.style.width = `${blackWidth}px`
-        key.style.left = `${3 + (i + 1) * pitch - 1.5 - blackWidth / 2}px`
+        if (i < WHITE_KEYS - 1 && i % 7 !== 2 && i % 7 !== 6) {
+          const black = document.createElement('div')
+          black.className = 'black'
+          key.append(black)
+        }
         keys.append(key)
       }
     </script>
