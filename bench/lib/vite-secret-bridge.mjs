@@ -1,6 +1,4 @@
 import { readFileSync } from 'node:fs'
-import { handleRequest } from '../../middleware.js'
-
 const DEV_NO_RATE_LIMIT = async () => ({ rateLimited: false })
 const LOCAL_DEV_PASSWORD = 'stagebench'
 
@@ -61,6 +59,14 @@ async function writeResponse(res, response, { secureCookies = true } = {}) {
  * @param {{ password: string, onFallbackPassword?: () => void }} options
  */
 export function mountSecretBridge(server, { password, onFallbackPassword }) {
+  // Lazy-load middleware so importing this plugin (e.g. showcase vite.config)
+  // does not require root @vercel/* packages at build time — only at dev server.
+  let handleRequestPromise
+  const loadHandleRequest = () => {
+    handleRequestPromise ??= import('../../middleware.js').then((m) => m.handleRequest)
+    return handleRequestPromise
+  }
+
   server.middlewares.use(async (req, res, next) => {
     const pathname = (req.url ?? '').split('?')[0]
     if (pathname !== '/secret') return next()
@@ -68,6 +74,7 @@ export function mountSecretBridge(server, { password, onFallbackPassword }) {
     const previous = process.env.STAGEBENCH_PASSWORD
     process.env.STAGEBENCH_PASSWORD = password
     try {
+      const handleRequest = await loadHandleRequest()
       const host = req.headers.host ?? 'localhost'
       const response = await handleRequest(await toRequest(req, host), {
         checkRateLimit: DEV_NO_RATE_LIMIT,
