@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>GPT-6 Sol High (fetch-fix diagnostic) · Stagebench evaluation</title>
+  <style>
+    :root { color-scheme: light; --red:#a51f24; --red-dark:#70191e; --ink:#211c1d; --muted:#665d5f; --line:#d6cdcf; --surface:#f5f3f3; --panel:#fff; --green:#2c7a45; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.55 Inter, ui-sans-serif, system-ui, sans-serif; }
+    a { color:var(--red-dark); }
+    .report-header { padding:42px max(24px,calc((100% - 1080px)/2)); background:var(--red); color:#fff; }
+    .report-header small { display:block; margin-bottom:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .report-header h1 { max-width:760px; margin:0; font-size:clamp(34px,6vw,62px); line-height:1; letter-spacing:-.03em; text-wrap:balance; }
+    .report-header p { max-width:70ch; margin:18px 0 0; color:#ffecec; }
+    .aggregate { display:flex; align-items:baseline; gap:9px; margin-top:28px; }
+    .aggregate strong { font-size:48px; line-height:1; }
+    .aggregate span { font-weight:800; text-transform:uppercase; }
+    main { width:min(1080px,calc(100% - 32px)); margin:0 auto; padding:42px 0 72px; }
+    .overview, .stage-report { margin-bottom:34px; padding:26px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+    h2,h3,h4 { text-wrap:balance; } h2 { margin:0; font-size:28px; } h3 { margin:0 0 12px; font-size:15px; } h4 { margin:0 0 10px; color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { color:var(--muted); font-size:11px; text-align:left; text-transform:uppercase; }
+    th,td { padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    .section-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; } .section-intro span,.implementation-phase header span { color:var(--red); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; } .section-intro a { font-size:12px; font-weight:800; }
+    .implementation-details > p { max-width:76ch; color:var(--muted); }
+    .implementation-phase { padding:22px 0; border-top:1px solid var(--line); } .implementation-phase:last-child { padding-bottom:0; } .implementation-phase h3 { margin:2px 0 14px; font-size:18px; }
+    .implementation-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.05fr) minmax(0,1.4fr); gap:24px; }
+    .library-list { margin:0; padding:0; list-style:none; } .library-list li { display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #eee8e9; } .library-list span { color:var(--muted); font-size:11px; }
+    .audio-details { margin:0; } .audio-details > div { display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; padding:5px 0; border-bottom:1px solid #eee8e9; } .audio-details dt { color:var(--muted); font-size:11px; font-weight:800; } .audio-details dd { margin:0; } .audio-details ul { margin:0; padding-left:17px; } .audio-details span { color:var(--muted); font-size:12px; } .empty-detail { color:var(--muted); }
+    .stage-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+    .stage-heading > div:first-child span { color:var(--red); font-size:11px; font-weight:800; text-transform:uppercase; }
+    .stage-score { display:flex; align-items:baseline; gap:5px; color:var(--red-dark); } .stage-score strong { font-size:34px; line-height:1; } .stage-score span { font-size:11px; font-weight:800; text-transform:uppercase; }
+    .summary { max-width:78ch; margin:20px 0 26px; color:#3f383a; }
+    .report-columns { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:28px; }
+    .findings { margin:0; padding:0; list-style:none; } .findings li { padding:0 0 12px; } .findings strong,.findings span { display:block; } .findings span { margin-top:3px; color:var(--muted); font-size:12px; }
+    .issues { margin:28px 0; padding:20px; background:#f8eded; border-radius:8px; } .issues ol { margin:0; padding-left:20px; } .issues li + li { margin-top:8px; }
+    .measurements { margin:0; padding:0; list-style:none; font-size:12px; } .measurements li { display:flex; gap:6px; align-items:baseline; padding:1px 0; } .measurements code { font-size:11px; } .measurements span { color:var(--muted); } .measurements b { margin-left:auto; }
+    .pill-computed { display:inline-block; padding:1px 6px; border-radius:999px; background:#e3eef0; color:#0f6e7a; font-size:9.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+    .sev { display:inline-block; margin-right:6px; padding:1px 7px; border-radius:999px; font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; vertical-align:1px; }
+    .sev-critical { background:#821b20; color:#fff; } .sev-major { background:#e6d0a8; color:#6a4a09; } .sev-minor { background:#e2dcdd; color:#5b5354; }
+    .gate { display:inline-block; margin:0 0 12px; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; } .gate-pass { background:#e3f2e7; color:#225d34; } .gate-fail { background:#f5dfe0; color:#821b20; }
+    details { margin-top:26px; border-top:1px solid var(--line); } summary { padding:18px 0; font-weight:800; cursor:pointer; } .criteria-group + .criteria-group { margin-top:24px; } .criteria-table ul { margin:0; padding-left:18px; } .criteria-table li + li { margin-top:6px; }
+    footer { padding:24px; background:var(--ink); color:#cfc7c9; font-size:11px; text-align:center; }
+    @media (max-width:800px) { .implementation-grid { grid-template-columns:1fr; } }
+    @media (max-width:720px) { .report-columns { grid-template-columns:1fr; } .overview,.stage-report { padding:18px; } .stage-heading { align-items:flex-start; flex-direction:column; } .section-intro { align-items:flex-start; flex-direction:column; } .audio-details > div { grid-template-columns:1fr; gap:2px; } table { display:block; overflow-x:auto; } }
+    @media print { .report-header { background:#fff; color:#000; padding-top:0; } .report-header p { color:#333; } body { background:#fff; } .overview,.stage-report { break-inside:avoid; border-color:#999; } details > * { display:block; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <small>Stagebench evaluation · rubric 2.0.0 · evaluator claude-opus-5</small>
+    <h1>GPT-6 Sol High (fetch-fix diagnostic)</h1>
+    <p>Evidence-backed evaluation of panel fidelity, sound, playability, and feature completion, rated blind against the Nord Stage 4 references. Scores use phase-specific weights and automated technical gates.</p>
+    <div class="aggregate"><strong>82</strong><span>/100</span></div>
+  </header>
+  <main>
+    <section class="overview">
+      <h2>Run overview</h2>
+      <p>Run <code>gpt-6-sol-fetchfix</code> · complete · 3/3 selected phases evaluated · generated Sep 23, 2026, 2:14 AM UTC</p>
+      <table><thead><tr><th>Phase</th><th>Scope</th><th>Score</th></tr></thead><tbody><tr><td>Phase 1</td><td>Complete surface and basic piano</td><td><strong>89</strong>/100</td></tr><tr><td>Phase 2</td><td>Piano library and working effects</td><td><strong>74</strong>/100</td></tr><tr><td>Phase 3</td><td>Complete Stage 4 system</td><td><strong>75</strong>/100</td></tr></tbody></table>
+    </section>
+    
+  <section class="stage-report" id="run-axis">
+    <header class="stage-heading">
+      <div><span>Scored once &middot; stage3</span><h2>Panel fidelity</h2></div>
+      <div class="stage-score"><strong>86</strong><span>/100 &middot; 40% of the run</span></div>
+    </header>
+    
+    <table class="criteria-table">
+      <thead><tr><th>Criterion</th><th>Measured / rated</th><th>Score</th><th>Evidence</th></tr></thead>
+      <tbody>
+    <tr>
+      <td><strong>Chassis, silhouette &amp; geometry</strong> <span class="pill-computed">computed</span></td>
+      <td><ul class="measurements"><li><code>deckFraction</code> <span>0.53921</span> <b>100</b></li><li><code>keybedFraction</code> <span>0.46079</span> <b>100</b></li><li><code>widthFraction</code> <span>0.94</span> <b>100</b></li><li><code>aspectRatio</code> <span>3.09514</span> <b>100</b></li><li><code>sectionFractionMaxDeviation</code> <span>0.00001</span> <b>100</b></li></ul></td>
+      <td>100</td>
+      <td><ul><li>At 1440x900 .instrument measures 1353.59x437.33 px at (43.20,33.00): widthFraction 1353.59/1440 = 0.94000 (in [0.88,0.97]); aspectRatio 3.09514 vs 3.0951 specified (dev 0.00004).</li><li>Deck incl. top rail spans instrument top y=33.00 to .control-deck bottom y=268.81 -&gt; 235.81/437.33 = 0.53921; keybed incl. bottom rail 268.81-&gt;470.33 = 201.52/437.33 = 0.46079 (targets 0.54/0.46 +/-0.025).</li><li>Six section widths over deck width 1297.14: performance 0.14000, organ 0.20000, piano 0.08499, program 0.12500, synth 0.25000, effects 0.20000 vs 0.14/0.20/0.085/0.125/0.25/0.20 -&gt; max deviation 0.00001 (scratch/geom.mjs).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Hardware inventory &amp; placement</strong> <span class="pill-computed">computed</span></td>
+      <td><ul class="measurements"><li><code>requiredLandmarksPresent</code> <span>33</span> <b>100</b></li><li><code>controlsReachable</code> <span>114</span> <b>98</b></li><li><code>forbiddenPresent</code> <span>0</span> <b>100</b></li></ul></td>
+      <td>99</td>
+      <td><ul><li>All 33 sectionLandmarks entries render inside their own section: performance 5/5 (master-level knob, six rotary controls on exposed red chassis, pitch stick, modulation wheel, &#039;nord stage 4 / HAMMER ACTION&#039; branding), organ 4/4 (nine drawbars, .slider-leds ladders on both level faders, four model switches, percussion + soft/fast/third), piano 5/5, program 7/7 (one .program-oled, 56.7x58.9 px dial, eight program buttons, page left/right, Live Mode + two Layer Scene buttons, Store + Split, three morph-assign buttons), synth 6/6 (one .synth-oled), effects 6/6 - counted in the rendered DOM at 1440x900 (scratch/ctl.mjs).</li><li>Reachability by the prescribed 5x5 document.elementFromPoint grid, page unscrolled at 1440x900: 114 of 115 [data-control-id] controls resolve to themselves or a descendant at &gt;=1 grid point. The single failure is effects.eq-mid (box 1236.2,199.4,46.7x33.7), whose 25 grid points all resolve to effects.compressor-amount stacked on nearly the same rect (1239,199,47x34) - rendered, so present, but a pointer can never operate it (scratch/reach.mjs, scratch/eqmid.mjs).</li><li>forbiddenPresent = 0 by literal application of forbiddenDetection: only two displayElements exist anywhere (.program-oled 64.8 px = 0.40 of its section, .synth-oled 81.1 px = 0.25 of its section, both &lt; 0.5 and one per section); the performance and effects bands contain zero displayElements; performance has no child covering &gt;=0.8 of the band with a panelBlueGray-or-darker fill (section background-color is transparent red chassis); organ has 11 drawbar-like controls (&gt;=3x taller than wide) and only 2 controls within 5% of its median width, so the equal-width-grid rule fails; piano has 2 such tall controls (&lt;6); synth has 6 controls within 5% of both medians (&lt;8); effects shows 5 distinct row pitches (37/37/22/37/36 px), so no single undifferentiated grid (scratch/forb.mjs).</li><li>Disagreement worth reporting: piano.piano-layer-b (552.1,188.9,32x18.9) is partly covered by piano.timbre (563.1,193.1,46.3x21) - its centre is unreachable and a framework click times out - but it satisfies the grid rule at its left edge, so it is counted reachable.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Keybed fidelity</strong> <span class="pill-computed">computed</span></td>
+      <td><ul class="measurements"><li><code>keysInsideKeybed</code> <span>73</span> <b>100</b></li><li><code>keyCount</code> <span>73</span> <b>100</b></li><li><code>whiteKeys</code> <span>43</span> <b>100</b></li><li><code>blackKeys</code> <span>30</span> <b>100</b></li><li><code>blackKeyHeightFraction</code> <span>0.6099</span> <b>100</b></li></ul></td>
+      <td>100</td>
+      <td><ul><li>73 .piano-key elements: 43 .white + 30 .black, exactly the Stage 4 73 variant split (E-E). All 73 boxes fall inside .keybed (x 76.80-1363.17, y 268.83-455.58 vs keybed 76.80..1363.17 / 268.83..455.58) -&gt; keysInsideKeybed 73/73.</li><li>Median white key 29.91x186.75 px, median black 17.64x113.91 px -&gt; blackKeyHeightFraction 113.91/186.75 = 0.6099 vs 0.61 target (dev 0.0001); black/white width ratio 0.590.</li><li>Pressed state verified separately by pointer-down on a key (class gains &#039;pressed&#039; / key visually depresses).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Chassis &amp; plate colour fidelity</strong> <span class="pill-computed">computed</span></td>
+      <td><ul class="measurements"><li><code>referenceColorsMatched</code> <span>5</span> <b>100</b></li></ul></td>
+      <td>100</td>
+      <td><ul><li>CIE76 deltaE of nearest rendered surface (&gt;=200px of the cropped instrument region in the 1440x900 screenshot) to each referenceColor: chassisMid #871926 dE 1.05; chassisDark #62131c dE 3.73; panelBlueGray #3b424c dE 0.80; keyBlack #0a0b0c dE 0.52; keyWhite #dcdcdb dE 0.52.</li><li>All five are under the deltaE 12 threshold -&gt; 5/5 matched (scratch probe over 10243 unique instrument-region colours).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Materials, legends &amp; displays</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Materials are convincing: .instrument carries a four-stop chassis gradient (rgb(155,39,52) -&gt; rgb(139,25,39) -&gt; rgb(98,...)) plus two-layer drop shadow; knob faces are radial gradients with an offset highlight; white keys use a five-stop horizontal gradient; both OLEDs are cyan rgb(168,225,231) Courier New on an inset-shadowed bezel; button LEDs shift rgb(65,25,27) unlit -&gt; rgb(252,98,46) with a glow when lit; faders carry LED ladders and drawbar caps.</li><li>Silkscreen legibility fails at rendered size: all 115 .control-label elements are 5.25 px, and 65 pairs of label boxes overlap at 1440x900 (scratch/typo.mjs).</li><li>Visible collisions in the 3x-scaled crops (scratch/crop_organ.png, scratch/crop_program.png): the organ &#039;DRAWBARS&#039; legend is struck through the four model buttons, the nine drawbar legends are clipped to &#039;DRAWBA&#039;, &#039;LEVEL A/LEVEL B&#039; is buried under PRESET 1/PRESET 2, the &#039;ORGAN&#039; title sits under the ON button, and &#039;LAYER SCENE1LAYER SCENE 2&#039; runs together.</li><li>The program OLED&#039;s own text overflows its bezel - &#039;BPM&#039; and &#039;73 KEY HAMMER&#039; spill onto the panel and collide with the buttons below - and the program section is split into a red half and a dark half with a hard vertical seam the reference photograph does not have.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Panel state &amp; displays</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>Control positions track their parameters: performance.master-level renders transform rotate(-135deg)/0deg/135deg at values 0/50/100; organ.organ-level-a&#039;s .slider-cap moves bottom 4.15% -&gt; 74.7% for values 5 -&gt; 90; organ.drawbar-1-16- moves bottom 0% -&gt; 83% for 0 -&gt; 100 (scratch/panelstate2.mjs).</li><li>LEDs follow the active layer and section: pressing piano.piano-layer-b sets its aria-pressed true and its .button-led to rgb(252,98,46) with glow while layer A drops to rgb(65,25,27), and every control&#039;s title attribute updates from &#039;Grand · Piano A&#039; to &#039;Grand · Piano B&#039;; the same holds for effects.layer-focus-organ.</li><li>Displays read live values: the synth OLED tracks layer and waveform (&#039;SYNTH A Saw&#039; -&gt; &#039;SYNTH A Super Saw&#039; -&gt; &#039;SYNTH B Saw&#039;); the program OLED shows slot, name, dirty &#039;E&#039;, scene and tempo (&#039;1.1 CONCERT GRAND E · SCENE II · 96 BPM&#039;); .split-leds gains a positioned marker (title &#039;Split 48&#039;, left 27.78%) only once a split is armed; pressed keys gain class &#039;pressed&#039;, aria-pressed=true and a 1.75 px translate.</li><li>Defects that break the panel as a state display: the three engine ON buttons (organ.organ-on, piano.piano-on, synth.synth-on, class &#039;hardware-control button accent&#039;) render a LIT LED in BOTH states - rgb(255,91,45) with a 2.69px glow when off and rgb(252,98,46) with a 4.04px glow when on - where an ordinary button (effects.delay-on) goes dark rgb(65,25,27) when off, so the most prominent on/off indicators on the deck never read as off; and their aria-pressed is INVERTED - at boot piano.piano-on reads aria-pressed=false while the piano is the sounding layer (tapped rms 0.01784), clicking it sets aria-pressed=true and the output falls to exactly 0.00000, clicking again returns false and 0.01800 (scratch/rv_led.mjs, scratch/rv_inv.mjs).</li><li>Further gaps: the fader LED ladders are a fixed repeating-linear-gradient identical at level 5 and level 90, so they never meter; the panel does not repaint section on/off when the Layer Scene changes (organ.organ-on set on in Scene I still reads the same value in Scene II, and a toggle in Scene II carries back into Scene I - scratch/rv_state3.mjs); a morph-assigned fader stays at its assigned position instead of the live morphed value; transpose never appears on the OLED although scene and BPM do.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Narrow-viewport retention</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>At 390x844 the instrument keeps its identity and geometry exactly: aspect ratio 3.095, deck fraction 0.540, all 73 keys present and 73/73 inside the keybed, and the six section width ratios unchanged (141/202/86/126/253/202 px) - it is scaled and scrolled, not collapsed or reflowed into a list (scratch/narrow.mjs, scratch/narrow.png).</li><li>The keybed is genuinely playable at this size and the settings rack reflows to a readable single-column mobile form with full-size tap targets; no console errors were logged on load.</li><li>Costs: the instrument renders 1050 px wide inside a horizontal scroller, so only about a third is visible at once - 37 of 115 controls are hit-testable unscrolled; .control-label drops to 4.09 px, which is illegible; and documentElement.scrollWidth is 543 px against a 390 px viewport, so the page itself overflows horizontally rather than confining the pan to the instrument scroller.</li></ul></td>
+    </tr></tbody>
+    </table>
+  </section>
+    <section class="overview implementation-details" id="implementation-details">
+      <div class="section-intro">
+        <div><span>Honesty disclosure</span><h2>Audio provenance</h2></div>
+        <a href="implementation-details.json">View JSON</a>
+      </div>
+      <p>Audio files are detected from the sealed artifact; sound-generation methods and sample provenance are declared by the candidate in <code>IMPLEMENTATION_DETAILS.json</code>.</p>
+      <section class="implementation-phase">
+        <header><span>Phase 1</span><h3>Complete surface and basic piano</h3></header>
+        <dl class="audio-details"><div><dt>Audio strategy</dt><dd>Live additive Web Audio synthesis for one basic piano-like voice. No recorded samples or external audio assets are used in Phase 1.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>Basic synthesized piano</strong> — Three sine partials per note with velocity-dependent amplitude and brightness, attack/decay envelope, and note release.</li></ul></dd></div><div><dt>Recorded sample provenance</dt><dd>No recorded or external sample sources declared</dd></div><div><dt>Bundled audio</dt><dd>None detected</dd></div><div><dt>Notes</dt><dd><ul><li>No bundled recorded piano samples are claimed; Phase 1 permits an honestly described synthesized voice.</li><li>Panel controls are decorative and do not alter the signal path.</li></ul></dd></div></dl>
+      </section><section class="implementation-phase">
+        <header><span>Phase 2</span><h3>Piano library and working effects</h3></header>
+        <dl class="audio-details"><div><dt>Audio strategy</dt><dd>One lazy Web Audio context; two Piano layer buses through ordered per-layer effects and a shared rotary into master gain and limiter. Grand, Upright, Electric use bundled recorded samples. Clav, Digital, Misc and loading/error fallback use live synthesis.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>Clav, Digital, Misc and playable sample fallback</strong> — Live oscillator synthesis with note envelope, timbre filter, unison and resonance oscillator; no generated buffer is described as a recording.</li><li><strong>Reverb impulse responses</strong> — Deterministic synthetic impulse data generated in AudioBuffer.</li></ul></dd></div><div><dt>Sample provenance</dt><dd><ul><li><strong>Grand — AKAI Splendid Steinway</strong> — https://github.com/smpldsnds/sfzinstruments-splendid-grand-piano · Public Domain</li><li><strong>Upright — FreePats Kawai KW</strong> — https://github.com/freepats/upright-piano-KW · CC0 1.0</li><li><strong>Electric — Greg Sullivan Wurlitzer EP200</strong> — https://github.com/smpldsnds/sfzinstruments-greg-sullivan-e-pianos · CC BY 3.0 Unported</li></ul></dd></div><div><dt>Bundled audio</dt><dd>77 files · 12.7 MB</dd></div><div><dt>Notes</dt><dd><ul><li>Electric uses Greg Sullivan Wurlitzer EP200 under CC BY 3.0 Unported; credit and license apply to redistributed sample files.</li><li>The original FLAC sources for Upright are retained alongside compressed OGG playback derivatives.</li><li>The sampled sets have multiple root pitches and recorded velocity layers. Grand upper register reuses a single recorded soft layer where no hard source file exists.</li><li>If any playback sample fails to fetch/decode, status reports sample error and synthesized fallback remains playable.</li><li>Electric recordings are by Greg Sullivan and distributed under CC BY 3.0 Unported. The bundled OGG files came from the smpldsnds mirror of the original sfzinstruments/GregSullivan.E-Pianos repository.</li><li>Upright OGG playback files were derived from the listed FreePats FLAC sources using FFmpeg mono Opus, retaining the first nine seconds. Both originals and derivatives are listed in the Upright set.</li></ul></dd></div></dl>
+      </section><section class="implementation-phase">
+        <header><span>Phase 3</span><h3>Complete Stage 4 system</h3></header>
+        <dl class="audio-details"><div><dt>Audio strategy</dt><dd>One lazy Web Audio context: recorded Piano A/B, live additive Organ A/B with one shared effect chain, live Synth A/B/C with independent effect chains, shared rotary, master gain, limiter, and one destination.</dd></div><div><dt>Generated sound sources</dt><dd><ul><li><strong>Clav, Digital, Misc and playable sample fallback</strong> — Live oscillator synthesis with note envelope, timbre filter, unison and resonance oscillator; no generated buffer is described as a recording.</li><li><strong>Reverb impulse responses</strong> — Deterministic synthetic impulse data generated in AudioBuffer.</li><li><strong>Organ and Synth live synthesis</strong> — Live Web Audio oscillators, harmonic drawbar/register mixes, FM frequency modulation, detune stacks, noise buffers, filters, envelopes, vibrato and LFO. White Noise buffer is generated at runtime; no generated buffer is described as a recording.</li></ul></dd></div><div><dt>Sample provenance</dt><dd><ul><li><strong>Grand — AKAI Splendid Steinway</strong> — https://github.com/smpldsnds/sfzinstruments-splendid-grand-piano · Public Domain</li><li><strong>Upright — FreePats Kawai KW</strong> — https://github.com/freepats/upright-piano-KW · CC0 1.0</li><li><strong>Electric — Greg Sullivan Wurlitzer EP200</strong> — https://github.com/smpldsnds/sfzinstruments-greg-sullivan-e-pianos · CC BY 3.0 Unported</li></ul></dd></div><div><dt>Bundled audio</dt><dd>77 files · 12.7 MB</dd></div><div><dt>Notes</dt><dd><ul><li>Electric uses Greg Sullivan Wurlitzer EP200 under CC BY 3.0 Unported; credit and license apply to redistributed sample files.</li><li>The original FLAC sources for Upright are retained alongside compressed OGG playback derivatives.</li><li>The sampled sets have multiple root pitches and recorded velocity layers. Grand upper register reuses a single recorded soft layer where no hard source file exists.</li><li>If any playback sample fails to fetch/decode, status reports sample error and synthesized fallback remains playable.</li><li>Electric recordings are by Greg Sullivan and distributed under CC BY 3.0 Unported. The bundled OGG files came from the smpldsnds mirror of the original sfzinstruments/GregSullivan.E-Pianos repository.</li><li>Upright OGG playback files were derived from the listed FreePats FLAC sources using FFmpeg mono Opus, retaining the first nine seconds. Both originals and derivatives are listed in the Upright set.</li><li>sampleSources entries each represent an instrument set with name, source, and license; files list the members of each set for checksum verification.</li></ul></dd></div></dl>
+      </section>
+    </section>
+    
+  <section class="stage-report" id="stage-1">
+    <header class="stage-heading">
+      <div><span>Phase 1</span><h2>Complete surface and basic piano</h2></div>
+      <div class="stage-score"><strong>89</strong><span>/100</span></div>
+    </header>
+
+    <p class="summary">A complete, recognizable Stage 4 73 surface with a genuinely working basic piano. Geometry is essentially exact: 73 keys (43/30), MIDI 28-100, 73/73 inside the keybed, black-key height 0.6099 vs 0.61, aspect 3.09514 vs 3.0951, width 0.940, and the six section fractions hit 0.14/0.20/0.085/0.125/0.25/0.20 with zero deviation. Measured against the served build, every Phase 1 input reaches one note lifecycle: pointer, real multi-touch, computer keyboard with repeat suppression, and Web MIDI with velocity (RMS 0.0050 at v20 vs 0.0906 at v127), CC64 sustain, oldest-first stealing at exactly 24 of 30 notes, and blur/disconnect returning output to exactly 0.0. The decorative boundary is honest under test and the declared source matches runtime (3 sine partials, one context, no audio assets). Weaknesses: the voice is three fixed sine partials with one decay shape - clearly not a piano to a trained ear; effects.eq-mid is fully buried under effects.compressor-amount and pointer-unreachable; and the silkscreen is barely legible - every legend renders at 5.2 px and 93 of 115 collide with a neighbour. Zero console errors throughout.</p>
+
+    <section>
+      <h3>Axis scores</h3>
+      <table>
+        <thead><tr><th>Axis</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+        <tbody><tr><td>Sound</td><td>25%</td><td><strong>85</strong></td><td>21</td></tr><tr><td>Playability &amp; control</td><td>55%</td><td><strong>93</strong></td><td>51</td></tr><tr><td>Feature completeness</td><td>20%</td><td><strong>83</strong></td><td>16</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <ol><li><span class="sev sev-major">major</span> EQ Mid knob is completely buried and cannot be operated by pointer: At 1440x900 unscrolled, a 5x5 document.elementFromPoint grid across effects.eq-mid (x 1236.2, y 380.2, 46.7x33.7) resolves to effects.compressor-amount at all 25 points: the two controls are authored at overlapping coordinates in src/hardware.ts (Compressor Amount at 50,67 and EQ Mid at 49,67). 114/115 controls are pointer-reachable. The control remains keyboard-operable (focus + ArrowRight moved 45 -&gt; 47), so it is present but reachable by one modality only. The Phase 1 hard gate requires every visible control to move or press accessibly, and evidence/stage1-visual-audit.md does not disclose the collision.</li><li><span class="sev sev-minor">minor</span> 65 of 115 control legends overlap, so much of the silkscreen is unreadable: Pairwise bounding-box comparison of the 115 .control-label elements at 1440x900 found 65 overlapping pairs, and 8 control boxes overlap each other. Rendered output shows runs such as &#039;DRAWBAR1DRAWBAR2...&#039;, &#039;LAYER SCENE1LAYER SCENE 2&#039; and &#039;PITCH STICKMODULATIC WHEEL&#039; (scratch/desktop.png). Accessible names are unaffected - all 115 controls carry correct aria-labels - but visually the controls are hard to identify.</li><li><span class="sev sev-minor">minor</span> 24-voice polyphony ceiling steals sustained notes: src/piano.ts sets maxVoices = 24 and pedal-held voices count against it. Holding CC64 and playing MIDI 40-69 left exactly notes 46-69 sounding; the six oldest were cut. The stealing itself is correct and deterministic, but a pianist pedalling a passage will hear notes disappear well before the hardware would.</li><li><span class="sev sev-minor">minor</span> Program band controls crowd and overflow the inset plate: In the rendered desktop capture the Program/Morph inset plate is narrower than its section (red chassis shows through on the left), program buttons 5-8 straddle the plate&#039;s bottom edge, the three morph-assign buttons sit at the very bottom of the deck, and the program OLED&#039;s &#039;73 KEY HAMMER ACTION&#039; line spills past its bezel onto the page-navigation row. All controls are present and reachable; the placement is simply tight.</li></ol>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-pass">Passed</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>dist/index.html present</td></tr><tr><td>Lint covers candidate sources</td><td>Pass</td><td>Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate&#039;s own sources.</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Sound</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Piano voice</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Played the served build (http://localhost:4281, build/assets/index-mqzO-EMv.js) with an AudioContext tap: a pointer press on the C4 key produced analyser RMS 0.0648 / peak 0.1898 against exactly 0.0 before any note, so the voice is genuinely audible, not state-only.</li><li>Pitch is correct equal temperament: the tap recorded oscillator frequencies 261.6256, 524.036 and 786.970 Hz for MIDI 60 - three sine partials at ratios 1, 2.003, 3.008 (src/piano.ts WebPianoBackend).</li><li>Decay and release behave: RMS sampled in six consecutive 200 ms windows on one held MIDI 60 note fell monotonically 0.0805, 0.0566, 0.0475, 0.0399, 0.0333, 0.0277; after note-off RMS returned to exactly 0.0 within 500 ms (release ramp 0.22 s).</li><li>Simplified in ways a player notices: every note is the same three fixed sine partials with one 8 s exponential decay - no hammer/attack noise, no register-dependent decay or inharmonicity, no key-off component, and pointer and computer-key notes are fixed velocity 105 and 95 respectively (only MIDI carries real velocity). Polyphony ceiling is 24 voices (src/piano.ts maxVoices).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Declared source honesty</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>IMPLEMENTATION_DETAILS.json declares live additive Web Audio synthesis, one generatedSource, sampleSources: []. Runtime agrees: the tapped context created exactly 3 oscillators and 4 gains for a single note, all oscillator .type values were &#039;sine&#039;, and window.__probe.ctxCount was 1 (one shared AudioContext).</li><li>No recorded material exists to mis-declare: build/ contains only index.html, assets/index-mqzO-EMv.js (204828 B) and assets/index-DiHlqCGL.css (7611 B) - no audio assets - and the page issued no network requests after load (networkidle, 0 console/page errors across every probe).</li><li>The UI makes the same claim to the user: the status strip reads &#039;STAGE 4 73 - Synthesized basic piano&#039;, so the declaration is not contradicted anywhere I could exercise it.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Playability &amp; control</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Input coverage</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Pointer: mouse down on .piano-key[data-midi=60] set aria-pressed=true and raised RMS to 0.0648; mouse up returned aria-pressed=false and RMS to 0.0. Dragging off the key before release (pointer moved to 10,10) still released the note - aria-pressed false, no stuck voice.</li><li>Independent multi-touch verified with real CDP Input.dispatchTouchEvent: touch 1 on MIDI 60 -&gt; pressed [60]; adding touch 2 on MIDI 64 -&gt; [60,64]; lifting only the second -&gt; [64]; lifting all -&gt; []. No page errors.</li><li>Computer keyboard: &#039;a&#039; sounded MIDI 48 (RMS 0.0553, aria-pressed on key 48); a synthetic keydown with repeat:true and a second non-repeat keydown while held both added 0 oscillators (osc count 9 -&gt; 9), so repeat suppression works.</li><li>Web MIDI through the real navigator.requestMIDIAccess path (faked MIDIAccess in an init script): 0x90/64/110 sounded key 64 at RMS 0.0695, 0x80 silenced it, CC64 sustained, and CC120/123 are routed (src/piano.ts routeMidiMessage). Failure paths are truthful too: denied -&gt; &#039;MIDI denied or unavailable&#039;, absent API -&gt; &#039;MIDI unavailable&#039;, device removal -&gt; &#039;MIDI disconnected&#039;.</li><li>Keyboard-accessible keybed: focusing .piano-key[data-midi=60] and holding Enter set aria-pressed=true, releasing cleared it.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Voice lifecycle</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Velocity maps monotonically and audibly: MIDI 60 at velocity 20 measured RMS 0.00501 / peak 0.0129; the same note at velocity 127 measured RMS 0.0906 / peak 0.2685 - an 18.1x spread on the rendered signal.</li><li>Sustain: with CC64=127, note-on 67 then note-off 67 left the note sounding (RMS 0.0368, aria-pressed still true on key 67); sending CC64=0 dropped RMS to exactly 0.0 and cleared aria-pressed. Space does the same from the computer keyboard, and Space on a focused panel button is correctly ignored (no sustain triggered).</li><li>Deterministic stealing: sending note-on for MIDI 40..69 (30 notes) left exactly 24 sounding and the survivors were 46-69 - the six oldest were stolen, oldest-first, exactly as src/piano.ts documents. Combined RMS under that load was 0.245 with peak 0.761 (no clipping).</li><li>All-notes-off: with 2 MIDI notes held, dispatching window blur took sounding keys 2 -&gt; 0 and RMS to 0.0; disconnecting the MIDI input while a note was held took 1 -&gt; 0 and updated the status to &#039;MIDI disconnected&#039;. After 5 notes on/off, sounding count returned to 0 and RMS to exactly 0.0 (voice nodes are disconnected on a timer in WebPianoBackend). Unmount is covered too: src/App.test.tsx:172 asserts a held note stops when the instrument unmounts.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Control feel &amp; decorative boundary</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>All 115 panel controls move and report state: 43 range inputs (43/43 with aria-label and aria-valuetext) and 72 buttons (72/72 with aria-label and aria-pressed). Clicking piano.piano-on toggled aria-pressed false-&gt;true-&gt;false and lit its LED (computed background rgb(252,98,46)); ArrowUp twice on organ.drawbar-1-16- moved 70 -&gt; 72 with the cap style updating to bottom:59.76%.</li><li>The decorative boundary holds under measurement: while a MIDI note was sounding, driving performance.master-level from 68 to 0 (knob transform rotate(48.6deg) -&gt; rotate(-135deg), aria-valuetext &#039;0 percent, decorative&#039;) left output on its natural decay curve and changed nothing else; clicking all 72 panel buttons with no note held produced RMS 0.0 / peak 0.0.</li><li>Nothing fakes success: aria-valuetext ends &#039;...percent, decorative&#039;, the status strip states &#039;Panel controls are decorative in Phase 1&#039;, and the panel &#039;Sustain Pedal&#039; button toggles to aria-pressed=true while the live sustain indicator stays &#039;sustain o&#039; and a note released after pressing it fell to RMS 0.0.</li><li>Defect: effects.eq-mid is completely buried. A 5x5 elementFromPoint grid across its box (x 1236.2, y 380.2, 46.7x33.7 at 1440x900, unscrolled) resolved to effects.compressor-amount at all 25 points - 114/115 controls are pointer-reachable. It is still keyboard-operable (focus + ArrowRight moved 45 -&gt; 47), so it is reachable by one modality only.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Feature completeness</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Required Phase 1 controls present</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Every sectionLandmarks entry in specs/nord-stage-4.visual.json renders in its own section: performance has master level, rotary speed/drive/slow-stop/fast/on/select, pitch stick, mod wheel and &#039;nord stage 4&#039; branding; organ has 9 drawbars, LED ladders, 4 model switches and percussion controls; program has the primary OLED, dial, 8 program buttons, page nav, Live Mode + 2 Layer Scenes, Store, Split and 3 morph assigns; synth and effects likewise. Counted 115 controls: performance 9, organ 24, piano 12, program 19, synth 29, effects 22.</li><li>Structure matches the spec exactly: measured section fractions of the deck were 0.140, 0.200, 0.085, 0.125, 0.250, 0.200 in Performance/Organ/Piano/Program/Synth/Effects order (spec 0.14/0.20/0.085/0.125/0.25/0.20, zero deviation), and exactly two .oled elements exist - program (64.8 px in a 162.1 px section) and synth (81.1 px in a 324.3 px section), both well under the 0.5 wide-display threshold.</li><li>Identifiability is where it falls short: every .control-label renders at computed font-size 5.2478 px at 1440x900 (styles.css sets .39cqw) with overflow:hidden, so 10 legends are clipped mid-word (&#039;DRAWBAI&#039;, &#039;MODULATIC WHEEL&#039;); pairwise bounding-box comparison found 65 overlapping label pairs involving 93 of the 115 labels, and 8 control boxes overlap each other. Most collisions are small (only 2 pairs exceed 25% of a label&#039;s area), so the dominant defect is type size rather than gross overlap - but the net effect in scratch/rev-desktop.png is runs like &#039;DRAWBAR1DRAWBAR2...&#039; and &#039;LAYER SCENE1LAYER SCENE 2&#039; that cannot be read at rendered size. All 115 controls do carry correct aria-labels.</li><li>Density is simplified against the reference: the Piano band reduces the hardware&#039;s six type selectors to one &#039;Type&#039; button and one &#039;Model&#039; button, and the Program band&#039;s buttons 5-8 and the three morph assigns straddle the bottom edge of the inset plate in the rendered screenshot (scratch/desktop.png).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Required piano feature IDs</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>All 11 required Phase 1 IDs appear in artifact/tests/feature-matrix.json mapped to non-empty test files (src/App.test.tsx, 241 lines, 13 it() cases; tests/capture_stage1.py, 84 lines), matching inputs/verification.json (coveredFeatures 11 / requiredFeatures 11).</li><li>Each piano ID was exercised in the running build, not just in tests: basic-note-lifecycle (note on/off/overlap/all-notes-off verified by aria-pressed and RMS), basic-inputs (pointer, CDP multi-touch, keyboard with repeat suppression, Web MIDI, denied/disconnected statuses), basic-sustain-polyphony (CC64 hold/release, 24 concurrent voices, oldest-first stealing, 18.1x velocity spread), basic-status-cleanup (idle/ready/error statuses and blur/disconnect voice stops).</li><li>visual.key-count and regression.chassis verified live: 73 keys rendered, 43 white / 30 black, MIDI 28-100 (E1-E7), 73/73 key boxes inside the keybed rect, black/white height ratio 0.6099 vs the 0.61 spec, instrument aspect 3.09514 vs 3.0951, width fraction 0.9400 inside 0.88-0.97, and documentElement.scrollHeight 900 at 1440x900 (no vertical scroll, no marketing hero).</li><li>piano.basic-status-cleanup covers unmount as well as blur/disconnect: src/App.test.tsx:172 &#039;stops a held note when the instrument unmounts&#039;, and src/App.test.tsx:233 asserts the audio-error status. Re-running the build independently reproduced the runtime half: 3 sine partials at 261.6256/524.036/786.970 Hz for MIDI 60, one AudioContext created lazily on first note, exactly 24 of 30 note-ons left sounding (survivors 46-69), and blur took 2 sounding keys to 0 with analyser RMS 0.0.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Declared gaps are accurate</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Everything declared decorative really is: with a note sounding, master level -&gt; 0 changed no output; all 72 panel buttons clicked produced RMS 0.0; the panel Sustain Pedal button toggles aria-pressed but does not sustain (note released after pressing it fell to RMS 0.0 and the live indicator stayed &#039;sustain o&#039;).</li><li>Status claims are truthful in failure: with window.AudioContext throwing, the strip read &#039;Audio error - keys remain visual&#039; and keys still depressed (aria-pressed=true) rather than claiming readiness; before any note it reads &#039;Audio not started - play a key to enable&#039;; MIDI reports denied / unavailable / disconnected accurately per the injected condition.</li><li>Undeclared gap: evidence/stage1-visual-audit.md states &#039;115 modeled panel controls&#039; and that the capture pass verified decorative controls moving, but effects.eq-mid is pointer-unreachable (25/25 hit-test points resolve to effects.compressor-amount) and neither the audit nor IMPLEMENTATION_DETAILS.json mentions it.</li><li>The declaration is also thin as a gap list: IMPLEMENTATION_DETAILS.json carries no explicit unimplemented-feature enumeration, only two audio notes; the honest &#039;Panel controls are decorative in Phase 1&#039; claim lives in the status strip rather than in the declared record.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  <section class="stage-report" id="stage-2">
+    <header class="stage-heading">
+      <div><span>Phase 2</span><h2>Piano library and working effects</h2></div>
+      <div class="stage-score"><strong>74</strong><span>/100</span></div>
+    </header>
+
+    <p class="summary">Phase 2 is genuinely implemented, not declared. Serving build/ on :4292 and driving it with Playwright, one AudioContext feeds A/B buses -&gt; ordered units -&gt; layer level -&gt; master gain -&gt; limiter -&gt; a single destination; 56 OGG files are fetched and decoded offline (&#039;Recorded pianos ready&#039;). Grand/Upright/Electric are real, audibly distinct recordings (centroid 1825/759/1256 Hz; pairwise band-L1 0.67-0.84). Every required piano control moves the signal, 12-note polyphony through the hottest amp peaked 0.484 with no clipping, and failures degrade visibly (&#039;SAMPLE ERROR - FALLBACK&#039;, still playable). The weak half is character: Reverb is measurable but inaudible (fully wet peak 4.02e-4 vs dry 0.1011, -48 dB) so one required unit effectively does not work; Amp Sim types differ mostly by 11-20 dB of makeup gain; A-Wah is an LFO bandpass, not an envelope follower; Clav/Digital/Misc are bare saw/triangle/sine. Three panel controls in functional sections are silently inert and no gaps section is declared.</p>
+
+    <section>
+      <h3>Axis scores</h3>
+      <table>
+        <thead><tr><th>Axis</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+        <tbody><tr><td>Sound</td><td>55%</td><td><strong>66</strong></td><td>36</td></tr><tr><td>Playability &amp; control</td><td>20%</td><td><strong>82</strong></td><td>16</td></tr><tr><td>Feature completeness</td><td>25%</td><td><strong>85</strong></td><td>21</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <ol><li><span class="sev sev-major">major</span> Amp Sim types differ mainly by makeup gain: With one C4 note, Amp Sim Twin/JC/Small take rms from the 0.01347 baseline to 0.0882/0.0488/0.1318 (peak 0.101 -&gt; 0.439/0.313/0.466), i.e. +11 to +20 dB. The normalised tanh curve in artifact/src/stage.ts:143-145 divides by tanh(grit*...), which is effectively a large makeup gain, so the three &#039;distinct colorations&#039; are dominated by level and the master limiter has to absorb the rest under polyphony.</li><li><span class="sev sev-major">major</span> Clav, Digital and Misc are bare oscillators with no namesake character: artifact/src/stage.ts:241 selects sawtooth for Clav, triangle for Digital and sine for Misc, all sharing the same piano envelope and timbre filter. Measured Digital vs Misc band-L1 distance is only 0.176. Misc is specified as mallet character (marimba/vibraphone) but is an unmodified sine - the same waveform used for the sample-failure fallback - so the type has no recognisable identity.</li><li><span class="sev sev-major">major</span> Reverb is inaudible at every dry/wet setting: At wet=100 the rendered output collapses to peak 4.02e-4 against a dry peak of 0.1011 (-48 dB) for all six types; at the default wet=0.35 the only change is the dry attenuation (rms 0.65x, band-L1 0.002 for Room) with a tail 53 dB under the note. The IR in artifact/src/stage.ts:151-154 is sin(i*9.73)*sin(i*2.17), a deterministic two-tone product rather than noise, and ConvolverNode&#039;s default normalisation then scales it far below the dry path. Decay ordering Booth&lt;Room&lt;Spring&lt;Stage&lt;Hall&lt;Cathedral is correct, so the structure is right and only the level is wrong - but as shipped, the reverb knob reads as a volume kill rather than a room, while the delay by comparison sits a usable -22 dB under the dry note.</li><li><span class="sev sev-minor">minor</span> Timbre Bright is practically inaudible: stage.ts:228 sets a 12 kHz lowpass for Bright against 9.5 kHz for Off. Onset-aligned 350 ms windows averaged over four repeats give a &gt;4 kHz energy fraction of 0.0715 (Bright) vs 0.0605 (Off), about 1.5 dB, while Soft drops it to 0.0355. The spec asks Bright to emphasize treble.</li><li><span class="sev sev-minor">minor</span> Three inert controls in functional sections are undeclared: &#039;piano.piano-model&#039;, &#039;performance.rotary-select&#039; and &#039;performance.modulation-wheel&#039; have no branch in the update() handler in artifact/src/App.tsx; driving each produced no state, audio or panel change (zero new audio-graph edges). The only honesty notice in the UI says &#039;Organ, Synth, and Program controls are decorative&#039; and only those three sections get the &#039;, decorative&#039; aria-valuetext, so these dead controls inside declared-functional sections are never disclosed. IMPLEMENTATION_DETAILS.json has no unsupported/gaps section either, although both specs require excluded controls to be listed as unsupported.</li><li><span class="sev sev-minor">minor</span> String Res is a fixed octave sine, not sympathetic resonance: stage.ts:245 adds an oscillator at 440*2^((note-57)/12) - exactly one octave above the struck note - at gain 0.012, rising to 0.028 only when any other voice is live. It does not follow which notes or pedal are actually held, so the resonance does not change with the held chord as the manual describes.</li><li><span class="sev sev-minor">minor</span> Most effect parameters live off-panel: The modeled chassis exposes only the seven unit On buttons, twelve knobs and the three focus buttons. Effect type selection, dry/wet, delay feedback filter, Global, Compressor Fast and Reverb Bright are reachable only from the auxiliary settings strip rendered below the instrument, which the artifact&#039;s own visual audit acknowledges is not a photo-matched panel feature.</li><li><span class="sev sev-minor">minor</span> Layer level is applied before Rotary: In artifact/src/stage.ts:262 the To Rotary path is chain output -&gt; level[id] -&gt; rotary input -&gt; master, whereas the spec&#039;s requiredOrder is Rotary when routed, then Layer level, then master gain/limiter. Audible effect is small but layer level then also scales the rotary drive.</li><li><span class="sev sev-minor">minor</span> Phase 2 visual audit carries no candidate measurement: artifact/evidence/stage2-visual-audit.md states that &#039;the Phase 2 browser capture and interaction pass is deferred&#039; to the operator seal step and that &#039;No Phase 2 visual measurement or console result is claimed here&#039;. The shipped stage2-desktop.png, stage2-narrow.png and stage2-capture.json were indeed produced by that seal step (capturedAt 2026-09-23T01:18:59.829Z against verification.json verifiedAt 01:18:59.916Z), so the audit is honest rather than contradictory - but Phase 2 ships with no candidate-run visual or console verification of its own, unlike Phase 1.</li><li><span class="sev sev-minor">minor</span> 12 MB of unused FLAC originals ship in the build: build/samples contains 56 OGG files that are fetched and 21 FLAC files that are never requested (the probe recorded exactly 56 sample fetches and 56 decodeAudioData calls). The upright FLAC set alone accounts for about 12 MB of the 13 MB sample payload.</li></ol>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-pass">Passed</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>dist/index.html present</td></tr><tr><td>Lint covers candidate sources</td><td>Pass</td><td>Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate&#039;s own sources.</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Sound</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Instrument breadth &amp; character</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Warmed a note after every type change, then captured C4 from build/ at :4292: peak-window spectral centroid Grand 1825 Hz, Upright 759 Hz, Electric 1256 Hz; three genuinely different recorded sets, not one voice relabelled.</li><li>Pairwise 8-band L1 distance between the recorded sets: Grand-Upright 0.759, Grand-Electric 0.841, Upright-Electric 0.672, against 0.367 for the two closest synthesised types - the energy distributions differ in shape (Grand peaks in the 400-800 Hz band at 0.494 with 0.063 above 6.4 kHz; Upright 0.319 in 200-400 Hz and 0.001 above 6.4 kHz; Electric 0.379 in 800-1600 Hz), so none is a filtered pitch-shift of another.</li><li>Clav/Digital/Misc are single oscillators sharing the piano envelope (artifact/src/stage.ts:241 sets sawtooth/triangle/sine). Digital vs Misc band-L1 is only 0.367 with 82% and 100% of their energy in one band, and Misc - specified as &#039;mallet character such as marimba or vibraphone&#039; - is a plain sine, the same waveform the load-failure fallback uses.</li><li>All six types select and sound; panel &#039;Piano Type&#039; cycles Grand-&gt;Upright-&gt;...-&gt;Misc and the Program OLED aria-label tracked it (&#039;Program display: Upright piano, ready&#039;).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Effect audibility &amp; correctness</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>A/B&#039;d every unit and type against a warmed baseline on build/ served at :4292 (C4, pointer velocity 105; baseline rms 0.01481, peak 0.1011, centroid 1602 Hz). All 25 configurations moved the rendered signal - 8-band L1 vs baseline from 0.031 (Vibe) to 1.564 (HP24 Filter) - and Mod 1, Mod 2, Delay, Amp Sim/EQ and Compressor each behave like their namesake (Ring Mod L1 1.058, Wah L1 0.234, Compressor rms 1.44x, delay repeats at 0.8-1.2s peak 7.8e-3 = -22 dB under the dry note, -11.5 dB at wet 100).</li><li>Reverb is measurable but not audible at any setting, so one of the six required units effectively does not work. At wet=100 the whole output collapses to peak 4.02e-4 against a dry peak of 0.1011 (-48 dB): Booth/Room/Spring/Stage/Hall/Cathedral render rms 2.4e-5/3.2e-5/6.1e-5/4.7e-5/6.1e-5/7.5e-5. At the default wet=0.35 the only change is the dry attenuation (rms 0.65x, band-L1 0.002 for Room) with a tail of 2.6e-5 rms, ~53 dB under the note. Turning the reverb knob up reads as a volume kill, not as a room.</li><li>Decay length does order correctly (Hall tail 0.8-1.2/1.5-2.0/2.5-3.0s = 7.8e-5/3.8e-5/2.8e-6 against Cathedral 9.5e-5/6.6e-5/3.3e-5, Booth 8.2e-8/0/0), and the delay feedback filter processes the repeats rather than the dry path - so the failure is level, not structure. The cause is visible in artifact/src/stage.ts:151-154: the &#039;impulse&#039; is sin(i*9.73)*sin(i*2.17), a deterministic two-tone product rather than noise, which ConvolverNode&#039;s default normalisation then scales far below the dry path.</li><li>Namesake deviations elsewhere: artifact/src/stage.ts:108 builds A-Wah as an LFO-swept bandpass, not the specified envelope follower with Rate acting as sensitivity; and Amp Sim Twin/JC/Small raise single-note rms 6.4x/3.6x/10.1x (peak 0.101 -&gt; 0.439/0.313/0.466) while their spectra barely move (L1 0.112/0.050/0.244), so the three &#039;distinct colorations&#039; differ mostly in level.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Signal graph &amp; gain staging</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Patched AudioNode.connect in the page: exactly one AudioContext is created and exactly one edge reaches AudioDestinationNode - GainNode(master) -&gt; DynamicsCompressorNode(limiter) -&gt; AudioDestinationNode. Captured edges confirm per-layer buses: bus A -&gt; chain in -&gt; chain out -&gt; level A -&gt; master, same for B, and units are inserted in the spec order mod1, mod2, delay, ampEq, compressor, reverb (artifact/src/stage.ts:163).</li><li>To Rotary reroutes correctly: with Amp Sim = To Rotary and Rotary On, a new edge level-A -&gt; rotary-input appeared and rotary output feeds master; reverb sits before rotary in the chain, as the spec requires.</li><li>No clipping under load: 12 simultaneous computer-keyboard notes through Amp Sim &#039;Small&#039; peaked at 0.484 (rms 0.158) with 0 samples above 0.999, one AudioContext throughout (__ctxCount=1); all voices and pressed states returned to 0 after release and after a window blur (residual rms 0.0).</li><li>Gain staging is loose in two places: Amp Sim &#039;Small&#039; takes a single note from rms 0.0148 to 0.149 (+20 dB) before the limiter, and the fully wet reverb path lands 48 dB under the dry path (see effectAudibility). Layer level is also applied before Rotary, while the spec&#039;s requiredOrder puts Rotary ahead of layer level.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Playability &amp; control</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Two-layer piano behaviour</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Enable/level/octave all reach the graph: A alone rms 0.01258; enabling B as Electric at +12 gave 0.01584; setting the panel Piano Level B fader to 0 returned 0.01273 and to 100 gave 0.01932 (centroid 1326 -&gt; 1009 -&gt; 1606 -&gt; 1096 Hz).</li><li>Panel feedback tracks state: the Program OLED aria-label reads &#039;Program display: &lt;type&gt; piano, &lt;status&gt;&#039; for the focused layer, the status strip line changes to &#039;STAGE 4 73 - Upright - Piano A&#039;, and pressing the panel effect On button flips both its aria-pressed and the matching unit state.</li><li>FX focus follows layer focus - selecting Focus Piano B switched the effects header to &#039;FX PIANO B&#039;; chains are per-layer (reverb on for A read aria-pressed=false after focusing B), and Group mode propagated a delay toggle from B to A.</li><li>Piano section On/Off is real: with Piano On released, a pointer note rendered rms 0.0. Layer enable and octave shift are only reachable from the auxiliary settings strip below the chassis, not from the modeled panel.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Detailed piano controls</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Every required control measurably moves the signal (C4, pointer velocity 105): KB Touch Light/Medium/Heavy rms 0.01376/0.01239/0.01101; Dyn Comp 0-&gt;3 rms 0.01239-&gt;0.01379; Unison 0/1/3 rms 0.01271/0.01219/0.00767 (detune spread +/-16.5 cents at 3); Master Level 25/68/100 rms 0.00492/0.01259/0.01887.</li><li>Soft Release lengthens the tail as specified: with the key released at 0.4s, rms in the 0.8-0.9s window is 0.0 with Soft Release off and 7.7e-4 with it on (artifact/src/stage.ts:248, 0.6s vs 0.24s release).</li><li>Timbre Soft is the only clearly audible step: onset-aligned 350ms windows averaged over 4 repeats give &gt;4 kHz energy fraction Off 0.0605, Soft 0.0355, Bright 0.0715 - &#039;Bright&#039; is a 12 kHz lowpass against 9.5 kHz for Off (stage.ts:228) and a player would not hear it. Electric correctly extends the list with Dyno 1 and Dyno 2.</li><li>String Res changes the signal (centroid 1129 -&gt; 1290 Hz) but stage.ts:245 synthesises a fixed sine one octave above the struck note rather than sympathetic resonance of the notes or pedal actually held; its level only steps 0.012 -&gt; 0.028 when other voices are live.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Input reliability &amp; failure behaviour</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>Stress pass: 30 rapid two-note computer-keyboard bursts in 1.5s left 0 stuck keys; holding 13 keys and dispatching window blur cleared all pressed states and left residual rms 0.0.</li><li>Asset failure degrades visibly and honestly: routing **/samples/** to abort produced status &#039;Sample error - synthesized fallback playable&#039; and the OLED &#039;GRAND / SAMPLE ERROR - FALLBACK&#039;, while notes stayed playable (rms 0.0291) and the primary library was never reported ready.</li><li>Sustain is correct per layer: with Space held, C4 rms at 1.0-1.2s was 1.34e-3 against 0.0 unsustained; turning SUSTPED off for layer A returned it to 0.0 with the pedal still down.</li><li>Web MIDI is unavailable in this browser profile and the strip says so (&#039;MIDI denied or unavailable&#039;) rather than claiming a connection; the console carried no page errors or app errors across every interaction pass.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Feature completeness</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Required piano instruments</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>All six types are selectable from the panel Piano Type button and from the type select, and each renders audio; the Program OLED and status strip report the selected type.</li><li>Recorded sets really load offline from the published build: my own pass recorded 56 fetches under /samples and exactly 56 decodeAudioData calls with one AudioContext, and the status strip reached &#039;Recorded pianos ready - offline&#039;. Census: grand 19 files 1.3 MB, upright 21 OGG + 21 unused FLAC 12 MB, electric 16 files 400 KB.</li><li>Sample coverage is real rather than one pitch-shifted note: artifact/src/stage.ts:26-39 maps 11 Grand roots, 11 Upright roots and 8 Electric roots, each with a soft and a hard layer, and IMPLEMENTATION_DETAILS.json lists every file&#039;s root note and velocity layer.</li><li>The panel &#039;Piano Model&#039; button has no handler in artifact/src/App.tsx and clicking it changed no state or audio - one model per type, which the spec allows, but the dead dial is not declared unsupported.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Required effect units and types</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>All six units plus the shared Rotary are present and reachable, and every listed type is selectable: mod1 6, mod2 6, ampEq 7, reverb 6 (artifact/src/stage.ts:7-14) - I exercised all 25 and each changed the rendered signal.</li><li>Routing controls exist and work: per-unit bypass, all-effects bypass (FX on rms 1.3e-4 vs all-bypass 1.40e-2 with the same settings), dry/wet for delay and reverb, delay feedback filter and tap tempo, Group, Global on delay/compressor/reverb, manual Piano/Organ/Synth focus buttons, and To Rotary.</li><li>Focus honesty: selecting FX focus Organ shows &#039;FX ORGAN - decorative&#039; and a panel Reverb On press then changes nothing (aria-pressed false -&gt; false) instead of faking a hit.</li><li>Coverage gap: on the modeled panel only the seven On buttons, twelve knobs and three focus buttons exist; effect type selection, dry/wet, feedback filter, Global, Fast and Bright are reachable only from an auxiliary settings strip below the chassis. Master Clock sync and ping-pong are absent.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Declared gaps are accurate</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>The audio declaration is truthful and I verified it by behaviour, not by reading: the three sets declared as recordings really decode 56 bundled files, and the types declared as live synthesis (Clav/Digital/Misc, fallback) really are oscillators; the reverb IRs declared as &#039;deterministic synthetic impulse data&#039; match stage.ts:150-154. No generated buffer is described as a recording.</li><li>The status strip&#039;s decorative claim holds: Organ, Synth and Program controls carry aria-valuetext &#039;... , decorative&#039; and changed no audio, and the FX Organ/Synth focus path is explicitly labelled decorative.</li><li>Undeclared inert controls inside sections declared functional: clicking &#039;piano.piano-model&#039; and &#039;performance.rotary-select&#039; flipped only aria-pressed - no status-strip text, no OLED change and zero new audio-graph edges - and &#039;performance.modulation-wheel&#039; moved 0-&gt;90 with aria-valuetext &#039;90 percent&#039; and no effect, while only Organ/Synth/Program controls carry the &#039;, decorative&#039; suffix.</li><li>IMPLEMENTATION_DETAILS.json carries no gaps/unsupported section at all (only $schema, version, phase, audio), although both the piano and effects specs require excluded controls to be &#039;listed as unsupported&#039;; and artifact/evidence/stage2-visual-audit.md claims no Phase 2 measurement of its own, deferring the capture to the operator seal step (stage2-capture.json capturedAt 01:18:59.829Z matches verification.json verifiedAt 01:18:59.916Z).</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  <section class="stage-report" id="stage-3">
+    <header class="stage-heading">
+      <div><span>Phase 3</span><h2>Complete Stage 4 system</h2></div>
+      <div class="stage-score"><strong>75</strong><span>/100</span></div>
+    </header>
+
+    <p class="summary">A complete and largely working Stage 4. All three engines are genuinely distinct (spectral distances 0.75-0.97), the four organ models and all 14 synth waveforms are separate sources with category-correct Osc Ctrl, and one AudioContext feeds shared per-section effect chains, rotary (1.05/5.79 Hz), master gain and a limiter into one destination. Programs (32+8 Live), splits, transpose, panic, morphs, glide, unison and a clock-synced arpeggiator all measurably change rendered audio; pointer, keyboard and Web MIDI reach one note lifecycle and all 115 panel controls are keyboard-operable. Geometry is near-exact: aspect 3.09514, deck 0.53921, width 0.94000, section deviation 0.00001, 73/73 keys inside the keybed, 5/5 colours matched, 33/33 landmarks, 0 forbidden. Held back by real defects: an uncaught AudioNode.disconnect exception on every graph rebuild; a reload that boots factory state while falsely flagging it dirty; Layer Scenes that share continuous parameters; three engine ON LEDs lit in both states with aria-pressed inverted against the audible state; and legends at 5.25 px with 65 overlapping labels. EQ Mid is fully buried under Compressor Amount.</p>
+
+    <section>
+      <h3>Axis scores</h3>
+      <table>
+        <thead><tr><th>Axis</th><th>Weight</th><th>Score</th><th>Contribution</th></tr></thead>
+        <tbody><tr><td>Sound</td><td>45%</td><td><strong>75</strong></td><td>33</td></tr><tr><td>Playability &amp; control</td><td>20%</td><td><strong>66</strong></td><td>13</td></tr><tr><td>Feature completeness</td><td>35%</td><td><strong>82</strong></td><td>28</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="issues">
+      <h3>Priority issues</h3>
+      <ol><li><span class="sev sev-major">major</span> Uncaught AudioNode.disconnect exception on every audio-graph rebuild: &quot;Failed to execute &#039;disconnect&#039; on &#039;AudioNode&#039;: the given destination is not connected&quot; is thrown as an uncaught pageerror once per section toggle and once per drawbar move (scratch/verify.mjs: 1 error per organ.organ-on click, 1 per drawbar input, 2 for two further toggles). Reproduced with no evaluator instrumentation attached (scratch/notap.mjs). Audio keeps working, but the shared completion gate requires an error-free console during the interaction pass.</li><li><span class="sev sev-major">major</span> Reload boots the factory edit buffer and falsely reports the program as dirty: Storing an edit to slot 1.1 writes it to localStorage (the value is present in the 369018-byte &#039;stage4-programs-v3&#039; payload), but after reload the app shows &#039;1.1 CONCERT GRAND E&#039; with factory Grand instead of the stored Clav. The &#039;E&#039; dirty indicator is lit with no user edit, and the stored program only loads after navigating one slot away and back (scratch/persist.mjs).</li><li><span class="sev sev-major">major</span> Layer Scenes do not hold independent continuous parameters and the panel does not follow them: Piano Level A set to 25 under Scene I and 95 under Scene II leaves both scenes reading 95 with matching audio; only layer on/off is scened (Scene II organ on 0.03085 rms vs Scene I 0.01722). The panel also does not repaint - organ.organ-on still reads aria-pressed=true in the scene where the organ is silent (scratch/scenes2.mjs, scratch/scenes3.mjs).</li><li><span class="sev sev-major">major</span> Engine ON buttons are permanently lit and their pressed state is inverted: organ.organ-on, piano.piano-on and synth.synth-on carry the &#039;accent&#039; class and render a lit LED in both states (off rgb(255,91,45) + 2.69px glow, on rgb(252,98,46) + 4.04px glow), so a player cannot read which engines are active; effects.delay-on by contrast goes dark rgb(65,25,27) when off. The reported state is also inverted: at boot piano.piano-on reads aria-pressed=false while the piano is the sounding layer (tapped rms 0.01784); one click sets aria-pressed=true and the rendered output drops to exactly 0.00000; a second click returns aria-pressed=false and rms 0.01800 (scratch/rv_led.mjs, scratch/rv_inv.mjs). The panel reports the opposite of what the instrument is doing on its three most prominent switches.</li><li><span class="sev sev-major">major</span> Silkscreen legends overlap and truncate at rendered size: All 115 .control-label elements are 5.25 px and 65 label-box pairs overlap at 1440x900. The organ &#039;DRAWBARS&#039; legend is struck through the model switches, drawbar legends clip to &#039;DRAWBA&#039;, LEVEL A/B is buried under PRESET 1/2, and the program OLED&#039;s text overflows its bezel onto the panel (scratch/typo.mjs, scratch/crop_organ.png).</li><li><span class="sev sev-minor">minor</span> Two Layer Effects / Piano controls are stacked on top of each other: effects.eq-mid (1236.2,199.4,46.7x33.7) is completely covered by effects.compressor-amount (1239,199,47x34) - all 25 hit-test points resolve to the compressor, so EQ Mid can never be operated by pointer. piano.piano-layer-b is partly covered by piano.timbre; its centre is unreachable and a Playwright click on it times out, although its left edge still passes the grid test.</li><li><span class="sev sev-minor">minor</span> Key click inaudible and rotary Stop not a distinct speed: Toggling keyClick changes the rendered spectrum by 0.040 and the attack/sustain ratio by 1.008 vs 1.012 - no measurable click, where percussion moves the same measures to 0.758/1.196. performance.rotary-slow-stop only clears rotaryFast, so Slow and Stop both measure 1.05 Hz pan modulation instead of the three speeds the organ spec requires.</li><li><span class="sev sev-minor">minor</span> Page overflows horizontally at 390x844 and legends drop to 4.09 px: documentElement.scrollWidth is 543 px against a 390 px viewport, so the whole page pans rather than just the instrument scroller; control labels render at 4.09 px and only 37 of 115 controls are reachable without scrolling.</li><li><span class="sev sev-minor">minor</span> Limiter allows overs under extreme polyphony: 48 simultaneous MIDI notes across all three engines peak at 1.0709 with 4 full-scale samples; the DynamicsCompressor before the destination reduces but does not prevent clipping.</li></ol>
+    </section>
+
+    <section>
+      <h3>Technical gate</h3>
+      <p class="gate gate-pass">Passed</p>
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+        <tbody><tr><td>test</td><td>Pass</td><td>Passed</td></tr><tr><td>typecheck</td><td>Pass</td><td>Passed</td></tr><tr><td>lint</td><td>Pass</td><td>Passed</td></tr><tr><td>build</td><td>Pass</td><td>Passed</td></tr><tr><td>Built phase artifact</td><td>Pass</td><td>dist/index.html present</td></tr><tr><td>Lint covers candidate sources</td><td>Pass</td><td>Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate&#039;s own sources.</td></tr></tbody>
+      </table>
+    </section>
+
+    <details>
+      <summary>Criterion ratings and evidence</summary>
+      
+        <section class="criteria-group">
+          <h3>Sound</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Distinct engine character</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Three architecturally different engines in one context: Piano is recorded samples (spectral centroid 1251 Hz at C4), Organ is additive/tonewheel (B3 centroid 286 Hz, fundamental-dominant peaks at 129/261 Hz), Synth is oscillator-based (Saw centroid 2974 Hz). Pairwise normalised-spectrum distance piano/organ 0.969, piano/synth 0.826, organ/synth 0.748 (scratch/engines2.mjs, C4 held 0.8 s, tapped at the AudioContext destination).</li><li>All four required organ models are separate engines, not renamed copies: B3 286 Hz / Vox 3023 Hz / Farf 3025 Hz / Pipe 1 421 Hz centroids, pairwise distances 0.759-0.975 (lowest B3 vs Pipe 1 at 0.759).</li><li>Synth source categories behave per spec: Osc Ctrl 5-&gt;95 changes nothing for Pure/Sine (distance 0.001), shifts Sync Saw (0.391), detunes Multi Saw (0.119) and drives FM 2-op modulation (0.640) - exactly the oscCtrlByCategory table.</li><li>Gap: B3 key click is not audible. Toggling keyClick changes the spectrum by only 0.040 and the attack/sustain envelope ratio by 1.008 vs 1.012 baseline, where percussion moves the same measures to 0.758/1.196 (scratch/organfeat.mjs).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Effects &amp; routing integration</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>One AudioContext only (window.__ctxInfo reports a single 44.1 kHz context after exercising all three engines) ending GainNode -&gt; DynamicsCompressorNode -&gt; destination; no second context is ever created.</li><li>Every engine inherits the shared chain: the FX panel focus buttons retitle the editor to &#039;FX PIANO A&#039;, &#039;FX ORGAN A+B&#039; (one shared chain for both organ layers, per organ spec) and &#039;FX SYNTH A&#039; (independent per synth layer). Enabling reverb then delay on the organ extends decay-to-5% from 0.16 s (dry) to 0.52 s to 1.37 s; synth reverb changes rms 0.01626 -&gt; 0.01032 (scratch/fx.mjs).</li><li>Rotary routing is real and ramps: with To Rotary engaged the stereo pan modulation measures 1.05 Hz slow and 5.79 Hz fast, returning to 1.05 Hz on slow/stop (scratch/rotary2.mjs, L-R envelope FFT).</li><li>Defect: every audio-graph rebuild throws an uncaught pageerror &quot;Failed to execute &#039;disconnect&#039; on &#039;AudioNode&#039;: the given destination is not connected&quot; - 1 per section toggle and 1 per drawbar move, reproduced with no instrumentation attached (scratch/notap.mjs, scratch/verify.mjs). Audio survives, but the shared completion gate requires a clean console.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Musical quality under load</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>48 simultaneous MIDI notes (36-83) across Piano+Organ+Synth render continuously at rms 0.22984 with no dropouts, and the output returns to exactly 0.000000 rms after all note-offs (scratch/load2.mjs).</li><li>Latency measured from MIDI note-on to first sample above 0.002 is 28.3 ms; ctx.baseLatency 0.010 s, ctx.outputLatency 0.032 s.</li><li>A 2 s sustained tone captured 86016 tapped frames with no gaps, and a 12-note computer-keyboard chord peaked at 0.2696 without artefacts.</li><li>Weakness: the 48-note worst case peaks at 1.0709 with 4 samples at full scale, so the DynamicsCompressor limiter does not fully prevent overs under extreme load.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Playability &amp; control</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Program &amp; state round-trip</strong></td>
+      <td>2/4</td>
+      <td>50</td>
+      <td><ul><li>In-session round-trip is lossless: 11 edits spanning piano type, organ model/drawbar/percussion/section-on, synth waveform/cutoff/voice-mode, master clock and transpose were stored to slot 1.1, then the program was navigated two slots away and back - 0 of 11 parameters differed (scratch/roundtrip.mjs snapshot diff over every rack input/select/button).</li><li>The dirty flag is truthful during editing: the OLED gains &#039;E&#039; on the first edit and drops it after Store -&gt; Confirm Store; Store As offers a 32-slot destination picker.</li><li>Defect: after a page reload the app boots showing slot 1.1 with FACTORY state (piano type Grand) while flagging it dirty (&#039;1.1 CONCERT GRAND E&#039;), even though localStorage &#039;stage4-programs-v3&#039; (369018 bytes) does contain the stored Clav. Stepping one program away and back then loads the stored Clav correctly - so the bank persists but the boot edit buffer does not, and the dirty flag lies with zero user edits (scratch/persist.mjs).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Performance controls &amp; bindings</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>All four input paths reach one note lifecycle: pointer press on [data-midi=60], computer keyboard A-;, Space sustain (energy at t+0.8 s 0.0034 held vs 0.0000 unheld), and Web MIDI via an injected port - status bar reads &#039;1 MIDI input connected&#039;, note-on lights the key (class &#039;pressed&#039;, aria-pressed=true) and CC64 sustains (scratch/midi.mjs).</li><li>MIDI velocity maps: peak 0.0168 at velocity 20 vs 0.1505 at velocity 127 (~9x).</li><li>Every one of the 115 panel controls is a native input[type=range] or button with aria-label and aria-valuetext and is keyboard-operable - 115/115 focusable, and ArrowRight x5 moved Master Level 68 -&gt; 73 (scratch/final.mjs).</li><li>Morphs reach their destinations audibly: with Wheel assigned to Piano Level A, wheel 0 renders rms 0.02512 and wheel 100 renders 0.00264; the panel modulation wheel drives the same morph (0.00253). Defect: the morph-assigned fader stays pinned at its assigned value (10 / cap bottom 8.3%) instead of tracking the live morphed position.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Cross-system workflows</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Splits gate all three engines: with Low split at C4 and Piano:A on zone 1 / Organ:A on zones 2-4, C3 renders rms 0.01757 (piano alone) and C5 renders 0.02492 (organ alone), versus 0.03064/0.03023 with the split off (scratch/cross2.mjs). Three split points with Off/+-6/+-12 crossfade and per-layer zone ranges exist for Piano A/B, Organ A/B and Synth A/B/C.</li><li>Transpose shifts rendered pitch: dominant partial moves 527.6 Hz -&gt; 743.6 Hz (+6 semitones, the control&#039;s clamp) (scratch/misc.mjs).</li><li>Panic is immediate and total: with six keys held, output is rms 0.008572 in the first 250 ms after Panic and exactly 0.000000 (peak 0.000000) for the following 800 ms.</li><li>Defect: Layer Scenes only half work. Layer on/off is scene-dependent in audio (Scene II with organ on 0.03085 vs Scene I 0.01722), but level faders are shared - setting Piano Level A to 25 in Scene I and 95 in Scene II leaves both scenes at 95 - and the panel organ.organ-on button still reads aria-pressed=true in Scene I where the organ is silent (scratch/scenes2.mjs, scratch/scenes3.mjs).</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+        <section class="criteria-group">
+          <h3>Feature completeness</h3>
+          <table class="criteria-table">
+            <thead><tr><th>Criterion</th><th>Rating</th><th>Score</th><th>Evidence</th></tr></thead>
+            <tbody>
+    <tr>
+      <td><strong>Organ system</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Nine drawbars drive the audible spectrum: re-registering to the 1&#039; drawbar alone moves the normalised spectrum by a distance of 0.999 and the centroid from 286 Hz to 2107 Hz; restoring gives 0.197 (scratch/organfeat.mjs).</li><li>B3 percussion and its variants each measurably change audio - percussion on 0.758 spectral distance and attack/sustain ratio 1.196 vs 1.012, harmonic Third 0.794, fast decay 0.789. Vibrato/chorus C1 vs V3 differ by 0.180.</li><li>Two layers A/B share one effect chain (editor titles &#039;FX ORGAN A+B&#039;), with per-layer level, octave and zone; four models selectable from both panel and rack; rotary integrates with acceleration (1.05 -&gt; 5.79 Hz pan modulation).</li><li>Gaps a player would notice: key click is inaudible (0.040 spectral distance, attack ratio 1.008); Slow and Stop are one state (performance.rotary-slow-stop only sets rotaryFast=false, and measured pan modulation is 1.05 Hz for both) so the spec&#039;s three speeds are two; the drawbar LED ladders are a static repeating-linear-gradient that does not change between level 5 and level 90.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Synth system</strong></td>
+      <td>4/4</td>
+      <td>100</td>
+      <td><ul><li>All 14 required waveforms across Pure/Sync/Multi/Super/FM-H are selectable and audibly distinct (Sine 262 Hz centroid, Saw 2974, Square 2719, White Noise 6562, Sync Saw 3538, Multi Saw 3088, Super Saw 3214, FM 2-op 636), with Osc Ctrl acting per category exactly as the spec&#039;s table requires (scratch/synthfeat.mjs).</li><li>All four filters alter audio - LP12 base centroid 3167 Hz, cutoff 20 -&gt; 694 Hz, LP24 2207 Hz, HP 8261 Hz, BP 7607 Hz - plus resonance (0.235 distance), tracking and Drive 3 (rms 0.0222 -&gt; 0.1641).</li><li>Three envelopes, LFO (5 waveforms, 3 destinations, sync) and voice behaviour all real: amp attack 1 -&gt; 80 moves time-to-90%-peak from 0.052 s to 1.220 s; unison 0 -&gt; 3 gives 0.764 spectral distance; glide in Mono produces a measured portamento trajectory 261 -&gt; 267 -&gt; 300 -&gt; 354 -&gt; 418 Hz where glide 0 jumps 261 -&gt; 523 Hz in one frame (scratch/final.mjs).</li><li>Arpeggiator runs, syncs and responds: Arp Run raises envelope modulation index from 0.0036 to 0.0537, range 3 changes the pattern period (1.20 Hz -&gt; 2.00 Hz), and with Arp Sync the envelope peak scales with the master clock (60 BPM vs 200 BPM moves the dominant envelope component from 2.31 Hz to 8.46 Hz).</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Layers, splits, scenes &amp; morphs</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>Layer architecture matches the specs: Organ A/B, Piano A/B, Synth A/B/C, each with on/off, focus, level fader, octave +-12 and independent zone assignment; focus is switchable from the panel (piano.piano-layer-b lights its LED and the control titles change to &#039;Grand · Piano B&#039;).</li><li>Splits and zones work across all three engines simultaneously - see the C3 0.01757 / C5 0.02492 measurement under cross-system workflows - with three split points and Off/+-6/+-12 crossfade widths.</li><li>Morph sources reach destinations: Wheel assign then wheel 0 -&gt; 100 moves Piano Level A audibly (rms 0.02512 -&gt; 0.00264); a Control Pedal morph with its own assign/clear pair is present.</li><li>Defect: Layer Scenes I/II share every continuous parameter (level set to 25 in Scene I and 95 in Scene II leaves both at 95) and the panel does not repaint section on/off state when the scene changes, so only layer enable state is genuinely scened.</li></ul></td>
+    </tr>
+    <tr>
+      <td><strong>Programs &amp; Live Mode</strong></td>
+      <td>3/4</td>
+      <td>75</td>
+      <td><ul><li>32 program slots are addressable as 4 pages x 8 buttons - page-right then program-2 moves the OLED from &#039;1.5 VOX COMBO&#039; to &#039;2.2 UPRIGHT ROOM 10&#039; - and 8 Live slots exist behind Live Mode (&#039;LIVE 2 LIVE 2&#039; on the OLED) with Nord-correct auto-store (no &#039;E&#039; flag while in Live).</li><li>Store, Store As with a 32-destination picker, List, and both panel (program.page-left/right, program.store, program.live-mode) and rack navigation all function; the bank persists to localStorage &#039;stage4-programs-v3&#039; (369018 bytes containing the stored value) (scratch/prog.mjs, scratch/persist.mjs).</li><li>Recall is lossless within a session: 0 of 11 stored parameters differed after navigating two slots away and back.</li><li>Defect: on reload the app restores the bank but not the current program into the edit buffer - it shows &#039;1.1 CONCERT GRAND E&#039; with factory Grand rather than the stored Clav, which only appears after stepping away and back.</li></ul></td>
+    </tr></tbody>
+          </table>
+        </section>
+    </details>
+  </section>
+  </main>
+  <footer>Academic UI/audio reconstruction benchmark · Not affiliated with Nord Keyboards.</footer>
+</body>
+</html>

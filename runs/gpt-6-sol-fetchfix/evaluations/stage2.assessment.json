@@ -1,0 +1,186 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-6-sol-fetchfix",
+  "stage": 2,
+  "evaluator": "stagebench-phase2-evaluator (opus-5 review pass)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-23T02:40:00Z",
+  "summary": "Phase 2 is genuinely implemented, not declared. Serving build/ on :4292 and driving it with Playwright, one AudioContext feeds A/B buses -> ordered units -> layer level -> master gain -> limiter -> a single destination; 56 OGG files are fetched and decoded offline ('Recorded pianos ready'). Grand/Upright/Electric are real, audibly distinct recordings (centroid 1825/759/1256 Hz; pairwise band-L1 0.67-0.84). Every required piano control moves the signal, 12-note polyphony through the hottest amp peaked 0.484 with no clipping, and failures degrade visibly ('SAMPLE ERROR - FALLBACK', still playable). The weak half is character: Reverb is measurable but inaudible (fully wet peak 4.02e-4 vs dry 0.1011, -48 dB) so one required unit effectively does not work; Amp Sim types differ mostly by 11-20 dB of makeup gain; A-Wah is an LFO bandpass, not an envelope follower; Clav/Digital/Misc are bare saw/triangle/sine. Three panel controls in functional sections are silently inert and no gaps section is declared.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Warmed a note after every type change, then captured C4 from build/ at :4292: peak-window spectral centroid Grand 1825 Hz, Upright 759 Hz, Electric 1256 Hz; three genuinely different recorded sets, not one voice relabelled.",
+            "Pairwise 8-band L1 distance between the recorded sets: Grand-Upright 0.759, Grand-Electric 0.841, Upright-Electric 0.672, against 0.367 for the two closest synthesised types - the energy distributions differ in shape (Grand peaks in the 400-800 Hz band at 0.494 with 0.063 above 6.4 kHz; Upright 0.319 in 200-400 Hz and 0.001 above 6.4 kHz; Electric 0.379 in 800-1600 Hz), so none is a filtered pitch-shift of another.",
+            "Clav/Digital/Misc are single oscillators sharing the piano envelope (artifact/src/stage.ts:241 sets sawtooth/triangle/sine). Digital vs Misc band-L1 is only 0.367 with 82% and 100% of their energy in one band, and Misc - specified as 'mallet character such as marimba or vibraphone' - is a plain sine, the same waveform the load-failure fallback uses.",
+            "All six types select and sound; panel 'Piano Type' cycles Grand->Upright->...->Misc and the Program OLED aria-label tracked it ('Program display: Upright piano, ready')."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "A/B'd every unit and type against a warmed baseline on build/ served at :4292 (C4, pointer velocity 105; baseline rms 0.01481, peak 0.1011, centroid 1602 Hz). All 25 configurations moved the rendered signal - 8-band L1 vs baseline from 0.031 (Vibe) to 1.564 (HP24 Filter) - and Mod 1, Mod 2, Delay, Amp Sim/EQ and Compressor each behave like their namesake (Ring Mod L1 1.058, Wah L1 0.234, Compressor rms 1.44x, delay repeats at 0.8-1.2s peak 7.8e-3 = -22 dB under the dry note, -11.5 dB at wet 100).",
+            "Reverb is measurable but not audible at any setting, so one of the six required units effectively does not work. At wet=100 the whole output collapses to peak 4.02e-4 against a dry peak of 0.1011 (-48 dB): Booth/Room/Spring/Stage/Hall/Cathedral render rms 2.4e-5/3.2e-5/6.1e-5/4.7e-5/6.1e-5/7.5e-5. At the default wet=0.35 the only change is the dry attenuation (rms 0.65x, band-L1 0.002 for Room) with a tail of 2.6e-5 rms, ~53 dB under the note. Turning the reverb knob up reads as a volume kill, not as a room.",
+            "Decay length does order correctly (Hall tail 0.8-1.2/1.5-2.0/2.5-3.0s = 7.8e-5/3.8e-5/2.8e-6 against Cathedral 9.5e-5/6.6e-5/3.3e-5, Booth 8.2e-8/0/0), and the delay feedback filter processes the repeats rather than the dry path - so the failure is level, not structure. The cause is visible in artifact/src/stage.ts:151-154: the 'impulse' is sin(i*9.73)*sin(i*2.17), a deterministic two-tone product rather than noise, which ConvolverNode's default normalisation then scales far below the dry path.",
+            "Namesake deviations elsewhere: artifact/src/stage.ts:108 builds A-Wah as an LFO-swept bandpass, not the specified envelope follower with Rate acting as sensitivity; and Amp Sim Twin/JC/Small raise single-note rms 6.4x/3.6x/10.1x (peak 0.101 -> 0.439/0.313/0.466) while their spectra barely move (L1 0.112/0.050/0.244), so the three 'distinct colorations' differ mostly in level."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Patched AudioNode.connect in the page: exactly one AudioContext is created and exactly one edge reaches AudioDestinationNode - GainNode(master) -> DynamicsCompressorNode(limiter) -> AudioDestinationNode. Captured edges confirm per-layer buses: bus A -> chain in -> chain out -> level A -> master, same for B, and units are inserted in the spec order mod1, mod2, delay, ampEq, compressor, reverb (artifact/src/stage.ts:163).",
+            "To Rotary reroutes correctly: with Amp Sim = To Rotary and Rotary On, a new edge level-A -> rotary-input appeared and rotary output feeds master; reverb sits before rotary in the chain, as the spec requires.",
+            "No clipping under load: 12 simultaneous computer-keyboard notes through Amp Sim 'Small' peaked at 0.484 (rms 0.158) with 0 samples above 0.999, one AudioContext throughout (__ctxCount=1); all voices and pressed states returned to 0 after release and after a window blur (residual rms 0.0).",
+            "Gain staging is loose in two places: Amp Sim 'Small' takes a single note from rms 0.0148 to 0.149 (+20 dB) before the limiter, and the fully wet reverb path lands 48 dB under the dry path (see effectAudibility). Layer level is also applied before Rotary, while the spec's requiredOrder puts Rotary ahead of layer level."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Enable/level/octave all reach the graph: A alone rms 0.01258; enabling B as Electric at +12 gave 0.01584; setting the panel Piano Level B fader to 0 returned 0.01273 and to 100 gave 0.01932 (centroid 1326 -> 1009 -> 1606 -> 1096 Hz).",
+            "Panel feedback tracks state: the Program OLED aria-label reads 'Program display: <type> piano, <status>' for the focused layer, the status strip line changes to 'STAGE 4 73 - Upright - Piano A', and pressing the panel effect On button flips both its aria-pressed and the matching unit state.",
+            "FX focus follows layer focus - selecting Focus Piano B switched the effects header to 'FX PIANO B'; chains are per-layer (reverb on for A read aria-pressed=false after focusing B), and Group mode propagated a delay toggle from B to A.",
+            "Piano section On/Off is real: with Piano On released, a pointer note rendered rms 0.0. Layer enable and octave shift are only reachable from the auxiliary settings strip below the chassis, not from the modeled panel."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Every required control measurably moves the signal (C4, pointer velocity 105): KB Touch Light/Medium/Heavy rms 0.01376/0.01239/0.01101; Dyn Comp 0->3 rms 0.01239->0.01379; Unison 0/1/3 rms 0.01271/0.01219/0.00767 (detune spread +/-16.5 cents at 3); Master Level 25/68/100 rms 0.00492/0.01259/0.01887.",
+            "Soft Release lengthens the tail as specified: with the key released at 0.4s, rms in the 0.8-0.9s window is 0.0 with Soft Release off and 7.7e-4 with it on (artifact/src/stage.ts:248, 0.6s vs 0.24s release).",
+            "Timbre Soft is the only clearly audible step: onset-aligned 350ms windows averaged over 4 repeats give >4 kHz energy fraction Off 0.0605, Soft 0.0355, Bright 0.0715 - 'Bright' is a 12 kHz lowpass against 9.5 kHz for Off (stage.ts:228) and a player would not hear it. Electric correctly extends the list with Dyno 1 and Dyno 2.",
+            "String Res changes the signal (centroid 1129 -> 1290 Hz) but stage.ts:245 synthesises a fixed sine one octave above the struck note rather than sympathetic resonance of the notes or pedal actually held; its level only steps 0.012 -> 0.028 when other voices are live."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Stress pass: 30 rapid two-note computer-keyboard bursts in 1.5s left 0 stuck keys; holding 13 keys and dispatching window blur cleared all pressed states and left residual rms 0.0.",
+            "Asset failure degrades visibly and honestly: routing **/samples/** to abort produced status 'Sample error - synthesized fallback playable' and the OLED 'GRAND / SAMPLE ERROR - FALLBACK', while notes stayed playable (rms 0.0291) and the primary library was never reported ready.",
+            "Sustain is correct per layer: with Space held, C4 rms at 1.0-1.2s was 1.34e-3 against 0.0 unsustained; turning SUSTPED off for layer A returned it to 0.0 with the pedal still down.",
+            "Web MIDI is unavailable in this browser profile and the strip says so ('MIDI denied or unavailable') rather than claiming a connection; the console carried no page errors or app errors across every interaction pass."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All six types are selectable from the panel Piano Type button and from the type select, and each renders audio; the Program OLED and status strip report the selected type.",
+            "Recorded sets really load offline from the published build: my own pass recorded 56 fetches under /samples and exactly 56 decodeAudioData calls with one AudioContext, and the status strip reached 'Recorded pianos ready - offline'. Census: grand 19 files 1.3 MB, upright 21 OGG + 21 unused FLAC 12 MB, electric 16 files 400 KB.",
+            "Sample coverage is real rather than one pitch-shifted note: artifact/src/stage.ts:26-39 maps 11 Grand roots, 11 Upright roots and 8 Electric roots, each with a soft and a hard layer, and IMPLEMENTATION_DETAILS.json lists every file's root note and velocity layer.",
+            "The panel 'Piano Model' button has no handler in artifact/src/App.tsx and clicking it changed no state or audio - one model per type, which the spec allows, but the dead dial is not declared unsupported."
+          ]
+        },
+        {
+          "id": "effectUnitCoverage",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "All six units plus the shared Rotary are present and reachable, and every listed type is selectable: mod1 6, mod2 6, ampEq 7, reverb 6 (artifact/src/stage.ts:7-14) - I exercised all 25 and each changed the rendered signal.",
+            "Routing controls exist and work: per-unit bypass, all-effects bypass (FX on rms 1.3e-4 vs all-bypass 1.40e-2 with the same settings), dry/wet for delay and reverb, delay feedback filter and tap tempo, Group, Global on delay/compressor/reverb, manual Piano/Organ/Synth focus buttons, and To Rotary.",
+            "Focus honesty: selecting FX focus Organ shows 'FX ORGAN - decorative' and a panel Reverb On press then changes nothing (aria-pressed false -> false) instead of faking a hit.",
+            "Coverage gap: on the modeled panel only the seven On buttons, twelve knobs and three focus buttons exist; effect type selection, dry/wet, feedback filter, Global, Fast and Bright are reachable only from an auxiliary settings strip below the chassis. Master Clock sync and ping-pong are absent."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "The audio declaration is truthful and I verified it by behaviour, not by reading: the three sets declared as recordings really decode 56 bundled files, and the types declared as live synthesis (Clav/Digital/Misc, fallback) really are oscillators; the reverb IRs declared as 'deterministic synthetic impulse data' match stage.ts:150-154. No generated buffer is described as a recording.",
+            "The status strip's decorative claim holds: Organ, Synth and Program controls carry aria-valuetext '... , decorative' and changed no audio, and the FX Organ/Synth focus path is explicitly labelled decorative.",
+            "Undeclared inert controls inside sections declared functional: clicking 'piano.piano-model' and 'performance.rotary-select' flipped only aria-pressed - no status-strip text, no OLED change and zero new audio-graph edges - and 'performance.modulation-wheel' moved 0->90 with aria-valuetext '90 percent' and no effect, while only Organ/Synth/Program controls carry the ', decorative' suffix.",
+            "IMPLEMENTATION_DETAILS.json carries no gaps/unsupported section at all (only $schema, version, phase, audio), although both the piano and effects specs require excluded controls to be 'listed as unsupported'; and artifact/evidence/stage2-visual-audit.md claims no Phase 2 measurement of its own, deferring the capture to the operator seal step (stage2-capture.json capturedAt 01:18:59.829Z matches verification.json verifiedAt 01:18:59.916Z)."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "effectAudibility",
+      "title": "Amp Sim types differ mainly by makeup gain",
+      "detail": "With one C4 note, Amp Sim Twin/JC/Small take rms from the 0.01347 baseline to 0.0882/0.0488/0.1318 (peak 0.101 -> 0.439/0.313/0.466), i.e. +11 to +20 dB. The normalised tanh curve in artifact/src/stage.ts:143-145 divides by tanh(grit*...), which is effectively a large makeup gain, so the three 'distinct colorations' are dominated by level and the master limiter has to absorb the rest under polyphony."
+    },
+    {
+      "severity": "major",
+      "criterion": "instrumentBreadth",
+      "title": "Clav, Digital and Misc are bare oscillators with no namesake character",
+      "detail": "artifact/src/stage.ts:241 selects sawtooth for Clav, triangle for Digital and sine for Misc, all sharing the same piano envelope and timbre filter. Measured Digital vs Misc band-L1 distance is only 0.176. Misc is specified as mallet character (marimba/vibraphone) but is an unmodified sine - the same waveform used for the sample-failure fallback - so the type has no recognisable identity."
+    },
+    {
+      "severity": "major",
+      "criterion": "effectAudibility",
+      "title": "Reverb is inaudible at every dry/wet setting",
+      "detail": "At wet=100 the rendered output collapses to peak 4.02e-4 against a dry peak of 0.1011 (-48 dB) for all six types; at the default wet=0.35 the only change is the dry attenuation (rms 0.65x, band-L1 0.002 for Room) with a tail 53 dB under the note. The IR in artifact/src/stage.ts:151-154 is sin(i*9.73)*sin(i*2.17), a deterministic two-tone product rather than noise, and ConvolverNode's default normalisation then scales it far below the dry path. Decay ordering Booth<Room<Spring<Stage<Hall<Cathedral is correct, so the structure is right and only the level is wrong - but as shipped, the reverb knob reads as a volume kill rather than a room, while the delay by comparison sits a usable -22 dB under the dry note."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoControlDepth",
+      "title": "Timbre Bright is practically inaudible",
+      "detail": "stage.ts:228 sets a 12 kHz lowpass for Bright against 9.5 kHz for Off. Onset-aligned 350 ms windows averaged over four repeats give a >4 kHz energy fraction of 0.0715 (Bright) vs 0.0605 (Off), about 1.5 dB, while Soft drops it to 0.0355. The spec asks Bright to emphasize treble."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "Three inert controls in functional sections are undeclared",
+      "detail": "'piano.piano-model', 'performance.rotary-select' and 'performance.modulation-wheel' have no branch in the update() handler in artifact/src/App.tsx; driving each produced no state, audio or panel change (zero new audio-graph edges). The only honesty notice in the UI says 'Organ, Synth, and Program controls are decorative' and only those three sections get the ', decorative' aria-valuetext, so these dead controls inside declared-functional sections are never disclosed. IMPLEMENTATION_DETAILS.json has no unsupported/gaps section either, although both specs require excluded controls to be listed as unsupported."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoControlDepth",
+      "title": "String Res is a fixed octave sine, not sympathetic resonance",
+      "detail": "stage.ts:245 adds an oscillator at 440*2^((note-57)/12) - exactly one octave above the struck note - at gain 0.012, rising to 0.028 only when any other voice is live. It does not follow which notes or pedal are actually held, so the resonance does not change with the held chord as the manual describes."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectUnitCoverage",
+      "title": "Most effect parameters live off-panel",
+      "detail": "The modeled chassis exposes only the seven unit On buttons, twelve knobs and the three focus buttons. Effect type selection, dry/wet, delay feedback filter, Global, Compressor Fast and Reverb Bright are reachable only from the auxiliary settings strip rendered below the instrument, which the artifact's own visual audit acknowledges is not a photo-matched panel feature."
+    },
+    {
+      "severity": "minor",
+      "criterion": "signalGraph",
+      "title": "Layer level is applied before Rotary",
+      "detail": "In artifact/src/stage.ts:262 the To Rotary path is chain output -> level[id] -> rotary input -> master, whereas the spec's requiredOrder is Rotary when routed, then Layer level, then master gain/limiter. Audible effect is small but layer level then also scales the rotary drive."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "Phase 2 visual audit carries no candidate measurement",
+      "detail": "artifact/evidence/stage2-visual-audit.md states that 'the Phase 2 browser capture and interaction pass is deferred' to the operator seal step and that 'No Phase 2 visual measurement or console result is claimed here'. The shipped stage2-desktop.png, stage2-narrow.png and stage2-capture.json were indeed produced by that seal step (capturedAt 2026-09-23T01:18:59.829Z against verification.json verifiedAt 01:18:59.916Z), so the audit is honest rather than contradictory - but Phase 2 ships with no candidate-run visual or console verification of its own, unlike Phase 1."
+    },
+    {
+      "severity": "minor",
+      "title": "12 MB of unused FLAC originals ship in the build",
+      "detail": "build/samples contains 56 OGG files that are fetched and 21 FLAC files that are never requested (the probe recorded exactly 56 sample fetches and 56 decodeAudioData calls). The upright FLAC set alone accounts for about 12 MB of the 13 MB sample payload."
+    }
+  ]
+}
