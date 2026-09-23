@@ -8,6 +8,27 @@ interface KeybedProps {
 }
 
 const POINTER_FALLBACK_VELOCITY = 0.8
+const emptySubscribe = () => () => {}
+
+function SustainPedal({ controller }: { controller: InstrumentController | null }) {
+  const down = useSyncExternalStore(
+    controller ? controller.subscribe : emptySubscribe,
+    () => controller?.isSustainDown() ?? false,
+    () => false,
+  )
+  return (
+    <button
+      type="button"
+      className="sustain-pedal"
+      data-testid="sustain-pedal"
+      aria-label="Sustain Pedal"
+      aria-pressed={down}
+      onClick={() => controller?.setSustain(!down)}
+    >
+      Sustain
+    </button>
+  )
+}
 
 function KeyView({
   keyDef,
@@ -108,7 +129,9 @@ export function Keybed({ controller }: KeybedProps) {
     <div className="keybed-band" data-testid="keybed-band" data-split={VARIANT.vertical.keybed}>
       <div className="end-cheek" aria-hidden="true" />
       <div className="keybed-col">
-        <div className="key-slot" aria-hidden="true" />
+        <div className="key-slot">
+          <SustainPedal controller={controller} />
+        </div>
         <div
           className="keybed"
           role="group"

@@ -219,6 +219,7 @@ export function PanelButton({ store, id, className, children }: ControlProps) {
   const activate = () => {
     if (cycleLabels && cycleLabels.length > 0) store.cycle(id)
     else if (latching) store.toggle(id)
+    else store.pulse(id)
   }
 
   return (

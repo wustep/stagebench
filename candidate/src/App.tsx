@@ -6,6 +6,7 @@ import { ControlDeck } from './components/sections'
 import { InstrumentController } from './input/controller'
 import { MidiInput, realMidiBoundary, type MidiBoundary } from './input/midi'
 import { VARIANT } from './model/variant'
+import { bindPanel } from './state/panelSync'
 import { PresentationStore } from './state/presentation'
 
 export interface AppProps {
@@ -39,7 +40,9 @@ export default function App({ audio, midi, timers, onEngine }: AppProps) {
       onSustain: (down) => controller.setSustain(down),
       onAllNotesOff: () => controller.allNotesOff('midi'),
     })
+    const detachPanel = bindPanel(store, engine)
     const detachKeys = controller.attachWindow(window)
+    if (import.meta.env.MODE !== 'test') void engine.preloadSamples()
     if (!cancelled) setSession({ engine, controller, midi: midiInput })
     onEngine?.(engine)
     void midiInput.start()
@@ -47,10 +50,11 @@ export default function App({ audio, midi, timers, onEngine }: AppProps) {
       cancelled = true
       controller.allNotesOff('unmount')
       detachKeys()
+      detachPanel()
       midiInput.close()
       engine.dispose()
     }
-  }, [audio, midi, timers, onEngine])
+  }, [audio, midi, store, timers, onEngine])
 
   return (
     <main className="stage-app">

@@ -214,7 +214,8 @@ function Organ({ store }: { store: PresentationStore }) {
   )
 }
 
-function Piano({ store }: { store: PresentationStore }) {
+function Piano({ store, engine }: { store: PresentationStore; engine: PianoEngine | null }) {
+  const { status } = useStatus(engine)
   return (
     <SectionFrame id="piano">
       <header className="title-band">
@@ -239,7 +240,7 @@ function Piano({ store }: { store: PresentationStore }) {
       </div>
       <div className="piano-select">
         <span className="group-tab">Piano Select</span>
-        <CycleLeds store={store} id="piano-type" className="cycle-stack" />
+        <CycleLeds store={store} id="piano-type" className={status === 'fallback' ? 'cycle-stack is-flashing' : 'cycle-stack'} />
         <PanelButton store={store} id="piano-type" className="btn-tiny">
           Type
         </PanelButton>
@@ -538,6 +539,9 @@ function Effects({ store }: { store: PresentationStore }) {
         </PanelButton>
       </header>
       <div className="fx-focus">
+        <PanelButton store={store} id="fx-focus-organ" className="btn-tiny">
+          Organ
+        </PanelButton>
         <PanelButton store={store} id="fx-focus-piano" className="btn-tiny">
           Piano
         </PanelButton>
@@ -625,7 +629,7 @@ function Effects({ store }: { store: PresentationStore }) {
             </div>
           </div>
           <div className="fx-bottom">
-            <div className="fx-unit">
+            <div className="fx-unit" data-fx-unit="delay">
               <span className="group-tab">Delay</span>
               <Knob store={store} id="delay-tempo" className="knob-sm">
                 Tempo
@@ -653,7 +657,7 @@ function Effects({ store }: { store: PresentationStore }) {
                 </PanelButton>
               </div>
             </div>
-            <div className="fx-unit fx-comp">
+            <div className="fx-unit fx-comp" data-fx-unit="compressor">
               <span className="group-tab">Comp</span>
               <Knob store={store} id="comp-amount" className="knob-sm">
                 Amount
@@ -662,7 +666,7 @@ function Effects({ store }: { store: PresentationStore }) {
                 On
               </PanelButton>
             </div>
-            <div className="fx-unit">
+            <div className="fx-unit" data-fx-unit="reverb">
               <span className="group-tab">Reverb</span>
               <Knob store={store} id="reverb-mix" className="knob-sm">
                 Mix
@@ -699,7 +703,7 @@ export function ControlDeck({
     <div className="control-deck" data-testid="control-deck" data-split={VARIANT.vertical.controlDeck}>
       <Performance store={store} />
       <Organ store={store} />
-      <Piano store={store} />
+      <Piano store={store} engine={engine} />
       <Program store={store} engine={engine} midi={midi} />
       <Synth store={store} />
       <Effects store={store} />

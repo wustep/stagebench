@@ -13,7 +13,9 @@ export interface MidiPortLike {
 }
 
 export interface MidiAccessLike {
-  inputs: Iterable<MidiPortLike> | { values(): Iterable<MidiPortLike> }
+  inputs:
+    | Iterable<MidiPortLike | [string, MidiPortLike]>
+    | { values(): Iterable<MidiPortLike | [string, MidiPortLike]> }
   addEventListener(type: 'statechange', listener: () => void): void
   removeEventListener(type: 'statechange', listener: () => void): void
 }
@@ -38,10 +40,21 @@ export interface MidiHandlers {
   onAllNotesOff: () => void
 }
 
+/**
+ * MIDIInputMap is maplike: `for...of` yields `[id, port]`, while `values()`
+ * yields ports. A bare array of ports is also accepted (tests).
+ */
 function inputPorts(access: MidiAccessLike): MidiPortLike[] {
-  const inputs = access.inputs
-  if (Symbol.iterator in inputs) return [...(inputs as Iterable<MidiPortLike>)]
-  return [...inputs.values()]
+  const inputs = access.inputs as Iterable<MidiPortLike | [string, MidiPortLike]> & {
+    values?: () => Iterable<MidiPortLike | [string, MidiPortLike]>
+  }
+  const source = typeof inputs.values === 'function' ? inputs.values() : inputs
+  const ports: MidiPortLike[] = []
+  for (const item of source) {
+    if (Array.isArray(item)) ports.push(item[1])
+    else ports.push(item)
+  }
+  return ports
 }
 
 /**

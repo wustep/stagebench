@@ -1,10 +1,20 @@
+import {
+  AMP_TYPES,
+  DELAY_FILTERS,
+  MOD1_TYPES,
+  MOD2_TYPES,
+  PIANO_TYPES,
+  REVERB_TYPES,
+  TIMBRES as TIMBRE_LABELS,
+  TOUCHES as TOUCH_LABELS,
+} from '../audio/labels'
 import type { SectionId } from './variant'
 
 /**
  * Normalized hardware model for the Nord Stage 4 deck.
- * Phase 1: every panel control is decorative. It moves or presses and
- * stores presentation state only. It does not change audio or pretend that
- * programs, organs, synths, or effects are running.
+ * Every control keeps `decorative: true` so the Phase 1 inventory contract
+ * stays intact. Piano, Layer Effects, and Master Level are wired to audio
+ * from the panel listener; Organ, Synth, and Program stay presentation-only.
  */
 export type ControlType = 'knob' | 'encoder' | 'button' | 'fader' | 'drawbar' | 'wheel' | 'stick'
 
@@ -19,8 +29,12 @@ export interface HardwareControl {
   initial?: number
   latching?: boolean
   springLoaded?: boolean
-  /** LED/selector labels cycled on each press. Presentation only. */
+  /** LED/selector labels cycled on each press. */
   cycleLabels?: readonly string[]
+  /** Starting cycle index when cycleLabels is set. */
+  cycleInitial?: number
+  /** Starting latched state for buttons. */
+  initialToggle?: boolean
   decorative: boolean
 }
 
@@ -35,6 +49,8 @@ interface ControlSeed {
   latching?: boolean
   springLoaded?: boolean
   cycleLabels?: readonly string[]
+  cycleInitial?: number
+  initialToggle?: boolean
 }
 
 const knob = (id: string, label: string, group?: string): ControlSeed => ({
@@ -92,13 +108,23 @@ function section(sectionId: SectionId, seeds: ControlSeed[]): HardwareControl[] 
   return seeds.map((seed) => ({ ...seed, section: sectionId, decorative: true }))
 }
 
+export {
+  AMP_TYPES,
+  DELAY_FILTERS,
+  MOD1_TYPES,
+  MOD2_TYPES,
+  PIANO_TYPES,
+  REVERB_TYPES,
+  TIMBRE_LABELS,
+  TOUCH_LABELS,
+}
+
 export const DRAWBAR_FOOTAGES = ['16′', '5⅓′', '8′', '4′', '2⅔′', '2′', '1⅗′', '1⅓′', '1′'] as const
 export const DRAWBAR_COLORS = ['brown', 'brown', 'white', 'white', 'black', 'white', 'black', 'black', 'white'] as const
 export const DRAWBAR_INITIAL = [3, 0, 8, 2, 5, 1, 4, 0, 6] as const
 export const PROGRAM_BUTTON_LEGENDS = ['System', 'Sound', 'Organize', 'Aux KB', 'Output', 'Pedal', 'MIDI', 'Extern'] as const
 
 const ORGAN_MODELS = ['B3', 'Vox', 'Farf', 'Pipe 1', 'Pipe 2'] as const
-const PIANO_TYPES = ['Grand', 'Upright', 'Electric', 'Clav', 'Digital', 'Misc'] as const
 const VIB_STEPS = ['V1', 'V2', 'V3', 'C1', 'C2', 'C3'] as const
 
 const performanceControls = section('performance', [
@@ -134,16 +160,16 @@ const organControls = section('organ', [
 ])
 
 const pianoControls = section('piano', [
-  toggle('piano-on', 'Piano Section On'),
+  { ...toggle('piano-on', 'Piano Section On'), initialToggle: true },
   fader('piano-level-a', 'Piano Layer A Level'),
   fader('piano-level-b', 'Piano Layer B Level'),
-  toggle('piano-layer-a', 'Piano Layer A On/Off'),
+  { ...toggle('piano-layer-a', 'Piano Layer A On/Off'), initialToggle: true },
   toggle('piano-layer-b', 'Piano Layer B On/Off'),
   { ...push('piano-acoustics', 'Acoustics Select', 'Acoustics'), cycleLabels: ['Off', 'Soft Rel', 'String Res'] },
   { ...push('piano-unison', 'Unison Select', 'Acoustics'), cycleLabels: ['Off', '1', '2', '3'] },
-  { ...push('piano-kb-touch', 'KB Touch Select'), cycleLabels: ['Heavy', 'Medium', 'Light'] },
+  { ...push('piano-kb-touch', 'KB Touch Select'), cycleLabels: TOUCH_LABELS, cycleInitial: 1 },
   { ...push('piano-dyn-comp', 'Dynamic Compression Select'), cycleLabels: ['Off', '1', '2', '3'] },
-  { ...push('piano-timbre', 'Piano Timbre Select', 'Timbre'), cycleLabels: ['Off', 'Soft', 'Mid', 'Bright'] },
+  { ...push('piano-timbre', 'Piano Timbre Select', 'Timbre'), cycleLabels: TIMBRE_LABELS },
   { ...push('piano-type', 'Piano Type Select', 'Piano Select'), cycleLabels: PIANO_TYPES },
   encoder('piano-model', 'Piano Model Dial', 'Piano Select'),
   push('piano-octave-down', 'Piano Octave Shift Down'),
@@ -220,35 +246,36 @@ const synthControls = section('synth', [
 const effectsControls = section('effects', [
   toggle('effects-on', 'Layer Effects On'),
   push('all-fx-off', 'All FX Off', 'FX Focus'),
-  push('fx-focus-piano', 'Piano FX Focus Group', 'FX Focus'),
-  push('fx-focus-synth', 'Synth FX Focus Group', 'FX Focus'),
+  { ...toggle('fx-focus-organ', 'Organ FX Focus', 'FX Focus'), initialToggle: false },
+  { ...toggle('fx-focus-piano', 'Piano FX Focus Group', 'FX Focus'), initialToggle: true },
+  toggle('fx-focus-synth', 'Synth FX Focus Group', 'FX Focus'),
   toggle('shift-2', 'Shift/Exit (FX)', 'FX Focus'),
   knob('mod1-rate', 'Mod 1 Rate', 'Mod 1'),
   knob('mod1-amount', 'Mod 1 Amount', 'Mod 1'),
-  { ...push('mod1-variation', 'Mod 1 Variation', 'Mod 1'), cycleLabels: ['A', 'B', 'C', 'D'] },
+  { ...push('mod1-variation', 'Mod 1 Type', 'Mod 1'), cycleLabels: MOD1_TYPES },
   toggle('mod1-on', 'Mod 1 On', 'Mod 1'),
   knob('mod2-rate', 'Mod 2 Rate', 'Mod 2'),
   knob('mod2-amount', 'Mod 2 Amount', 'Mod 2'),
-  { ...push('mod2-variation', 'Mod 2 Variation', 'Mod 2'), cycleLabels: ['A', 'B', 'C', 'D'] },
+  { ...push('mod2-variation', 'Mod 2 Type', 'Mod 2'), cycleLabels: MOD2_TYPES },
   toggle('mod2-on', 'Mod 2 On', 'Mod 2'),
   knob('amp-drive', 'Amp Sim Drive', 'Amp Sim/EQ'),
   knob('amp-freq', 'Amp Sim EQ Frequency', 'Amp Sim/EQ'),
   { ...knob('eq-bass', 'EQ Bass', 'Amp Sim/EQ'), initial: 64 },
   { ...knob('eq-mid', 'EQ Mid', 'Amp Sim/EQ'), initial: 64 },
   { ...knob('eq-treble', 'EQ Treble', 'Amp Sim/EQ'), initial: 64 },
-  { ...push('amp-variation', 'Amp Sim Variation', 'Amp Sim/EQ'), cycleLabels: ['Twin', 'JC', 'Small'] },
+  { ...push('amp-variation', 'Amp Sim Variation', 'Amp Sim/EQ'), cycleLabels: AMP_TYPES },
   toggle('amp-on', 'Amp Sim/EQ On', 'Amp Sim/EQ'),
   knob('delay-tempo', 'Delay Tempo', 'Delay'),
   { ...push('delay-variation', 'Delay Effects Variation', 'Delay'), cycleLabels: ['1', '2', '3', '4'] },
   knob('delay-feedback', 'Delay Feedback', 'Delay'),
   push('delay-tap', 'Delay Tap/Set', 'Delay'),
-  { ...push('delay-filter', 'Delay Feedback Filter', 'Delay'), cycleLabels: ['HP', 'Off', 'LP'] },
+  { ...push('delay-filter', 'Delay Feedback Filter', 'Delay'), cycleLabels: DELAY_FILTERS },
   knob('delay-mix', 'Delay Dry/Wet', 'Delay'),
   toggle('delay-on', 'Delay On', 'Delay'),
   knob('comp-amount', 'Compressor Amount', 'Comp'),
   toggle('comp-on', 'Compressor On', 'Comp'),
   toggle('reverb-bright', 'Reverb Bright/Dark', 'Reverb'),
-  { ...push('reverb-variation', 'Reverb Variation', 'Reverb'), cycleLabels: ['Room', 'Stage', 'Hall'] },
+  { ...push('reverb-variation', 'Reverb Variation', 'Reverb'), cycleLabels: REVERB_TYPES },
   knob('reverb-mix', 'Reverb Dry/Wet', 'Reverb'),
   toggle('reverb-on', 'Reverb On', 'Reverb'),
 ])

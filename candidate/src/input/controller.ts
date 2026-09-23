@@ -35,6 +35,10 @@ export class InstrumentController {
     return (this.held.get(midi)?.size ?? 0) > 0
   }
 
+  isSustainDown(): boolean {
+    return this.engine.isSustainDown()
+  }
+
   heldNotes(): number[] {
     return [...this.held.keys()]
   }

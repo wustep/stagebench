@@ -12,8 +12,9 @@ export interface AudioParamLike {
 }
 
 export interface AudioNodeLike {
-  connect(destination: AudioNodeLike): void
+  connect(destination: AudioNodeLike | AudioParamLike, output?: number, input?: number): void
   disconnect(): void
+  channelCount?: number
 }
 
 export interface GainNodeLike extends AudioNodeLike {
@@ -31,6 +32,7 @@ export interface BiquadFilterNodeLike extends AudioNodeLike {
   type: BiquadFilterType | string
   frequency: AudioParamLike
   Q: AudioParamLike
+  gain: AudioParamLike
 }
 
 export interface AudioBufferLike {
@@ -39,8 +41,26 @@ export interface AudioBufferLike {
 
 export interface AudioBufferSourceNodeLike extends AudioNodeLike {
   buffer: AudioBufferLike | null
-  start(when?: number): void
+  playbackRate: AudioParamLike
+  loop: boolean
+  start(when?: number, offset?: number): void
   stop(when?: number): void
+}
+
+export interface DelayNodeLike extends AudioNodeLike {
+  delayTime: AudioParamLike
+}
+
+export interface WaveShaperNodeLike extends AudioNodeLike {
+  curve: Float32Array | null
+}
+
+export interface ConvolverNodeLike extends AudioNodeLike {
+  buffer: AudioBufferLike | null
+}
+
+export interface StereoPannerNodeLike extends AudioNodeLike {
+  pan: AudioParamLike
 }
 
 export interface DynamicsCompressorNodeLike extends AudioNodeLike {
@@ -63,7 +83,12 @@ export interface AudioContextLike {
   createBiquadFilter(): BiquadFilterNodeLike
   createBuffer(channels: number, length: number, sampleRate: number): AudioBufferLike
   createBufferSource(): AudioBufferSourceNodeLike
+  createDelay(maxDelayTime?: number): DelayNodeLike
+  createWaveShaper(): WaveShaperNodeLike
+  createConvolver(): ConvolverNodeLike
+  createStereoPanner?: () => StereoPannerNodeLike
   createDynamicsCompressor?: () => DynamicsCompressorNodeLike
+  decodeAudioData?: (data: ArrayBuffer) => Promise<AudioBufferLike>
 }
 
 export interface TimerBoundary {

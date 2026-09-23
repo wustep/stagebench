@@ -110,6 +110,37 @@ describe('piano.basic-inputs', () => {
     await waitFor(() => expect(screen.getAllByTestId('engine-status').at(-1)).toHaveAttribute('data-midi', 'denied'))
   })
 
+  it('accepts a maplike MIDIInputMap that yields [id, port] entries', async () => {
+    const port = new FakePort()
+    const inputs = {
+      *[Symbol.iterator](): IterableIterator<[string, MidiPortLike]> {
+        yield ['input-1', port]
+      },
+    }
+    const access: MidiAccessLike = {
+      inputs,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }
+    const midi: MidiBoundary = {
+      isSupported: () => true,
+      requestAccess: async () => access,
+    }
+    let engine: PianoEngine | null = null
+    renderApp({
+      audio: audioBoundary(),
+      midi,
+      onEngine: (created) => {
+        engine = created
+      },
+    })
+    await waitFor(() => expect(screen.getByTestId('engine-status')).toHaveAttribute('data-midi', 'ready'))
+    port.emit([0x90, 64, 90])
+    expect(engine!.isNoteActive(64)).toBe(true)
+    port.emit([0x80, 64, 0])
+    expect(engine!.isNoteActive(64)).toBe(false)
+  })
+
   it('drives two keys from independent pointers', () => {
     let engine: PianoEngine | null = null
     renderApp({
