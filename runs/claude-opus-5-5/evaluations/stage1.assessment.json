@@ -1,0 +1,255 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-opus-5-5",
+  "stage": 1,
+  "evaluator": "Blind StageBench Phase 1 evaluator (Claude Opus 5)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-22T21:35:13Z",
+  "summary": "A near-reference Phase 1 build. Geometry is essentially exact at 1440x900 (deck 0.5397, keybed 0.4603, width 0.9300, aspect 3.0948, worst section deviation 4.6e-8) and all five reference colours match within dE 1.2. Inventory is complete: 33/33 section landmarks, 146/146 controls pointer-reachable by the 5x5 elementFromPoint grid, 73/73 keys inside the keybed (43 white / 30 black, black-key height 0.6099), zero forbidden descriptors satisfied. The generated additive piano tracks pitch (E2 82.43 Hz vs 82.41), holds level across E1-E7 (peak ~0.208), decays monotonically and never clips under 24 voices (peak 0.2394). Pointer, touch, computer keyboard and Web MIDI all reach one lifecycle; velocity, release, sustain (UI/Space/CC64), 24-voice stealing and blur all-notes-off all verified. Every panel control moves and reports state while changing no audio, and says so in aria-description. Shortfalls are small: the sustain toggle desyncs from Space/CC64, the Program OLED carries no live performance values, and micro-legends are sub-pixel at Fit scale.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Pitch is correct across the keybed: autocorrelation on rendered output gives 82.43 Hz for MIDI 40 (E2, expected 82.41) and 525.0 Hz for MIDI 72 (C5, expected 523.25) (scratch/tone.py against build/).",
+            "Level is even across the range: peak amplitude 0.2087 (E1), 0.2084 (E2), 0.2087 (C4), 0.2080 (C5), 0.2038 (E6), 0.2006 (E7) - no dead or hot zones.",
+            "Decay and release behave: C4 half-second RMS windows fall monotonically 0.0901, 0.0577, 0.0369, 0.0236, 0.0150, 0.0095 over 3 s, while E1 decays far more slowly (0.1078 -> 0.0347) and E7 fastest (0.0466 -> 0.0) - register-dependent decay, as a piano does. Releasing the key immediately renders silence (rms 0.0).",
+            "Gain staging holds under load: 24 simultaneous notes at full front-strike velocity render peak 0.2394, rms 0.0424, no clipping (scratch/misc.py).",
+            "Simplifications a player would notice: the voice is mono (channel difference 0.000 across a 3 s render) and is built from 25 root tones every 3 semitones pitch-shifted +/-1 semitone with a single velocity layer, per src/audio/pianoTone.ts."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares generated buffers and an empty sampleSources array; the published build contains no audio assets at all - build/assets holds only index-C5WydGGq.js (271 KB) and index-CwprUXtX.css (13.8 KB), and no audio fetch occurs during play.",
+            "The declared root count is observable in the running build: the status panel reads 'Synthesized piano ready (25 generated root tones)', matching the declared 'MIDI 28, 31, ... 97, 100 (25 roots)'.",
+            "The UI states the limitation unprompted: 'The piano is a synthesized tone generated in the browser, not a recording.' appears in the status panel at load (scratch/sus2.py, scratch/misc.py).",
+            "The declared signal chain is consistent with measurement: velocity changes both level and brightness (MIDI vel 20 rms 0.00495 vs vel 127 rms 0.0585), as claimed for the velocityGain/velocityCutoff pair."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Pointer: a synthetic pointerdown on [data-note='60'] renders rms 0.04773, peak 0.2087 (scratch/audio.py).",
+            "Touch: pointerdown with pointerType='touch' on [data-note='64'] renders rms 0.04445, peak 0.2243 (scratch/misc.py) - the same lifecycle, not a separate path.",
+            "Computer keyboard: holding A and S reports '2 / 24 voices - held: C4 D4' and renders rms 0.05466; five keydowns with repeat=true still report '1 / 24 voices', so auto-repeat is suppressed (scratch/audio3.py).",
+            "Web MIDI: with an injected requestMIDIAccess, 0x90 60 100 renders rms 0.03979 and the panel reads 'MIDI connected: Probe MIDI (notes, velocity, CC64 sustain)'.",
+            "All four paths converge on one voice counter and one held-note list in the status panel ('n / 24 voices - held: ...'), and only one AudioContext is ever constructed (window.__ctxs.length === 1)."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Velocity maps from two sources: pointer strike position front vs back gives rms 0.05483 vs 0.00909 (6.0x), MIDI velocity 127 vs 20 gives 0.05853 vs 0.00495 (11.8x).",
+            "Sustain reaches the engine from all three declared inputs - on-screen toggle, Space bar and MIDI CC64 - each flipping the live readout to 'sustain down' (scratch/sus2.py, scratch/audio3.py).",
+            "Voice stealing is bounded and stable: 30 simultaneous pointerdowns report '24 / 24 voices' with 30 notes still in the held list, matching the declared 24-voice ceiling.",
+            "All-notes-off works on both paths: dispatching window 'blur' with 3 notes down clears the held-note list, and the 'All notes off' button after 3 notes renders silence (rms 0.0) (scratch/audio2.py, scratch/audio3.py).",
+            "Per-note release is real, not a hard cut: pointerdown followed by pointerup renders rms 0.0 over the 3 s offline render, i.e. the release envelope has run to zero."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Every control class moves under real input and reports state: Master level knob aria-valuenow 96 -> 108 (3x ArrowUp) -> 127 (End) and also responds to pointer drag; drawbar 1 aria-valuenow 8 -> 5 with aria-valuetext '16' pulled to 5 of 8 (position only)'; fader 100 -> 84; mod wheel 0 -> 125; Program dial encoder 0 -> 2 detents (scratch/panel2.py against build/).",
+            "Inertness is declared on the control itself: every one of the 146 controls carries aria-description 'Decorative in Phase 1: moves only, changes no sound or program state.', and slider aria-valuetext is suffixed '(knob position only)' / '(position only)'.",
+            "No faked success: driving Master level to its minimum (Home) and then playing MIDI 60 renders rms 0.04773 and peak 0.20866 - bit-identical to the default-position render, so the knob honestly does nothing.",
+            "Indicators still track the control: Organ model select cycles aria-description 'Indicator: unlit' -> 'FARF' -> 'VOX' with the section's lit-LED count going 0 -> 1; Percussion on flips aria-pressed false -> true with lit count 1 -> 2.",
+            "Accessibility audit of the rendered page: 146/146 controls have an aria-label, 0 lack a role, 0 are outside the tab order, and all 44 sliders expose aria-valuenow (scratch/panel.py)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "146 controls render across the six sections in spec order - performance 7, organ 24, piano 14, program 28, synth 40, effects 33 - by kind: 97 buttons, 26 knobs, 9 drawbars, 7 faders, 5 encoders, 1 pitch stick, 1 mod wheel (scratch/reach.py).",
+            "All 33 sectionLandmarks entries are rendered inside their own section, verified by a per-section query of [data-kind] labels and leaf text (scratch/labels.py): e.g. performance carries MASTER LEVEL, ROTARY SPEAKER (DRIVE/ON/STOP MODE/SLOW-FAST), pitch stick, mod wheel and 'nord stage 4' branding on the exposed red chassis, exactly where the reference photo places them.",
+            "Each control is individually identifiable: stable ids of the form <section>-<name> (performance-master-level, organ-drawbar-1, organ-perc-on, organ-model, ...) plus human aria-labels ('Drawbar 3 (8')', 'Percussion harmonic third', 'Delay filter (Ping Pong with Shift)').",
+            "The two OLED locations required by the phase contract are the only ones present: one .oled in program, one in synth, and none in performance, organ, piano or effects (scratch/forbid.py)."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "The Phase 1 piano scope in specs/nord-stage-4.piano.json is one dependable basic voice plus sustain from UI control, keyboard mapping and MIDI CC64, plus truthful loading/ready state - all four exercised in the running build (scratch/sus2.py, scratch/audio3.py).",
+            "Truthful ready state observed at load: 'PIANO VOICE / Ready / Synthesized piano ready (25 generated root tones). / Audio starts on your first key press', mirrored on the Program OLED as 'PHASE 1 - KEYBED / Basic Piano / Synth piano: ready / Panel: decorative'.",
+            "Polyphony, velocity, release and cleanup are all present and measured (see voiceLifecycle evidence); inputs/verification.json records featureMatrix coveredFeatures 11 of requiredFeatures 11 with test, typecheck, lint and build all passing.",
+            "Caveat: the declared labelled fallback ('Fallback tone', live OscillatorNode) could not be forced in the sealed build, since generation succeeded on every load - it is declared and the ready path is honest, but the failure branch was not observed."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "'Every panel knob, button, fader, drawbar, wheel and stick is decorative in Phase 1' is true as declared: Master level at minimum produces an identical render (rms 0.04773) to Master level at default, and all 146 controls carry the decorative aria-description.",
+            "'No recorded samples are bundled or fetched in Phase 1; sampleSources is intentionally empty' is true: build/assets contains only a JS and a CSS file, with no audio asset of any kind.",
+            "'Polyphony is 24 voices with deterministic stealing' is true: 30 simultaneous notes cap at exactly '24 / 24 voices'.",
+            "Nothing undeclared was found missing: the Synth section honestly labels itself 'SYNTH / Inactive / Not built in Phase 1' on its own OLED rather than presenting dead controls as live, and the page footer restates the boundary ('Only the keybed and sustain make sound in Phase 1')."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "On-screen sustain toggle desyncs from Space bar and MIDI CC64",
+      "detail": "Holding Space or sending CC64=127 flips the live engine readout to 'sustain down', but the status-panel toggle stays labelled 'Sustain pedal up' with aria-pressed=\"false\" (scratch/sus2.py: spaceDown -> {btn:'Sustain pedal up', pressed:'false', line:'0 / 24 voices - sustain down'}). Only clicking the toggle itself updates it. A user or screen-reader reading the control gets the opposite of the engine state, and the next click inverts rather than releases."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "Program OLED carries no live performance values",
+      "detail": "While notes are sounding, both OLEDs render the same static text as at idle ('PHASE 1 - KEYBED / Basic Piano / Synth piano: ready / Panel: decorative'; 'SYNTH / Inactive / Not built in Phase 1'). Voice count, held notes and sustain state live only in the status panel below the instrument (scratch/panel.py oledWhilePlaying). The displays report engine readiness truthfully but do not read live values the way the hardware display does."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Micro-legends are sub-pixel at Fit scale",
+      "detail": "At 1440x900 the deck is 233.5 px tall (stage scale 0.8370) and at 390x844 it is 65 px (scale 0.2338), so group legends and shift legends render at roughly 3-4 px and are not readable without the built-in 2x/3x zoom. The artwork itself is reference-grade at 3x (drawbar footage legends, 8-step LED ladders, knob scale rings, 'HANDMADE IN SWEDEN BY CLAVIA DMI AB v2.0 Rev.B' silkscreen), so this is a rendered-size legibility limit rather than missing detail."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoVoice",
+      "title": "Mono voice with 3-semitone root spacing and one velocity layer",
+      "detail": "Rendered output is identical in both channels (summed absolute channel difference 0.000 over a 3 s render), and the voice is 25 roots every 3 semitones resampled +/-1 semitone with velocity applied as gain plus filter cutoff only. Declared honestly in IMPLEMENTATION_DETAILS.json and within Phase 1 scope, but a player will hear the uniform pitch-shift and the absent stereo image."
+    },
+    {
+      "severity": "minor",
+      "title": "Shipped visual audit names the building model, weakening blind evaluation",
+      "detail": "artifact/evidence/stage1-visual-audit.md opens with a line identifying the model and configuration that produced the artifact. EVAL.md instructs the evaluator not to discover this; shipping it inside the sealed artifact makes that impossible to avoid on a first read. It did not enter this assessment, but the capture template should strip it."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage1",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.5397,
+          "keybedFraction": 0.4603,
+          "widthFraction": 0.93,
+          "aspectRatio": 3.0948,
+          "sectionFractionMaxDeviation": 0
+        },
+        "evidence": [
+          "Measured in the published build/ served statically and loaded at exactly 1440x900 in headless Chrome, unscrolled (scratch/geo.py). .instrument box = x 50.406, y 167.750, w 1339.1875, h 432.7250; .keybed top at y 401.2708.",
+          "deckFraction = (401.2708 - 167.750) / 432.7250 = 0.539652 (target 0.54 +/-0.025); keybedFraction = 199.2042 / 432.7250 = 0.460348 (target 0.46 +/-0.025).",
+          "widthFraction = 1339.1875 / 1440 = 0.929991, inside [0.88, 0.97]; aspectRatio = 1339.1875 / 432.7250 = 3.094777 (target 3.0951 +/-0.06, deviation 0.00032).",
+          "The six [data-section] widths divided by instrument width are 0.140000, 0.200000, 0.085000, 0.125000, 0.250000, 0.200000 in the spec order performance, organ, piano, program, synth, effects; worst deviation from the visual.json fractions is 4.56e-8, reported as 0.0.",
+          "document.documentElement.scrollHeight = 900 at 1440x900, so the instrument is fully visible without vertical scroll as the presentation spec requires."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 33,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 146,
+          "controlsTotal": 146,
+          "forbiddenPresent": 0
+        },
+        "evidence": [
+          "All 33 sectionLandmarks entries (performance 5, organ 4, piano 5, program 7, synth 6, effects 6) are rendered inside their own [data-section], confirmed by per-section enumeration of [data-kind] aria-labels and leaf text at 1440x900 (scratch/labels.py). Examples: organ shows nine drawbars 16'-1' with 8-step LED ladders, FARF/VOX/B3/PIPE1/PIPE2/B3 BASS model switches and a B3 PERCUSSION block; program shows the primary OLED, PROGRAM dial, buttons 1-8, PAGE/CAT, LIVE MODE, LAYER SCENE, STORE, SPLIT and the three MORPH ASSIGN buttons (WHEEL/A.T./CTRLPED).",
+          "Reachability by the prescribed method - 5x5 elementFromPoint grid over each control's bounding box at 1440x900, page unscrolled, no framework click helper: 146 of 146 controls resolve to themselves or a descendant on at least one grid point; the unreachable list is empty. The same test on the 73 keys returns 73/73 (scratch/reach.py).",
+          "forbiddenDetection rules applied literally against the rendered DOM (scratch/forbid.py). performance 'full dark inset plate': largest single dark fill covers 0.033 of the band's 43,782 px2, far below 0.8 - fails the rule. performance/effects 'OLED display': zero displayElements in either section. organ/piano 'wide OLED display': zero displayElements. synth 'wide display spanning the section': largest displayElement is 0.232 of section width, below 0.5. program 'multiple primary displays': largest displayElement area 2906.6 px2, next largest 576.3 px2 (0.198 of it), below the 0.5 threshold. organ 'generic equal-width control grid': control widths are not within 5% of their median and 11 drawbar-like controls (>=3x taller than wide) are present. piano 'drawbar bank': only 2 tall controls, below 6. synth 'uniform repeated knob matrix' and effects 'single undifferentiated control grid': widths/heights non-uniform, 21 and 28 distinct control rows respectively. Every rule was evaluable; the count is 0, not null.",
+          "No disagreement found between sectionLandmarks and reference/nord-stage-4-73.jpg: the render places the Rotary Speaker block on the exposed red chassis below MASTER LEVEL in the performance band, which is where the photograph puts it and what the spec note describes."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 73,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.6099
+        },
+        "evidence": [
+          "73 [data-note] elements render at 1440x900, split 43 white / 30 black, spanning MIDI 28 (E1) to MIDI 100 (E7) - the E-to-E 73-key range of the assigned stage-4-73 variant (scratch/keys.py).",
+          "Every key box falls inside the .keybed box (x 50.4, y 401.3, w 1339.2, h 199.2) within 0.5 px on all four edges: 73 inside, 0 outside.",
+          "Mean white key 29.35 x 184.14 px, mean black key 17.01 x 112.31 px, giving blackKeyHeightFraction = 112.31 / 184.14 = 0.6099 (target 0.61 +/-0.03) and a black/white width ratio of 0.5798.",
+          "Keys are playable, not decoration: all 73 pass the same 5x5 elementFromPoint reachability test, and a pointerdown on [data-note='60'] renders audio (rms 0.04773)."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "Sampled the rendered 1440x900 screenshot of build/ on a 2 px grid, keeping only colours occupying >=150 sampled pixels as surfaces (155 qualifying surfaces), then took the CIE76 deltaE to each of the five specs referenceColors (scratch/color.py -> scratch/desktop.png).",
+          "chassisMid #851a25 -> rgb(133,26,37) dE 0.00; chassisDark #5a0c13 -> rgb(90,13,21) dE 1.18; panelBlueGray #3c424d -> rgb(60,66,77) dE 0.00 (16,520 sampled px, the inset plates); keyBlack #0b0b0b -> rgb(11,11,11) dE 0.00; keyWhite #dcdcdc -> rgb(220,220,218) dE 1.04. All five are inside dE 12, so 5 of 5 match."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "At 3x zoom the organ band renders nine drawbars with alternating black/white caps, per-drawbar footage legends (16', 5 1/3', 8', 4', 2 2/3', 2', 1 3/5', 1 1/3', 1') and Hammond register names (BASS16, STR16, FLUTE8, OBOE8, TRMP8, STR8, FLUTE4, STR4), each with its own 8-step numbered red LED ladder (scratch/desk3x.png, scratch/d3_a.png).",
+          "Knob caps carry printed scale rings - 0-10 for DRIVE, RATE, AMOUNT, FREQ, GLIDE and -10..+10 for the EQ BASS/MID/TREBLE trio - and shift legends are drawn as red-outlined boxes (MST CLK, PING PONG, SENS, A-WAH, GLOBAL, SOUND INIT), which is how the hardware silkscreens its secondary functions (scratch/d3_c.png).",
+          "Fader level LED ladders are separate green ladders beside each layer fader, and section-on indicators are discrete LED dots with data-lit state; the page carries 44 sliders and 97 buttons all with distinct printed legends (scratch/labels.py text dump per section).",
+          "OLED treatment is correct: exactly two displays (program, synth), cyan-on-black with a bordered title bar, monospace body and a discrete title/big-value/line hierarchy rather than plain text on a rectangle.",
+          "Chassis micro-detail present: rear-panel jack silkscreen on the top rail (MONITOR IN, HEADPHONES, OUT 1-4, CONTROL PEDAL, ORGAN SWELL, SUSTAIN PEDAL, TRIPLE PEDAL, MIDI IN/OUT, USB, AC IN), the 'nord stage 4 / HAMMER ACTION 73' logo lockup, and the vertical 'HANDMADE IN SWEDEN BY CLAVIA DMI AB v2.0 Rev.B' silkscreen at the right edge.",
+          "Limitation: at the Fit scale the deck is only 233.5 px tall, so these legends are 3-4 px and unreadable until the built-in 2x/3x zoom is used.",
+          "Rating held at 3 rather than 4: the criterion scores legends 'legible at rendered size', and at the default Fit scale the micro-legends are 3-4 px and unreadable without the 2x/3x zoom; the panel typeface is also a condensed system sans (Arial Narrow / Liberation Sans Narrow) rather than Nord's panel face. Both are simplifications a knowledgeable player would notice, which is the anchor-3 description, not anchor 4."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "Control positions track their own parameter and report it: Master level aria-valuenow 96 -> 108 -> 127 with aria-valuetext '76% ...' -> '85% ...' -> '100% (knob position only)'; drawbar 1 8 -> 5 with '16' pulled to 5 of 8'; Organ layer A fader 100 -> 84 ('66% (fader position only)'); mod wheel 0 -> 125 by pointer drag; Program dial 0 -> 2 detents (scratch/panel2.py).",
+          "LEDs follow the control they belong to: Organ model select cycles indicator unlit -> FARF -> VOX while the section's data-lit=true count goes 0 -> 1; Percussion on goes aria-pressed false -> true with lit count 1 -> 2.",
+          "Displays read live engine state, honestly scoped: the Program OLED shows 'PHASE 1 - KEYBED / Basic Piano / Synth piano: ready / Panel: decorative' and the Synth OLED shows 'SYNTH / Inactive / Not built in Phase 1' rather than faking a program.",
+          "Shortfall 1 - the displays do not read live performance values. Playing MIDI 60 leaves both .oled texts byte-identical; voice count ('1 / 24 voices - held: C4') and sustain state appear only in the status panel below the instrument (scratch/panel.py).",
+          "Shortfall 2 - the sustain indicator desyncs. Space bar or MIDI CC64=127 flips the engine line to 'sustain down' while the toggle stays 'Sustain pedal up' with aria-pressed=\"false\" (scratch/sus2.py)."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 4,
+        "evidence": [
+          "At 390x844 the whole instrument is rendered as one scaled unit (stage data-scale 0.2338) at x 8, y 89, w 374.0, h 120.8: widthFraction 0.959, aspectRatio 3.0948 and deckFraction 0.5397 - identical proportions to desktop, so nothing reflows or collapses (scratch/narrow.py).",
+          "No clipping and no overflow: document.documentElement.scrollWidth = 390 and scrollHeight = 844 at that viewport, with the instrument bottom at y 209.8, fully inside the fold.",
+          "All six sections stay at their spec fractions (0.140, 0.200, 0.085, 0.125, 0.250, 0.200) and all content survives: 73/73 keys still inside the keybed and 146/146 controls still pass the 5x5 elementFromPoint reachability test at 390x844.",
+          "Usability is addressed rather than ignored: a Fit / 2x / 3x zoom control sits above the instrument at narrow width, which is what makes the ~5 px white keys and 3 px legends workable; the screenshot shows the full six-section deck and keybed intact (scratch/narrow_full.png)."
+        ]
+      }
+    ]
+  }
+}
