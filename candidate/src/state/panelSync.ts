@@ -1,5 +1,6 @@
 import type { PianoEngine } from '../audio/engine'
 import { PIANO_TYPES, TIMBRES, TOUCHES, type LayerId } from '../audio/labels'
+import { handlePhase3, presentPhase3 } from './panelPhase3'
 import type { PanelAction, PresentationStore } from './presentation'
 
 function shifted(store: PresentationStore) {
@@ -55,6 +56,7 @@ export function presentInstrument(store: PresentationStore, engine: PianoEngine)
   store.presentCycle('reverb-variation', fx.reverb.type)
   store.presentValue('reverb-mix', fx.reverb.mix)
   store.presentToggle('reverb-on', fx.reverb.on)
+  presentPhase3(store, engine)
 }
 
 function readPanelIntoEngine(store: PresentationStore, engine: PianoEngine) {
@@ -114,12 +116,19 @@ function readPanelIntoEngine(store: PresentationStore, engine: PianoEngine) {
 }
 
 /**
- * Mirror panel gestures into the engine. Organ, Synth, and Program controls
- * fall through and stay presentation-only. Returns true to swallow a toggle
- * that should not flip the hardware latch (Shift chords).
+ * Mirror panel gestures into the engine. Phase 3 controls are handled first.
+ * Returns true to swallow a toggle that should not flip the hardware latch.
  */
 export function bindPanel(store: PresentationStore, engine: PianoEngine) {
-  return store.setPanelListener((action: PanelAction, id: string) => {
+  let applying = false
+  const detachEngine = engine.subscribe(() => {
+    if (applying) return
+    presentInstrument(store, engine)
+  })
+  const detachPanel = store.setPanelListener((action: PanelAction, id: string) => {
+    applying = true
+    try {
+    if (handlePhase3(store, engine, action, id)) return action === 'before-toggle'
     if (action === 'before-toggle') {
       if (shifted(store) && id === 'piano-layer-a') {
         engine.toggleSustped('A')
@@ -152,14 +161,24 @@ export function bindPanel(store: PresentationStore, engine: PianoEngine) {
       if (id === 'piano-octave-up') engine.nudgeOctave(1)
       else if (id === 'piano-octave-down') engine.nudgeOctave(-1)
       else if (id === 'all-fx-off') {
-        engine.setEffectsOn(false)
+        engine.allEffectsOff()
         store.presentToggle('effects-on', false)
-      } else if (id === 'delay-tap') engine.tapDelay(performance.now() / 1000)
+      } else if (id === 'delay-tap') {
+        engine.tapDelay(performance.now() / 1000)
+        store.presentValue('delay-tempo', engine.readFx().delay.tempo)
+      }
       return false
     }
     if (action === 'toggle' || action === 'value' || action === 'cycle') {
       readPanelIntoEngine(store, engine)
     }
     return false
+    } finally {
+      applying = false
+    }
   })
+  return () => {
+    detachEngine()
+    detachPanel()
+  }
 }

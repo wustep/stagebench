@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { HARDWARE_CONTROLS } from '../model/hardware'
+import { isUnsupportedControl } from '../model/unsupported'
 import { SECTIONS } from '../model/variant'
 import { renderApp } from '../test/renderApp'
 
@@ -10,7 +11,7 @@ describe('visual.control-inventory surface', () => {
     for (const control of HARDWARE_CONTROLS) {
       const nodes = document.querySelectorAll(`[data-control-id="${control.id}"]`)
       expect(nodes, control.id).toHaveLength(1)
-      expect(nodes[0]).toHaveAttribute('data-decorative', 'true')
+      expect(nodes[0]).toHaveAttribute('data-decorative', isUnsupportedControl(control.id) ? 'true' : 'false')
     }
     const oleds = document.querySelectorAll('.oled')
     expect(oleds).toHaveLength(2)

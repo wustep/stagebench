@@ -29,16 +29,20 @@ export default function App({ audio, midi, timers, onEngine }: AppProps) {
 
   useLayoutEffect(() => {
     let cancelled = false
-    const engine = new PianoEngine({
-      ...(audio ?? realAudioBoundary()),
-      timers: timers ?? audio?.timers ?? realTimers(),
-    })
+    const engine = new PianoEngine(
+      {
+        ...(audio ?? realAudioBoundary()),
+        timers: timers ?? audio?.timers ?? realTimers(),
+      },
+      { persist: import.meta.env.MODE !== 'test' },
+    )
     const controller = new InstrumentController(engine)
     const midiInput = new MidiInput(midi ?? realMidiBoundary(), {
       onNoteOn: (note, velocity) => controller.noteOn(note, velocity, 'midi'),
       onNoteOff: (note) => controller.noteOff(note, 'midi'),
       onSustain: (down) => controller.setSustain(down),
       onAllNotesOff: () => controller.allNotesOff('midi'),
+      onControlPedal: (value) => engine.setControlPedal(value),
     })
     const detachPanel = bindPanel(store, engine)
     const detachKeys = controller.attachWindow(window)
@@ -69,7 +73,7 @@ export default function App({ audio, midi, timers, onEngine }: AppProps) {
       >
         <div className="chassis" data-testid="chassis">
           <ControlDeck store={store} engine={session?.engine ?? null} midi={session?.midi ?? null} />
-          <Keybed controller={session?.controller ?? null} />
+          <Keybed controller={session?.controller ?? null} engine={session?.engine ?? null} />
         </div>
       </div>
     </main>

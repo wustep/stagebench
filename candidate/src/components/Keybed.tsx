@@ -1,10 +1,12 @@
 import { useCallback, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type { PianoEngine } from '../audio/engine'
 import type { InstrumentController } from '../input/controller'
 import { KEYS, WHITE_KEY_COUNT, type KeyDef } from '../model/keys'
 import { VARIANT } from '../model/variant'
 
 interface KeybedProps {
   controller: InstrumentController | null
+  engine?: PianoEngine | null
 }
 
 const POINTER_FALLBACK_VELOCITY = 0.8
@@ -35,9 +37,11 @@ function KeyView({
   controller,
   onPointerDownKey,
   onPointerUpKey,
+  split = false,
 }: {
   keyDef: KeyDef
   controller: InstrumentController
+  split?: boolean
   onPointerDownKey: (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => void
   onPointerUpKey: (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => void
 }) {
@@ -74,6 +78,7 @@ function KeyView({
       data-note={keyDef.name}
       data-black={keyDef.isBlack ? 'true' : 'false'}
       data-pressed={pressed ? 'true' : 'false'}
+      data-split-led={split ? 'true' : 'false'}
       aria-label={`${keyDef.name} key`}
       aria-pressed={pressed}
       style={{
@@ -92,8 +97,14 @@ function KeyView({
   )
 }
 
-export function Keybed({ controller }: KeybedProps) {
+export function Keybed({ controller, engine = null }: KeybedProps) {
   const pointers = useRef(new Map<number, number>())
+  const splitKey = useSyncExternalStore(
+    engine ? engine.subscribe : emptySubscribe,
+    () => (engine?.activeSplitMidis() ?? []).join(','),
+    () => '',
+  )
+  const splitMidis = new Set(splitKey.split(',').filter((midi) => midi.length > 0).map(Number))
 
   const onPointerDownKey = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>, midi: number) => {
@@ -145,6 +156,7 @@ export function Keybed({ controller }: KeybedProps) {
                   key={keyDef.id}
                   keyDef={keyDef}
                   controller={controller}
+                  split={splitMidis.has(keyDef.midi)}
                   onPointerDownKey={onPointerDownKey}
                   onPointerUpKey={onPointerUpKey}
                 />

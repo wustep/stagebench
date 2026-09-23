@@ -2,9 +2,10 @@ import { useSyncExternalStore, type ReactNode } from 'react'
 import type { PianoEngine } from '../audio/engine'
 import type { MidiInput } from '../input/midi'
 import { DRAWBAR_COLORS, DRAWBAR_FOOTAGES, PROGRAM_BUTTON_LEGENDS } from '../model/hardware'
+import { UNSUPPORTED_CONTROLS } from '../model/unsupported'
 import { SECTIONS, VARIANT, type SectionId } from '../model/variant'
 import type { PresentationStore } from '../state/presentation'
-import { CycleLeds, Drawbar, Encoder, Fader, Knob, PanelButton, PitchStick, Wheel } from './controls'
+import { CycleLeds, Drawbar, Encoder, Fader, Knob, MorphIdsContext, PanelButton, PitchStick, Wheel } from './controls'
 
 const emptySubscribe = () => () => {}
 
@@ -35,10 +36,32 @@ function useMidi(midi: MidiInput | null) {
   )
 }
 
+function useProgram(engine: PianoEngine | null) {
+  return useSyncExternalStore(
+    engine ? engine.subscribe : emptySubscribe,
+    () => engine?.getProgramView() ?? null,
+    () => null,
+  )
+}
+
+function midiLine(status: string) {
+  if (status === 'denied') return 'MIDI DENIED'
+  if (status === 'disconnected') return 'MIDI DISCONNECTED'
+  if (status === 'unsupported') return 'MIDI UNSUPPORTED'
+  return `MIDI ${status.toUpperCase()}`
+}
+
 function ProgramOled({ engine, midi }: { engine: PianoEngine | null; midi: MidiInput | null }) {
   const { status, detail, voices } = useStatus(engine)
   const midiStatus = useMidi(midi)
+  const view = useProgram(engine)
   const word = status === 'idle' ? 'IDLE' : status.toUpperCase()
+  const label = typeof view?.label === 'string' ? view.label : '1.1 Grand Piano'
+  const dirty = view?.dirty === true
+  const listOpen = view?.listOpen === true
+  const names = Array.isArray(view?.names) ? view.names.filter((name): name is string => typeof name === 'string') : []
+  const storeMode = typeof view?.storeMode === 'string' ? view.storeMode : 'play'
+  const nameDraft = typeof view?.nameDraft === 'string' ? view.nameDraft : ''
   return (
     <div
       className="oled program-oled"
@@ -49,20 +72,43 @@ function ProgramOled({ engine, midi }: { engine: PianoEngine | null; midi: MidiI
       data-status={status}
       data-voices={voices}
       data-midi={midiStatus}
+      data-dirty={dirty ? 'true' : 'false'}
+      data-store={storeMode}
     >
-      <p>STAGE 4 73</p>
-      <p>PIANO {word}</p>
+      <p>STAGE 4 73 {word}</p>
+      <p>
+        {label}
+        {dirty ? ' E' : ''}
+      </p>
       <p>{detail}</p>
+      <p data-testid="midi-status">{midiLine(midiStatus)}</p>
+      {storeMode === 'name' ? <p data-testid="store-name">NAME {nameDraft}</p> : null}
+      {listOpen ? (
+        <ol data-testid="program-list">
+          {names.map((name, index) => (
+            <li key={`${index}-${name}`} data-program-index={index}>
+              {index + 1} {name}
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </div>
   )
 }
 
-function SynthOled() {
+function SynthOled({ engine }: { engine: PianoEngine | null }) {
+  const view = useProgram(engine)
+  const on = engine?.programDocument()?.synth.sectionOn === true
+  const wave = typeof view?.waveform === 'string' ? view.waveform : 'Saw'
+  const category = typeof view?.waveformCategory === 'string' ? view.waveformCategory : 'Pure'
+  const samples = view?.samples === true
   return (
-    <div className="oled synth-oled" data-oled="synth" aria-label="Synth OLED">
-      <p>SYNTH</p>
-      <p>OFF</p>
-      <p>decorative</p>
+    <div className="oled synth-oled" data-oled="synth" aria-label="Synth OLED" data-testid="synth-status">
+      <p>SYNTH {on ? 'ON' : 'OFF'}</p>
+      <p>
+        {wave} {category}
+      </p>
+      <p>{samples ? 'SAMPLES UNSUPPORTED' : 'ANALOG'}</p>
     </div>
   )
 }
@@ -89,7 +135,26 @@ function SectionFrame({
   )
 }
 
-function Performance({ store }: { store: PresentationStore }) {
+function ControlPedal({ engine }: { engine: PianoEngine | null }) {
+  const view = useProgram(engine)
+  const value = typeof view?.pedal === 'number' ? view.pedal : 0
+  return (
+    <label className="control-pedal">
+      Pedal
+      <input
+        type="range"
+        min={0}
+        max={127}
+        aria-label="Control Pedal"
+        data-testid="control-pedal"
+        value={Math.round(value)}
+        onChange={(event) => engine?.setControlPedal(Number(event.target.value))}
+      />
+    </label>
+  )
+}
+
+function Performance({ store, engine }: { store: PresentationStore; engine: PianoEngine | null }) {
   return (
     <SectionFrame id="performance">
       <div className="brand" aria-hidden="true">
@@ -102,6 +167,7 @@ function Performance({ store }: { store: PresentationStore }) {
       <div className="wheel-row">
         <PitchStick store={store} id="perf-pitch-stick" />
         <Wheel store={store} id="perf-mod-wheel" />
+        <ControlPedal engine={engine} />
       </div>
       <div className="rotary-block">
         <span className="group-tab">Rotary Speaker</span>
@@ -360,12 +426,63 @@ function Program({
             Shift
           </PanelButton>
         </div>
+        <div className="split-editor" data-testid="split-editor">
+          <button type="button" aria-label="Nudge low split" onClick={() => { engine?.focusSplit('low'); engine?.nudgeSplit(1) }}>
+            Low
+          </button>
+          <button type="button" aria-label="Nudge mid split" onClick={() => { engine?.focusSplit('mid'); engine?.nudgeSplit(1) }}>
+            Mid
+          </button>
+          <button type="button" aria-label="Nudge high split" onClick={() => { engine?.focusSplit('high'); engine?.nudgeSplit(1) }}>
+            High
+          </button>
+          <button type="button" aria-label="Cycle crossfade" onClick={() => { engine?.focusSplit('mid'); engine?.cycleCrossfade() }}>
+            Xfade
+          </button>
+          <button
+            type="button"
+            aria-label="Piano A zone"
+            onClick={() => {
+              const zone = engine?.programDocument()?.piano.zones.A ?? { lo: 0, hi: 3 }
+              engine?.setLayerZone('piano', 'A', (zone.lo + 1) % 4, zone.hi)
+            }}
+          >
+            Pno A
+          </button>
+          <button
+            type="button"
+            aria-label="Organ A zone"
+            onClick={() => {
+              const zone = engine?.programDocument()?.organ.layers.A.zone ?? { lo: 0, hi: 3 }
+              engine?.setLayerZone('organ', 'A', (zone.lo + 1) % 4, zone.hi)
+            }}
+          >
+            Org A
+          </button>
+          <button
+            type="button"
+            aria-label="Synth A zone"
+            onClick={() => {
+              const zone = engine?.programDocument()?.synth.layers.A.zone ?? { lo: 0, hi: 3 }
+              engine?.setLayerZone('synth', 'A', (zone.lo + 1) % 4, zone.hi)
+            }}
+          >
+            Syn A
+          </button>
+        </div>
+        <ul className="unsupported-list" data-testid="unsupported-controls">
+          {UNSUPPORTED_CONTROLS.map((entry) => (
+            <li key={entry.id} data-unsupported={entry.id}>
+              {entry.id}: {entry.reason}
+            </li>
+          ))}
+        </ul>
       </div>
     </SectionFrame>
   )
 }
 
-function Synth({ store }: { store: PresentationStore }) {
+function Synth({ store, engine }: { store: PresentationStore; engine: PianoEngine | null }) {
   return (
     <SectionFrame id="synth">
       <header className="title-band">
@@ -376,7 +493,7 @@ function Synth({ store }: { store: PresentationStore }) {
       </header>
       <div className="synth-layout">
         <div className="synth-col synth-layers">
-          <SynthOled />
+          <SynthOled engine={engine} />
           <div className="layer-trio">
             <Fader store={store} id="synth-level-a">
               A
@@ -699,14 +816,22 @@ export function ControlDeck({
   engine: PianoEngine | null
   midi: MidiInput | null
 }) {
+  const morphKey = useSyncExternalStore(
+    engine ? engine.subscribe : emptySubscribe,
+    () => (engine?.morphControlIds() ?? []).join(','),
+    () => '',
+  )
+  const morphIds = new Set(morphKey.split(',').filter((id) => id.length > 0))
   return (
-    <div className="control-deck" data-testid="control-deck" data-split={VARIANT.vertical.controlDeck}>
-      <Performance store={store} />
-      <Organ store={store} />
-      <Piano store={store} engine={engine} />
-      <Program store={store} engine={engine} midi={midi} />
-      <Synth store={store} />
-      <Effects store={store} />
-    </div>
+    <MorphIdsContext.Provider value={morphIds}>
+      <div className="control-deck" data-testid="control-deck" data-split={VARIANT.vertical.controlDeck}>
+        <Performance store={store} engine={engine} />
+        <Organ store={store} />
+        <Piano store={store} engine={engine} />
+        <Program store={store} engine={engine} midi={midi} />
+        <Synth store={store} engine={engine} />
+        <Effects store={store} />
+      </div>
+    </MorphIdsContext.Provider>
   )
 }

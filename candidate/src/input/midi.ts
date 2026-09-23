@@ -38,6 +38,8 @@ export interface MidiHandlers {
   onNoteOff: (note: number) => void
   onSustain: (down: boolean) => void
   onAllNotesOff: () => void
+  /** CC11 expression / control pedal. Optional so older callers stay valid. */
+  onControlPedal?: (value: number) => void
 }
 
 /**
@@ -161,6 +163,10 @@ export class MidiInput {
     }
     if (command === 0xb0 && data1 === 64) {
       this.handlers.onSustain(data2 >= 64)
+      return
+    }
+    if (command === 0xb0 && data1 === 11) {
+      this.handlers.onControlPedal?.(data2)
       return
     }
     if (command === 0xb0 && (data1 === 120 || data1 === 123)) {

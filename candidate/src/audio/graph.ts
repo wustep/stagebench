@@ -10,6 +10,8 @@ import type {
   WaveShaperNodeLike,
 } from './boundaries'
 import type { AmpType, DelayFilter, LayerId, Mod1Type, Mod2Type, ReverbType, Timbre } from './labels'
+
+export type ExtraBusId = 'organ' | 'synthA' | 'synthB' | 'synthC'
 import { SIGNAL_ORDER } from './labels'
 
 interface WetProcessor {
@@ -585,6 +587,7 @@ class LayerBus {
     this.ampLp2 = biquad(ctx, 'lowpass', 18000, 0.7)
     this.ampHp = biquad(ctx, 'highpass', 20, 0.7)
     this.ampHp2 = biquad(ctx, 'highpass', 20, 0.7)
+    const ampTrim = gain(ctx, 0.62)
     this.ampShaper.connect(this.ampBass)
     this.ampBass.connect(this.ampMid)
     this.ampMid.connect(this.ampTreble)
@@ -592,10 +595,11 @@ class LayerBus {
     this.ampLp.connect(this.ampLp2)
     this.ampLp2.connect(this.ampHp)
     this.ampHp.connect(this.ampHp2)
+    this.ampHp2.connect(ampTrim)
     this.amp.mount({
       input: this.ampDriveGain,
-      output: this.ampHp2,
-      nodes: [this.ampShaper, this.ampBass, this.ampMid, this.ampTreble, this.ampLp, this.ampLp2, this.ampHp, this.ampHp2],
+      output: ampTrim,
+      nodes: [this.ampShaper, this.ampBass, this.ampMid, this.ampTreble, this.ampLp, this.ampLp2, this.ampHp, this.ampHp2, ampTrim],
       oscs: [],
       update: () => undefined,
     })
@@ -726,11 +730,11 @@ class LayerBus {
     on: boolean,
     time: number,
   ) {
-    const driveAmount = type === 'EQ' || type === 'LP24' || type === 'HP24' || type === 'Rotary' ? 0.2 + drive * 0.4 : 0.35 + drive * (type === 'Small' ? 3.2 : type === 'Twin' ? 2.1 : type === 'JC' ? 0.8 : 1.4)
+    const driveAmount = type === 'EQ' || type === 'LP24' || type === 'HP24' || type === 'Rotary' ? 0.2 + drive * 0.35 : 0.3 + drive * (type === 'Small' ? 1.55 : type === 'Twin' ? 1.15 : type === 'JC' ? 0.65 : 0.9)
     setParam(this.ampDriveGain.gain, driveAmount, time)
-    const bassDb = (bass - 0.5) * 30
-    const midDb = (mid - 0.5) * 30
-    const trebleDb = (treble - 0.5) * 30
+    const bassDb = (bass - 0.5) * 18
+    const midDb = (mid - 0.5) * 18
+    const trebleDb = (treble - 0.5) * 18
     const midHz = 200 * 2 ** (clamp01(freq) * Math.log2(8000 / 200))
     this.ampBass.frequency.value = 100
     this.ampBass.gain.value = type === 'LP24' || type === 'HP24' ? 0 : type === 'Small' ? bassDb + 4 : type === 'Twin' ? bassDb + 1 : bassDb
@@ -812,6 +816,7 @@ class LayerBus {
 export class InstrumentGraph {
   readonly order = SIGNAL_ORDER
   readonly layers: Record<LayerId, LayerBus>
+  readonly extra: Record<ExtraBusId, LayerBus>
   private readonly master: GainNodeLike
   private readonly limiter: AudioNodeLike
   private readonly rotaryInput: GainNodeLike
@@ -830,10 +835,17 @@ export class InstrumentGraph {
       A: new LayerBus(ctx, stereo, impulses),
       B: new LayerBus(ctx, stereo, impulses),
     }
+    this.extra = {
+      organ: new LayerBus(ctx, stereo, impulses),
+      synthA: new LayerBus(ctx, stereo, impulses),
+      synthB: new LayerBus(ctx, stereo, impulses),
+      synthC: new LayerBus(ctx, stereo, impulses),
+    }
     this.master = gain(ctx, 0.85)
     this.rotaryInput = gain(ctx, 1)
     this.layers.A.send.connect(this.rotaryInput)
     this.layers.B.send.connect(this.rotaryInput)
+    for (const bus of Object.values(this.extra)) bus.send.connect(this.rotaryInput)
     const low = biquad(ctx, 'lowpass', 700, 0.7)
     const high = biquad(ctx, 'highpass', 700, 0.7)
     this.rotaryInput.connect(low)
@@ -863,6 +875,7 @@ export class InstrumentGraph {
     this.drive.connect(this.master)
     this.layers.A.direct.connect(this.master)
     this.layers.B.direct.connect(this.master)
+    for (const bus of Object.values(this.extra)) bus.direct.connect(this.master)
 
     const limiter = ctx.createDynamicsCompressor?.()
     if (limiter) {
@@ -882,6 +895,14 @@ export class InstrumentGraph {
 
   input(layer: LayerId): GainNodeLike {
     return this.layers[layer].input
+  }
+
+  extraInput(id: ExtraBusId): GainNodeLike {
+    return this.extra[id].input
+  }
+
+  private extraBus(id: ExtraBusId): LayerBus {
+    return this.extra[id]
   }
 
   destinationFeedCount() {
@@ -948,9 +969,15 @@ export class InstrumentGraph {
   }
 
   setRotary(fast: boolean, stopped: boolean, drive: number, time: number) {
-    const hornHz = stopped ? 0.15 : fast ? 6.6 : 0.85
-    const bassHz = stopped ? 0.1 : fast ? 5.2 : 0.65
-    const depth = stopped ? 0.02 : fast ? 0.62 : 0.48
+    this.setRotaryAmount(fast ? 1 : 0, stopped, drive, time)
+  }
+
+  /** amount 0 is slow, 1 is fast. Speed changes ramp so the rotor accelerates. */
+  setRotaryAmount(amount: number, stopped: boolean, drive: number, time: number) {
+    const span = Math.max(0, Math.min(1, amount))
+    const hornHz = stopped ? 0.15 : 0.8 + span * 5.8
+    const bassHz = stopped ? 0.1 : 0.62 + span * 4.6
+    const depth = stopped ? 0.02 : 0.42 + span * 0.22
     const when = Math.max(time, 0)
     const glide = when <= 0.0001 ? 0 : 0.85
     const rampHz = (param: AudioParamLike, value: number) => {
@@ -973,6 +1000,56 @@ export class InstrumentGraph {
     setParam(this.rotaryDriveGain.gain, 0.25 + (drive / 127) * 2.4, time)
   }
 
+  setExtraChain(
+    id: ExtraBusId,
+    fx: {
+      effectsOn: boolean
+      mod1Type: Mod1Type
+      mod1Rate: number
+      mod1Amount: number
+      mod1On: boolean
+      mod2Type: Mod2Type
+      mod2Rate: number
+      mod2Amount: number
+      mod2On: boolean
+      delayTempo: number
+      delayFeedback: number
+      delayMix: number
+      delayFilter: DelayFilter
+      delayOn: boolean
+      delaySeconds?: number
+      ampType: AmpType
+      ampDrive: number
+      ampBass: number
+      ampMid: number
+      ampFreq: number
+      ampTreble: number
+      ampOn: boolean
+      compAmount: number
+      compFast: boolean
+      compOn: boolean
+      reverbType: ReverbType
+      reverbMix: number
+      reverbBright: boolean
+      reverbOn: boolean
+      toRotary: boolean
+      level: number
+    },
+    time: number,
+  ) {
+    const bus = this.extraBus(id)
+    bus.setEffectsEnabled(fx.effectsOn, time)
+    bus.setLevel(fx.level, time)
+    bus.setMod1(fx.mod1Type, fx.mod1Rate, fx.mod1Amount, fx.mod1On, time)
+    bus.setMod2(fx.mod2Type, fx.mod2Rate, fx.mod2Amount, fx.mod2On, time)
+    bus.setDelay(fx.delayTempo, fx.delayFeedback, fx.delayMix, fx.delayFilter, fx.delayOn, time)
+    if (fx.delaySeconds !== undefined) bus.setDelayTime(fx.delaySeconds, time)
+    bus.setAmp(fx.ampType, fx.ampDrive, fx.ampBass, fx.ampMid, fx.ampFreq, fx.ampTreble, fx.ampOn, time)
+    bus.setComp(fx.compAmount, fx.compFast, fx.compOn, time)
+    bus.setReverb(fx.reverbType, fx.reverbMix, fx.reverbBright, fx.reverbOn, time)
+    bus.setRoute(fx.toRotary, time)
+  }
+
   dispose() {
     for (const osc of [this.horn, this.bass]) {
       try {
@@ -981,12 +1058,15 @@ export class InstrumentGraph {
         /* already stopped */
       }
     }
-    this.layers.A.mod1.dispose()
-    this.layers.B.mod1.dispose()
-    this.layers.A.mod2.dispose()
-    this.layers.B.mod2.dispose()
-    this.layers.A.delay.insert.dispose()
-    this.layers.B.delay.insert.dispose()
+    const buses = [this.layers.A, this.layers.B, ...Object.values(this.extra)]
+    for (const bus of buses) {
+      bus.mod1.dispose()
+      bus.mod2.dispose()
+      bus.delay.insert.dispose()
+      bus.amp.dispose()
+      bus.comp.dispose()
+      bus.reverb.dispose()
+    }
     try {
       this.master.disconnect()
       this.limiter.disconnect()

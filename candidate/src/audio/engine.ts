@@ -20,6 +20,8 @@ import {
   type Timbre,
 } from './labels'
 import { decodeEncodedLibrary, fetchEncodedLibrary, pickZone, type EncodedSet, type RecordedSet, type SampleZone } from './library'
+import type { ProgramDocument, StorageLike, SynthLayerDocument } from './performance'
+import { ProgramController, type PianoPart } from './programHost'
 
 export type EngineStatus = 'idle' | 'loading' | 'ready' | 'error' | 'fallback'
 export type VoiceMode = 'primary' | 'fallback' | 'none'
@@ -41,7 +43,12 @@ export interface PianoEngineOptions {
   /** Throw after the context exists so the labeled sine fallback is used. */
   failPrimary?: boolean
   maxPolyphony?: number
+  /** Persist programs and Live slots. Tests leave this off. */
+  storage?: StorageLike | null
+  persist?: boolean
 }
+
+type FxKey = LayerId | 'organ' | 'synthA' | 'synthB' | 'synthC'
 
 interface BendTarget {
   param: AudioParamLike
@@ -209,19 +216,36 @@ export class PianoEngine {
     A: this.defaultLayer(true),
     B: this.defaultLayer(false),
   }
-  private readonly fx: Record<LayerId | 'organ' | 'synth', FxState> = {
+  private readonly fx: Record<FxKey, FxState> = {
     A: defaultFx(),
     B: defaultFx(),
     organ: defaultFx(),
-    synth: defaultFx(),
+    synthA: defaultFx(),
+    synthB: defaultFx(),
+    synthC: defaultFx(),
   }
   private readonly taps: number[] = []
+  private programs: ProgramController | null = null
 
   constructor(
     private readonly boundary: AudioBoundary,
     private readonly options: PianoEngineOptions = {},
   ) {
     this.maxPolyphony = options.maxPolyphony ?? MAX_POLYPHONY
+    const storage = options.storage ?? (options.persist && typeof localStorage !== 'undefined' ? localStorage : null)
+    this.programs = new ProgramController(
+      {
+        capturePiano: () => this.capturePiano(),
+        applyPiano: (part) => this.applyPiano(part),
+        now: () => this.now(),
+        context: () => this.ctx,
+        graph: () => this.graph,
+        timers: () => this.boundary.timers,
+        emit: () => this.emit(),
+        allNotesOff: () => this.allNotesOff(),
+      },
+      storage,
+    )
   }
 
   private defaultLayer(enabled: boolean): LayerSnapshot {
@@ -389,6 +413,7 @@ export class PianoEngine {
       this.ctx = this.boundary.createContext()
       this.contextsCreated += 1
       this.graph = new InstrumentGraph(this.ctx)
+      this.programs?.attach(this.ctx, this.graph, this.boundary.timers)
       this.pushGraph()
       if (this.options.failPrimary) {
         this.forcedFallback = true
@@ -469,6 +494,7 @@ export class PianoEngine {
     graph.setEffectsEnabled(this.effectsOn, time)
     for (const layer of ['A', 'B'] as const) this.pushLayer(layer, time)
     graph.setRotary(this.rotaryFast, this.rotaryStop, this.rotaryDrive, time)
+    this.programs?.pushAudio()
   }
 
   private pushLayer(layer: LayerId, time: number) {
@@ -485,7 +511,9 @@ export class PianoEngine {
     graph.setAmp(layer, ampType, fx.ampDrive, fx.ampBass, fx.ampMid, fx.ampFreq, fx.ampTreble, fx.ampOn, time)
     graph.setComp(layer, fx.comp.amount, fx.comp.fast || fx.comp.amount >= 110, fx.comp.on, time)
     graph.setReverb(layer, (REVERB_TYPES[fx.reverb.type] ?? 'Room') as ReverbType, fx.reverb.mix, fx.reverb.bright, fx.reverb.on, time)
-    graph.setRotarySend(layer, fx.ampOn && ampType === 'Rotary', time)
+    const synced = this.programs?.clockSync().delay
+    if (synced) graph.setDelaySeconds(layer, 60 / (this.programs?.tempo() ?? 120), time)
+    graph.setRotarySend(layer, this.effectsOn && fx.ampOn && ampType === 'Rotary', time)
   }
 
   private shaped(velocity: number) {
@@ -514,13 +542,10 @@ export class PianoEngine {
       this.byKey.delete(`${layer}:${midi}`)
       this.releaseVoice(existing, QUICK_RELEASE_SEC, at)
     }
-    if (!this.sectionOn) {
-      this.emit()
-      return
-    }
     const shaped = this.shaped(velocity)
-    for (const layer of ['A', 'B'] as const) {
+    if (this.sectionOn) for (const layer of ['A', 'B'] as const) {
       if (!this.layerState[layer].enabled) continue
+      if ((this.programs?.pianoZone(layer, midi) ?? 1) <= 0.001) continue
       while (this.voices.size >= this.maxPolyphony) {
         const oldest = this.oldestVoice()
         if (!oldest) break
@@ -529,6 +554,7 @@ export class PianoEngine {
       const voice = this.startVoice(layer, midi, shaped, at)
       this.byKey.set(`${layer}:${midi}`, voice)
     }
+    this.programs?.noteOn(midi, velocity, at)
     this.emit()
   }
 
@@ -544,6 +570,7 @@ export class PianoEngine {
       this.byKey.delete(`${layer}:${midi}`)
       this.releaseVoice(voice, voice.releaseSec, at)
     }
+    this.programs?.noteOff(midi, at)
     this.emit()
   }
 
@@ -559,6 +586,7 @@ export class PianoEngine {
         }
       }
     }
+    this.programs?.setSustain(down)
     this.emit()
   }
 
@@ -566,6 +594,7 @@ export class PianoEngine {
     this.sustainDown = false
     for (const voice of [...this.voices]) this.stopImmediate(voice)
     this.byKey.clear()
+    this.programs?.silence()
     this.emit()
   }
 
@@ -573,6 +602,7 @@ export class PianoEngine {
     if (this.disposed) return
     this.disposed = true
     this.allNotesOff()
+    this.programs?.dispose()
     this.graph?.dispose()
     const ctx = this.ctx
     this.ctx = null
@@ -664,10 +694,14 @@ export class PianoEngine {
 
   setFocusedSoftRelease(on: boolean) {
     this.layerState[this.focus].softRelease = on
+    if (on) this.layerState[this.focus].stringRes = false
+    this.programs?.touch()
   }
 
   setFocusedStringRes(on: boolean) {
     this.layerState[this.focus].stringRes = on
+    if (on) this.layerState[this.focus].softRelease = false
+    this.programs?.touch()
   }
 
   setFocusedAcoustics(index: number) {
@@ -709,11 +743,43 @@ export class PianoEngine {
   setPitchStick(value: number) {
     this.pitchStick = value
     this.applyBend()
+    this.programs?.setPitch(value)
   }
 
   setEffectsOn(on: boolean) {
+    if (on) this.programs?.clearBypass()
+    if (this.manualFocus === 'organ') {
+      this.programs?.setOrganEffects(on)
+      return
+    }
+    if (this.manualFocus === 'synth') {
+      this.programs?.setSynthEffects(on)
+      return
+    }
     this.effectsOn = on
-    if (this.graph) this.graph.setEffectsEnabled(on, this.now())
+    if (this.graph) {
+      const time = this.now()
+      this.graph.setEffectsEnabled(on, time)
+      for (const layer of ['A', 'B'] as const) {
+        const fx = this.fx[layer]
+        const ampType = (AMP_TYPES[fx.ampType] ?? 'EQ') as AmpType
+        this.graph.setRotarySend(layer, on && fx.ampOn && ampType === 'Rotary', time)
+      }
+    }
+    this.programs?.touch()
+  }
+
+  /** All FX Off bypasses piano, organ, synth, and the organ rotary send. */
+  allEffectsOff() {
+    this.effectsOn = false
+    if (this.graph) {
+      const time = this.now()
+      this.graph.setEffectsEnabled(false, time)
+      this.graph.setRotarySend('A', false, time)
+      this.graph.setRotarySend('B', false, time)
+    }
+    this.programs?.setBypassAll()
+    this.emit()
   }
 
   setManualFocus(focus: EffectFocus) {
@@ -738,32 +804,25 @@ export class PianoEngine {
     this.emit()
   }
 
-  editTarget(): LayerId | 'organ' | 'synth' {
+  editTarget(): FxKey {
     if (this.manualFocus === 'organ') return 'organ'
-    if (this.manualFocus === 'synth') return 'synth'
+    if (this.manualFocus === 'synth') return this.programs?.synthFxKey() ?? 'synthA'
     return this.focus
   }
 
   private editFx(): FxState {
     const target = this.editTarget()
-    if (target === 'organ' || target === 'synth') return this.fx[target]
-    if (this.pianoGroup) return this.fx.A
+    if (target === 'organ' || target === 'synthA' || target === 'synthB' || target === 'synthC') return this.fx[target]
+    if (this.pianoGroup && this.manualFocus === 'piano') return this.fx.A
     return this.fx[target]
   }
 
   private copyGlobals(source: FxState) {
-    if (source.delay.global) {
-      this.fx.A.delay = { ...source.delay }
-      this.fx.B.delay = { ...source.delay }
-    }
-    if (source.comp.global) {
-      this.fx.A.comp = { ...source.comp }
-      this.fx.B.comp = { ...source.comp }
-    }
-    if (source.reverb.global) {
-      this.fx.A.reverb = { ...source.reverb }
-      this.fx.B.reverb = { ...source.reverb }
-    }
+    const targets: FxKey[] =
+      this.manualFocus === 'organ' ? ['organ'] : this.manualFocus === 'synth' ? ['synthA', 'synthB', 'synthC'] : ['A', 'B']
+    if (source.delay.global) for (const key of targets) this.fx[key].delay = { ...source.delay }
+    if (source.comp.global) for (const key of targets) this.fx[key].comp = { ...source.comp }
+    if (source.reverb.global) for (const key of targets) this.fx[key].reverb = { ...source.reverb }
     if (this.pianoGroup && this.manualFocus === 'piano') this.fx.B = cloneFx(this.fx.A)
   }
 
@@ -779,10 +838,12 @@ export class PianoEngine {
     Object.assign(fx, rest)
     this.copyGlobals(fx)
     this.pushGraph()
+    this.programs?.touch()
   }
 
-  readFx(target = this.editTarget()): FxState {
-    return cloneFx(this.fx[target])
+  readFx(target: FxKey | 'synth' = this.editTarget()): FxState {
+    const key = target === 'synth' ? (this.programs?.synthFxKey() ?? 'synthA') : target
+    return cloneFx(this.fx[key])
   }
 
   tapDelay(atSeconds: number) {
@@ -804,6 +865,7 @@ export class PianoEngine {
     this.rotaryFast = fast
     this.rotaryStop = stopped
     this.rotaryDrive = drive
+    this.programs?.setRotaryPerformance(fast, stopped, drive)
     if (this.graph) this.graph.setRotary(fast, stopped, drive, this.now())
   }
 
@@ -857,11 +919,12 @@ export class PianoEngine {
     const ctx = this.ctx!
     const graph = this.graph!
     const state = this.layerState[layer]
-    const sounding = Math.max(0, Math.min(127, key + state.octave))
+    const sounding = Math.max(0, Math.min(127, key + state.octave + (this.programs?.transposeOf() ?? 0)))
+    const zoneGain = this.programs?.pianoZone(layer, key) ?? 1
     const start = this.now(at)
     const fallback = this.forcedFallback || (this.library === 'failed' && isSampledType(state.type))
     const zones = fallback ? null : this.zonesFor(state.type)
-    const peak = (fallback ? 0.08 : 0.05) + 0.55 * velocity
+    const peak = ((fallback ? 0.08 : 0.05) + 0.55 * velocity) * zoneGain
     const gainNode = ctx.createGain()
     gainNode.gain.setValueAtTime(0.0001, start)
     const attack = zones ? 0.004 : 0.008
@@ -1114,6 +1177,315 @@ export class PianoEngine {
       }
     }
     this.disconnect(voice)
+  }
+
+  private capturePiano(): PianoPart {
+    const touchIndex = Math.max(0, TOUCHES.indexOf(this.kbTouch))
+    return {
+      sectionOn: this.sectionOn,
+      focus: this.focus,
+      kbTouch: touchIndex,
+      dynComp: this.dynComp,
+      effectsOn: this.effectsOn,
+      pianoGroup: this.pianoGroup,
+      manualFocus: this.manualFocus,
+      layers: {
+        A: { ...this.layerState.A },
+        B: { ...this.layerState.B },
+      },
+      fx: {
+        A: cloneFx(this.fx.A),
+        B: cloneFx(this.fx.B),
+        organ: cloneFx(this.fx.organ),
+        synthA: cloneFx(this.fx.synthA),
+        synthB: cloneFx(this.fx.synthB),
+        synthC: cloneFx(this.fx.synthC),
+      },
+      pitch: this.pitchStick,
+      sustainDown: this.sustainDown,
+    }
+  }
+
+  private applyPiano(part: PianoPart) {
+    this.sectionOn = part.sectionOn
+    this.focus = part.focus
+    this.kbTouch = TOUCHES[part.kbTouch] ?? 'Medium'
+    this.dynComp = part.dynComp as 0 | 1 | 2 | 3
+    this.effectsOn = part.effectsOn
+    this.pianoGroup = part.pianoGroup
+    this.manualFocus = part.manualFocus
+    this.layerState.A = { ...part.layers.A }
+    this.layerState.B = { ...part.layers.B }
+    this.fx.A = cloneFx(part.fx.A as FxState)
+    this.fx.B = cloneFx(part.fx.B as FxState)
+    this.fx.organ = cloneFx(part.fx.organ as FxState)
+    this.fx.synthA = cloneFx(part.fx.synthA as FxState)
+    this.fx.synthB = cloneFx(part.fx.synthB as FxState)
+    this.fx.synthC = cloneFx(part.fx.synthC as FxState)
+    this.pushGraph()
+    this.applyBend()
+  }
+
+  getProgramView(): Record<string, unknown> {
+    return this.programs?.snapshot() ?? {}
+  }
+
+  isProgramDirty(): boolean {
+    return this.programs?.isDirty() ?? false
+  }
+
+  selectProgram(index: number) {
+    this.programs?.selectProgram(index)
+  }
+
+  selectLiveSlot(index: number) {
+    this.programs?.selectLive(index)
+  }
+
+  setLiveMode(on: boolean) {
+    this.programs?.setLiveMode(on)
+  }
+
+  nudgeProgram(delta: number) {
+    this.programs?.nudge(delta)
+  }
+
+  setProgramPage(page: number) {
+    this.programs?.setPage(page)
+  }
+
+  setProgramList(on: boolean) {
+    this.programs?.setListOpen(on)
+  }
+
+  armStore() {
+    this.programs?.armStore()
+  }
+
+  armStoreAs() {
+    this.programs?.armStoreAs()
+  }
+
+  confirmStore() {
+    this.programs?.confirmStore()
+  }
+
+  cancelStore() {
+    this.programs?.cancelStore()
+  }
+
+  undoProgram() {
+    this.programs?.undo()
+  }
+
+  deleteStoreChar() {
+    this.programs?.nameDelete()
+  }
+
+  insertStoreChar() {
+    this.programs?.nameInsert()
+  }
+
+  nudgeSplit(delta: number) {
+    this.programs?.nudgeSplitPosition(delta)
+  }
+
+  focusSplit(which: 'low' | 'mid' | 'high') {
+    this.programs?.focusSplit(which)
+  }
+
+  cycleCrossfade() {
+    this.programs?.cycleCrossfade()
+  }
+
+  setDialTarget(target: 'amp' | 'filter' | 'osc' | 'vibrato' | 'pitch') {
+    this.programs?.setDialTarget(target)
+  }
+
+  storeMode(): string {
+    return this.programs?.bankMode() ?? 'play'
+  }
+
+  programDocument(): ProgramDocument {
+    return this.programs!.document()
+  }
+
+  setSplitEnabled(on: boolean) {
+    this.programs?.setSplitEnabled(on)
+  }
+
+  setSplitPoint(which: 'low' | 'mid' | 'high', position: number, crossfade: 0 | 6 | 12, enabled = true) {
+    this.programs?.setSplitPoint(which, position, crossfade, enabled)
+  }
+
+  setLayerZone(section: 'organ' | 'piano' | 'synth', layer: 'A' | 'B' | 'C', lo: number, hi: number) {
+    this.programs?.setLayerZone(section, layer, { lo, hi })
+  }
+
+  zoneGain(section: 'organ' | 'piano' | 'synth', layer: 'A' | 'B' | 'C', midi: number): number {
+    return this.programs?.zoneGainFor(section, layer, midi) ?? 1
+  }
+
+  setScene(scene: 'I' | 'II') {
+    this.programs?.setScene(scene)
+  }
+
+  getScene(): 'I' | 'II' {
+    return this.programs?.getScene() ?? 'I'
+  }
+
+  beginMorph(source: 'wheel' | 'pedal') {
+    this.programs?.beginMorph(source)
+  }
+
+  latchMorph(source: 'wheel' | 'pedal') {
+    this.programs?.latchMorph(source)
+  }
+
+  endMorph() {
+    this.programs?.endMorph()
+  }
+
+  assignMorph(source: 'wheel' | 'pedal', id: string, from: number, to: number) {
+    this.programs?.assignMorph(source, id, from, to)
+  }
+
+  clearMorph(source: 'wheel' | 'pedal') {
+    this.programs?.clearMorph(source)
+  }
+
+  morphControlIds(): string[] {
+    return this.programs?.morphIds() ?? []
+  }
+
+  morphSource(): 'wheel' | 'pedal' | null {
+    return this.programs?.morphSource() ?? null
+  }
+
+  baseValue(id: string): number {
+    return this.programs?.baseValue(id) ?? 0
+  }
+
+  setModWheel(value: number) {
+    this.programs?.setModWheel(value)
+  }
+
+  setControlPedal(value: number) {
+    this.programs?.setControlPedal(value)
+  }
+
+  setTempo(bpm: number) {
+    this.programs?.setTempo(bpm)
+  }
+
+  tapMasterClock(time: number) {
+    this.programs?.tapClock(time)
+  }
+
+  getTempo(): number {
+    return this.programs?.tempo() ?? 120
+  }
+
+  setClockSync(target: 'arp' | 'lfo' | 'delay' | 'mod1', on: boolean) {
+    this.programs?.setClockSync(target, on)
+  }
+
+  toggleEffectClockSync() {
+    this.programs?.toggleEffectSync()
+  }
+
+  setTranspose(semitones: number, enabled = true) {
+    this.programs?.setTranspose(semitones, enabled)
+  }
+
+  toggleTranspose() {
+    this.programs?.toggleTranspose()
+  }
+
+  panic() {
+    this.pitchStick = 0
+    this.sustainDown = false
+    this.applyBend()
+    this.programs?.panic()
+  }
+
+  setOrganOn(on: boolean) {
+    this.programs?.setOrganSection(on)
+  }
+
+  pressOrganLayer(layer: 'A' | 'B') {
+    this.programs?.pressOrganLayer(layer)
+  }
+
+  setOrganModel(index: number) {
+    this.programs?.setOrganModel(index)
+  }
+
+  setDrawbar(index: number, value: number) {
+    this.programs?.setDrawbar(index, value)
+  }
+
+  setOrganLevel(layer: 'A' | 'B', value: number) {
+    this.programs?.setOrganLevel(layer, value)
+  }
+
+  nudgeOrganOctave(direction: -1 | 1) {
+    this.programs?.nudgeOrganOctave(direction)
+  }
+
+  setOrganVibrato(index: number, on?: boolean) {
+    this.programs?.setOrganVib(index)
+    if (on !== undefined) this.programs?.setOrganVibOn(on)
+  }
+
+  setOrganPercussion(partial: { percOn?: boolean; percSoft?: boolean; percFast?: boolean; percThird?: boolean }) {
+    this.programs?.setPerc(partial)
+  }
+
+  setRotarySource(on: boolean) {
+    this.programs?.setRotarySource(on)
+  }
+
+  setSynthOn(on: boolean) {
+    this.programs?.setSynthSection(on)
+  }
+
+  pressSynthLayer(layer: 'A' | 'B' | 'C') {
+    this.programs?.pressSynthLayer(layer)
+  }
+
+  setSynthFocus(layer: 'A' | 'B' | 'C') {
+    this.programs?.setSynthFocus(layer)
+  }
+
+  patchSynth(patch: Partial<SynthLayerDocument>) {
+    this.programs?.patchSynth(patch)
+  }
+
+  setSynthLevel(layer: 'A' | 'B' | 'C', value: number) {
+    this.programs?.setSynthLevel(layer, value)
+  }
+
+  nudgeSynthOctave(direction: -1 | 1) {
+    this.programs?.nudgeSynthOctave(direction)
+  }
+
+  organVoiceCount(): number {
+    return this.programs?.organVoiceCount() ?? 0
+  }
+
+  synthVoiceCount(): number {
+    return this.programs?.synthVoiceCount() ?? 0
+  }
+
+  loadProgramNames(): string[] {
+    return this.programs?.loadFactoriesForTest() ?? []
+  }
+
+  activeSplitMidis(): number[] {
+    const view = this.getProgramView()
+    const split = view.split
+    return Array.isArray(split) ? split.filter((midi): midi is number => typeof midi === 'number' && midi > 0) : []
   }
 
   private disconnect(voice: Voice) {

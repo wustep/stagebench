@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { getControl } from '../model/hardware'
+import { isUnsupportedControl } from '../model/unsupported'
 import {
   PresentationStore,
   usePresentationCycle,
@@ -17,8 +18,12 @@ interface ControlProps {
 
 const STEP_KEYS = new Set(['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'PageUp', 'PageDown', 'Home', 'End'])
 
+/** Control ids currently assigned to Wheel or Control Pedal morph. */
+export const MorphIdsContext = createContext<ReadonlySet<string>>(new Set())
+
 function useContinuous(store: PresentationStore, id: string) {
   const control = getControl(id)
+  const morph = useContext(MorphIdsContext).has(id)
   const value = usePresentationValue(store, id)
   const min = control.min ?? 0
   const max = control.max ?? 127
@@ -107,7 +112,9 @@ function useContinuous(store: PresentationStore, id: string) {
     'aria-orientation': (control.type === 'stick' ? 'horizontal' : 'vertical') as 'horizontal' | 'vertical',
     'data-control-id': id,
     'data-panel-control': 'true',
-    'data-decorative': 'true',
+    'data-decorative': isUnsupportedControl(id) ? 'true' : 'false',
+    'data-bound': isUnsupportedControl(id) ? 'false' : 'true',
+    'data-morph': morph ? 'true' : 'false',
     'data-type': control.type,
     onKeyDown,
     onKeyUp,
@@ -209,6 +216,7 @@ export function PitchStick({ store, id, className }: ControlProps) {
 
 export function PanelButton({ store, id, className, children }: ControlProps) {
   const control = getControl(id)
+  const morph = useContext(MorphIdsContext).has(id)
   const lit = usePresentationToggle(store, id)
   const pressed = usePresentationPressed(store, id)
   const cycleIndex = usePresentationCycle(store, id)
@@ -230,7 +238,9 @@ export function PanelButton({ store, id, className, children }: ControlProps) {
       aria-pressed={latching ? lit : pressed}
       data-control-id={id}
       data-panel-control="true"
-      data-decorative="true"
+      data-decorative={isUnsupportedControl(id) ? 'true' : 'false'}
+      data-bound={isUnsupportedControl(id) ? 'false' : 'true'}
+      data-morph={morph ? 'true' : 'false'}
       data-cycle={cycleLabels ? cycleIndex : undefined}
       onPointerDown={(event) => {
         event.preventDefault()

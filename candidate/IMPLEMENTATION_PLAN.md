@@ -1,12 +1,20 @@
-# Phase 2 implementation plan — Nord Stage 4 73
+# Phase 3 implementation plan — Nord Stage 4 73
 
 Assigned variant: `stage-4-73` (73-key hammer action, E1–E7).
 
-Specs: `specs/nord-stage-4.visual.json`, `specs/nord-stage-4.piano.json`, `specs/nord-stage-4.effects.json`.
+Specs: `specs/nord-stage-4.visual.json`, `specs/nord-stage-4.piano.json`, `specs/nord-stage-4.effects.json`, `specs/nord-stage-4.programs.json`, `specs/nord-stage-4.organ.json`, `specs/nord-stage-4.synth.json`.
 
-Phase 2 turns the Piano section and the Layer Effects section on, and connects Master Level. Organ, Synth, and Program stay decorative. The visual spec still fixes the silhouette, the 54/46 deck/keybed split, and the section fractions (performance 0.14, organ 0.20, piano 0.085, program 0.125, synth 0.25, effects 0.20).
+Phase 3 turns the Organ, Synth, and Program sections on and keeps the Phase 2 piano and effect graph. The visual spec still fixes the silhouette, the 54/46 deck/keybed split, and the section fractions (performance 0.14, organ 0.20, piano 0.085, program 0.125, synth 0.25, effects 0.20).
 
 ## Hard gates
+
+- [x] Program save/load round-trips all supported state across the 32 slots and 8 Live slots.
+- [x] Splits, crossfades, scenes, morphs, and layer routing are editable from the panel and observable in audio.
+- [x] B3, Vox, Farf, and Pipe organ engines and the required Synth source categories are audibly distinct, not renamed copies of one oscillator.
+- [x] Organ and Synth route through the Phase 2 graph with no separate AudioContext.
+- [x] All inherited visual, piano, effects, and input behavior remains regression-free.
+
+Phase 2 hard gates still hold:
 
 - [x] Grand, Upright, and Electric are bundled recorded sample sets that are audibly distinct, work offline, and have complete redistributable provenance.
 - [x] Every functional piano and effect control measurably changes rendered audio and agrees with its panel feedback.
@@ -33,7 +41,31 @@ layer source (sample or synthesis, unison, octave, pitch stick)
 
 Layer level is before the direct/rotary split. A shared rotary summed first cannot scale layer A and layer B independently, so each layer's level scales that layer into both the dry sum and the rotary send. Reverb still precedes rotary. Delay feedback filtering is inside the feedback loop (the dry tap is unfiltered; repeats pass the LP/HP/BP). Parameter moves use short gain ramps. Voices, oscillators, and timers disconnect on release, layer disable, all-notes-off, and dispose.
 
-Organ and Synth effect slots exist in state so focus and global copy have somewhere to land. They do not produce audio.
+Organ (one shared chain for both layers) and Synth A/B/C use the same ordered inserts on extra buses that sum into the same master and the same rotary. `destinationFeedCount` stays 1. There is no second AudioContext.
+
+## Programs
+
+32 slots (4 pages × 8 buttons) plus 8 Live slots. The program dial steps slots. Shift+dial opens the numeric list. Store writes the current document; Shift+Store names it (dial edits a character, page buttons delete or insert) and then picks a destination. A dirty program shows `E` and is discarded on the next program change; Undo restores that edit. Live auto-stores and is never dirty. Master Level and the live positions of the pitch stick, mod wheel, sustain pedal, and control pedal are performance state and are not stored. Ten factory programs ship in the first slots (Grand Piano matches the boot patch so the instrument is not dirty at startup).
+
+Splits: three points, each one of C2 F2 C3 F3 C4 F4 C5 F5 C6 F6 C7, crossfade Off / ±6 / ±12. The split note belongs to the upper zone. Each layer picks a zone span. Enabled points light split LEDs on those keys. Panel buttons nudge each point, cycle the mid crossfade, and step Piano/Organ/Synth A zones.
+
+Layer Scene I/II stores enable masks only. Sound parameters stay put.
+
+Morph: Wheel and Control Pedal (panel slider and MIDI CC11). Assign by selecting the source and moving a destination; Shift+source clears. Wheel and pedal can drive the same control. While assigning, the source does not apply. Rotary speed is morphable and ramps.
+
+Master Clock is 30–300 BPM by tap (four taps) or by holding Tap and turning the program dial. Arp and LFO follow the clock by default. Delay and Mod 1 do not, so the Phase 2 delay-time formula stays; Shift+Tap opts those in. Transpose is ±6. Shift+Transpose is Panic (notes off, pedals and wheels centered).
+
+## Organ
+
+Two layers, one effect chain. Models: B3 (sine drawbars), Vox (square odd partials), Farf (on/off square ranks plus a shaper), Pipe 1 (slow sine attack and chiff), Pipe 2 (brighter pipe). B3 Bass reuses B3 on 16' and 8' and is not on the panel cycle. Nine drawbars with LED graphs. B3 percussion is single-trigger; key click is a short generated noise burst. Vibrato/chorus is V1 V2 V3 C1 C2 C3. The Organ rotary button sends the organ bus to the shared rotary even when the layer-effect chain is bypassed. All FX Off forces that send off until a section's effects are enabled again. Slow/fast accelerates over about 0.85 s. Stop mode is a very slow rotor.
+
+## Synth
+
+Three layers. Analog waveforms: Pure (sine, triangle, saw, square, pulse 33, pulse 10, noise), Sync, Multi, Super, FM-H. Osc Ctrl does nothing on Pure, sets the sync ratio, detunes Multi/Super, and sets the FM index. Samples mode is bound and silent: there is no sample library, and the OLED says SAMPLES UNSUPPORTED. Filters: LP24 (two lowpasses), LP12, HP, BP, plus resonance, drive, tracking, and an envelope. Osc, filter, and amp envelopes are on the three dials; the env buttons pick which envelope. LFO waveforms are triangle, saw down, saw up, square, and sample & hold, to Osc Pitch, Osc Ctrl (filter Q), or Filter Freq. The third panel LED is labeled Amp in the hardware catalog and selects Osc Ctrl, which is the spec's third destination. Voice modes: poly, mono, legato, low/high/last priority (Shift+Voice), glide, unison, and vibrato (off / delayed / wheel). Arp and gate schedule on the audio clock so offline renders stay deterministic: rate, clock sync, range, direction, hold, and run.
+
+## Control audit
+
+Every hardware control is either bound (`data-decorative="false"`, `data-bound="true"`) or listed in `src/model/unsupported.ts` and on the program panel. Spec-excluded and listed unsupported: morph aftertouch, organ/piano/synth preset libraries, Section Edit, Monitor/Copy, organ preset, delay variation, and per-type piano model variations. The hardware model's own `decorative` flag stays true so the Phase 1 inventory test still sees a complete deck.
 
 ## Piano
 

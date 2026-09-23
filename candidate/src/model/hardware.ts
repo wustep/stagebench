@@ -13,8 +13,8 @@ import type { SectionId } from './variant'
 /**
  * Normalized hardware model for the Nord Stage 4 deck.
  * Every control keeps `decorative: true` so the Phase 1 inventory contract
- * stays intact. Piano, Layer Effects, and Master Level are wired to audio
- * from the panel listener; Organ, Synth, and Program stay presentation-only.
+ * stays intact. The DOM `data-decorative` attribute is the honesty flag:
+ * spec-excluded controls are decorative, and every other control is bound.
  */
 export type ControlType = 'knob' | 'encoder' | 'button' | 'fader' | 'drawbar' | 'wheel' | 'stick'
 
