@@ -205,7 +205,7 @@ function App() {
         <div className="showcase-copy">
           <span className="showcase-flag">Featured showcase</span>
           <h2 id="showcase-heading">The evolving Stage 4</h2>
-          <p>Seeded from the top-scoring run, then iterated beyond the benchmark rules. Not scored against the gallery.</p>
+          <p>Edited by Stephen, starting from the Fable 5 run.</p>
         </div>
         <button type="button" className="open-preview showcase-play" onClick={openShowcase}>
           <span>Play the showcase</span> <PlayIcon />
