@@ -6,26 +6,7 @@
 // them from the manufacturer's official URLs for local evaluation only.
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-
-// filename in ./reference  ->  official Clavia/Nord source URL
-const ASSETS = [
-  {
-    file: 'manual.pdf',
-    url: 'https://www.nordkeyboards.com/wt/documents/951/Nord%20Stage%204%20User%20Manual%20v1.6X-Edition-N.pdf',
-  },
-  {
-    file: 'nord-stage-4.jpg', // Stage 4 88 (full)
-    url: 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/lyDePXcG/NS4_HA88_TopDown-01_241008.jpg',
-  },
-  {
-    file: 'nord-stage-4-73.jpg', // Stage 4 73
-    url: 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/2jnZVaTL/NS4_HA73_TopDown-01_241008.jpg',
-  },
-  {
-    file: 'nord-stage-4-compact.jpg', // Stage 4 Compact 73
-    url: 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/NS4_Compact73_TopDown-01_231020.jpg',
-  },
-]
+import { REFERENCE_ASSETS, REFERENCE_PHOTOS } from './reference-assets.mjs'
 
 const exists = (path) => access(path).then(() => true, () => false)
 
@@ -64,15 +45,18 @@ async function fetchAsset(url, timeoutMs) {
   throw lastError ?? new Error('unknown fetch failure')
 }
 
-export async function fetchReference(root, { force = false, timeout } = {}) {
+export async function fetchReference(root, { force = false, timeout, photosOnly = false } = {}) {
   const timeoutMs = Number.isFinite(Number(timeout)) && Number(timeout) > 0
     ? Number(timeout)
     : DEFAULT_TIMEOUT_MS
   const outDir = join(root, 'reference')
   await mkdir(outDir, { recursive: true })
+  const assets = photosOnly
+    ? Object.entries(REFERENCE_PHOTOS).map(([file, url]) => ({ file, url }))
+    : REFERENCE_ASSETS
   let downloaded = 0
   let failed = 0
-  for (const { file, url } of ASSETS) {
+  for (const { file, url } of assets) {
     const dest = join(outDir, file)
     if (!force && (await exists(dest))) {
       console.log(`· skip  ${file} (already present)`)

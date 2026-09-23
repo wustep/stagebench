@@ -41,3 +41,5 @@ The Vercel deployment uses server-side authentication through `middleware.js`. T
 ## Reference material & attribution
 
 Stagebench is an independent, non-commercial benchmark for studying browser UI/audio reconstruction. It is **not affiliated with, authorized, or endorsed by Clavia DMI AB**. "Nord" and "Nord Stage" are trademarks of Clavia DMI AB, used here only to identify the product being studied. The Nord Stage 4 user manual and product photography are copyrighted by Clavia DMI AB and are **not redistributed** in this repository — `pnpm bench fetch` downloads them from Nord's official servers into the gitignored `reference/` directory for local evaluation only. Do not commit, re-host, or redistribute them.
+
+Production builds run `scripts/prepare-reference-photos.mjs` (via `prebuild`) to fetch the product JPGs into `reference/` and copy them to gitignored `public/reference/` so the gallery overlay can serve them locally; middleware still falls back to Nord's CDN if a local file is missing.

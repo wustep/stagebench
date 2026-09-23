@@ -64,7 +64,7 @@ Prefer the preview servers in `.claude/launch.json` (`dev`, `showcase`) over ad-
 - `prompts/stage<N>.md` — per-phase instructions given to agents.
 - `reference/` — Nord manual PDF + product photos, fetched via `pnpm bench fetch`, gitignored, not redistributed.
 - `public/previews/`, `public/reports/` — published playable builds and static evaluation reports (generated; don't hand-edit).
-- `middleware.js` — Vercel middleware for `/secret` only (HMAC-signed extras cookie gated by `STAGEBENCH_PASSWORD`; the main gallery is public).
+- `middleware.js` — Vercel middleware for `/secret` (HMAC-signed extras cookie gated by `STAGEBENCH_PASSWORD`) and `/reference/*` (local `public/reference/` / `reference/` first, then Nord CDN proxy; main gallery is public).
 
 ## Testing conventions
 

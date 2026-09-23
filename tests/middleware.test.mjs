@@ -106,14 +106,62 @@ test('middleware proxies /reference photos publicly, without a secret or cookie'
 
   const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
   const response = await handleRequest(request('/reference/nord-stage-4-73.jpg'), {
+    readLocal: async () => null,
     fetch: async (url) => {
       assert.match(String(url), /NS4_HA73_TopDown/)
+      assert.doesNotMatch(String(url), /nord-assets-prod/)
       return new Response(bytes, { status: 200, headers: { 'Content-Type': 'image/jpeg' } })
     },
   })
   assert.equal(response.status, 200)
   assert.equal(response.headers.get('content-type'), 'image/jpeg')
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes)
+})
+
+test('middleware prefers a local reference photo over upstream', async () => {
+  delete process.env.STAGEBENCH_PASSWORD
+
+  const local = new Uint8Array([0xff, 0xd8, 0x01, 0xd9])
+  let fetched = false
+  const response = await handleRequest(request('/reference/nord-stage-4-73.jpg'), {
+    readLocal: async (name) => {
+      assert.equal(name, 'nord-stage-4-73.jpg')
+      return local
+    },
+    fetch: async () => {
+      fetched = true
+      return new Response('nope', { status: 403 })
+    },
+  })
+  assert.equal(response.status, 200)
+  assert.equal(fetched, false)
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), local)
+})
+
+test('middleware falls back to upstream when local reference is missing', async () => {
+  delete process.env.STAGEBENCH_PASSWORD
+
+  const bytes = new Uint8Array([0xff, 0xd8, 0x02, 0xd9])
+  const response = await handleRequest(request('/reference/nord-stage-4.jpg'), {
+    readLocal: async () => null,
+    fetch: async (url) => {
+      assert.match(String(url), /NS4_HA88_TopDown/)
+      return new Response(bytes, { status: 200 })
+    },
+  })
+  assert.equal(response.status, 200)
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes)
+})
+
+test('middleware returns 502 when local and upstream both miss', async () => {
+  delete process.env.STAGEBENCH_PASSWORD
+
+  const response = await handleRequest(request('/reference/nord-stage-4-compact.jpg'), {
+    readLocal: async () => null,
+    fetch: async () => new Response('gone', { status: 403 }),
+  })
+  assert.equal(response.status, 502)
+  assert.match(await response.text(), /Reference photo unavailable/)
 })
 
 test('middleware rejects unknown /reference filenames', async () => {

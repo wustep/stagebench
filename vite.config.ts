@@ -7,8 +7,8 @@ import { secretBridgePlugin } from './bench/lib/vite-secret-bridge.mjs'
 /** Dev-server bridge to the repo-root reference/ photos (gitignored, fetched
  *  via `pnpm bench fetch`, never redistributed). Lets the artifact study
  *  pages under public/artifacts/ overlay /reference/<photo>.jpg while
- *  developing; production serves the same route from middleware.js after the
- *  /secret unlock, so published builds never bundle Nord's product shots. */
+ *  developing; production serves the same route from middleware.js (local
+ *  public/reference/ first, then Nord CDN proxy). */
 const referencePhotos = (): Plugin => ({
   name: 'stagebench-reference-photos',
   configureServer(server) {
