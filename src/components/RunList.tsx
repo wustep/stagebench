@@ -98,7 +98,7 @@ export const RunList = memo(function RunList({
                   </button>
                 )}
               </span>
-              <p>{resultClass.description}</p>
+              {resultClass.description ? <p>{resultClass.description}</p> : null}
             </header>
             <div aria-hidden="true" className="tower-head" style={sectorsStyle}>
               <span>Pos</span>
