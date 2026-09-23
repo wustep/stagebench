@@ -1,0 +1,263 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-6-luna",
+  "stage": 1,
+  "evaluator": "stagebench blind evaluator (Phase 1)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-22T22:05:00Z",
+  "summary": "Phase 1 builds a real instrument, then loses a third of its panel to one layout bug. Geometry at 1440x900 is near-exact: width fraction 0.9400, aspect 3.09514 (spec 3.0951), deck/keybed 0.5398/0.4602, all six section fractions within 0.00001 of spec. Keybed is exact: 73 keys, 43 white, 30 black, every key inside the keybed, black-key height fraction 0.6099 (target 0.61). All five reference colours match within deltaE 1.21. The defect: .instrument-section sets overflow:hidden on a 200.25px band whose content is taller, so 30 of 107 controls never render and 10 more are part-clipped; 32 fail pointer hit-testing. Piano timbre and detail switches, Store/Split, the three morph buttons, both synth envelopes, LFO/arp, compressor, reverb and layer focus are gone. At 390x844 it is 72 of 107. The visual audit claims these controls 'remain in the rendered chassis'; they do not, and no test measures layout. Audio and input are strong: pointer, independent multi-touch, computer keys and Web MIDI share one lifecycle; velocity 15 to 110 moves peak RMS 0.018 to 0.224; sustain, stealing and blur/disconnect cleanup all verified; Master Level honestly changes nothing (0.2009 vs 0.1989).",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Measured in the served build/ at 1440x900 with an AnalyserNode tapped onto the node that connects to ctx.destination: a pointer press on [data-key-id=key-c4] produced peak RMS 0.18846 against a silent baseline, and RMS returned to 0.000 after release.",
+            "Level, decay and release behave: MIDI note-on velocity 15 gave peak RMS 0.01796 and velocity 110 gave 0.22405 (12.5x); a note held under CC64 sustain still read RMS 0.07143 350 ms after its note-off, and fell to 3.3e-06 within 300 ms of the pedal rising.",
+            "Voice construction is one dependable voice, not a rich one: artifact/src/audio.ts renderPianoWave sums five inharmonic sine partials [1, 0.43, 0.19, 0.075, 0.028] under a fixed exp(-2.8t) envelope into a 2.2 s buffer per pitch, so timbre does not change with velocity and there is no stereo, detune or release sample - simplification a pianist would hear, which is why this is not a 4."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "artifact/IMPLEMENTATION_DETAILS.json declares strategy 'Locally generated additive piano synthesis rendered into Web Audio buffers; no network or recorded sample assets are used', with generatedSources[0].files = [] and sampleSources = []. Exercising the build confirms it: the whole published build is three files (build/index.html, assets/index-C1brDSye.js, assets/index-BNdDljEc.css) with no audio asset of any kind.",
+            "Observed in the running build: loading the page and playing notes issued exactly 3 network requests, all to the local static server and none external - the tone is created at runtime by context.createBuffer + renderPianoWave, so nothing recorded is being passed off as generated or vice versa.",
+            "The declaration is specific enough to check and matches the code path actually used: WebAudioPiano.getBuffer() in artifact/src/audio.ts fills a context buffer from renderPianoWave, and the audible chain is bufferSource -> per-voice gain -> master gain (0.72) -> destination, matching the note 'routed through one master gain node'."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All three paths reach one note lifecycle in the served build. Pointer: mouse down on key-c4 set aria-pressed=true and peak RMS 0.18846, mouse up set aria-pressed=false. Computer keyboard: KeyH set [data-midi=60] aria-pressed=true with peak RMS 0.16301 and released on keyup.",
+            "Web MIDI through a stubbed navigator.requestMIDIAccess: after clicking 'Connect MIDI' the status read 'MIDI connected'; 0x90/64/110 set [data-midi=64] aria-pressed=true and 0x80/64/0 cleared it; 0xB0/64/127 drove the UI sustain button to aria-pressed=true; a statechange disconnect returned status to 'MIDI disconnected' and released the held note (0 keys pressed).",
+            "Independent multi-touch verified with CDP Input.dispatchTouchEvent at 1440x900: two simultaneous touch points on key-c4 and key-g4 gave 2 keys pressed and peak RMS 0.21921; lifting one left exactly 1 pressed, lifting both left 0. Key repeat is suppressed - 5 synthetic keydown events with repeat:true while KeyH was held left the pressed count at 1."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Velocity, sustain and cleanup all measured in the running build: velocity 15 -> peak RMS 0.01796 vs velocity 110 -> 0.22405; CC64 down held a released note at RMS 0.07143 and CC64 up dropped it to 3.3e-06; dispatching window 'blur' with 40 notes held took the pressed-key count to 0 and RMS to 0.000; a MIDI statechange disconnect released that port's notes (0 pressed).",
+            "Voice stealing is deterministic and bounded: NoteLifecycle in artifact/src/audio.ts sorts by a monotonically increasing 'order' and evicts the oldest at maxVoices=32, and WebAudioPiano repeats the cap on its own voice map. Firing 40 concurrent note-ons produced peak RMS 0.60313 - loud but below clipping - rather than an unbounded sum.",
+            "Unmount cleanup is real rather than claimed: the App effect teardown calls lifecycle.allNotesOff() and output.dispose(), and stopVoice ramps each gain to 0.0001 then schedules source.stop with an onended that disconnects both nodes, so nodes are not left attached after release. Minor divergence: at 40 held notes the panel shows 40 pressed keys while only 32 voices exist."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "The decorative boundary itself is honest and measured: setting [data-control-id=performance-master-level] input to 0 and replaying the same MIDI note gave peak RMS 0.19893 against 0.20090 at its default 72 - the knob moves and reports state but provably does not touch the audio path, and the page states 'Panel controls are presentation-only in Phase 1.'",
+            "Controls do move and report: the master knob went 72 -> 77 on five ArrowRight presses with style '--control-rotation: 74.52deg; --control-position: 23%'; organ-model-vox toggled aria-pressed false -> true; driving organ-drawbar-1 to 100 lit 8 of 8 .drawbar-leds i.lit and updated its .control-value to '100'.",
+            "But 30 of 107 controls are not visibly inert - they are invisible. artifact/src/styles.css gives .instrument-section overflow:hidden on a 200.25px-tall band, and those 30 controls lay out below it (e.g. synth-amp-attack top=462 vs section bottom=432, visible fraction 0.00). They still take keyboard focus and announce values, so a screen-reader user is told about controls no sighted pointer user can see or operate."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "The inventory is complete in the DOM: 107 controls with unique stable data-control-id values across the six sections (32 knob, 55 button, 9 drawbar, 5 fader, 4 encoder, 2 wheel), covering every Phase 1 landmark including nine drawbars, six piano type selectors, eight program buttons, three morph assigns and the two OLED locations - 0 of 107 missing an accessible name or value.",
+            "But 'exists on the panel and is identifiable' fails for a third of it. Measured at 1440x900 unscrolled, 30 controls have a visible fraction of exactly 0.00 inside their own section and 10 more are part-clipped (piano-model-selector 0.40, program-live-mode 0.48, synth-filter-* 0.71, effects-delay-* 0.10). Entire required blocks are unreachable by eye: piano timbre and the six piano-detail switches, Store and Split, all three morph buttons, both synth envelopes, LFO/arpeggiator, compressor, reverb and layer focus.",
+            "The clipping is structural, not incidental: the computed-style chain for synth-amp-attack is .hardware-control (visible) -> .control-group (visible) -> .instrument-section overflow:hidden with box [232, 432] -> .deck-sections -> .instrument overflow:hidden, and the control's own box is [462, 497]."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All four Phase 1 piano feature IDs are exercised in the running build, not just in tests. piano.basic-note-lifecycle: note on/off/overlap/release verified with RMS 0.18846 -> 0.000. piano.basic-inputs: pointer, two-finger touch, computer keys and MIDI note/velocity/CC64 plus a denied/disconnected MIDI path all verified. piano.basic-sustain-polyphony: CC64 hold 0.07143, 40-voice peak 0.60313 with deterministic oldest-first stealing. piano.basic-status-cleanup: status read 'Ready - generated piano synthesis' and blur/disconnect took every voice to 0.",
+            "artifact/tests/feature-matrix.json maps all 11 required Phase 1 IDs to real, non-empty test files (src/hardware.test.ts, src/audio.test.ts, src/App.test.tsx), and inputs/verification.json records coveredFeatures 11 of requiredFeatures 11 with test, typecheck, lint and build all passing.",
+            "The audio tests are relationship-based rather than state-only, as the task requires: artifact/src/audio.test.ts asserts a non-silent waveform, that output level rises with velocity, that distinct pitches differ, that the release tail decays, and that voice/identity counts return to baseline after allNotesOff."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "What is declared is accurate: artifact/evidence/stage1-visual-audit.md correctly states the voice 'is original generated additive synthesis, not a recorded sample set' (confirmed - no audio assets in build/, 3 local requests total), that 'Program and Synth are the only primary OLED locations' (confirmed - exactly 2 elements carry data-primary-display), and that it does not claim screenshot-derived measurements or a browser-console pass. Its CSS figures check out: claimed 1353.6px wide and about 437.0px tall vs measured 1353.59 x 437.33.",
+            "But the largest gap in the artifact is not declared, and the audit states its opposite. Under 'Corrections and known deviations' it says of narrow widths 'They remain in the rendered chassis and retain full accessible names.' Measured: 30 of 107 controls have visible fraction 0.00 inside their section at 1440x900 and 72 of 107 at 390x844. Nothing anywhere in IMPLEMENTATION_DETAILS.json or the audit mentions that these controls do not render.",
+            "The test that should have caught it asserts nothing about layout. artifact/src/App.test.tsx line 136, 'keeps the chassis complete and fits the two required viewport proportions without a marketing hero', only checks that h1 is absent and that .instrument, .keybed, .instrument-top-rail and .deck-front-rail exist in jsdom - so regression.chassis is mapped to a test that cannot measure the regression it names."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "critical",
+      "criterion": "hardwareInventory",
+      "title": "overflow:hidden on each deck section clips 30 of 107 controls out of the instrument at 1440x900",
+      "detail": ".instrument-section is a 200.25px-tall band with overflow:hidden, but several sections lay out more content than that. Measured unscrolled at 1440x900, 30 controls have a visible fraction of exactly 0.00 inside their own section and 10 more are partly clipped; 32 of 107 fail a 5x5 document.elementFromPoint hit-test. Whole required landmark groups vanish: piano timbre, the six piano-detail switches, Store and Split, the three morph assign buttons, the amp and mod envelopes, LFO and arpeggiator, compressor, reverb and layer focus. Example chain: synth-amp-attack box [462, 497] inside a section whose box is [232, 432]."
+    },
+    {
+      "severity": "major",
+      "criterion": "narrowRetention",
+      "title": "At 390x844 only 30 of 107 controls are reachable and 72 render not at all",
+      "detail": "The silhouette survives the narrow profile intact (378x122.125, aspect 3.0952, width fraction 0.9692, deck/keybed 0.5392/0.4608, all 73 keys in one row, no horizontal overflow), but the same section clipping removes 72 of 107 controls and leaves only 30 pointer-reachable. White keys are 8.56px wide. The instrument stays recognizable; the panel stops being usable."
+    },
+    {
+      "severity": "major",
+      "criterion": "declaredGapAccuracy",
+      "title": "The visual audit asserts the clipped controls 'remain in the rendered chassis'",
+      "detail": "artifact/evidence/stage1-visual-audit.md, under 'Corrections and known deviations', says 'Controls are intentionally dense at narrow widths because the instrument retains its hardware aspect ratio. They remain in the rendered chassis and retain full accessible names.' The accessible-names half is true; the rendering half is contradicted by measurement (0.00 visible fraction for 30 controls at desktop, 72 at narrow). The honesty contract requires evidence not to claim behavior the artifact does not have."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "regression.chassis maps to a test with no layout or overflow assertions",
+      "detail": "artifact/src/App.test.tsx:136 checks only for the absence of an h1 and the presence of .instrument, .keybed, .instrument-top-rail and .deck-front-rail in jsdom. The feature ID it satisfies is specified as 'no marketing hero, detached rails, missing keys, overflow, or clipped chassis at 1440x900 and 390x844'. Nothing in the suite measures a box, so the clipping regression passes every gate in inputs/verification.json."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Organ drawbars render as 25x25 squares rather than drawbar stems",
+      "detail": "The nine drawbars are present in the organ section with 8-segment LED ladders, but their border boxes measure 25.17 x 25.1 px, a height/width ratio of 1.00 against hardware drawbars that are several times taller than wide. Under the spec's own forbiddenDetection vocabulary a drawbar-like control is 'at least 3x taller than it is wide', and none of the nine qualifies. The five layer faders are similar (42.5 x 45.0, ratio 1.06) with no visible travel slot."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Per-control legends are illegible or ellipsized at rendered size",
+      "detail": "In the 1440x900 capture the drawbar legends truncate to 'Organ d...' and knob legends such as 'Filter Cutoff' and 'Oscillator Shape' render at roughly 3-4px and cannot be read at 1:1. Group headings (ORGAN, DRAWBARS, PERCUSSION, OSCILLATOR, FILTER, EFFECT 1) are legible, so the section structure reads correctly while the silkscreen does not."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "Both OLEDs show fixed strings instead of live values",
+      "detail": "The program OLED renders the constant 'STAGE 4 - 73 / PHASE 1 / DECORATIVE DISPLAY' and the synth OLED 'SYNTH / INACTIVE'. Turning the program dial, pressing program buttons or moving any knob leaves both unchanged. This is honest for a phase where panel controls are decorative and both are labelled 'decorative in Phase 1', but it means neither display reads a live value."
+    },
+    {
+      "severity": "minor",
+      "criterion": "chassisGeometry",
+      "title": "Top-rail legends are out of order against the sections beneath them",
+      "detail": "The six .instrument-top-rail spans read PROGRAM, ORGAN, PIANO, PERFORMANCE, SYNTH, LAYER EFFECTS while the sections below them are, in DOM and visual order, performance, organ, piano, program, synth, effects. The rail therefore prints PROGRAM above the red performance band that carries Master Level and the rotary speaker, and PERFORMANCE above the program band that carries the OLED and program dial. The rail is aria-hidden, so this is visual only and does not affect the measured section fractions."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "Held keys past the 32-voice cap stay lit with no voice behind them",
+      "detail": "Firing 40 concurrent MIDI note-ons leaves 40 keys at aria-pressed=true while NoteLifecycle's maxVoices is 32, so eight keys show pressed with their voice already stolen. Defensible as key-state rather than voice-state, but the panel is reporting something the engine is not doing."
+    },
+    {
+      "severity": "minor",
+      "criterion": "hardwareInventory",
+      "title": "Synth band satisfies the spec's 'uniform repeated knob matrix' rule",
+      "detail": "The synth section's filter row and amp-envelope row form a 4x2 block of identical knobs: synth-filter-cutoff/resonance/drive/envelope and synth-amp-attack/decay/sustain/release all measure 76.52 x 35.75 px, on column centres 838.7/917.2/995.8/1074.3 (pitches 78.5/78.6/78.5) and two row centres 425.1/479.5 (pitch 54.4). That meets forbiddenDetection's 'uniform repeated knob matrix' rule literally - at least 8 controls whose widths and heights are within 5% of their medians and whose centres form a regular grid. It is counted once, for the synth section."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage1",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.53978,
+          "keybedFraction": 0.46022,
+          "widthFraction": 0.94,
+          "aspectRatio": 3.09514,
+          "sectionFractionMaxDeviation": 0.00001
+        },
+        "evidence": [
+          "Measured with getBoundingClientRect on the served build/ at 1440x900, unscrolled, no vertical page scroll (scrollHeight 900 = innerHeight). .instrument box: x 43.203, y 213.828, width 1353.594, height 437.328. widthFraction = 1353.594/1440 = 0.94000 (spec range 0.88-0.97); aspectRatio = 1353.594/437.328 = 3.09514 against the variant's measured 3.0951.",
+          "Vertical allocation taken from the same boxes: the keybed begins at y 449.891, so deck = (449.891-213.828)/437.328 = 0.53978 and keybed = (651.156-449.891)/437.328 = 0.46022, against 0.54/0.46 +/-0.025. The 54% deck is built as 4% top rail + 46% section surface + 4% front rail (topRail height 17.406, sections 200.25, frontRail 17.406).",
+          "Six section widths measured against the 1351.594px deck extent, in spec order: performance 189.219 = 0.14000 (target 0.14), organ 270.313 = 0.20000 (0.20), piano 114.875 = 0.08499 (0.085), program 168.938 = 0.12499 (0.125), synth 337.891 = 0.25000 (0.25), effects 270.313 = 0.20000 (0.20). Worst deviation 0.00001. Measured instead against the full 1353.594px instrument width the worst deviation is 0.00038 - still far inside the 0.012 tolerance either way."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 24,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 75,
+          "controlsTotal": 107,
+          "forbiddenPresent": 1
+        },
+        "evidence": [
+          "requiredLandmarksTotal 33 is the sum of the sectionLandmarks 'required' arrays in inputs/specs/nord-stage-4.visual.json (performance 5, organ 4, piano 5, program 7, synth 6, effects 6). 24 are rendered inside their own section. The 9 that are not rendered at all are piano 'timbre controls' and 'piano-detail switches', program 'store and split buttons' and 'three morph assign buttons', synth 'envelope controls' and 'LFO and arpeggiator controls', and effects 'compressor', 'reverb' and 'layer focus controls' - every control in each of those groups measured a visible fraction of exactly 0.00 inside its section at 1440x900, because .instrument-section is overflow:hidden with box [232, 432] while the controls lay out at y 455-606. This is clipping, not z-order burial, so it is an inventory-and-placement failure rather than a reachability-only one.",
+          "controlsReachable measured exactly as the rubric specifies: for each of the 107 [data-control-id] elements, a 5x5 grid across its border box hit-tested with document.elementFromPoint at 1440x900 with the page unscrolled, counting the control only if a point resolved to it or a descendant. No framework click helper was used. Result 75 of 107; the 32 failures are listed in scratch/reach.py output and all report being blocked by button.piano-key (two also by div.deck-front-rail), i.e. they lay out over the keybed after being clipped out of the deck.",
+          "forbiddenPresent = 1, applying each forbiddenDetection rule literally against the rendered DOM at 1440x900 unscrolled. The one occurrence is the synth band's 'uniform repeated knob matrix'. The rule reads 'At least 8 controls in the section whose border-box widths and heights all fall within 5% of their medians and whose centres form a regular grid (row and column pitches each within 5% of their medians)'. synth-filter-cutoff/resonance/drive/envelope plus synth-amp-attack/decay/sustain/release are exactly such a set: 8 controls at 76.516-76.531 x 35.750 (width deviation 0.02% of median, height deviation 0%), four column centres 838.7/917.2/995.8/1074.3 with pitches 78.5/78.6/78.5 (0.13% of median) and one row pitch of 54.4. The rule is existential, not whole-section: the effects rule adds the clause 'The section's controls form one such uniform grid', which would be redundant if the synth rule already required the whole section. Counted once for the synth section, per 'count a descriptor once per section'. The other eight descriptors evaluate to zero. Exactly two displayElements exist, one per section: .oled-screen.program-oled 129.6x28.4 (the only display in program, so 'multiple primary displays' fails) and .oled-screen.synth-oled 109.1x20.4 (width fraction 0.323, under the 0.5 threshold for 'wide display spanning the section'). A scan for elements whose class, id, data attribute or accessible name contains oled/display/screen returned 0 in the performance, organ, piano and effects bands, so neither 'OLED display' rule fires. 'full dark inset plate': the performance band is not .inset-panel and samples as chassis red, so no dark plate covers 0.8 of it. 'generic equal-width control grid' (organ): the only equal-width set of 6 or more is the 9 drawbars at 25.16-25.17px, all on one row; the 36.4px controls sit on two rows of 4 and 2, so no >=2 rows with equal row counts exist. 'drawbar bank' (piano): 0 piano controls are 3x taller than wide. 'single undifferentiated control grid' (effects): 12 distinct row bands with bordered .control-group boxes (group-effect-1 and group-effect-2 each carry 1px borders and a distinct background), so it is not one undifferentiated grid."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 73,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.60994
+        },
+        "evidence": [
+          "Counted from the rendered build at 1440x900: 73 elements carry data-key-id, 43 with data-key-color=white and 30 black, spanning MIDI 40 to 112 (E2 to E8) - the exact 73-key E-to-E split in inputs/specs/nord-stage-4.variants.json. All 73 key boxes fall inside the .keybed box (x 44.203-1395.797, y 449.891-650.141) with zero outliers at a 0.5px tolerance, and all 73 also fall inside the tighter .keybed-inner box.",
+          "Key geometry measured from the same boxes: white keys 30.938 x 192.078, black keys 20.109 x 117.156. blackKeyHeightFraction = 117.156/192.078 = 0.60994 against the variant target 0.61 +/-0.03, and black/white width ratio 0.6500. White keys tile exactly 1/43 of the keybed width and black keys sit on the semitone boundaries.",
+          "Pressed state observed live rather than inferred: pointer down on key-c4, KeyH on the computer keyboard and MIDI 0x90/64/110 each set aria-pressed=true on the matching key and cleared it on release, and two simultaneous CDP touch points lit exactly two keys and released independently."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "Sampled the rendered 1440x900 screenshot of the served build, cropped to the instrument (x 44-1397, y 214-651), kept only colours covering at least 0.05% of that area to exclude anti-aliasing fringes (356 surface colours), and took the minimum CIE76 deltaE to each of the five specs referenceColors in CIE L*a*b*.",
+          "All five land far inside the deltaE 12 threshold: chassisMid #851a25 -> #851a25 dE 0.00 (0.34% of area); chassisDark #5a0c13 -> #570b12 dE 1.21 (0.52%); panelBlueGray #3c424d -> #3d424c dE 0.74 (0.42%); keyBlack #0b0b0b -> #090a0a dE 0.44 (0.52%); keyWhite #dcdcdc -> #dddddd dE 0.35 (0.41%). Worst of the five is 1.21."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "Materials and colour read correctly: red chassis with blue-gray inset plates carrying a red perimeter on organ, piano, synth and effects, exposed red chassis on performance and program, and all five reference colours within deltaE 1.21 of spec. LED detail is real - each of the nine drawbars carries an 8-segment ladder and driving organ-drawbar-1 to 100 lit 8 of 8 .drawbar-leds i.lit; every button carries a .button-lamp that follows aria-pressed. Both OLEDs are treated as displays, teal on near-black with a multi-line readout.",
+          "Caps and hardware forms are wrong for two control families. The nine organ drawbars measure 25.17 x 25.1px, a height/width ratio of 1.00 where hardware drawbars are tall stems, and the five layer faders measure 42.5 x 45.0 (ratio 1.06) with no visible travel slot - the spec's own vocabulary calls a drawbar-like control one at least 3x taller than wide, and none of the 14 qualifies. Knob caps are better: dark, rounded, with a white pointer that rotates with value.",
+          "Silkscreen is largely unreadable at 1:1 in the 1440x900 capture. Drawbar legends truncate to 'Organ d...' with an ellipsis; knob legends such as 'Filter Cutoff', 'Oscillator Shape' and 'Equalizer Treble' render at roughly 3-4px. Group headings (DRAWBARS, ORGAN MODEL, PERCUSSION, VIBRATO, OSCILLATOR, FILTER, EFFECT 1, AMP SIMULATOR AND EQ) and button legends (PERC, SOFT, 3RD, FAST, GRAN, UPRI, ELEC) are legible, so structure reads while detail does not. Combined with 9 landmark groups clipped out of the panel entirely, this sits at the 'required landmarks absent' anchor rather than 'simplified in ways a player would notice'."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "Control positions do track their parameters, driven and observed: five ArrowRight presses on performance-master-level moved it 72 -> 77 and rewrote its inline style to '--control-rotation: 74.52deg; --control-position: 23%'; organ-model-vox toggled aria-pressed false -> true with its lamp; organ-drawbar-1 driven to 100 lit 8 of 8 ladder segments and updated its .control-value text to '100'. All 107 controls expose a name and a value, 0 missing either.",
+          "Live instrument state is shown where it exists in this phase: the keybed reflects notes from pointer, touch, computer keys and MIDI; the footer sustain button went to aria-pressed=true on MIDI CC64 127 and back on 0; the status line read 'Ready - generated piano synthesis' and the MIDI line tracked disconnected -> connected -> disconnected across a stubbed statechange.",
+          "But neither display reads a live value. The program OLED holds the constant 'STAGE 4 - 73 / PHASE 1 / DECORATIVE DISPLAY' and the synth OLED 'SYNTH / INACTIVE' through every control change - turning the program dial or pressing program buttons changes nothing on screen. And 30 controls' state changes are invisible: they update aria-pressed and their transform while being clipped out of the section (visible fraction 0.00), so a third of the panel reports state nobody can see."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "The instrument stays recognizable at 390x844: measured .instrument 378 x 122.125, aspect 3.0952, width fraction 0.9692, deck/keybed 0.5392/0.4608, all six sections present in order, all 73 keys in a single row inside the chassis, document.scrollWidth 390 = innerWidth so there is no horizontal overflow and no clipped chassis edge.",
+          "It stops being usable. The same overflow:hidden section band removes far more at this width: 72 of 107 controls measure a visible fraction of 0.00 inside their section and 10 more are partial, and a 5x5 elementFromPoint hit-test finds only 30 of 107 reachable. White keys are 8.56px wide, so the keybed is playable only barely.",
+          "The artifact's own visual audit anticipated density at this width - 'Controls are intentionally dense at narrow widths because the instrument retains its hardware aspect ratio' - but its next sentence, 'They remain in the rendered chassis', is contradicted by the 72 zero-visibility measurements. Retaining the silhouette while shedding two-thirds of the controls is correct structure with materially incomplete behavior."
+        ]
+      }
+    ]
+  }
+}
