@@ -1,0 +1,41 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "Generated buffers (honest synthesis), no recordings. One basic piano voice: at page load the browser synthesizes 25 mono root tones (every 3 semitones, E1-E7) into AudioBuffers with src/audio/pianoTone.ts, and each note plays the nearest root through AudioBufferSourceNode (playbackRate within +/-1 semitone) -> BiquadFilter low-pass (velocity brightness) -> GainNode (velocity level + release envelope) -> master GainNode -> AudioContext.destination. While tones are still generating, or if generation fails, a clearly labelled live OscillatorNode (triangle) fallback plays through the same filter/gain/master chain.",
+    "generatedSources": [
+      {
+        "name": "Basic piano tone (generated)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/pianoTone.ts renderPianoTone()",
+        "method": "Additive synthesis of up to 28 inharmonic string partials (stiff-string stretch, hammer-position spectral weighting), two-stage prompt/aftersound exponential decay per partial, two strings detuned by 0.9 cents from E2 upward, and a 12 ms low-passed deterministic noise hammer transient (mulberry32 PRNG seeded per note). Normalized to 0.8 peak with 2 ms attack and 60 ms tail fades.",
+        "rendering": "Rendered in the browser at load time at 32 kHz; not stored as files and not derived from any recording.",
+        "roots": "MIDI 28, 31, ... 97, 100 (25 roots)",
+        "phase1Use": "The only piano voice in Phase 1.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Fallback tone (live synthesis)",
+        "kind": "live-oscillator",
+        "generator": "src/audio/pianoAudio.ts startVoice() fallback branch",
+        "method": "Web Audio triangle OscillatorNode with a decaying gain; used only while the generated tones are loading or after generation fails. The status panel and Program OLED label it 'Fallback tone'.",
+        "license": "Original code in this repository; no third-party audio."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "No recorded samples are bundled or fetched in Phase 1; sampleSources is intentionally empty.",
+      "The UI states the truth: 'The piano is a synthesized tone generated in the browser, not a recording.'",
+      "Velocity scales both level (velocityGain) and brightness (velocityCutoff). Sustain comes from the keyboard Space bar, the on-screen sustain toggle, and MIDI CC64.",
+      "Polyphony is 24 voices with deterministic stealing (releasing, then oldest sustained, then oldest held).",
+      "Every panel knob, button, fader, drawbar, wheel and stick is decorative in Phase 1: presentation state only, connected to no audio node.",
+      "Tests render the real generated buffers and gain/filter automation with an in-repo sample-accurate Web Audio simulator (src/testing/simAudio.ts); no audio device, network or MIDI device is needed."
+    ]
+  },
+  "boundaries": {
+    "injectable": ["AudioContext factory", "requestMIDIAccess", "keyboard/blur event target", "document visibility", "event-loop yield used during tone generation"],
+    "definedIn": "src/runtime.ts"
+  }
+}

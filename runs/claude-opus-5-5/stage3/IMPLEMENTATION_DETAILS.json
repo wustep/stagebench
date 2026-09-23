@@ -1,0 +1,1864 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 3,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "One AudioContext for every engine. LayeredEngine routes each physical key to the seven layers (Organ A/B, Piano A/B, Synth A/B/C) by section on/layer enable, split zone and crossfade gain, then octave shift and Transpose; each layer owns its voices. Piano voices are AudioBufferSourceNode(s) playing the nearest recorded zone (or a generated buffer for Clav/Digital/Misc) -> layer bus -> Timbre EQ (+ String Res) -> its own chain. Organ voices are live OscillatorNodes (sine / square / custom PeriodicWaves per model) -> per-layer Vox tone mix -> vibrato/chorus scanner -> layer level -> ONE shared organ chain. Synth voices are live OscillatorNodes (native and PeriodicWave waveforms), a looped generated noise buffer, ConstantSource envelopes, drive and two biquads -> layer bus -> arp gate -> its own chain -> layer level. Every chain is Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ -> Compressor -> Reverb, then (direct | shared Rotary: Organ via the Rotary ORGAN button, piano/synth via To Rotary) -> master gain (Master Level) -> limiter -> ceiling -> the single destination.",
+    "sampleSources": [
+      {
+        "name": "Salamander Grand — Salamander Grand Piano V3",
+        "pianoModel": "Salamander Grand",
+        "kind": "recorded-samples",
+        "recordedInstrument": "Yamaha C5 grand piano (two AKG C414, AB pair)",
+        "author": "Alexander Holm",
+        "source": "https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html",
+        "download": "https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz",
+        "license": "CC-BY-3.0",
+        "licenseUrl": "http://creativecommons.org/licenses/by/3.0/",
+        "attribution": "Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0, https://creativecommons.org/licenses/by/3.0/). Samples converted to 24 kHz mono, trimmed and faded.",
+        "licenseFile": "public/samples/licenses/grand-LICENSE.txt",
+        "files": [
+          "public/samples/grand.nspk",
+          "public/samples/licenses/grand-LICENSE.txt"
+        ],
+        "format": "NSPK v1 container: JSON header + block IMA-ADPCM mono, 24000 Hz, 1017-sample blocks (built by scripts/build-sample-packs.mjs; decoded in src/audio/samplePack.ts)",
+        "processing": "mono (stereo sources mixed (L+R)/2), fine-tune (fineTuneAppliedCents) via rate change, soxr resample to 24000 Hz, 16-bit PCM; onset: first sample above max(-50 dB re file peak, 2.5x lead-in noise) walking back from the -30 dB crossing, capped at 1.5 ms before that crossing, minus 0.5 ms pre-roll with 1 ms raised-cosine fade-in; max 4.0 s; linear fade-out over final 0.6 s (or half the length if shorter); no per-file normalization; instrumentGain applied uniformly",
+        "rootNotes": [
+          21,
+          24,
+          27,
+          30,
+          33,
+          36,
+          39,
+          42,
+          45,
+          48,
+          51,
+          54,
+          57,
+          60,
+          63,
+          66,
+          69,
+          72,
+          75,
+          78,
+          81,
+          84,
+          87,
+          90,
+          93,
+          96,
+          99,
+          102,
+          105,
+          108
+        ],
+        "velocityLayers": {
+          "v1": "1-42",
+          "v2": "43-85",
+          "v3": "86-127"
+        },
+        "zones": [
+          {
+            "root": 21,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A0v4.wav"
+          },
+          {
+            "root": 24,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C1v4.wav"
+          },
+          {
+            "root": 27,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#1v4.wav"
+          },
+          {
+            "root": 30,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#1v4.wav"
+          },
+          {
+            "root": 33,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A1v4.wav"
+          },
+          {
+            "root": 36,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C2v4.wav"
+          },
+          {
+            "root": 39,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#2v4.wav"
+          },
+          {
+            "root": 42,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#2v4.wav"
+          },
+          {
+            "root": 45,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A2v4.wav"
+          },
+          {
+            "root": 48,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C3v4.wav"
+          },
+          {
+            "root": 51,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#3v4.wav"
+          },
+          {
+            "root": 54,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#3v4.wav"
+          },
+          {
+            "root": 57,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A3v4.wav"
+          },
+          {
+            "root": 60,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C4v4.wav"
+          },
+          {
+            "root": 63,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#4v4.wav"
+          },
+          {
+            "root": 66,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#4v4.wav"
+          },
+          {
+            "root": 69,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A4v4.wav"
+          },
+          {
+            "root": 72,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C5v4.wav"
+          },
+          {
+            "root": 75,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#5v4.wav"
+          },
+          {
+            "root": 78,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#5v4.wav"
+          },
+          {
+            "root": 81,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A5v4.wav"
+          },
+          {
+            "root": 84,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C6v4.wav"
+          },
+          {
+            "root": 87,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#6v4.wav"
+          },
+          {
+            "root": 90,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#6v4.wav"
+          },
+          {
+            "root": 93,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A6v4.wav"
+          },
+          {
+            "root": 96,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C7v4.wav"
+          },
+          {
+            "root": 99,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#7v4.wav"
+          },
+          {
+            "root": 102,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#7v4.wav"
+          },
+          {
+            "root": 105,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 94309,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A7v4.wav"
+          },
+          {
+            "root": 108,
+            "layer": "v1",
+            "velocity": "1-42",
+            "samples": 71219,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C8v4.wav"
+          },
+          {
+            "root": 21,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A0v8.wav"
+          },
+          {
+            "root": 24,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C1v8.wav"
+          },
+          {
+            "root": 27,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#1v8.wav"
+          },
+          {
+            "root": 30,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#1v8.wav"
+          },
+          {
+            "root": 33,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A1v8.wav"
+          },
+          {
+            "root": 36,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C2v8.wav"
+          },
+          {
+            "root": 39,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#2v8.wav"
+          },
+          {
+            "root": 42,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#2v8.wav"
+          },
+          {
+            "root": 45,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A2v8.wav"
+          },
+          {
+            "root": 48,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C3v8.wav"
+          },
+          {
+            "root": 51,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#3v8.wav"
+          },
+          {
+            "root": 54,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#3v8.wav"
+          },
+          {
+            "root": 57,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A3v8.wav"
+          },
+          {
+            "root": 60,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C4v8.wav"
+          },
+          {
+            "root": 63,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#4v8.wav"
+          },
+          {
+            "root": 66,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#4v8.wav"
+          },
+          {
+            "root": 69,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A4v8.wav"
+          },
+          {
+            "root": 72,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C5v8.wav"
+          },
+          {
+            "root": 75,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#5v8.wav"
+          },
+          {
+            "root": 78,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#5v8.wav"
+          },
+          {
+            "root": 81,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A5v8.wav"
+          },
+          {
+            "root": 84,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C6v8.wav"
+          },
+          {
+            "root": 87,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#6v8.wav"
+          },
+          {
+            "root": 90,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#6v8.wav"
+          },
+          {
+            "root": 93,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A6v8.wav"
+          },
+          {
+            "root": 96,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C7v8.wav"
+          },
+          {
+            "root": 99,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#7v8.wav"
+          },
+          {
+            "root": 102,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#7v8.wav"
+          },
+          {
+            "root": 105,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A7v8.wav"
+          },
+          {
+            "root": 108,
+            "layer": "v2",
+            "velocity": "43-85",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C8v8.wav"
+          },
+          {
+            "root": 21,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A0v15.wav"
+          },
+          {
+            "root": 24,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C1v15.wav"
+          },
+          {
+            "root": 27,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#1v15.wav"
+          },
+          {
+            "root": 30,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#1v15.wav"
+          },
+          {
+            "root": 33,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A1v15.wav"
+          },
+          {
+            "root": 36,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C2v15.wav"
+          },
+          {
+            "root": 39,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#2v15.wav"
+          },
+          {
+            "root": 42,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#2v15.wav"
+          },
+          {
+            "root": 45,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A2v15.wav"
+          },
+          {
+            "root": 48,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C3v15.wav"
+          },
+          {
+            "root": 51,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#3v15.wav"
+          },
+          {
+            "root": 54,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#3v15.wav"
+          },
+          {
+            "root": 57,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A3v15.wav"
+          },
+          {
+            "root": 60,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C4v15.wav"
+          },
+          {
+            "root": 63,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#4v15.wav"
+          },
+          {
+            "root": 66,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#4v15.wav"
+          },
+          {
+            "root": 69,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A4v15.wav"
+          },
+          {
+            "root": 72,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C5v15.wav"
+          },
+          {
+            "root": 75,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#5v15.wav"
+          },
+          {
+            "root": 78,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#5v15.wav"
+          },
+          {
+            "root": 81,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A5v15.wav"
+          },
+          {
+            "root": 84,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C6v15.wav"
+          },
+          {
+            "root": 87,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#6v15.wav"
+          },
+          {
+            "root": 90,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#6v15.wav"
+          },
+          {
+            "root": 93,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A6v15.wav"
+          },
+          {
+            "root": 96,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C7v15.wav"
+          },
+          {
+            "root": 99,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/D#7v15.wav"
+          },
+          {
+            "root": 102,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/F#7v15.wav"
+          },
+          {
+            "root": 105,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 86976,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/A7v15.wav"
+          },
+          {
+            "root": 108,
+            "layer": "v3",
+            "velocity": "86-127",
+            "samples": 96000,
+            "file": "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit/C8v15.wav"
+          }
+        ],
+        "notes": "Roots every ~3 semitones across the keybed; 3 velocity layers."
+      },
+      {
+        "name": "Upright KW — Upright Piano KW (2022-02-21)",
+        "pianoModel": "Upright KW",
+        "kind": "recorded-samples",
+        "recordedInstrument": "Kawai upright piano (Zoom H1, player position)",
+        "author": "FreePats project (recorded by Gonzalo and Roberto, edited by Roberto <roberto@zenvoid.org>)",
+        "source": "https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html#UprightKW",
+        "download": "https://freepats.zenvoid.org/Piano/UprightPianoKW/UprightPianoKW-SFZ+FLAC-20220221.7z",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "attribution": "Upright Piano KW from the FreePats project (CC0 1.0; attribution not required).",
+        "licenseFile": "public/samples/licenses/upright-LICENSE.txt",
+        "files": [
+          "public/samples/upright.nspk",
+          "public/samples/licenses/upright-LICENSE.txt"
+        ],
+        "format": "NSPK v1 container: JSON header + block IMA-ADPCM mono, 24000 Hz, 1017-sample blocks (built by scripts/build-sample-packs.mjs; decoded in src/audio/samplePack.ts)",
+        "processing": "mono (stereo sources mixed (L+R)/2), fine-tune (fineTuneAppliedCents) via rate change, soxr resample to 24000 Hz, 16-bit PCM; onset: first sample above max(-50 dB re file peak, 2.5x lead-in noise) walking back from the -30 dB crossing, capped at 1.5 ms before that crossing, minus 0.5 ms pre-roll with 1 ms raised-cosine fade-in; max 4.0 s; linear fade-out over final 0.6 s (or half the length if shorter); no per-file normalization; instrumentGain applied uniformly",
+        "rootNotes": [
+          21,
+          24,
+          27,
+          30,
+          33,
+          36,
+          39,
+          42,
+          45,
+          47,
+          48,
+          51,
+          54,
+          57,
+          59,
+          60,
+          63,
+          66,
+          69,
+          72,
+          75,
+          78,
+          81,
+          84,
+          87,
+          90,
+          93,
+          96,
+          99,
+          102,
+          105,
+          107,
+          108
+        ],
+        "velocityLayers": {
+          "v1": "1-80",
+          "v2": "81-127"
+        },
+        "zones": [
+          {
+            "root": 21,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A0vL.flac"
+          },
+          {
+            "root": 24,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C1vL.flac"
+          },
+          {
+            "root": 27,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#1vL.flac"
+          },
+          {
+            "root": 30,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#1vL.flac"
+          },
+          {
+            "root": 33,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A1vL.flac"
+          },
+          {
+            "root": 36,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C2vL.flac"
+          },
+          {
+            "root": 39,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#2vL.flac"
+          },
+          {
+            "root": 42,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#2vL.flac"
+          },
+          {
+            "root": 45,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A2vL.flac"
+          },
+          {
+            "root": 48,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C3vL.flac"
+          },
+          {
+            "root": 51,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#3vL.flac"
+          },
+          {
+            "root": 54,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#3vL.flac"
+          },
+          {
+            "root": 57,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A3vL.flac"
+          },
+          {
+            "root": 60,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C4vL.flac"
+          },
+          {
+            "root": 63,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#4vL.flac"
+          },
+          {
+            "root": 66,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#4vL.flac"
+          },
+          {
+            "root": 69,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 51402,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A4vL.flac"
+          },
+          {
+            "root": 72,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C5vL.flac"
+          },
+          {
+            "root": 75,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 68157,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#5vL.flac"
+          },
+          {
+            "root": 78,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 45501,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#5vL.flac"
+          },
+          {
+            "root": 81,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 38487,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A5vL.flac"
+          },
+          {
+            "root": 84,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 52991,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C6vL.flac"
+          },
+          {
+            "root": 87,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 25561,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#6vL.flac"
+          },
+          {
+            "root": 90,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 26170,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#6vL.flac"
+          },
+          {
+            "root": 93,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 19280,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A6vL.flac"
+          },
+          {
+            "root": 96,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 15038,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C7vL.flac"
+          },
+          {
+            "root": 99,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 18876,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#7vL.flac"
+          },
+          {
+            "root": 102,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 14497,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#7vL.flac"
+          },
+          {
+            "root": 105,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 17636,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A7vL.flac"
+          },
+          {
+            "root": 108,
+            "layer": "v1",
+            "velocity": "1-80",
+            "samples": 9424,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C8vL.flac"
+          },
+          {
+            "root": 21,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A0vH.flac"
+          },
+          {
+            "root": 24,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C1vH.flac"
+          },
+          {
+            "root": 27,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#1vH.flac"
+          },
+          {
+            "root": 30,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#1vH.flac"
+          },
+          {
+            "root": 33,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A1vH.flac"
+          },
+          {
+            "root": 36,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C2vH.flac"
+          },
+          {
+            "root": 39,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#2vH.flac"
+          },
+          {
+            "root": 42,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#2vH.flac"
+          },
+          {
+            "root": 47,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/B2vH.flac"
+          },
+          {
+            "root": 48,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C3vH.flac"
+          },
+          {
+            "root": 51,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#3vH.flac"
+          },
+          {
+            "root": 54,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#3vH.flac"
+          },
+          {
+            "root": 57,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A3vH.flac"
+          },
+          {
+            "root": 59,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/B3vH.flac"
+          },
+          {
+            "root": 63,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#4vH.flac"
+          },
+          {
+            "root": 66,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 96000,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#4vH.flac"
+          },
+          {
+            "root": 69,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 71024,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A4vH.flac"
+          },
+          {
+            "root": 72,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 83263,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C5vH.flac"
+          },
+          {
+            "root": 75,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 75770,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#5vH.flac"
+          },
+          {
+            "root": 78,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 47200,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#5vH.flac"
+          },
+          {
+            "root": 81,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 68141,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A5vH.flac"
+          },
+          {
+            "root": 84,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 53012,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C6vH.flac"
+          },
+          {
+            "root": 87,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 44013,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#6vH.flac"
+          },
+          {
+            "root": 90,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 30121,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#6vH.flac"
+          },
+          {
+            "root": 93,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 29997,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A6vH.flac"
+          },
+          {
+            "root": 96,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 42953,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/C7vH.flac"
+          },
+          {
+            "root": 99,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 16981,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/D#7vH.flac"
+          },
+          {
+            "root": 102,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 16038,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/F#7vH.flac"
+          },
+          {
+            "root": 105,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 21792,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/A7vH.flac"
+          },
+          {
+            "root": 107,
+            "layer": "v2",
+            "velocity": "81-127",
+            "samples": 20019,
+            "file": "UprightPianoKW-SFZ+FLAC-20220221/samples/B7vH.flac"
+          }
+        ],
+        "notes": "Roots every ~3 semitones across the keybed; 2 velocity layers."
+      },
+      {
+        "name": "Wurlitzer EP200 — Wurlitzer EP200 Electric Piano v1.1 (Greg Sullivan E-Pianos, SFZ port by kinwie)",
+        "pianoModel": "Wurlitzer EP200",
+        "kind": "recorded-samples",
+        "recordedInstrument": "Wurlitzer 200 (EP200) reed electric piano",
+        "author": "Greg Sullivan",
+        "source": "https://github.com/sfzinstruments/GregSullivan.E-Pianos",
+        "download": "https://github.com/sfzinstruments/GregSullivan.E-Pianos/tree/8c3e581acda3594b553948ff0222d4f84a698376/Wurlitzer%20EP200/Samples",
+        "license": "CC-BY-3.0",
+        "licenseUrl": "http://creativecommons.org/licenses/by/3.0/",
+        "attribution": "Wurlitzer EP200 samples by Greg Sullivan (http://www.sullivang.net/), SFZ/FLAC edition by kinwie / sfzinstruments, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Samples converted to 24 kHz, fine-tuned per source SFZ, trimmed and faded.",
+        "licenseFile": "public/samples/licenses/electric-LICENSE.txt",
+        "files": [
+          "public/samples/electric.nspk",
+          "public/samples/licenses/electric-LICENSE.txt"
+        ],
+        "format": "NSPK v1 container: JSON header + block IMA-ADPCM mono, 24000 Hz, 1017-sample blocks (built by scripts/build-sample-packs.mjs; decoded in src/audio/samplePack.ts)",
+        "processing": "mono (stereo sources mixed (L+R)/2), fine-tune (fineTuneAppliedCents) via rate change, soxr resample to 24000 Hz, 16-bit PCM; onset: first sample above max(-50 dB re file peak, 2.5x lead-in noise) walking back from the -30 dB crossing, capped at 1.5 ms before that crossing, minus 0.5 ms pre-roll with 1 ms raised-cosine fade-in; max 4.0 s; linear fade-out over final 0.6 s (or half the length if shorter); no per-file normalization; instrumentGain applied uniformly",
+        "rootNotes": [
+          33,
+          36,
+          40,
+          41,
+          44,
+          45,
+          47,
+          51,
+          52,
+          56,
+          61,
+          64,
+          66,
+          67,
+          68,
+          71,
+          73,
+          79,
+          85,
+          92
+        ],
+        "velocityLayers": {
+          "v1": "1-37",
+          "v2": "38-65",
+          "v3": "66-89",
+          "v4": "90-127"
+        },
+        "zones": [
+          {
+            "root": 33,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 58255,
+            "file": "Wurlitzer EP200/Samples/a1pp.flac"
+          },
+          {
+            "root": 44,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 91272,
+            "file": "Wurlitzer EP200/Samples/ab2pp.flac"
+          },
+          {
+            "root": 51,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 57665,
+            "file": "Wurlitzer EP200/Samples/eb3pp.flac"
+          },
+          {
+            "root": 56,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 24458,
+            "file": "Wurlitzer EP200/Samples/ab3pp.flac"
+          },
+          {
+            "root": 61,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 24026,
+            "file": "Wurlitzer EP200/Samples/db4pp.flac"
+          },
+          {
+            "root": 67,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 22733,
+            "file": "Wurlitzer EP200/Samples/g4pp.flac"
+          },
+          {
+            "root": 73,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 8617,
+            "file": "Wurlitzer EP200/Samples/db5pp.flac"
+          },
+          {
+            "root": 79,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 16030,
+            "file": "Wurlitzer EP200/Samples/g5mp.flac"
+          },
+          {
+            "root": 85,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 29675,
+            "file": "Wurlitzer EP200/Samples/db6mp.flac"
+          },
+          {
+            "root": 92,
+            "layer": "v1",
+            "velocity": "1-37",
+            "samples": 19901,
+            "file": "Wurlitzer EP200/Samples/ab6mp.flac"
+          },
+          {
+            "root": 33,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 67429,
+            "file": "Wurlitzer EP200/Samples/a1mp.flac"
+          },
+          {
+            "root": 40,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 52988,
+            "file": "Wurlitzer EP200/Samples/e2mp.flac"
+          },
+          {
+            "root": 45,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 56540,
+            "file": "Wurlitzer EP200/Samples/a2mp.flac"
+          },
+          {
+            "root": 51,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 52402,
+            "file": "Wurlitzer EP200/Samples/eb3mp.flac"
+          },
+          {
+            "root": 56,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 63930,
+            "file": "Wurlitzer EP200/Samples/ab3mp.flac"
+          },
+          {
+            "root": 61,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 49591,
+            "file": "Wurlitzer EP200/Samples/db4mp.flac"
+          },
+          {
+            "root": 66,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 35341,
+            "file": "Wurlitzer EP200/Samples/gb4mp.flac"
+          },
+          {
+            "root": 71,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 18736,
+            "file": "Wurlitzer EP200/Samples/b4mp.flac"
+          },
+          {
+            "root": 73,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 25267,
+            "file": "Wurlitzer EP200/Samples/db5mp.flac"
+          },
+          {
+            "root": 79,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 16030,
+            "file": "Wurlitzer EP200/Samples/g5mp.flac"
+          },
+          {
+            "root": 85,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 29675,
+            "file": "Wurlitzer EP200/Samples/db6mp.flac"
+          },
+          {
+            "root": 92,
+            "layer": "v2",
+            "velocity": "38-65",
+            "samples": 19901,
+            "file": "Wurlitzer EP200/Samples/ab6mp.flac"
+          },
+          {
+            "root": 33,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 96000,
+            "file": "Wurlitzer EP200/Samples/a1f.flac"
+          },
+          {
+            "root": 36,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 96000,
+            "file": "Wurlitzer EP200/Samples/c2f.flac"
+          },
+          {
+            "root": 41,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 96000,
+            "file": "Wurlitzer EP200/Samples/f2f.flac"
+          },
+          {
+            "root": 47,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 92718,
+            "file": "Wurlitzer EP200/Samples/b2f.flac"
+          },
+          {
+            "root": 52,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 56874,
+            "file": "Wurlitzer EP200/Samples/e3f.flac"
+          },
+          {
+            "root": 56,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 59984,
+            "file": "Wurlitzer EP200/Samples/ab3f.flac"
+          },
+          {
+            "root": 61,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 52879,
+            "file": "Wurlitzer EP200/Samples/db4f.flac"
+          },
+          {
+            "root": 68,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 65016,
+            "file": "Wurlitzer EP200/Samples/ab4f.flac"
+          },
+          {
+            "root": 73,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 43111,
+            "file": "Wurlitzer EP200/Samples/db5f.flac"
+          },
+          {
+            "root": 79,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 22804,
+            "file": "Wurlitzer EP200/Samples/g5f.flac"
+          },
+          {
+            "root": 85,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 26095,
+            "file": "Wurlitzer EP200/Samples/db6f.flac"
+          },
+          {
+            "root": 92,
+            "layer": "v3",
+            "velocity": "66-89",
+            "samples": 25257,
+            "file": "Wurlitzer EP200/Samples/ab6f.flac"
+          },
+          {
+            "root": 33,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 96000,
+            "file": "Wurlitzer EP200/Samples/a1ff.flac"
+          },
+          {
+            "root": 36,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 96000,
+            "file": "Wurlitzer EP200/Samples/c2ff.flac"
+          },
+          {
+            "root": 41,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 96000,
+            "file": "Wurlitzer EP200/Samples/f2ff.flac"
+          },
+          {
+            "root": 47,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 92675,
+            "file": "Wurlitzer EP200/Samples/b2ff.flac"
+          },
+          {
+            "root": 52,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 69982,
+            "file": "Wurlitzer EP200/Samples/e3ff.flac"
+          },
+          {
+            "root": 56,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 77028,
+            "file": "Wurlitzer EP200/Samples/ab3ff.flac"
+          },
+          {
+            "root": 61,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 68722,
+            "file": "Wurlitzer EP200/Samples/db4ff.flac"
+          },
+          {
+            "root": 64,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 61293,
+            "file": "Wurlitzer EP200/Samples/e4ff.flac"
+          },
+          {
+            "root": 67,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 42384,
+            "file": "Wurlitzer EP200/Samples/g4ff.flac"
+          },
+          {
+            "root": 73,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 36467,
+            "file": "Wurlitzer EP200/Samples/db5ff.flac"
+          },
+          {
+            "root": 79,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 19697,
+            "file": "Wurlitzer EP200/Samples/g5ff.flac"
+          },
+          {
+            "root": 85,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 26095,
+            "file": "Wurlitzer EP200/Samples/db6f.flac"
+          },
+          {
+            "root": 92,
+            "layer": "v4",
+            "velocity": "90-127",
+            "samples": 25257,
+            "file": "Wurlitzer EP200/Samples/ab6f.flac"
+          }
+        ],
+        "notes": "Only 20 pitches (MIDI 33-92) were recorded in the source set, so the lowest keys (E1-G#1) shift up to 5 semitones down and the top keys above G6 shift up to 8 semitones up; inside 33-92 no key is more than 4 semitones from a root."
+      },
+      {
+        "name": "Rhodes (jRhodes3) — jRhodes3 GM subset (Discord SFZ GM Bank, 005-Electric Piano 1)",
+        "pianoModel": "Rhodes (jRhodes3)",
+        "kind": "recorded-samples",
+        "recordedInstrument": "1977 Rhodes Mark I Stage 73 (recorded from harp connector, with EQ)",
+        "author": "Jeff Learman",
+        "source": "https://github.com/sfzinstruments/Discord-SFZ-GM-Bank",
+        "download": "https://github.com/sfzinstruments/Discord-SFZ-GM-Bank/tree/7a9c478fe331f94f246d33332f0adedb25bbbe27/Discord%20GM/Melodic/005-Electric%20Piano%201",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "attribution": "Rhodes samples by Jeff Learman (jRhodes3, GM subset from the Discord SFZ GM Bank), CC0 1.0; attribution not required.",
+        "licenseFile": "public/samples/licenses/electric-rhodes-LICENSE.txt",
+        "files": [
+          "public/samples/electric-rhodes.nspk",
+          "public/samples/licenses/electric-rhodes-LICENSE.txt"
+        ],
+        "format": "NSPK v1 container: JSON header + block IMA-ADPCM mono, 24000 Hz, 1017-sample blocks (built by scripts/build-sample-packs.mjs; decoded in src/audio/samplePack.ts)",
+        "processing": "mono (stereo sources mixed (L+R)/2), fine-tune (fineTuneAppliedCents) via rate change, soxr resample to 24000 Hz, 16-bit PCM; onset: first sample above max(-50 dB re file peak, 2.5x lead-in noise) walking back from the -30 dB crossing, capped at 1.5 ms before that crossing, minus 0.5 ms pre-roll with 1 ms raised-cosine fade-in; max 4.0 s; linear fade-out over final 0.6 s (or half the length if shorter); no per-file normalization; instrumentGain applied uniformly",
+        "rootNotes": [
+          29,
+          35,
+          40,
+          45,
+          50,
+          55,
+          59,
+          62,
+          65,
+          71,
+          76,
+          81,
+          86,
+          91,
+          96
+        ],
+        "velocityLayers": {
+          "v1": "1-127"
+        },
+        "zones": [
+          {
+            "root": 29,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_029__F1_3.wav"
+          },
+          {
+            "root": 35,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_035__B1_3.wav"
+          },
+          {
+            "root": 40,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_040__E2_3.wav"
+          },
+          {
+            "root": 45,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_045__A2_3.wav"
+          },
+          {
+            "root": 50,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_050__D3_3.wav"
+          },
+          {
+            "root": 55,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_055__G3_3.wav"
+          },
+          {
+            "root": 59,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_059__B3_3.wav"
+          },
+          {
+            "root": 62,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_062__D4_3.wav"
+          },
+          {
+            "root": 65,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_065__F4_3.wav"
+          },
+          {
+            "root": 71,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 96000,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_071__B4_4.wav"
+          },
+          {
+            "root": 76,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 77038,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_076__E5_4.wav"
+          },
+          {
+            "root": 81,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 95996,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_081__A5_4.wav"
+          },
+          {
+            "root": 86,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 88450,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_086__D6_4.wav"
+          },
+          {
+            "root": 91,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 38350,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_091__G6_4.wav"
+          },
+          {
+            "root": 96,
+            "layer": "v1",
+            "velocity": "1-127",
+            "samples": 16605,
+            "file": "Discord GM/Melodic/005-Electric Piano 1/A_096__C7_4.wav"
+          }
+        ],
+        "notes": "Second Electric model (model dial). One velocity layer only (the CC0 GM subset); the CC BY-NC jRhodes sets were not used."
+      }
+    ],
+    "generatedSources": [
+      {
+        "name": "Digital Piano (synth)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/pianoTone.ts renderPianoTone()",
+        "method": "Additive synthesis of inharmonic string partials with two-stage decay and a noise hammer transient (the Phase 1 tone), roots every 3 semitones. Also the labelled fallback for a recorded model whose pack fails to load.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "FM E.Piano (synth)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/synthModels.ts fmEpiano()",
+        "method": "Two-operator FM (sine carrier, decaying modulation index) plus a short 14th-harmonic tine transient.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Clavinet (synth)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/synthModels.ts clavinet()",
+        "method": "Additive plucked-string harmonics shaped by pluck- and pickup-position combs, with a short deterministic tangent click.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Harpsichord (synth)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/synthModels.ts harpsichord()",
+        "method": "Additive 8' + 4' plucked choirs with slow decay.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Marimba (synth)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/synthModels.ts marimba()",
+        "method": "Damped tuned-bar modes at 1 : 3.93 : 9.24.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Vibraphone (synth)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/synthModels.ts vibraphone()",
+        "method": "Damped metal-bar modes at 1 : 4 : 10.1 with long ring.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Reverb impulse responses (generated)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/fx/reverb.ts renderImpulse()",
+        "method": "Deterministic filtered-noise exponential tails per type (Booth 0.25 s … Cathedral 4.2 s RT) with falling damping; Spring adds a repeating dispersive chirp train. Used by ConvolverNodes.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Organ key click / pipe chiff noise (generated)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/organ.ts organShared()",
+        "method": "25 ms of deterministic xorshift noise with an exponential decay, played through a band-pass per key (B3/B3 Bass click, Pipe chiff).",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Synth white noise (generated)",
+        "kind": "generated-buffer",
+        "generator": "src/audio/synth.ts synthShared()",
+        "method": "1.5 s of deterministic PRNG noise, looped by an AudioBufferSourceNode for the White Noise waveform.",
+        "rendering": "Rendered in the browser at load time; not stored as files and not derived from any recording.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Organ engines (live synthesis)",
+        "kind": "live-oscillator",
+        "generator": "src/audio/organ.ts startOrganVoice(), OrganLayerGraph",
+        "method": "Per key: nine drawbar oscillators. B3: pure sines at 16', 5 1/3', 8', 4', 2 2/3', 2', 1 3/5', 1 1/3', 1' with top-octave foldback, key click, single-triggered 2nd/3rd-harmonic percussion. Vox: square-wave dividers with mixture drawbars II/III/IV and a filtered/unfiltered tone mix on drawbar 9. Farf: nine on/off tab registers with flute/strings/oboe/trumpet PeriodicWaves. Pipe 1/Pipe 2: flue/principal PeriodicWaves with slow speech, chiff and release; chorus = detuned celeste rank. B3 Bass reuses B3 (16'/8' only); Pipe 2 reuses Pipe with a brighter principal. Vibrato/chorus V1-V3/C1-C3 is a modulated-delay scanner per layer.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Synth engine (live synthesis)",
+        "kind": "live-oscillator",
+        "generator": "src/audio/synth.ts startSynthVoice(), SynthLayerGraph; src/audio/synthEngine.ts; src/audio/arp.ts",
+        "method": "Analog mode only. Pure: sine/triangle/saw/square OscillatorNodes and 33 %/10 % pulse PeriodicWaves, white noise; Sync: master saw/square with a resonant formant swept 0-3 octaves by Osc Ctrl (a documented approximation of hard sync); Multi: three detuned saws (+ octave saw); Super: seven detuned, stereo-spread saws/squares; FM-H: 2-operator FM (modulator 2 x f0) with Osc Ctrl as index. Unison 1-3, drive, LP12/LP24/HP/BP biquads with key tracking/resonance/envelope, ADR oscillator/filter/amp envelopes (ConstantSource), LFO (5 waveforms incl. a generated S&H PeriodicWave, 3 destinations, master-clock sync), vibrato, poly/mono/legato with priority and constant-rate glide, deterministic arpeggiator/gate.",
+        "license": "Original code in this repository; no third-party audio."
+      },
+      {
+        "name": "Last-resort fallback tone (live synthesis)",
+        "kind": "live-oscillator",
+        "generator": "src/audio/stageAudio.ts startVoice() fallback branch",
+        "method": "Triangle OscillatorNode with decaying gain, used only if both a recorded pack and the generated Digital fallback are unavailable. Status and Program OLED label the fallback.",
+        "license": "Original code in this repository; no third-party audio."
+      }
+    ],
+    "liveProcessing": [
+      "Effects are live Web Audio processing (no recordings): six chains (Piano A/B, one shared Organ chain, Synth A/B/C) of Mod 1/Mod 2 LFO/delay/all-pass networks, delay line with in-loop feedback filter (Master Clock sync), WaveShaper amp models with cabinet biquads, 24 dB biquad LP/HP, DynamicsCompressor, generated-IR convolution reverb, and one two-rotor Rotary (crossover, doppler delay, AM, auto-pan; slow/fast/Stop with acceleration, drive, morphable speed)."
+    ],
+    "notes": [
+      "Grand, Upright and Electric (two Electric models) are bundled recorded samples served from public/samples and loaded offline from the app bundle; Clav, Digital and Misc models are synthesized in the browser and labelled \"(synth)\" in the model names.",
+      "If a sample pack fails to load, the status reports \"fallback\" (never \"ready\"), names the failed pack, flashes the type LED, shows LOAD FAILED on the Program OLED, and the model plays the generated Digital piano as a labelled fallback.",
+      "Soft/sostenuto pedals are not implemented (optional in the spec) and are not claimed. String Res is a simulated sympathetic resonance (comb bank), as the spec allows.",
+      "Organ and Synth are live synthesis (OscillatorNode, PeriodicWave, ConstantSource and biquad graphs) in the same AudioContext; the only buffers they use are the generated click/chiff and white-noise buffers listed above. No organ or synth sound is a recording.",
+      "Programs (32 + 8 Live) store canonical state only (no audio) in localStorage; Master Level and the pitch stick are not stored.",
+      "Tests render the real sample packs, generated buffers, organ/synth voices and effect graphs with the in-repo Web Audio simulator (src/testing/simAudio.ts)."
+    ]
+  },
+  "controls": {
+    "audit": "src/model/bindings/audit.ts (every panel control is functional or listed here; tested in src/__tests__/system.test.tsx)",
+    "unsupported": {
+      "organ-preset": "Organ Preset/Drawbar Live modes and drawbar sync are excluded (organ spec scope.excluded)",
+      "program-morph-at": "Aftertouch as a morph source is excluded (programs spec scope.excluded)",
+      "program-preset-organ": "The Organ preset library is excluded (programs spec scope.excluded, manual p. 41–42)",
+      "program-preset-piano": "The Piano preset library is excluded (programs spec scope.excluded, manual p. 41–42)",
+      "program-preset-synth": "The Synth preset library is excluded (programs spec scope.excluded, manual p. 41–42)",
+      "program-prog-view": "Multi-view Prog View modes are optional and not implemented; Shift+Prog View (preset name) is excluded",
+      "program-section-edit": "Section Edit and Layer Init are excluded (programs spec scope.excluded, manual p. 43–44)",
+      "program-mon-copy": "Monitor/Copy/Paste/Swap are excluded (programs spec scope.excluded, manual p. 43–44)",
+      "synth-mode": "Samples mode is optional and not implemented; Extern mode is excluded (synth spec) — the engine is Analog only",
+      "effects-delay-effects": "Delay feedback-loop effects (Chor/Vibe/Ens/Flam/Space) are excluded (effects spec scope.excluded)"
+    },
+    "unsupportedShiftFunctions": {
+      "performance-rotary-organ": "Close Mic (excluded, effects spec)",
+      "performance-rotary-stop-mode": "Stop angle (excluded, effects spec)",
+      "program-page-left": "Bank (only one bank, programs spec)",
+      "program-page-right": "Bank (only one bank, programs spec)",
+      "program-slot-1": "System menu (excluded)",
+      "program-slot-2": "Sound menu (excluded)",
+      "program-slot-3": "Organize menu (excluded)",
+      "program-slot-4": "Aux KB menu (excluded)",
+      "program-slot-5": "Output menu (excluded)",
+      "program-slot-6": "Pedal menu (excluded)",
+      "program-slot-7": "MIDI menu (excluded)",
+      "program-slot-8": "Extern menu (excluded)",
+      "synth-layer-c": "Pan (not in the synth spec)",
+      "synth-kb-hold": "Exclude (per-layer KB Hold exclude is excluded, synth spec)",
+      "synth-arp-menu": "Arp Group mode (excluded, synth spec)",
+      "synth-lfo-waveform": "LFO Group mode (excluded, synth spec)",
+      "synth-filter-type": "Filter Group mode (excluded, synth spec)",
+      "effects-delay-filter": "Ping Pong (optional, not implemented)",
+      "effects-mod1-type": "Mod 1 pedal modes / Variations (excluded, effects spec)"
+    }
+  },
+  "boundaries": {
+    "injectable": [
+      "AudioContext factory",
+      "asset fetch (sample packs)",
+      "requestMIDIAccess",
+      "keyboard/blur event target",
+      "document visibility",
+      "event-loop yield",
+      "monotonic clock (tap tempo, Master Clock tap)",
+      "program storage (localStorage)",
+      "repeating timer (arpeggiator clock)",
+      "diagnostics inspect hook"
+    ],
+    "definedIn": "src/runtime.ts"
+  }
+}
