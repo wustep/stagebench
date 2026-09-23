@@ -24,7 +24,7 @@ pnpm dev
 ## Run the benchmark
 
 ```sh
-pnpm bench fetch                                # Nord manual + product photos (gitignored, not redistributed)
+pnpm bench fetch                                # Nord manual PDF (+ photos if missing from the repo)
 pnpm bench new --model <id> --target <1|2|3>
 pnpm bench start <run-id>                       # per phase: isolated workspace for the implementation agent
 pnpm bench exec <run-id> --command "pnpm test"  # optional: run candidate commands inside Docker
@@ -40,6 +40,8 @@ The Vercel deployment uses server-side authentication through `middleware.js`. T
 
 ## Reference material & attribution
 
-Stagebench is an independent, non-commercial benchmark for studying browser UI/audio reconstruction. It is **not affiliated with, authorized, or endorsed by Clavia DMI AB**. "Nord" and "Nord Stage" are trademarks of Clavia DMI AB, used here only to identify the product being studied. The Nord Stage 4 user manual and product photography are copyrighted by Clavia DMI AB and are **not redistributed** in this repository — `pnpm bench fetch` downloads them from Nord's official servers into the gitignored `reference/` directory for local evaluation only. Do not commit, re-host, or redistribute them.
+Stagebench is an independent, non-commercial benchmark for studying browser UI/audio reconstruction. It is **not affiliated with, authorized, or endorsed by Clavia DMI AB**. "Nord" and "Nord Stage" are trademarks of Clavia DMI AB, used here only to identify the product being studied. The Nord Stage 4 user manual and product photography are copyrighted by Clavia DMI AB.
 
-Production builds run `scripts/prepare-reference-photos.mjs` (via `prebuild`) to fetch the product JPGs into `reference/` and copy them to gitignored `public/reference/` so the gallery overlay can serve them locally; middleware still falls back to Nord's CDN if a local file is missing.
+Product photos (`reference/*.jpg` and `public/reference/*.jpg`) are stored in this repository so the gallery overlay stays reliable when Nord's CDN paths change. The user manual PDF remains gitignored — fetch it locally with `pnpm bench fetch` and do not commit it. Photos remain Clavia's copyright; they are included here only for non-commercial benchmark evaluation.
+
+Production builds run `scripts/prepare-reference-photos.mjs` (via `prebuild`) to ensure JPGs are present under `public/reference/` (copying from committed `reference/` files, fetching only if missing). Middleware serves local files first and falls back to Nord's CDN if a local file is missing.

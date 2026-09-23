@@ -1,8 +1,8 @@
 // Official Nord Stage 4 reference asset URLs (Clavia DMI AB).
 // Shared by `pnpm bench fetch` and the production /reference proxy so the
-// two cannot drift. Photos are copyrighted and never committed — fetched
-// into gitignored ./reference for local use, and optionally served from
-// that folder by middleware when present.
+// two cannot drift. Product JPGs are committed under reference/ (and
+// public/reference/) for overlay reliability; the manual PDF stays
+// gitignored. Middleware serves local files first, then these CDN URLs.
 //
 // Nord moved CDN paths from /nord-assets-prod/media/... to /media/...;
 // the old prefix now returns 403.

@@ -7,10 +7,10 @@ import { secretBridgePlugin } from '../bench/lib/vite-secret-bridge.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Dev-server bridge to the repo-root reference/ photos (gitignored,
- *  fetched via `pnpm bench fetch`, never redistributed). On production the
- *  same /reference/* path is served publicly by middleware.js (local
- *  public/reference/ first, then Nord CDN — no /secret unlock required). */
+/** Dev-server bridge to repo-root reference/ photos (committed JPGs).
+ *  On production the same /reference/* path is served publicly by
+ *  middleware.js (local public/reference/ first, then Nord CDN —
+ *  no /secret unlock required). */
 const referencePhotos = (): Plugin => ({
   name: 'stagebench-reference-photos',
   configureServer(server) {

@@ -154,8 +154,8 @@ function jpegResponse(body, request) {
   return new Response(body, { status: 200, headers })
 }
 
-/** Prefer gitignored ./reference/<name> (from `pnpm bench fetch` / build prep),
- *  then public/reference/<name> (build-time copy for static hosting). */
+/** Prefer committed ./reference/<name>, then public/reference/<name>
+ *  (build copy / static hosting). CDN is the last-resort fallback. */
 async function readLocalReference(name, root = REPO_ROOT) {
   for (const dir of ['reference', 'public/reference']) {
     try {

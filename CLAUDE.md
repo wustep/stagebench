@@ -44,7 +44,7 @@ Prefer the preview servers in `.claude/launch.json` (`dev`, `showcase`) over ad-
 
 `pnpm bench <command>` orchestrates the run lifecycle:
 
-- `fetch` — download the Nord manual + product photos into `reference/` (gitignored, required before other bench commands)
+- `fetch` — download the Nord manual PDF (and any missing product photos) into `reference/` (manual stays gitignored)
 - `new --model <id> --target <1|2|3> [--variant stage-4-73]` — create a run
 - `start <run-id>` — create the isolated phase workspace (clones `bench/starter/`)
 - `exec <run-id> --command "..."` — run a command inside the run's container
@@ -62,7 +62,7 @@ Prefer the preview servers in `.claude/launch.json` (`dev`, `showcase`) over ad-
 - `showcase/` — the flagship Nord Stage 4 implementation. It is *not* a benchmark run: it was seeded from the best-scoring artifact and iterated further (log in `showcase/SHOWCASE.md`). It must keep passing its own test/typecheck/lint/build gates. Internal structure: `src/audio/` (engines + effects graph, one AudioContext with per-layer buses), `src/model/` (typed hardware model), `src/components/`, `src/input/` (MIDI/keyboard/pointer with injectable boundaries for tests), `src/state/`.
 - `specs/` — machine-readable Nord Stage 4 specs (`nord-stage-4.visual.json` geometry and control inventory, plus piano/organ/synth/effects/programs) and `benchmark-phases.json` (phase scopes and hard gates). These are the source of truth for visual fidelity work.
 - `prompts/stage<N>.md` — per-phase instructions given to agents.
-- `reference/` — Nord manual PDF + product photos, fetched via `pnpm bench fetch`, gitignored, not redistributed.
+- `reference/` — Nord product photos (committed JPGs) + optional manual PDF (`pnpm bench fetch`; PDF gitignored). Mirrored under `public/reference/` for static/middleware serving.
 - `public/previews/`, `public/reports/` — published playable builds and static evaluation reports (generated; don't hand-edit).
 - `middleware.js` — Vercel middleware for `/secret` (HMAC-signed extras cookie gated by `STAGEBENCH_PASSWORD`) and `/reference/*` (local `public/reference/` / `reference/` first, then Nord CDN proxy; main gallery is public).
 
