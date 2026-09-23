@@ -200,7 +200,7 @@ export class StageAudio implements VoiceBackend {
   private pitched = new Set<{ source: OscillatorNode | AudioBufferSourceNode; layer: LayerId; base: number }>()
   private synthLastFrequency = new Map<VoiceKey, number>()
   private timers = new Set<number>()
-  constructor(private state: () => StageState, private status: (s: StageAudioStatus) => void, private fetchAsset: typeof fetch = fetch, private contextFactory: () => AudioContext = () => new AudioContext()) {}
+  constructor(private state: () => StageState, private status: (s: StageAudioStatus) => void, private fetchAsset: typeof fetch = (...args: Parameters<typeof fetch>) => fetch(...args), private contextFactory: () => AudioContext = () => new AudioContext()) {}
   private ensure(): AudioContext | null {
     if (this.ctx) return this.ctx
     this.status('loading')
