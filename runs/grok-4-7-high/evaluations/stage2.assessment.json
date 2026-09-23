@@ -1,0 +1,263 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "grok-4-7-high",
+  "stage": 2,
+  "evaluator": "claude-opus-5-blind-eval",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-23T03:54:58Z",
+  "summary": "Phase 2 lands well. Measured against the served build at 1440x900 (bundle index-BkOg3NOi.js verified against build/assets), the chassis is essentially exact: width 0.940, aspect 3.09514, deck/keybed 0.5403/0.4597, worst section deviation 0.00001, 73/43/30 keys all inside the keybed, black-key fraction 0.610, 5/5 reference colours inside deltaE 12, 33/33 landmarks, 220/220 controls reachable by a 5x5 elementFromPoint grid, 0 forbidden descriptors. Audio is real, not decorative: six piano types with distinct spectra (centroids 447-3358 Hz), three genuine bundled sample libraries, per-layer buses, the spec's exact effect order into a limiter and one destination, and every effect unit and type measurably processing signal. KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res, Master Level and sustain (UI, Space, CC64) all move the rendered signal. Main defect: the all-effects bypass leaves To Rotary engaged (energy 7.0e-2 vs 3.1e-3 dry). Smaller: reverb Booth longer than Room, inert undeclared Model dial, MIDI failure invisible, tap tempo not on the panel, data-decorative on functional controls.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All six piano types are audibly distinct at the same note (C4, keyboard velocity 0.75), measured on the rendered destination tap in scratch/probe-types-m1.mjs: spectral centroid Grand 940.0 Hz, Upright 1013.1 Hz, Electric 447.3 Hz, Clav 3357.7 Hz, Digital 686.6 Hz, Misc 612.1 Hz; peak 0.415/0.356/0.536/0.514/0.574/0.622. No two share a band profile, so none is one voice relabelled.",
+            "Grand, Upright and Electric are genuinely different recorded sets, not one set re-pitched: build/samples/manifest.json plus artifact/IMPLEMENTATION_DETAILS.json declare Salamander Grand (52 zones), VCSL VS Upright (26 zones) and jRhodes3d Rhodes Mk I (30 zones), two velocity layers each, all bundled under build/samples/{grand,upright,electric} and served offline from the 4193 static server.",
+            "The Program OLED reports the sounding library per type while cycling piano-type (scratch/probe-types-m1.mjs): 'Salamander Grand' -> 'VS Upright' -> 'Rhodes Mk I' -> 'Clavinet synthesis' -> 'Digital FM synthesis' -> 'Vibraphone synthesis', matching the recorded/synthesised split declared in IMPLEMENTATION_DETAILS.json."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Every unit and every listed type measurably changes the rendered signal (scratch/fxtypes.txt, captured at the destination): Mod 1 six types centroid 951/930/1197/570/1446/1259 Hz; Mod 2 six types 1021/1126/1322/633/1007/1014 Hz; Amp Sim/EQ seven types 1724/2504/3031/1270/1946/4800/6088 Hz; Reverb six types energy 3.75e-4/7.36e-4/3.19e-4/2.15e-3/5.49e-3/1.18e-2; Delay feedback filter four settings 900/750/1144/1073 Hz.",
+            "Units behave like their namesakes: compressor at max amount squeezes the loud/quiet peak ratio from 14.28 to 1.80 (MIDI velocity 120 vs 25, scratch/misc.txt); delay at tempo min shows widely spaced repeats in the RMS series [0,0,0,0,.174,.134,.099,.003,.125,.091,...] and at tempo max a dense decaying tail (scratch/fxq.txt E line, scratch/misc.txt D1/D2); tapping delay-tap three times at ~250 ms visibly shortens repeat spacing from ~7 to ~3 frames (scratch/probe-tap-aa1.mjs).",
+            "Deviation a player would notice: the reverb decay order is wrong at the short end. Spec says decay grows from Booth (very short) to Cathedral, but measured tail energy is Room 3.75e-4 < Booth 7.36e-4 (scratch/fxtypes.txt), i.e. Booth rings longer than Room. Spring is distinct (3.19e-4, centroid 881 Hz) and Cathedral is longest (1.18e-2) as specified."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "One AudioContext and one destination: the init-script tap installed before the app builds its graph counted window.__ctxs.length = 1 with sampleRate 44100 (scratch/probe-audio-smoke-k1.mjs); artifact/src/audio/graph.ts:874-879 routes master -> DynamicsCompressor limiter (threshold -12, ratio 8) -> ctx.destination as the single feed.",
+            "The documented order is the implemented order: artifact/src/audio/graph.ts:566-572 chains chainIn -> mod1 -> mod2 -> delay -> amp -> comp -> reverb -> chainOut -> level -> direct/send, matching the effects spec requiredOrder; per-layer buses are confirmed behaviourally, since enabling reverb wet=127 while layer B is focused drops total energy from 1.06e-2 to 3.48e-3 (B wet, A still dry) and the panel then shows reverb-on=false / mix=64 when focus returns to A (scratch/probe-focusgroup-y1.mjs).",
+            "Gain staging holds under load: a 17-note cluster gives peak 0.741 with voices=17, and the same cluster with Master Level at 127 and Amp Sim drive at 127 peaks 0.914 with zero frames at full scale (scratch/probe-load-w1.mjs). Voices return to 0 after release.",
+            "Defect: the all-effects bypass does not unroute To Rotary. With Amp Sim/EQ set to 'To Rotary', dry energy is 3.09e-3; effects on gives 9.42e-2; after the all-fx-off pulse it is still 5.54e-2 and after toggling Layer Effects On off it is 7.03e-2 (centroid 2387 Hz vs 935 Hz dry), while per-unit bypass of amp-on does return to 3.05e-3 (scratch/probe-bypass-v1.mjs). Cause: graph.ts setEffectsEnabled (line 648) mutes the insert chain but never resets setRoute (line 802)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Enable, level, focus and octave all reach the audio graph (scratch/piano.txt, scratch/layers.txt): A only = energy 8.48e-3; enabling layer B = 1.47e-2; B level min returns to 8.48e-3 exactly, B level max = 1.57e-2; disabling B returns to 8.56e-3. Layer levels are independent.",
+            "Focus is per-layer and the panel follows it: with A=Grand and B=Electric the OLED reads 'Rhodes Mk I' and piano-type cycle=2 while B is focused, and 'Salamander Grand' with cycle=0 the moment focus returns to A, with the combined centroid staying at 605-607 Hz because both layers keep their own voice (scratch/layers.txt).",
+            "Octave shift applies to the focused layer only: pressing piano-octave-up on focused B moves the mix centroid from 607 to 907 Hz and energy from 1.59e-2 to 7.64e-3; two presses of piano-octave-down return it to 605 Hz (scratch/layers.txt). Layer press cycling matches the hardware (enable -> focus -> disable, artifact/src/audio/engine.ts:614)."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Five of the six controls move the rendered signal in the specified direction (scratch/piano.txt): KB Touch Heavy/Medium/Light peak 0.375/0.415/0.459; Dyn Comp Off/1/2/3 peak 0.415/0.460/0.496/0.543 (monotonic level lift); Timbre Off/Soft/Mid/Bright centroid 932/674/901/1168 Hz (Soft dampens highs, Bright lifts treble); Unison Off/1/2/3 peak 0.480/0.453/0.562/0.594 with centroid 1071->1157 Hz; Master Level 0 renders silence and 127 renders peak 0.573.",
+            "Soft Release and String Res both measurably change audio but are weak and mutually exclusive: solo note Off vs Soft Rel gives rms 0.01534 vs 0.01896 and audible tail 1 vs 3 frames; String Res under a held sustain pedal with an overlapping note gives rms 0.034 vs 0.0372 and 8 vs 7 frames, i.e. it attenuates rather than adds sympathetic energy (scratch/probe-acoustics-ii1.mjs).",
+            "Hardware deviation: the panel collapses both acoustics features into one 3-way cycle 'Off / Soft Rel / String Res' (artifact/src/model/hardware.ts:168), so unlike the Stage 4 the two cannot be engaged together; the reference photo shows separate SOFT REL and STRING RES switches."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Inputs stay reliable under stress: holding KeyA for 900 ms leaves voices=1 (auto-repeat suppressed); 40 rapid down/up retriggers finish with voices=0, peak 0.338 and no console errors; a window blur with two keys held takes voices from 2 to 0 and the captured peak afterwards is exactly 0 (scratch/probe-load-w1.mjs).",
+            "All three input paths reach one note lifecycle: pointer on C4 at 390x844 renders peak 0.4765 (scratch/probe-narrow-dd1.mjs); the stubbed requestMIDIAccess port (stub-measured) plays note on/off, honours CC64 sustain (audible tail 10 frames vs 5) and tracks velocity (velocity 20 energy 6.42e-2 vs velocity 100 8.17e-2) (scratch/layers.txt).",
+            "Asset failure degrades visibly: aborting every /samples/** request puts the OLED at data-status='fallback' reading 'PIANO FALLBACK / sample library failed - synthesized fallback' and the fallback is still playable at peak 0.591 (scratch/probe-fallback-x1.mjs).",
+            "Defect: a MIDI failure degrades silently. With requestMIDIAccess rejected, and also with it deleted entirely, the panel renders nothing about it - data-midi='denied' is only a DOM attribute and the OLED still reads 'PIANO IDLE / tap a key to play' (scratch/probe-midivis-gg1.mjs). The spec's flashing type LED on a failed model load is also absent (type LEDs unchanged in scratch/probe-fallback-x1.mjs)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All six required types are selectable from the panel and every one loads and sounds: cycling piano-type through data-cycle 0..5 and back to 0 produced non-silent captures for each (peaks 0.415/0.356/0.536/0.514/0.574/0.622) with the OLED naming the loaded model each time (scratch/probe-types-m1.mjs).",
+            "Grand, Upright and Electric are bundled recorded sets served offline by the 4193 static server: build/samples/manifest.json lists 52 grand, 26 upright and 30 electric MP3 zones across two velocity layers, files present under build/samples/*, with licence text in build/samples/SALAMANDER-LICENSE.txt and per-file provenance in artifact/IMPLEMENTATION_DETAILS.json.",
+            "Minor gap: only one model exists per type, so the Piano Model dial is inert - driving piano-model from 0 to 127 leaves the OLED at 'Salamander Grand' and the rendered energy unchanged (3.22e-3 vs 3.25e-3, scratch/probe-reliability-ee1.mjs). The required minimum (one model per type) is met."
+          ]
+        },
+        {
+          "id": "effectUnitCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All six units plus the shared Rotary are present and reachable, and every listed type within each is selectable from the panel and changes the signal: Mod 1 6 types, Mod 2 6 types, Amp Sim/EQ 7 types including To Rotary (cycle index 6, centroid 6088 Hz), Delay with 4 feedback-filter settings, Compressor, Reverb 6 types; each cycle wraps back to 0 after its last type (scratch/fxtypes.txt).",
+            "The routing controls exist and work: fx-focus-organ/piano/synth, all-fx-off and the Layer Effects On toggle are all reachable (220/220 controls hit-test reachable, scratch/probe-reach-h1.mjs); group mode via Shift+Piano FX Focus propagates the focused chain to the other layer, taking energy from 3.03e-3 (A wet only) to 1.56e-3 with centroid 890 -> 617 Hz (scratch/misc.txt G1/G2).",
+            "Rotary is real and shared: with Amp Sim/EQ = To Rotary the signal picks up rotary character (energy 3.09e-3 dry -> 9.42e-2), and rotary-drive raises it further (rms 0.1576 -> 0.1665) (scratch/probe-bypass-v1.mjs, scratch/layers.txt). Global mode is audible as well as wired: with layer B enabled and A's reverb on, Cathedral, mix 127, Shift+reverb-on (panelSync.ts:133 -> engine.toggleGlobal, engine.ts:731/754 copyGlobals) propagates the wet chain to B and the rendered signal drops from peak 0.419 / energy 3.86e-3 to peak 0.262 / 2.16e-3, while without global a focus move to B repaints reverb-on=false / mix=64 (scratch/rev-global-qq9.mjs, scratch/rev-global2-qq9.mjs). It carries no panel indication of its own."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Declared behaviour matches measurement: IMPLEMENTATION_DETAILS.json says a failed sample set yields status 'fallback' with detail 'sample library failed - synthesized fallback' - the rendered OLED reproduces that string exactly (scratch/probe-fallback-x1.mjs); it says Organ/Synth/Program stay decorative, and driving organ-drawbar-1, organ-level-a, organ-on, synth-on, synth-level-a and filter-freq to max left the rendered signal unchanged (energy 5.82e-3 vs 5.75e-3, scratch/probe-load-w1.mjs); it says compressor fast mode is amount >= 110, which matches artifact/src/state/panelSync.ts.",
+            "Sample provenance is truthful: the three declared recorded sets match build/samples/manifest.json zone-for-zone, and the eight generated/synthesised sources are all declared as live-synthesis or generated-buffer, never as recordings.",
+            "Undeclared gaps: the Piano Model dial does nothing and is not in the unsupported list (energy 3.22e-3 vs 3.25e-3 across its full range, scratch/probe-reliability-ee1.mjs); MIDI denial is never surfaced on the panel (scratch/probe-midivis-gg1.mjs); and every control, including the now-functional piano-type, perf-master-level and the effects knobs, still carries data-decorative=\"true\" in the rendered DOM (scratch/probe-ctrlstate-l1.mjs), contradicting its Phase 2 behaviour."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "signalGraph",
+      "title": "All-effects bypass leaves the To Rotary routing active",
+      "detail": "With Amp Sim/EQ set to 'To Rotary', neither the All FX Off pulse nor toggling Layer Effects On restores the dry signal. Measured at the destination: dry energy 3.09e-3; effects on 9.42e-2; after all-fx-off 5.54e-2; after toggling Layer Effects On off 7.03e-2 with centroid 2387 Hz vs 935 Hz dry. Per-unit bypass of amp-on does return to 3.05e-3, so only the global bypass leaks. Root cause: artifact/src/audio/graph.ts setEffectsEnabled (line 648) mutes chainIn/chainOut and opens the bypass gain but never resets setRoute (line 802), so the layer keeps feeding the shared rotary. The effects spec requires the Layer Effects ON button to bypass every effect at once. Evidence: scratch/probe-bypass-v1.mjs."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectAudibility",
+      "title": "Reverb decay order wrong between Room and Booth",
+      "detail": "The spec says decay grows from Booth (very short) to Cathedral. Measured tail energy over the six reverb types is Room 3.75e-4, Booth 7.36e-4, Spring 3.19e-4, Stage 2.15e-3, Hall 5.49e-3, Cathedral 1.18e-2 (scratch/fxtypes.txt), so Booth rings about twice as long as Room. Every type is individually distinct; only the ordering at the short end is off."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoControlDepth",
+      "title": "Soft Release and String Res collapsed into one mutually exclusive cycle",
+      "detail": "artifact/src/model/hardware.ts:168 defines piano-acoustics with cycleLabels ['Off','Soft Rel','String Res'], so the two acoustics features cannot be engaged together, unlike the Stage 4 which has separate switches (visible in inputs/reference/nord-stage-4-73.jpg). Both are measurable individually (Soft Rel rms 0.01896 vs 0.01534 off; String Res under sustain rms 0.034 vs 0.0372), but String Res attenuates rather than adding sympathetic energy. Evidence: scratch/probe-acoustics-ii1.mjs."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "Piano Model dial is inert and undeclared",
+      "detail": "Driving piano-model across its whole 0-127 range leaves the Program OLED at 'Salamander Grand' and the rendered energy unchanged (3.22e-3 vs 3.25e-3, scratch/probe-reliability-ee1.mjs). Only one model exists per type, which meets the required minimum, but IMPLEMENTATION_DETAILS.json's unsupported list does not mention the model dial, so this is an undeclared gap under the honesty contract."
+    },
+    {
+      "severity": "minor",
+      "criterion": "inputReliability",
+      "title": "MIDI denial and absence degrade silently",
+      "detail": "With navigator.requestMIDIAccess rejected, and also with it deleted entirely, nothing on the panel reports it: the OLED still reads 'STAGE 4 73 / PIANO IDLE / tap a key to play' and the only signal is the DOM attribute data-midi='denied' (scratch/probe-midivis-gg1.mjs). The spec's flashing type LED on a failed model load is likewise absent - the six Piano Select LEDs are unchanged in the sample-failure run (scratch/probe-fallback-x1.mjs)."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "data-decorative=\"true\" on controls that are functional in Phase 2",
+      "detail": "Every panel control still renders data-decorative=\"true\", including piano-type, perf-master-level and the whole effects bank, all of which measurably change audio in this phase (scratch/probe-ctrlstate-l1.mjs). artifact/src/model/hardware.ts states the flag is kept so the Phase 1 inventory contract stays intact, but the rendered metadata now contradicts the behaviour."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "Delay tap tempo does not update the Tempo knob",
+      "detail": "Three taps of delay-tap at ~250 ms audibly shorten the repeat spacing from ~7 to ~3 capture frames, but the Delay Tempo control's aria-valuenow is unchanged (127 before and after in scratch/misc.txt, 0 after tapping in scratch/probe-tap-aa1.mjs). The effects spec requires tap and clock tempo to agree with the panel."
+    },
+    {
+      "severity": "minor",
+      "criterion": "signalGraph",
+      "title": "Amp Sim types briefly exceed full scale",
+      "detail": "With Amp Sim/EQ on and drive raised 30 steps above default at default Master Level, the destination peak reaches 1.0127 (Twin) and 1.0202 (JC) (scratch/fxtypes.txt), i.e. about 0.17 dB over full scale. The master limiter otherwise holds: a 17-note cluster with Master Level 127 and drive 127 peaks at 0.914 (scratch/probe-load-w1.mjs)."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage2",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.5403,
+          "keybedFraction": 0.4597,
+          "widthFraction": 0.94,
+          "aspectRatio": 3.0951,
+          "sectionFractionMaxDeviation": 0.00001
+        },
+        "evidence": [
+          "Measured at 1440x900 against the served build (bundle assets/index-BkOg3NOi.js, sha256 535a87c1... identical to build/assets/index-BkOg3NOi.js): instrument border box 1353.59 x 437.33 at x=43.20, y=231.33, so widthFraction 1353.59/1440 = 0.9400 and aspectRatio 3.09514 vs the 3.0951 specified for Stage 4 73 (scratch/probe-computed-d1.mjs).",
+          "Vertical allocation including the rails: chassis top 231.33 to deck bottom 467.61 = 236.28 px -> deckFraction 0.5403; deck bottom to chassis bottom 668.66 = 201.05 px -> keybedFraction 0.4597 (targets 0.54/0.46 +/-0.025).",
+          "Six section fractions of the 1334.66 px deck measured in order: performance 0.13999, organ 0.19999, piano 0.08499, program 0.12500, synth 0.24999, effects 0.19999 against 0.14/0.20/0.085/0.125/0.25/0.20; worst deviation 0.00001 (scratch/probe-geom-b1.mjs)."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 33,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 220,
+          "controlsTotal": 220,
+          "forbiddenPresent": 0
+        },
+        "evidence": [
+          "All 33 sectionLandmarks entries render inside their own section (scratch/inv.json): performance carries perf-master-level, rotary-drive/speed/stop-mode/source, perf-pitch-stick, perf-mod-wheel and the 'nord stage 4' branding on exposed red chassis as the reference photo shows; organ has organ-drawbar-1..9, two .led-ladder level meters, organ-model with B3/Vox/Farf/Pipe 1/Pipe 2 and organ-perc-*; piano has piano-level-a/b, the six-LED Piano Select, piano-model, piano-timbre and the kb-touch/dyn-comp/acoustics/unison switches; program has the primary OLED, program-dial, program-1..8, page-left/right, live-mode, layer-scene, store, split-onset and morph-wheel/at/ctrlped; synth has one narrow OLED plus level, oscillator, filter, envelope, LFO and ARP controls; effects has two grouped fx-group blocks, amp/EQ, delay, comp, reverb and fx-focus-organ/piano/synth.",
+          "Reachability measured, not inferred: a 5x5 document.elementFromPoint grid across each control's border box at 1440x900 unscrolled resolved to the control or a descendant for 220 of 220 controls (147 panel controls + 73 keys), zero unreachable (scratch/probe-reach-h1.mjs). The same grid at 390x844 also returns 220/220 (scratch/probe-narrow-dd1.mjs). Denominator note: controlsTotal counts the 220 [data-control-id] controls (147 panel + 73 keys); the only other interactive element in the page, the .sustain-pedal button, carries no control id and is itself hit-test reachable, so including it would give 221/221 and leave the ratio at 1.0 (scratch/rev-reach-qq9.mjs).",
+          "forbiddenDetection rules applied literally against the rendered DOM (scratch/forb.json, scratch/probe-forbidden2-g1.mjs): no displayElement exists in the performance, organ, piano or effects sections; the program section has exactly one (166.8 x 45.9, the only one, so no 'multiple primary displays'); the synth section's widest displayElement is 0.198 of the section width, below the 0.5 'wide display' threshold; the organ section has 11 drawbar-like controls (>=3x taller than wide) so 'generic equal-width control grid' cannot fire; the piano section has only 2 such tall controls, below the 6 needed for 'drawbar bank'; the effects section splits into two labelled fx-group blocks so 'single undifferentiated control grid' fails; and the largest dark fill inside the performance band is 23x49 px against a 187x229 band, far below the 0.8 area needed for 'full dark inset plate'. Count = 0."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 73,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.61
+        },
+        "evidence": [
+          "73 key buttons render (43 .white-key, 30 .black-key), matching the Stage 4 73 variant's 73/43/30 and its E-to-E range: the first key is data-note='E1' data-midi='28' and the keybed group is labelled '73-key hammer action keybed, E1 to E7' (scratch/probe-keys-c1.mjs).",
+          "All 73 key boxes fall inside the keybed rect (76.33, 489.28, 1287.34 x 171.27) with a 0.5 px epsilon - keysInsideKeybed 73/73 (scratch/probe-computed-d1.mjs).",
+          "Black-key height fraction measured 104.47 / 171.27 = 0.60998 against the target 0.61 +/-0.03; black/white width ratio 17.36 / 29.94 = 0.580."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "Sampled the cropped instrument screenshot at 1440x900 (scratch/shot-inst-i1.png, 593052 px) and compared every rendered surface covering >=0.02% of the crop against specs referenceColors in CIE76: chassisMid #851a25 deltaE 0.00, chassisDark #5a0c13 deltaE 0.40, panelBlueGray #3c424d deltaE 0.00, keyBlack #0b0b0b deltaE 0.00, keyWhite #dcdcdc deltaE 0.00 - 5 of 5 inside deltaE 12.",
+          "The matching surfaces are real chassis and key areas, not stray pixels: the nearest keyBlack surface covers 4.94% of the crop, keyWhite 0.71%, panelBlueGray 0.62% and chassisMid 0.77%."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "Materials and caps are modelled rather than flat: faders carry a .fader-cap on a track beside an 8-segment tri-colour .led-ladder (measured segment colours rgb(55,242,122) green, rgb(255,193,74) amber, unlit rgb(26,29,34)); organ drawbars are role=slider with aria-valuemax=8, colour classes (drawbar-brown/white) and per-step .drawbar-leds; knobs and encoders carry .knob-index / .encoder-cap that rotate with value (scratch/probe-typo-cc1.mjs, scratch/shot-state-bb1.png).",
+          "OLED treatment is distinct from silkscreen: the Program and Synth displays use the Doto dot-matrix face on background rgb(5,8,12) with phosphor rgb(158,231,216) and a 2.7 px radius, while panel legends use Roboto Condensed and the logo uses Days One (scratch/probe-typo-cc1.mjs).",
+          "Simplification a knowledgeable player would notice: 91 legends render at 6.2 px and 34 more at 4.9 px at 1440x900 (scratch/probe-typo-cc1.mjs), so most silkscreen is at the threshold of legibility at the rendered size, and the sub-panel differentiation visible on reference/nord-stage-4-73.jpg (black insets inside the blue-grey plates, red-outlined type groups) is flattened to a single plate tone per section."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "Control positions track their parameters: driving piano-level-a to 0 moved its .fader-cap from 'top: 16.5827%' to 'top: 78%' and emptied its LED ladder from 6 lit segments to 0, while perf-master-level went to aria-valuenow=0 with the knob pointer rotated to minimum and reverb-mix to 127 (scratch/probe-panelstate-bb1.mjs, scratch/shot-state-bb1.png).",
+          "LEDs and displays follow the active layer and section: selecting Electric lit only the third Piano Select LED (Grand:false, Upright:false, Electric:true, Clav:false, Digital:false, Misc:false) and the Program OLED read 'PIANO READY / Rhodes Mk I'; the OLED also reports live data-voices (17 during a 17-note cluster, 0 after release) and pressing C4 set data-pressed='true' on that key; FX knob values and reverb-on repaint from the focused layer's own chain when focus moves A<->B (scratch/probe-panelstate-bb1.mjs, scratch/probe-load-w1.mjs, scratch/probe-focusgroup-y1.mjs).",
+          "Gaps: tapping delay-tap three times at ~250 ms audibly shortens the repeats but the Delay Tempo knob stays at its old aria-valuenow (127 before and after; 0 in the second run), so the panel does not agree with the running tempo (scratch/probe-tap-aa1.mjs, scratch/misc.txt); group and global modes produce no panel indication; MIDI state is never displayed; and every functional control still renders data-decorative=\"true\" (scratch/probe-ctrlstate-l1.mjs)."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "At 390x844 the instrument stays whole and does not clip or collapse: border box 374.39 x 120.95 at x=7.8, aspect 3.0953, documentElement.scrollWidth 390 = innerWidth (no horizontal overflow), all six sections still in order at the same fractions, and the full 73-key keybed still renders (scratch/probe-narrow-dd1.mjs, scratch/shot-narrow-i1.png).",
+          "It stays operable: the same 5x5 elementFromPoint grid resolves 220 of 220 controls at this viewport, and a real mouse press on the C4 key rendered audio at peak 0.4765 (scratch/probe-narrow-dd1.mjs).",
+          "Simplification: the layout only scales the desktop panel down rather than adapting, so keys are 8.28 px wide, the Master Level knob is 11.59 x 13.61 px and all silkscreen is below 2 px - the instrument occupies 121 px of an 844 px viewport, leaving most of the screen empty while panel legends become unreadable (scratch/shot-narrow-i1.png)."
+        ]
+      }
+    ]
+  }
+}
