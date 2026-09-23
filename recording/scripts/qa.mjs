@@ -10,7 +10,7 @@
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { loadShow, argv } from './lib/show.mjs';
+import { loadShow, argv, loadMidi } from './lib/show.mjs';
 
 const FF = process.env.FFMPEG || 'ffmpeg';
 const S = loadShow(argv('show'));
@@ -50,3 +50,28 @@ for (const t of report.timeline) {
   const lim = report.limiter.find((l) => l.model === t.model);
   console.log(`  #${String(t.rank).padEnd(3)} ${t.label.padEnd(24)} miss ${t.take.miss} late p95 ${t.take.schedLateMs.p95} ms, gain ${t.prep.gainDb} dB, limited ${lim.pctLimited}% (max ${lim.maxDb} dB)${t.take.quantizeVelocity ? `, velocity quantized to ${t.take.quantizeVelocity}` : ''}`);
 }
+
+// Note accounting: every MIDI note whose onset falls in a model's audible window must have been
+// played by that model's take (its played span covers the window) or be a known out-of-range skip.
+const midi = loadMidi(S.files.audio);
+const onsets = midi.tracks.flatMap((t) => t.notes).map((n) => ({ t: n.time, note: n.midi, vel: n.velocity }));
+const XF = 0.03;
+let totalExpected = 0, totalSkipped = 0, problems = 0;
+console.log('\nnotes per turn (audible window = from the switch before its downbeat to the next switch):');
+S.plan.segments.forEach((s, k) => {
+  const meta = JSON.parse(fs.readFileSync(path.join(S.takeDir(s.model), 'meta.json'), 'utf8'));
+  const from = k === 0 ? meta.playStart : s.audioFrom - XF, to = s.audioTo; // the first turn starts cold on its downbeat
+  const inWin = onsets.filter((n) => n.t >= from - 1e-6 && n.t < to);
+  const covered = inWin.filter((n) => n.t >= meta.playStart - 1e-6 && n.t < (meta.segment.playBefore ?? Infinity));
+  const skipped = new Set(meta.missed.map((x) => x.split('@')).filter(([, t]) => { const mt = meta.playStart + Number(t); return mt >= from - 1e-3 && mt < to; }).map(([n, t]) => `${n}@${(meta.playStart + Number(t)).toFixed(2)}`));
+  const missedMore = meta.miss > meta.missed.length ? ' (+ more misses not listed)' : '';
+  totalExpected += inWin.length; totalSkipped += skipped.size;
+  if (covered.length !== inWin.length) problems++;
+  console.log(`  ${S.model(s.model).label.padEnd(24)} expected ${String(inWin.length).padStart(4)}  played-span covers ${String(covered.length).padStart(4)}  skipped (out of keybed range) ${skipped.size}${skipped.size ? ' ' + [...skipped].join(' ') : ''}${missedMore}`);
+});
+console.log(`  total ${totalExpected} notes, ${totalSkipped} skipped out of range, ${problems ? problems + ' turns with UNCOVERED notes' : 'every note covered'}`);
+
+// Sync: prep.mjs aligns each take on its first note, so sync holds if the model's output latency is
+// steady through a take. Check that with scripts/latency.mjs (spread should be <~20 ms). Onset
+// cross-correlation on the mix is not reliable here: pedal, reverb and ~150 ms eighth notes alias.
+console.log('\nsync: run scripts/latency.mjs --show ... to confirm each model\'s latency is steady (spread < ~20 ms).');

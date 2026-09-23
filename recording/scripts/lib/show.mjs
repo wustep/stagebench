@@ -113,9 +113,19 @@ function makePlan(show, song, files, order) {
     };
   });
   for (const s of segments) s.secs = +(s.to - s.from).toFixed(3);
+  // 8-bar (barsPerModel) blocks inside each segment, used to measure and gently level loudness.
+  const blocks = segments.flatMap((s, k) => {
+    const out = [];
+    const lastBar = s.bars[1] + 1;
+    for (let b = s.bars[0]; b < lastBar; b += per) {
+      out.push({ model: s.model, seg: k, bars: [b, Math.min(b + per, lastBar) - 1], from: barTime(b), to: barTime(Math.min(b + per, lastBar)) });
+    }
+    return out;
+  });
+  blocks.at(-1).to = Math.min(blocks.at(-1).to, finalRelease);
   const refBars = song.levelReferenceBars || [show.startBar, show.startBar + per - 1];
   const ref = { from: barTime(refBars[0]), to: barTime(refBars[1] + 1) };
-  return { t0, end, duration: +(end - t0).toFixed(3), segments, ref, songBars };
+  return { t0, end, duration: +(end - t0).toFixed(3), segments, blocks, ref, songBars };
 }
 
 export const argv = (name, def) => {

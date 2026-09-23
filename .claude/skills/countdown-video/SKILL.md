@@ -42,8 +42,8 @@ cd recording && node scripts/make.mjs --show shows/<name>.json --plan
 
 If a model has no entry in `models.json`, the loader warns. Probe it with `node scripts/probe.mjs --model <id>` and write a fixture:
 
-- **Just the grand.** Piano A only; organ, synth, Piano B, unison and mod effects off. Use only controls the preview ships.
-- **Reverb.** Turn it on only when the probe's tail test shows a real tail. Amounts stay at the model's default.
+- **Just the grand plus basic reverb.** Piano A only; organ, synth, Piano B, unison and mod effects off. Use only controls the preview ships. Confirm with `scripts/audit.mjs`, and use `scripts/abtest.mjs` to prove a control really changes the sound. Some cycle buttons always report `aria-pressed=true`, so a blind toggle can switch things **on**.
+- **Reverb.** Turn it on only when the probe's tail test shows a real tail. Set it to about 35% dry/wet with a `setValue` step.
 - **Fixed-width layouts.** Use the suggested viewport, which gets a higher DPR instead of upscaling.
 - **Flagged key cost.** If the probe flags a high key cost (a note built per velocity), `quantizeVelocity` may be needed. That changes the input, so **ask the user** first and disclose it.
 - **Record the reasoning.** Put what you found in the fixture's `audit` string.
@@ -71,7 +71,7 @@ Diagnose the cause (see README "Hard-won details"). Don't paper over it in the c
 - the tail has decayed below about −50 dB;
 - the misses and lateness in the report make sense. Notes below a keybed's range are skipped by design; name them.
 
-Also report the limiter load per model. Velocity-sensitive pianos (Opus 5.5) take the most limiting at −14 LUFS.
+Also run `node scripts/latency.mjs --show …`. Each model's latency spread should stay under about 20 ms, so first-note alignment holds for the whole turn. Report the leveling nudges (in `output/<show>.report.json`) and the limiter load per model. If the user says a part is too quiet or too loud, adjust the show's `leveling` gently; don't flatten the song. Velocity-sensitive pianos (Opus 5.5) take the most limiting at −14 LUFS.
 
 You can't listen to the result. Tell the user to watch it with sound before posting.
 

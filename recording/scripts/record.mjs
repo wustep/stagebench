@@ -21,6 +21,7 @@ import fs from 'fs';
 import path from 'path';
 import { LAUNCH_ARGS, initScript, findInstrument, pianoOnly, hardwareBox, controlReport, installDriver } from './lib/page.mjs';
 import { loadShow, loadMidi, events, assertSamePerformance, argv, FPS } from './lib/show.mjs';
+import { runSetup } from './lib/setup.mjs';
 
 const S = loadShow(argv('show'));
 const key = argv('model');
@@ -67,34 +68,7 @@ for (const sel of ['[data-testid=screen-notice-dismiss]', 'button:has-text("Cont
 }
 
 // Setup steps (models.json): only controls the preview already ships.
-const setupLog = [];
-for (const step of model.setup) {
-  if (step.pressIfOff || step.pressOffIfOn) {
-    const sel = step.pressIfOff || step.pressOffIfOn, want = step.pressIfOff ? 'true' : 'false';
-    const b = page.locator(sel).first();
-    if (!(await b.count())) { setupLog.push(`missing ${sel}`); continue; }
-    const pressed = String(await b.getAttribute('aria-pressed') === 'true');
-    if (pressed === want) setupLog.push(`already ${want === 'true' ? 'on' : 'off'}: ${sel}`);
-    else { await b.click({ timeout: 2000 }); setupLog.push(`turned ${want === 'true' ? 'on' : 'off'}: ${sel}`); }
-  } else if (step.cycleTo) {
-    const [sel, re] = step.cycleTo;
-    const b = page.locator(sel).first();
-    if (!(await b.count())) { setupLog.push(`missing ${sel}`); continue; }
-    const from = await b.getAttribute('aria-label');
-    for (let i = 0; i < 12 && !new RegExp(re).test((await b.getAttribute('aria-label')) || ''); i++) {
-      await b.click({ timeout: 2000 });
-      await page.waitForTimeout(150);
-    }
-    setupLog.push(`${from} -> ${await b.getAttribute('aria-label')}`);
-  } else if (step.select) {
-    const [sel, val] = step.select;
-    const s = page.locator(sel).first();
-    if (!(await s.count())) { setupLog.push(`missing ${sel}`); continue; }
-    const cur = await s.evaluate((e) => e.options[e.selectedIndex]?.text);
-    if (cur === val) setupLog.push(`already ${val}: ${sel}`);
-    else { await s.selectOption({ label: val }); setupLog.push(`selected ${val} (was ${cur})`); }
-  }
-}
+const setupLog = await runSetup(page, model.setup);
 await page.waitForTimeout(600);
 const controlsAfter = await page.evaluate(controlReport);
 console.log('setup', setupLog);

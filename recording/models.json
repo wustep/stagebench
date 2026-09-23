@@ -1,51 +1,132 @@
 {
-  "$comment": "Per-run capture fixtures (prewarm: play every pitch/velocity once before recording, only for engines that build notes on first use; quantizeVelocity: snap velocities to N levels), keyed by run id (runs/<id>). Labels, ranks and scores come from runs/<id>/run.json; this file only holds how to capture each preview. Add an entry with `node scripts/probe.mjs --model <id>` before putting a new model in a show. viewport: CSS size + DPR so the instrument renders ~2400 device px wide (fixed-width layouts get a smaller CSS viewport and higher DPR, never upscaling). setup: steps run before capture, using only controls the preview ships (see README 'Setup steps'). Reverb is switched on only where the staccato tail test shows a real tail; amounts stay at each model's default.",
-  "default": { "viewport": { "width": 2560, "height": 960, "dpr": 1 }, "setup": [] },
+  "$comment": "Per-run capture fixtures (prewarm: play every pitch/velocity once before recording, only for engines that build notes on first use; quantizeVelocity: snap velocities to N levels), keyed by run id (runs/<id>). Labels, ranks and scores come from runs/<id>/run.json; this file only holds how to capture each preview. Add an entry with `node scripts/probe.mjs --model <id>` before putting a new model in a show. viewport: CSS size + DPR so the instrument renders ~2400 device px wide (fixed-width layouts get a smaller CSS viewport and higher DPR, never upscaling). setup: steps run before capture, using only controls the preview ships (see README 'Setup steps'). Every model plays just its grand plus basic reverb: reverb is switched on only where the staccato tail test shows a real tail, and set to ~35% of its dry/wet range (Opus 5.5's own default) with the model's own knob. Beware cycle buttons whose aria-pressed is always true (Kimi): pressIfOff/pressOffIfOn would toggle them blindly; A/B with scripts/abtest.mjs before adding a step.",
+  "default": {
+    "viewport": {
+      "width": 2560,
+      "height": 960,
+      "dpr": 1
+    },
+    "setup": []
+  },
   "claude-opus-5-5": {
-    "setup": [{ "pressIfOff": "button[aria-label=\"Reverb on\"]" }],
-    "audit": "Program 1.1 Salamander Grand samples, Piano A only. Velocity from strike depth (widest dynamic range of the set). Reverb works (dry/wet 35% default)."
+    "setup": [
+      {
+        "pressIfOff": "button[aria-label=\"Reverb on\"]"
+      }
+    ],
+    "audit": "Program 1.1 Salamander Grand samples, Piano A only. Velocity from strike depth (widest dynamic range of the set). Reverb works (dry/wet 35% default). Reverb left at its 35% default (the reference level for the others). A/B 2026-09-23: nothing else sounding."
   },
   "claude-fable-5-1": {
-    "setup": [{ "pressIfOff": "button[aria-label=\"Reverb on\"]" }],
-    "audit": "1.1 Init Grand, Piano A: Salamander C5, B off. Velocity from strike depth. Reverb on by default and works."
+    "setup": [
+      {
+        "pressIfOff": "button[aria-label=\"Reverb on\"]"
+      },
+      {
+        "setValue": [
+          "[aria-label=\"Reverb dry/wet\"]",
+          3.5
+        ]
+      }
+    ],
+    "audit": "1.1 Init Grand, Piano A: Salamander C5, B off. Velocity from strike depth. Reverb on by default and works; dry/wet 6.0 -> 3.5 (of 10) to match."
   },
   "claude-opus-5": {
     "setup": [
-      { "pressIfOff": "button[aria-label=\"Reverb On\"]" },
-      { "cycleTo": ["button[aria-label^=\"Reverb type\"]", "Room$"] }
+      {
+        "pressIfOff": "button[aria-label=\"Reverb On\"]"
+      },
+      {
+        "cycleTo": [
+          "button[aria-label^=\"Reverb type\"]",
+          "Room$"
+        ]
+      },
+      {
+        "setValue": [
+          "[aria-label=\"Reverb Dry/Wet\"]",
+          3.5
+        ]
+      }
     ],
-    "audit": "Concert Grand YDP recorded samples, Piano A only. Reverb works but ships as Spring; set to Room (Spring > Stage > Hall > Cathedral > Room > Booth). Keys carry data-note names (E1) and numeric data-midi."
+    "audit": "Concert Grand YDP recorded samples, Piano A only, mono output. Reverb works but ships as Spring at 6.4/10 wet (the 'weird effect'): set to Room (Spring > Stage > Hall > Cathedral > Room > Booth) at 3.5. A/B 2026-09-23: forcing organ/synth layers off changes nothing (sections are off). Keys carry data-note names (E1) and numeric data-midi."
   },
   "gpt-6-astra": {
-    "setup": [{ "select": ["select[aria-label=\"Piano type\" i]", "Grand"] }],
+    "setup": [
+      {
+        "select": [
+          "select[aria-label=\"Piano type\" i]",
+          "Grand"
+        ]
+      }
+    ],
     "audit": "Program 1.1 Concert Grand; only piano model is 'Grand synthesis fallback' (synthesized). Fixed velocity. Reverb switch adds no audible tail and drops the dry level ~3 dB, so it stays at default."
   },
   "claude-fable-5": {
-    "setup": [{ "pressIfOff": "button[aria-label=\"Reverb On\"]" }],
-    "audit": "Royal Grand program, A: Salamander Grand; organ/synth sections on but every layer off (silent). Reverb works. Its renderer crashes intermittently under dense playback (the octave-hit reference pass crashed 2 of 3 attempts on 2026-09-23; zero-length notes crash it reliably). make.mjs retries crashed takes. Not pre-warmed: it doesn't need it (185 ms once for engine start, then <1 ms per note)."
+    "setup": [
+      {
+        "pressIfOff": "button[aria-label=\"Reverb On\"]"
+      },
+      {
+        "setValue": [
+          "[aria-label=\"Reverb Dry/Wet\"]",
+          45
+        ]
+      }
+    ],
+    "audit": "Royal Grand program, A: Salamander Grand; organ/synth sections on but every layer off (silent). Reverb works; dry/wet 64 -> 44 (of 127, knob steps by 4) to match. Its renderer crashes intermittently under dense playback (the octave-hit reference pass crashed 2 of 3 attempts on 2026-09-23; zero-length notes crash it reliably). make.mjs retries crashed takes. Not pre-warmed: it doesn't need it (185 ms once for engine start, then <1 ms per note)."
   },
   "grok-4-7-high": {
     "setup": [],
     "audit": "1.1 Grand Piano, Piano A only, Layer Effects off. Velocity from strike depth. Reverb switch has no audible tail (also with Layer Effects on), so it stays at default. OLED reads 'MIDI DENIED' in headless Chromium (its own UI)."
   },
   "gpt-6-sol": {
-    "viewport": { "width": 1600, "height": 600, "dpr": 1.6 },
-    "setup": [{ "select": ["select[aria-label=\"Piano type\" i]", "Grand"] }],
+    "viewport": {
+      "width": 1600,
+      "height": 600,
+      "dpr": 1.6
+    },
+    "setup": [
+      {
+        "select": [
+          "select[aria-label=\"Piano type\" i]",
+          "Grand"
+        ]
+      }
+    ],
     "audit": "Fixed 1500 px layout. Synthesized piano (loads no samples), almost fully decorrelated L/R (attack correlation ~ -0.06) which reads hollow; fixed velocity. Effects off by default (turning 'Effect 1' on adds auto-pan). Reverb switch has no measurable effect, left at default."
   },
   "kimi-k3": {
-    "viewport": { "width": 1500, "height": 560, "dpr": 1.7 },
+    "viewport": {
+      "width": 1500,
+      "height": 560,
+      "dpr": 1.7
+    },
     "quantizeVelocity": 8,
     "prewarm": true,
     "setup": [
-      { "pressOffIfOn": "button[aria-label=\"Piano unison\"]" },
-      { "pressIfOff": "button[aria-label=\"Reverb on/off\"]" }
+      {
+        "pressIfOff": "button[aria-label=\"Reverb on/off\"]"
+      },
+      {
+        "setValue": [
+          "[aria-label=\"Reverb amount\"]",
+          45
+        ]
+      }
     ],
-    "audit": "Fixed 1400 px layout. Grand Lady D, Piano A only; Piano Unison ships ON (detuned doubling), switched off. Reverb works. Builds each note on first use (~90 ms main-thread work) keyed per pitch and almost per exact velocity, so humanized dynamics fall seconds behind in real time; velocities are snapped to 8 levels (Stephen's call) and every (pitch, velocity) is pre-warmed so it plays in time."
+    "audit": "Fixed 1400 px layout. Grand Lady D, Piano A only; organ and synth sections off (A/B: forcing their layers off changes nothing). Piano Unison, Dyn Comp and Timbre are cycle buttons whose aria-pressed is always true: the program default is a dry mono grand, and one Unison click turns detuned unison ON (A/B: L/R corr 1.000 -> 0.988, +1.3 dB), so they are left at default. Reverb works; amount 30 -> 45 (of 127). Builds each note on first use (~90 ms main-thread work) keyed per pitch and almost per exact velocity, so humanized dynamics fall seconds behind in real time; velocities are snapped to 8 levels (Stephen's call) and every (pitch, velocity) is pre-warmed so it plays in time."
   },
   "gpt-6-luna": {
-    "viewport": { "width": 1706, "height": 640, "dpr": 1.5 },
-    "setup": [{ "pressIfOff": "button[aria-label=\"Piano Type Grand\"]" }],
+    "viewport": {
+      "width": 1706,
+      "height": 640,
+      "dpr": 1.5
+    },
+    "setup": [
+      {
+        "pressIfOff": "button[aria-label=\"Piano Type Grand\"]"
+      }
+    ],
     "audit": "Fixed 1600 px layout. Salamander Grand, model Studio (Studio/Warm/Bright). Keybed labeled E2-D#8, an octave above a real Stage 4 73, so notes below E2 are skipped (its Transpose control does not remap keys). Fixed velocity, mono output. Reverb switch adds no tail and drops the dry level ~5 dB, left at default."
   }
 }

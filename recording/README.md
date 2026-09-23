@@ -39,10 +39,11 @@ Record serially and leave the machine alone while the audio passes run. They pla
 | `startBar`, `barsPerModel` | Where the video starts, and how long each model plays. Cut on the song's grid (`song.json` → `grid`). |
 | `last` | `"to-end"` means the last model plays every remaining bar. A number means that many bars. If omitted, the last model gets `barsPerModel` bars and lands on the next downbeat. |
 | `idle`, `breathe` | Idle keyboard before the first note (0.4 s), and the hold after the last note lifts (2.5 s). |
-| `caption` | Top-right `title`, `subtitle` and `date`. |
+| `caption` | Top-right `title`, `subtitle` and `date`. `fadeOut: [start, gone]` fades it out by `gone` seconds; the default is `[3.5, 5]`. |
 | `labels` | Optional `{ "<run-id>": "Display name" }` overrides. |
 | `titleCardSecs` | Optional intro card in the same style. It's 0 in the current show, meaning no intro slide. |
 | `loudness.targetLufs` | Final integrated loudness (−14). |
+| `leveling` | Gentle per-block nudges: `strength` 0.4, `deadbandDb` 2, `maxBoostDb` 3, `maxCutDb` 1.5. Each `barsPerModel` block more than `deadbandDb` from the median moves `strength` of its distance toward it, within the caps. Gains ramp inside a model's turn and step at cuts. Keep it gentle; the song's dynamics are the point. |
 | `previewBase`, `stage` | Where previews load from (production by default) and which phase. |
 
 **Duration.** Duration is roughly `models × barsPerModel × (seconds per bar)` plus the last model's extra bars. At this tempo one 8-bar cycle is about 7 s. Use `--plan` to see the exact timeline before recording.
@@ -54,12 +55,12 @@ Record serially and leave the machine alone while the audio passes run. They pla
 The style lives in `scripts/compose.mjs`:
 
 - **Frame:** 1920×1080 at 30 fps on black.
-- **Keyboard:** one at a time, fitted to a 1760×590 box centered at y = 600.
-- **Top-left:** `#N` at 60 px bold in `#f6eee2`, then "on StageBench" at 30 px in 62% white, then the model name at 92 px, weight 650. A model without a rank gets a "NEW" pill instead.
-- **Top-right caption:** title 30 px / 600, subtitle 22 px / 500, date 18 px caps.
+- **Keyboard:** one at a time, fitted to a 1800×610 box centered at y = 610.
+- **Top-left:** `#N` at 60 px bold in `#f6eee2`, then "on StageBench" at 30 px in 62% white, then the model name at 84 px, weight 650. A model without a rank gets a "NEW" pill instead.
+- **Top-right caption:** title 30 px / 600, subtitle 22 px / 500, date 18 px caps. It fades out by 5 s.
 - **Cuts:** hard picture cuts on the frame at or before each downbeat.
 - **Audio switches:** 30 ms equal-power crossfade ending exactly on the downbeat, with no fades.
-- **Encode:** H.264 High CRF 16, AAC 256 kbps at 48 kHz, −14 LUFS through a −1.7 dBFS lookahead limiter.
+- **Encode:** H.264 High CRF 16, AAC 256 kbps at 48 kHz. Gentle block leveling, then −14 LUFS through a −1.7 dBFS lookahead limiter.
 
 ## How a take is made (`scripts/record.mjs`)
 
@@ -79,16 +80,21 @@ Each model is recorded on one prepared page, with Playwright driving a headless 
 
 ## Adding a model
 
-1. Run `node scripts/probe.mjs --model <run-id>`. It reports the keybed range, fluid or fixed layout (with a suggested viewport), the sound-relevant controls as the page reports them, key-press cost, velocity response and the reverb tail test.
+1. Run `node scripts/probe.mjs --model <run-id>`, then `scripts/audit.mjs` (everything switched on after setup, and the effect/reverb amounts) and `scripts/abtest.mjs` (prove whether a control changes the sound). It reports the keybed range, fluid or fixed layout (with a suggested viewport), the sound-relevant controls as the page reports them, key-press cost, velocity response and the reverb tail test.
 2. Read the report's controls list and add a fixture to `models.json`. It should give just the grand on Piano A: organ, synth, Piano B, unison and mod effects off. Turn reverb on only if the tail test shows a real tail, and leave amounts at the model's defaults.
-3. Record the model alone: `make.mjs --models <id>`. Check its `meta.json` for `setup`, `miss` and `schedLateMs`, and look at `still.png`.
+3. Run `scripts/latency.mjs --model <id>`. Output latency should be steady, with a spread under about 20 ms, because prep aligns each take on its first note.
+4. Record the model alone: `make.mjs --models <id>`. Check its `meta.json` for `setup`, `miss` and `schedLateMs`, and look at `still.png`.
 
-## Setup steps (models.json)
+## Setup steps (models.json, run by `scripts/lib/setup.mjs`)
 
 - `pressIfOff: <selector>` clicks if `aria-pressed` isn't `true`.
 - `pressOffIfOn: <selector>` clicks if `aria-pressed` is `true`.
 - `select: [<selector>, <option label>]` chooses an option.
 - `cycleTo: [<selector>, <aria-label regex>]` clicks a cycling button until its label matches.
+- `setValue: [<selector>, <target>, <regex?>]` steps a slider or knob with the arrow keys to a target. It's used to set reverb to about 35%.
+- `click: <selector>` clicks once, for cycle buttons with no readable state. Verify it with `abtest.mjs`.
+
+**Target sound: just the grand plus basic reverb.** Reverb is on only where the tail test shows it works, and set to about 35% of its dry/wet range, which is Opus 5.5's default. Some previews render toggles as cycle buttons whose `aria-pressed` is always `true`, such as Kimi's Piano Unison, Dyn Comp and Timbre. `pressIfOff`/`pressOffIfOn` would toggle those blindly: the old Kimi fixture's "unison off" step actually switched unison **on**. A/B any step with `scripts/abtest.mjs` before trusting it.
 
 ## Hard-won details
 

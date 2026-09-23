@@ -3,8 +3,9 @@
  * Usage: node scripts/compose.mjs --show shows/<name>.json
  *
  * House style (keep identical across shows): 1920x1080, 30 fps, black. One keyboard at a time,
- * fit to a 1760x590 box centered at y=600. Top-left: "#N on StageBench" (60 px bold, warm white)
- * over the model name (92 px). Top-right: caption title / subtitle / date. Text is HTML rendered
+ * fit to a 1800x610 box centered at y=610. Top-left: "#N on StageBench" (60 px bold, warm white)
+ * over the model name (84 px). Top-right: caption title / subtitle / date, fading out by 5 s
+ * (caption.fadeOut). Text is HTML rendered
  * with -apple-system (SF Pro on macOS), so render on a Mac for identical type.
  * Audio: one timeline from the takes, 30 ms equal-power switches that end exactly on each
  * downbeat (no fades), then linear make-up gain to the target LUFS through a -1.7 dBFS lookahead
@@ -19,7 +20,7 @@ import { loadShow, argv, FPS } from './lib/show.mjs';
 const FF = process.env.FFMPEG || 'ffmpeg';
 const FFPROBE = process.env.FFPROBE || 'ffprobe';
 const W = 1920, H = 1080;
-const BOX_W = 1760, BOX_H = 590, BOX_CY = 600;
+const BOX_W = 1800, BOX_H = 610, BOX_CY = 610;
 const MARGIN_X = (W - BOX_W) / 2;
 const LIMIT_DBFS = -1.7;
 const XF = 0.03; // switch length; ends exactly on the downbeat
@@ -81,6 +82,52 @@ const mixed = path.join(WORK, 'timeline-premaster.wav');
 ff([...inputs, '-filter_complex', chains.join(';') + ';' + segs.map((_, i) => `[s${i}]`).join('') +
   `amix=inputs=${segs.length}:normalize=0:duration=longest,apad=whole_dur=${tlDur.toFixed(5)},atrim=duration=${tlDur.toFixed(5)}`,
   '-t', tlDur.toFixed(5), '-ar', String(SR), '-c:a', 'pcm_f32le', mixed]);
+
+// --- 1b. Gentle leveling: nudge only blocks that stand well off the median. ---
+// Each barsPerModel block is measured (after the per-model reference gains). A block more than
+// `deadbandDb` from the median moves toward it by `strength` of its distance, capped at
+// +maxBoostDb / -maxCutDb. Gains ramp over `rampSec` inside a model's turn and step exactly at the
+// cut between models, so the song keeps its shape and nothing pumps.
+const LV = { strength: 0.35, deadbandDb: 2, maxBoostDb: 2, maxCutDb: 1.5, rampSec: 1, ...(S.show.leveling || {}) };
+const blockLoud = (from, to) => {
+  const r = spawnSync(FF, ['-hide_banner', '-nostdin', '-ss', (from - P.t0).toFixed(3), '-t', (to - from).toFixed(3), '-i', mixed,
+    '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'], { encoding: 'utf8' });
+  return Number(/I:\s+(-?[\d.]+) LUFS/.exec(r.stderr)?.[1]);
+};
+const blocks = P.blocks.map((b) => ({ ...b, I: blockLoud(b.from, b.to) }));
+const sorted = blocks.map((b) => b.I).sort((x, y) => x - y);
+const median = sorted[Math.floor(sorted.length / 2)];
+for (const b of blocks) {
+  const d = b.I - median;
+  b.nudgeDb = Math.abs(d) <= LV.deadbandDb ? 0 : Math.max(-LV.maxCutDb, Math.min(LV.maxBoostDb, -LV.strength * d));
+}
+{
+  const dec = spawnSync(FF, ['-v', 'error', '-i', mixed, '-f', 'f32le', '-ac', '2', '-ar', String(SR), '-'], { maxBuffer: 1 << 30 }).stdout;
+  const st = new Float32Array(dec.buffer.slice(dec.byteOffset, dec.byteOffset + dec.byteLength));
+  const n = st.length / 2;
+  const gainAt = new Float32Array(n);
+  const idxOf = (t) => Math.max(0, Math.min(n, Math.round((t - P.t0) * SR)));
+  blocks.forEach((b, i) => {
+    const first = i === 0 || blocks[i - 1].seg !== b.seg;
+    const last = i === blocks.length - 1 || blocks[i + 1].seg !== b.seg;
+    const from = first ? (b.seg === 0 ? P.t0 : segs[b.seg].audioFrom) : b.from;
+    const to = last ? (b.seg === segs.length - 1 ? P.end : segs[b.seg].audioTo) : blocks[i + 1].from;
+    for (let j = idxOf(from); j < idxOf(to); j++) gainAt[j] = b.nudgeDb;
+  });
+  // Smooth only the within-turn block boundaries.
+  const smooth = Float32Array.from(gainAt);
+  blocks.forEach((b, i) => {
+    if (i === 0 || blocks[i - 1].seg !== b.seg) return;
+    const g0 = blocks[i - 1].nudgeDb, g1 = b.nudgeDb, c = idxOf(b.from), h = Math.round((LV.rampSec / 2) * SR);
+    for (let j = c - h; j < c + h; j++) if (j >= 0 && j < n) smooth[j] = g0 + ((g1 - g0) * (j - (c - h))) / (2 * h);
+  });
+  for (let j = 0; j < n; j++) { const g = Math.pow(10, smooth[j] / 20); st[2 * j] *= g; st[2 * j + 1] *= g; }
+  const r = spawnSync(FF, ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', '-f', 'f32le', '-ar', String(SR), '-ac', '2', '-i', '-',
+    '-c:a', 'pcm_f32le', mixed], { input: Buffer.from(st.buffer), maxBuffer: 1 << 30 });
+  if (r.status !== 0) throw new Error(String(r.stderr).slice(-800));
+}
+console.log('leveling (median ' + median.toFixed(1) + ' LUFS): ' + blocks.map((b) => `${b.model} ${b.bars.join('-')} ${b.I.toFixed(1)}${b.nudgeDb ? ` ${b.nudgeDb > 0 ? '+' : ''}${b.nudgeDb.toFixed(1)}dB` : ''}`).join(' | '));
+
 const pre = loudness(mixed);
 const makeup = TARGET_LUFS - pre.I;
 const master = path.join(WORK, 'timeline-master.wav');
@@ -110,7 +157,7 @@ const css = `
   .num { font-size: 60px; font-weight: 700; letter-spacing: -1px; color: #f6eee2; font-variant-numeric: tabular-nums; }
   .new { font-size: 26px; font-weight: 700; letter-spacing: 3px; color: #000; background: #f6eee2; padding: 6px 14px; border-radius: 8px; align-self: center; }
   .on { font-size: 30px; font-weight: 500; color: rgba(255,255,255,0.62); }
-  .name { margin-top: 4px; font-size: 92px; font-weight: 650; letter-spacing: -1.5px; line-height: 1.02; }
+  .name { margin-top: 4px; font-size: 84px; font-weight: 650; letter-spacing: -1.3px; line-height: 1.02; }
   .cap { position: absolute; right: ${MARGIN_X}px; top: 98px; text-align: right; }
   .cap .t { font-size: 30px; font-weight: 600; color: rgba(255,255,255,0.86); letter-spacing: -0.2px; }
   .cap .s { margin-top: 8px; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.55); }
@@ -125,12 +172,16 @@ for (const s of segs) {
   const m = S.model(s.model);
   const rank = m.rank ? `<span class="num">#${m.rank}</span><span class="on">on StageBench</span>`
     : `<span class="new">NEW</span><span class="on">not yet ranked on StageBench</span>`;
-  await page.setContent(`<style>${css}</style><div class="card"><div class="rank">${rank}</div><div class="name">${esc(m.label)}</div></div>${CAPTION}`);
+  await page.setContent(`<style>${css}</style><div class="card"><div class="rank">${rank}</div><div class="name">${esc(m.label)}</div></div>`);
   await page.evaluate(() => document.fonts.ready);
   const file = path.join(WORK, `label-${s.model}.png`);
   await page.screenshot({ path: file, omitBackground: true });
   overlays.push(file);
 }
+await page.setContent(`<style>${css}</style>${CAPTION}`);
+await page.evaluate(() => document.fonts.ready);
+const captionPng = path.join(WORK, 'caption.png');
+await page.screenshot({ path: captionPng, omitBackground: true });
 let title = null;
 if (TITLE_SECS > 0) {
   await page.setContent(`<style>${css}
@@ -162,8 +213,14 @@ segs.forEach((s, i) => {
   graph.push(`[c${i}][${oi}:v]overlay=0:0,format=yuv420p,setsar=1,trim=end_frame=${Math.round(D * FPS)}[v${i + 1}]`);
 });
 const parts = Array.from({ length: segs.length + 1 }, (_, i) => i).filter((i) => i > 0 || title);
-graph.push(`${parts.map((i) => `[v${i}]`).join('')}concat=n=${parts.length}:v=1:a=0[v]`);
 const total = TITLE_SECS + tlDur;
+// Caption: fully visible, then fades out and is gone by fadeOut[1] seconds into the film.
+const [capFadeStart, capGone] = cap.fadeOut || [3.5, 5];
+graph.push(`${parts.map((i) => `[v${i}]`).join('')}concat=n=${parts.length}:v=1:a=0[vcat]`);
+graph.push(`[${idx}:v]format=rgba,fade=t=out:st=${capFadeStart}:d=${(capGone - capFadeStart).toFixed(3)}:alpha=1[cap]`);
+graph.push(`[vcat][cap]overlay=0:0:eof_action=pass,format=yuv420p[v]`);
+vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(capGone + 0.5), '-i', captionPng);
+idx++;
 graph.push(`[${idx}:a]${TITLE_SECS > 0 ? `adelay=${TITLE_SECS * 1000}:all=1,` : ''}apad=whole_dur=${total.toFixed(5)}[a]`);
 vin.push('-i', master);
 ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-t', total.toFixed(5),
@@ -172,7 +229,7 @@ ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-
 
 const report = {
   show: S.name, file: path.relative(process.cwd(), S.output), duration: duration(S.output), loudness: loudness(S.output),
-  makeupDb: +makeup.toFixed(2), limiter,
+  makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, lufs: b.I, nudgeDb: +b.nudgeDb.toFixed(2) })) },
   timeline: segs.map((s) => {
     const m = S.model(s.model);
     return { model: s.model, label: m.label, rank: m.rank, score: m.score, bars: s.bars,
