@@ -1,5 +1,9 @@
 import { next } from '@vercel/functions'
 import { checkRateLimit } from '@vercel/firewall'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { REFERENCE_PHOTO_NAME, REFERENCE_PHOTOS } from './bench/lib/reference-assets.mjs'
 
 const LOGIN_RATE_LIMIT_ID = 'stagebench-login'
 const SESSION_SECONDS = 60 * 60 * 24 * 7
@@ -8,16 +12,8 @@ const EXTRAS_PATH = '/secret'
 const EXTRAS_COOKIE = 'stagebench_extras'
 const encoder = new TextEncoder()
 
-// Official Nord product shots — proxied for any visitor (same URLs as
-// bench/lib/fetch-reference.mjs; publicly hotlinkable from Nord's CDN, just
-// not bundled in the repo). The reference-photo compare tool is available to
-// everyone, so this proxy is intentionally not gated behind /secret.
-const REFERENCE_PHOTOS = {
-  'nord-stage-4.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/lyDePXcG/NS4_HA88_TopDown-01_241008.jpg',
-  'nord-stage-4-73.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/2jnZVaTL/NS4_HA73_TopDown-01_241008.jpg',
-  'nord-stage-4-compact.jpg': 'https://assets.nordkeyboards.com/nord-assets-prod/media/original_images/NS4_Compact73_TopDown-01_231020.jpg',
-}
-const REFERENCE_PHOTO_NAME = /^nord-stage-4[\w.-]*\.jpg$/
+// Repo root — middleware.js lives at the project root on Vercel and locally.
+const REPO_ROOT = fileURLToPath(new URL('.', import.meta.url))
 
 const securityHeaders = {
   'Cache-Control': 'no-store',
@@ -146,6 +142,31 @@ function htmlResponse(html, status = 401, headers = {}) {
   })
 }
 
+function jpegResponse(body, request) {
+  const headers = {
+    'Content-Type': 'image/jpeg',
+    'Cache-Control': 'public, max-age=3600',
+    'X-Content-Type-Options': 'nosniff',
+  }
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers })
+  }
+  return new Response(body, { status: 200, headers })
+}
+
+/** Prefer committed ./reference/<name>, then public/reference/<name>
+ *  (build copy / static hosting). CDN is the last-resort fallback. */
+async function readLocalReference(name, root = REPO_ROOT) {
+  for (const dir of ['reference', 'public/reference']) {
+    try {
+      return await readFile(join(root, dir, name))
+    } catch {
+      // not present at this path — try the next
+    }
+  }
+  return null
+}
+
 async function handleReferencePhoto(request, options = {}) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method not allowed', { status: 405, headers: securityHeaders })
@@ -161,21 +182,28 @@ async function handleReferencePhoto(request, options = {}) {
     return new Response('Not found', { status: 404, headers: securityHeaders })
   }
 
+  const readLocal = options.readLocal ?? readLocalReference
+  const local = await readLocal(name)
+  if (local) {
+    return jpegResponse(local, request)
+  }
+
   const fetchImpl = options.fetch ?? fetch
-  const upstream = await fetchImpl(sourceUrl)
+  let upstream
+  try {
+    upstream = await fetchImpl(sourceUrl)
+  } catch (error) {
+    console.error('Stagebench reference photo upstream fetch error', error)
+    return new Response('Reference photo unavailable', { status: 502, headers: securityHeaders })
+  }
   if (!upstream.ok) {
     return new Response('Reference photo unavailable', { status: 502, headers: securityHeaders })
   }
 
-  const headers = {
-    'Content-Type': 'image/jpeg',
-    'Cache-Control': 'public, max-age=3600',
-    'X-Content-Type-Options': 'nosniff',
-  }
   if (request.method === 'HEAD') {
-    return new Response(null, { status: 200, headers })
+    return jpegResponse(null, request)
   }
-  return new Response(upstream.body, { status: 200, headers })
+  return jpegResponse(upstream.body, request)
 }
 
 export async function handleRequest(request, options = {}) {

@@ -60,7 +60,7 @@ const COMMANDS = {
   thumbs: 'Regenerate gallery hover thumbnails from the published previews [<run-id>]',
   redigest: 'redigest [<run-id>] — re-record sealed artifact digests under the current artifact definition [--apply] (dry run by default)',
   reindex: 'Regenerate src/data/runs.json from runs/*/run.json',
-  fetch: 'Download the Nord manual and product photos into ./reference [--force] [--timeout <ms>]',
+  fetch: 'Download the Nord manual and product photos into ./reference [--force] [--timeout <ms>] [--photos-only]',
   help: 'Show this help',
 }
 
@@ -467,7 +467,7 @@ try {
     } else if (command === 'reindex') {
       result = await reindexRegistry(root)
     } else if (command === 'fetch') {
-      result = await fetchReference(root, { force: options.force === 'true', timeout: options.timeout })
+      result = await fetchReference(root, { force: options.force === 'true', timeout: options.timeout, photosOnly: options['photos-only'] === 'true' })
       if (result.failed > 0) process.exitCode = 1
     }
     if (result) console.log(JSON.stringify(result, null, 2))

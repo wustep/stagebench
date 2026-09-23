@@ -4,11 +4,11 @@ import { createReadStream, existsSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import { secretBridgePlugin } from './bench/lib/vite-secret-bridge.mjs'
 
-/** Dev-server bridge to the repo-root reference/ photos (gitignored, fetched
- *  via `pnpm bench fetch`, never redistributed). Lets the artifact study
- *  pages under public/artifacts/ overlay /reference/<photo>.jpg while
- *  developing; production serves the same route from middleware.js after the
- *  /secret unlock, so published builds never bundle Nord's product shots. */
+/** Dev-server bridge to repo-root reference/ photos (committed JPGs;
+ *  `pnpm bench fetch` for the manual PDF). Lets artifact study pages under
+ *  public/artifacts/ overlay /reference/<photo>.jpg while developing;
+ *  production serves the same route from middleware.js (local files first,
+ *  then Nord CDN). */
 const referencePhotos = (): Plugin => ({
   name: 'stagebench-reference-photos',
   configureServer(server) {

@@ -119,8 +119,8 @@ const extraModelsUnlocked =
   document.cookie.split(';').some((entry) => entry.trim().startsWith('stagebench_extras='))
 const showDevTools = import.meta.env.DEV || extraModelsUnlocked
 const overlayMissingMessage = import.meta.env.DEV
-  ? 'reference photo unavailable — dev server with reference/ fetched (pnpm bench fetch)'
-  : 'reference photo unavailable — upstream fetch failed; try again later'
+  ? 'reference photo unavailable — run pnpm bench fetch (serves reference/ via vite)'
+  : 'reference photo unavailable — no local asset and upstream fetch failed'
 
 /** Dev-only measure tool: a drag-drawn bounding box over the chassis. The
  *  geometry (x/y/w/h) is stored as FRACTIONS of the chassis box — x and w of
