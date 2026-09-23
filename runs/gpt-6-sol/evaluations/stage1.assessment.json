@@ -1,0 +1,139 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-6-sol",
+  "stage": 1,
+  "evaluator": "blind-evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-22T23:22:52Z",
+  "summary": "Geometrically exact and behaviourally honest, visually thin. Every computed measurement lands inside tolerance: width 0.94000, aspect 3.09514 vs 3.0951, deck 0.53925 / keybed 0.46075, six section fractions off by <=3.3e-06, 73/43/30 keys all inside the keybed at black-height 0.60994, and 5/5 reference colours within deltaE 12 (worst 2.26). All 33 documented landmarks render in their own sections and no forbidden descriptor is satisfied. Audio is what it claims: three sine partials per note, no samples anywhere in the bundle, velocity 20 vs 120 giving 0.00443 vs 0.07400 RMS, sustain via Space and CC64, 24-voice oldest-first stealing, blur and CC123 returning output to exactly 0.0. Pointer, 10-point touch, computer keyboard and Web MIDI all reach one lifecycle, and Master Level provably does not touch the signal. Costs: the legend and OLED layer collides and overflows across most sections, one control (EQ Mid) is buried under Compressor Amount and unreachable by pointer, on-screen and typed notes have fixed velocity, and the surface omits many photographed controls without declaring it.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Measured live output from build/ (served on 127.0.0.1:25013, Chromium 1228, AudioContext tapped with an AnalyserNode before ctx.destination): silence 0.0 RMS, one held pointer note 0.05301 RMS / 0.09953 peak, returning to exactly 0.0 RMS ~500 ms after release. Voice sounds across the whole keybed (verified MIDI notes 40-75 and pointer on MIDI 28/55/60).",
+            "Level, decay and release behave: velocity 20 -> 0.00443 RMS vs velocity 120 -> 0.07400 RMS (16.7x, same note 60); envelope in artifact/src/piano.ts:93-96 ramps 0.23*amp -> 0.11*amp at 140 ms -> 0.00012 at 8 s, release 0.22 s vs stop 0.008 s (piano.ts:125). 24 simultaneous voices peak 0.598 with no clipping.",
+            "Simplified in ways a player notices: every note is three sine partials at fixed ratios 1 / 2.003 / 3.008 (artifact/src/piano.ts:99-110) with one global 8 s decay, so bass and treble decay identically, there is no hammer/attack noise, no inharmonicity and no stereo image; the tone reads as a soft additive bell rather than a struck string."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json declares strategy 'Live additive Web Audio synthesis', generatedSources[0].method 'Three sine partials per note ... attack/decay envelope, and note release', sampleSources []. Exercising the build confirms it: the only sound-producing call in build/assets/index-mqzO-EMv.js is createOscillator (1 occurrence); decodeAudioData, AudioBuffer, createBufferSource all occur 0 times and build/ contains no .wav/.mp3/.ogg asset.",
+            "Runtime tap counted exactly one AudioContext for the whole session and three OscillatorNodes per note; nothing generated is described as a recording, and the on-screen status strip reads 'STAGE 4 73 - Synthesized basic piano'.",
+            "'Panel controls are decorative and do not alter the signal path' (notes[1]) is true under test: holding a note and driving Master Level 68 -> 28 gave RMS ratio 0.7640 over the interval versus 0.7588 for the same interval with the knob untouched - i.e. envelope decay only."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All four input paths exercised against build/: mouse pointerdown on the MIDI-60 key -> 0.05870 RMS and class 'piano-key white pressed'; ten simultaneous CDP touch points on ten different keys -> 10 keys with .pressed and 0.17224 RMS; computer key 'a' -> 0.04756 RMS on MIDI 48 with OS key-repeat suppressed; injected Web MIDI 0x90/0x80/CC64/CC123 all routed (artifact/src/piano.ts:140-149).",
+            "Pointer capture is correct: pressing MIDI 55 and dragging the cursor to (100,100) kept the note sounding (0.05402 RMS) and mouseup off the key released it to 0.0 RMS with aria-pressed back to false.",
+            "MIDI status is truthful rather than optimistic - with no MIDI the status region reads 'MIDI denied or unavailable'; with a stubbed MIDIAccess exposing one connected port it reads '1 MIDI input connected'. Each of the 73 keys is also a focusable button that plays on Enter/Space (artifact/src/App.tsx:163-179)."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Velocity, sustain, stealing and all-notes-off all verified live: CC64=127 then note-on/note-off left the note sounding at 0.04250 RMS, and CC64=0 dropped it to 0.0; Space does the same from the computer keyboard (status toggles 'Space: sustain' from circle to filled).",
+            "Voice stealing is deterministic and capped: sending 36 MIDI note-ons (notes 40-75) left exactly 24 keys in .pressed state, matching maxVoices = 24 with oldest-first eviction from an insertion-ordered Map (artifact/src/piano.ts:10, 14-21).",
+            "Cleanup returns to baseline: six held computer keys (0.10092 RMS, 6 keys pressed) -> window blur -> 0.0 RMS and 0 keys pressed; CC123 likewise -> 0.0 RMS; unmount stop is covered by artifact/src/App.test.tsx 'stops a held note when the instrument unmounts'. Nodes are disconnected on a timer after release (piano.ts:119-123).",
+            "Gap: pointer and computer-keyboard notes use constant velocities 105 and 95 (artifact/src/App.tsx:153, 74), so on-screen and typed playing has no dynamics - velocity is expressive only over MIDI."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Every one of the 115 panel controls moves and reports state: buttons flip aria-pressed and their LED from rgb(65,25,27) to rgb(252,98,46) (verified on 'Organ On'); sliders/knobs/drawbars change value and visuals (Drawbar 5 2 2/3' 42 -> 52 by ArrowUp moved .slider-cap bottom to 26.91px). 188 focusable elements (145 buttons + 43 range inputs), 0 without an accessible name, focus outline computed as '2px solid rgb(227,248,124)'.",
+            "The decorative boundary is honest, not faked: toggling Organ On with a note silent left output at 0.0 RMS, Master Level 68 -> 28 did not change a sounding note (ratio 0.7640 moved vs 0.7588 untouched), aria-valuetext reads '68 percent, decorative', and the status strip states 'Panel controls are decorative in Phase 1'.",
+            "One control cannot be operated by pointer: 'EQ Mid' (effects.eq-mid) is exactly overlapped by 'Compressor Amount' (source positions x49,y67 vs x50,y67 in artifact/src/hardware.ts) - 0 of 25 elementFromPoint grid samples at 1440x900 resolve to it, all returning the sibling INPUT."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "All 33 sectionLandmarks entries from specs/nord-stage-4.visual.json render inside their own section (measured from the DOM): performance 5/5 incl. the rotary block on exposed red chassis and 'nord stage 4' branding, organ 4/4 (9 drawbars + 11 LED ladders + 4 model switches + percussion), piano 5/5, program 7/7, synth 6/6, effects 6/6. Exactly two OLEDs exist, in Program and Synth, as the phase contract requires.",
+            "115 controls total across the six sections (performance 9, organ 24, piano 12, program 19, synth 29, effects 22), each with a stable data-control-id and a unique aria-label.",
+            "Materially thinner than inputs/reference/nord-stage-4-73.jpg, which shows several hundred legends and controls: no per-section Octave Shift, KB Zone or SUSTPED/PSTICK toggles (only a single piano 'Sustain Pedal' button), and no Transpose, Master Clock or Panic anywhere in artifact/src/hardware.ts, and the Piano section reduces the photo's six-LED type column plus Piano Select block to two generic 'Piano Type'/'Piano Model' buttons."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "artifact/tests/feature-matrix.json maps all 11 required Phase 1 IDs to real, non-empty test files (src/App.test.tsx, 241 lines, 13 specs; tests/capture_stage1.py), matching verification.json featureMatrix 11/11 covered.",
+            "Each piano ID was re-exercised in the running build rather than read off: basic-note-lifecycle (note on/off/retrigger, 3 retriggers of 'a' left 0.02587 RMS then silence), basic-inputs (pointer, 10-point touch, keyboard, MIDI note/velocity/CC64), basic-sustain-polyphony (24 concurrent voices, oldest-first stealing), basic-status-cleanup (audio idle -> 'Audio ready', MIDI denied vs connected, blur/CC123 -> 0.0 RMS).",
+            "Visual/regression IDs also hold at both canonical viewports: 73 keys / 43 white / 30 black, six sections at 0.14/0.20/0.085/0.125/0.25/0.20 of deck width, no vertical document scroll (scrollHeight 900 = innerHeight at 1440x900; 844 = 844 at 390x844), and zero console messages on load at either size."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Declared gaps are real: the audio declaration (generated, no samples) is confirmed by the bundle containing createOscillator and zero decodeAudioData/createBufferSource; 'panel controls are decorative' is confirmed by the Master Level A/B above; evidence/stage1-visual-audit.md's claim of 115 controls, 9 drawbars and exactly two OLEDs matches the DOM exactly.",
+            "Evidence is not stale or hand-made: artifact/evidence/stage1-desktop.png matches my own 1440x900 capture of build/ to 13 of 1,296,000 pixels (one 5x3 antialiased glyph patch; mean absolute difference 0.0005), so the published screenshots really do depict the sealed build.",
+            "Undeclared gaps: neither IMPLEMENTATION_DETAILS.json nor the visual audit discloses that effects.eq-mid is fully covered by effects.compressor-amount and unoperable by pointer, nor that a substantial set of photographed panel controls (Octave Shift, KB Zone, SUSTPED/PSTICK, Transpose, Panic, Master Clock) was omitted; the audit only says 'fine printed legends and some small hardware spacing are approximations'."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "typographyDetail",
+      "title": "Control legends collide and OLED text overflows its display",
+      "detail": "At the canonical 1440x900 size the .control-label elements (positioned at left:-20%; width:140% of each control) overlap across most sections: 'PITCH STICK'/'MODULATIC WHEEL', 'ROTARY SLOW STOP'/'ROTARY FAST', piano 'LEVEL A'/'LEVEL B', 'LAYER SCENBLAYER SCENE 2', 'COMPRESSOR AMOUNT' over 'EQ BASS', and the nine organ drawbar captions running together. The Program OLED's third line ('73 KEY HAMMER ACTION') overflows its 64.8x50.5px box onto the plate, and the Synth OLED is painted over the 'Mode Analog' and 'Mode FM' buttons. See scratch/eval-desktop.png and scratch/deck-zoom.png."
+    },
+    {
+      "severity": "major",
+      "criterion": "hardwareInventory",
+      "title": "EQ Mid is fully buried under Compressor Amount and unreachable by pointer",
+      "detail": "artifact/src/hardware.ts places 'EQ Mid' at x=49,y=67 and 'Compressor Amount' at x=50,y=67 with identical 18x16 boxes, so the later sibling covers the earlier one. All 25 elementFromPoint samples across EQ Mid's bounding box at 1440x900 unscrolled resolve to the Compressor Amount input, making it 114/115 reachable. It remains rendered and tab-focusable, so it is present but unoperable by pointer, and the phase gate requires every visible control to move or press."
+    },
+    {
+      "severity": "minor",
+      "criterion": "voiceLifecycle",
+      "title": "Pointer and computer-keyboard notes have fixed velocity",
+      "detail": "artifact/src/App.tsx:153 uses a constant velocity of 105 for pointer input and :74 uses 95 for mapped computer keys, so dynamics are available only over MIDI (verified: MIDI velocity 20 -> 0.00443 RMS, 120 -> 0.07400 RMS, while all pointer notes measured 0.0587 +/- 0.001). Mapping pointer y-position or touch force within the key would restore expression for the primary on-screen input."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelControlCoverage",
+      "title": "Photographed panel controls omitted without declaration",
+      "detail": "Against inputs/reference/nord-stage-4-73.jpg the render omits per-section Octave Shift, KB Zone and SUSTPED/PSTICK toggles, and Transpose, Master Clock and Panic (absent from artifact/src/hardware.ts entirely), and collapses the Piano type six-LED column and Piano Select block into two generic buttons - 115 controls in total against several hundred in the photo. evidence/stage1-visual-audit.md notes only that 'fine printed legends and some small hardware spacing are approximations'."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoVoice",
+      "title": "Voice decays identically across the whole range",
+      "detail": "artifact/src/piano.ts schedules one envelope (0.23*amp -> 0.11*amp at 140 ms -> 0.00012 at 8 s) with fixed partial ratios 1/2.003/3.008 regardless of note number, so E1 and E7 ring for the same eight seconds and no register-dependent inharmonicity, hammer noise or stereo spread is present."
+    }
+  ]
+}
