@@ -8,6 +8,7 @@ import type { CSSProperties } from 'react'
 import type { PhaseNumber } from '../run-utils'
 import { floorScore, getRunTitle, getThumbPath } from '../run-utils'
 import type { RunEntry } from '../types'
+import { partialPhaseLabel, tokenHeadline } from '../token-coverage.mjs'
 import {
   bestByTierPanel,
   bestByTierPhase,
@@ -28,6 +29,27 @@ import { ChevronIcon, InfoIcon, PlayIcon, ReportIcon, StatusLight } from './icon
 // plus its frame). A row closer than this to the top of the viewport shows its
 // card below instead of above.
 const THUMB_MAX_HEIGHT = 300
+
+function TokenDetail({
+  label,
+  value,
+  scope,
+}: {
+  label: string
+  value: number | null
+  scope: string | null
+}) {
+  if (value == null) return null
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        {formatTokens(value)}
+        {scope ? <span className="token-scope"> · {scope}</span> : null}
+      </dd>
+    </div>
+  )
+}
 
 export const RunList = memo(function RunList({
   expandedRunId,
@@ -77,7 +99,13 @@ export const RunList = memo(function RunList({
         // Sector column count rides on a CSS variable so legacy tiers
         // with a four-phase protocol keep their own aligned grid.
         const sectorsStyle = { '--sectors': phaseList.length } as CSSProperties
-        const tokens = run.telemetry?.totalTokens ?? run.telemetry?.inputTokens ?? null
+        // Full-run usage only. Input tokens are not a stand-in for the total,
+        // and a sum of the phases that happened to record usage is "partial".
+        const headline = tokenHeadline(run.telemetry, run.tokenCoverage)
+        const coverage = run.tokenCoverage
+        const phaseCount = coverage?.phaseCount ?? 0
+        const scopeFor = (field: 'totalTokens' | 'inputTokens' | 'outputTokens' | 'reasoningTokens') =>
+          coverage ? partialPhaseLabel(coverage[field], phaseCount) : null
         const panel = run.panelVisuals
         const bestPanel = panel !== null && panel === bestByTierPanel.get(resultClass.id)
         return (
@@ -182,7 +210,12 @@ export const RunList = memo(function RunList({
               <span aria-hidden="true" className="sector-bar"><i style={{ width: `${panel !== null ? Math.min(100, Math.max(0, panel)) : 0}%` }} /></span>
               <small aria-hidden="true">Panel Visuals</small>
             </div>
-            <span className="cell-num">{tokens !== null ? formatTokens(tokens) : '—'}</span>
+            <span
+              className={`cell-num${headline.kind === 'partial' ? ' is-partial' : ''}`}
+              title={headline.kind === 'partial' ? `Recorded for ${headline.label} only. Not full-run usage.` : undefined}
+            >
+              {headline.kind === 'total' ? formatTokens(headline.value) : headline.kind === 'partial' ? 'partial' : '—'}
+            </span>
             <span className="cell-num">{run.telemetry?.wallTimeSeconds != null ? formatDurationCompact(run.telemetry.wallTimeSeconds) : '—'}</span>
             <div className="total" aria-label={run.score !== null ? `Score ${floorScore(run.score)} out of 100` : undefined}>
               {run.score !== null
@@ -211,10 +244,14 @@ export const RunList = memo(function RunList({
                 <div><dt>Updated</dt><dd>{formatDate(run.updatedAt)}</dd></div>
                 {run.telemetry?.wallTimeSeconds != null && <div><dt>Wall time</dt><dd>{formatDuration(run.telemetry.wallTimeSeconds)}</dd></div>}
                 {run.telemetry?.costUsd != null && <div><dt>Cost</dt><dd>${run.telemetry.costUsd.toFixed(2)}</dd></div>}
-                {run.telemetry?.totalTokens != null && <div><dt>Total tokens</dt><dd>{formatTokens(run.telemetry.totalTokens)}</dd></div>}
-                {run.telemetry?.inputTokens != null && <div><dt>Tokens in</dt><dd>{formatTokens(run.telemetry.inputTokens)}</dd></div>}
-                {run.telemetry?.outputTokens != null && <div><dt>Tokens out</dt><dd>{formatTokens(run.telemetry.outputTokens)}</dd></div>}
-                {run.telemetry?.reasoningTokens != null && <div><dt>Reasoning</dt><dd>{formatTokens(run.telemetry.reasoningTokens)}</dd></div>}
+                {run.telemetry?.totalTokens != null
+                  ? <TokenDetail label="Total tokens" value={run.telemetry.totalTokens} scope={scopeFor('totalTokens')} />
+                  : headline.kind === 'total'
+                    ? <TokenDetail label="Total tokens" value={headline.value} scope={null} />
+                    : null}
+                <TokenDetail label="Tokens in" value={run.telemetry?.inputTokens ?? null} scope={scopeFor('inputTokens')} />
+                <TokenDetail label="Tokens out" value={run.telemetry?.outputTokens ?? null} scope={scopeFor('outputTokens')} />
+                <TokenDetail label="Reasoning" value={run.telemetry?.reasoningTokens ?? null} scope={scopeFor('reasoningTokens')} />
                 {run.telemetry?.toolCalls != null && <div><dt>Tool calls</dt><dd>{run.telemetry.toolCalls}</dd></div>}
               </dl>
               {run.reportPath && (

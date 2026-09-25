@@ -63,6 +63,20 @@ test('registry entries have unique, well-formed ids and parseable dates', () => 
   }
 })
 
+test('token headlines distinguish full-run totals from partial phase coverage', () => {
+  const byId = Object.fromEntries(runs.map((run) => [run.id, run]))
+  assert.equal(byId['claude-opus-5-5'].telemetry.totalTokens, 2_090_000)
+  assert.deepEqual(byId['claude-opus-5-5'].tokenCoverage.totalTokens, [1, 2, 3])
+  assert.equal(byId['gpt-6-astra'].telemetry.totalTokens, null)
+  assert.deepEqual(byId['gpt-6-astra'].tokenCoverage.inputTokens, [3])
+  assert.deepEqual(byId['claude-fable-5'].tokenCoverage.inputTokens, [1, 2])
+  assert.equal(byId['claude-fable-5'].tokenCoverage.inputTokens.includes(3), false)
+  assert.equal(typeof byId['gpt-5-6-luna-3'].telemetry.totalTokens, 'number')
+  assert.deepEqual(byId['gpt-5-6-luna-3'].tokenCoverage.inputTokens, [])
+  assert.equal(typeof byId['gpt-5-6-sol-high'].telemetry.totalTokens, 'number')
+  assert.deepEqual(byId['gpt-5-6-sol-high'].tokenCoverage.totalTokens, [])
+})
+
 test('run titles fall back to the model id and are always present', () => {
   // Fixture: an explicit title overrides the model id; without one, the model
   // id is the display title (canonical identity vs. display name).

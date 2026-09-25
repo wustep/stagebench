@@ -32,7 +32,7 @@ pnpm bench seal <run-id> [--cost-usd N --input-tokens N --output-tokens N]   # i
 pnpm bench score <run-id>                       # per phase: evaluator workspace first, then registers the filled assessment
 ```
 
-`pnpm bench status <run-id>` prints the next command and telemetry. Wall time is recorded automatically per phase; pass cost/token usage at seal time (or later via `pnpm bench telemetry`). Runs recorded before the current schema appear in the gallery as Legacy with their frozen scores and reports.
+`pnpm bench status <run-id>` prints the next command and telemetry. Wall time is recorded automatically per phase; pass cost/token usage at seal time (or later via `pnpm bench telemetry`). The gallery Tokens column is full-run usage (input plus output, or a recorded total). Partial phase coverage is labeled incomplete instead of shown as the run total. Runs recorded before the current schema appear in the gallery as Legacy with their frozen scores and reports.
 
 ## Private deployment protection
 

@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { blindRunCode, hashTree, loadProtocol, readJson, selectedPhases, workspaceRoot, writeJson } from '../shared.mjs'
+import { tokenCoverageFromStages } from '../../../src/token-coverage.mjs'
 import { TELEMETRY_FIELDS, roundTelemetryValue } from '../../../src/telemetry-fields.mjs'
 
 export function pathsFor(root) {
@@ -264,7 +265,9 @@ export function markRunning(root, id, phase, now = new Date()) {
 }
 
 // Sum per-stage telemetry into run totals. A total is null until at least one
-// stage reports that field — never silently zero.
+// stage reports that field — never silently zero. That sum is only full-run
+// usage when every phase recorded the field; the gallery checks coverage
+// (tokenCoverageFromStages) before presenting it as the Tokens column.
 function recomputeTelemetry(run) {
   const totals = {}
   for (const field of TELEMETRY_FIELDS) {
@@ -399,6 +402,9 @@ export function registryEntry(run) {
     rubricVersion: run.evaluation?.rubricVersion ?? null,
     reportPath: run.evaluation?.reportPath ?? null,
     telemetry: telemetrySummary(run),
+    // Phase lists for each token field, so the gallery can tell a full-run
+    // total from a sum of the phases that happened to record one.
+    tokenCoverage: tokenCoverageFromStages(run.stages),
     previewPath: run.previewPath ?? null,
     previewStage: run.previewStage ?? null,
     previews: run.previews ?? null,
@@ -423,7 +429,7 @@ function reindexCachePath(root) {
 // but not changes to the projection itself — a new field silently kept its old
 // shape until something touched the run. Bump this whenever registryEntry's
 // output shape changes.
-const REGISTRY_PROJECTION_VERSION = 3
+const REGISTRY_PROJECTION_VERSION = 4
 
 function readReindexCache(root) {
   try {

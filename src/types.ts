@@ -17,6 +17,17 @@ export type Telemetry = {
   toolCalls: number | null
 }
 
+// Which phases recorded each token field. A run-level sum is full-run usage
+// only when the field's list covers every phase (or the run has a total and
+// no phase split). See src/token-coverage.mjs.
+export type TokenCoverage = {
+  phaseCount: number
+  totalTokens: number[]
+  inputTokens: number[]
+  outputTokens: number[]
+  reasoningTokens: number[]
+}
+
 export type StageEntry = {
   number: PhaseNumber
   status: StageStatus
@@ -47,6 +58,7 @@ export type RawRunEntry = {
   panelVisuals?: number | null
   reportPath?: string | null
   telemetry?: Partial<Telemetry> | null
+  tokenCoverage?: TokenCoverage | null
   previewPath?: string | null
   previewStage?: PhaseNumber | null
   previews?: Partial<Record<`${PhaseNumber}`, string>> | null
@@ -75,6 +87,7 @@ export type RunEntry = {
   panelVisuals: number | null
   reportPath: string | null
   telemetry: Telemetry | null
+  tokenCoverage: TokenCoverage | null
   previewPath: string | null
   previewStage: PhaseNumber | null
   previews: Partial<Record<`${PhaseNumber}`, string>>
