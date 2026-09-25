@@ -37,6 +37,7 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
     panelVisuals: typeof raw.panelVisuals === 'number' ? raw.panelVisuals : null,
     reportPath: raw.reportPath ?? null,
     telemetry,
+    tokenCoverage: raw.tokenCoverage ?? null,
     previewPath: raw.previewPath ?? null,
     previewStage: raw.previewStage ?? null,
     previews: raw.previews ?? {},

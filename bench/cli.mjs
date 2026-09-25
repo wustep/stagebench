@@ -40,6 +40,7 @@ import { loadRubric, runGates } from './lib/eval/evaluate.mjs'
 import { aggregateStageEvaluations, mergeAssessments, scoreAssessment } from './lib/eval/scoring.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from './lib/eval/report.mjs'
 import { fetchReference } from './lib/fetch-reference.mjs'
+import { tokenCoverageFromStages } from '../src/token-coverage.mjs'
 import { TELEMETRY_FLAGS } from '../src/telemetry-fields.mjs'
 import { parseSubagentTelemetryFiles, telemetryValuesFromParse } from './lib/telemetry-jsonl.mjs'
 
@@ -413,6 +414,7 @@ try {
       result = {
         ...statusSummary(run),
         telemetry: run.telemetry ?? null,
+        tokenCoverage: tokenCoverageFromStages(run.stages),
         stages: run.stages.map(({ number, status, evaluation, telemetry }) => ({ number, status, score: evaluation?.score ?? null, telemetry: telemetry ?? null })),
         workspaces: (workspaces.work.length || workspaces.eval.length) ? workspaces : null,
       }
