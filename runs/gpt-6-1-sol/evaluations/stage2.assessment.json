@@ -1,0 +1,174 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "gpt-6-1-sol",
+  "stage": 2,
+  "evaluator": "Stagebench blind Phase 2 evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-30T04:05:56Z",
+  "summary": "A strong Phase 2. The published build serves three genuine bundled recorded sample sets (183 FLACs, 153 MB, all 183 SHA256 digests matching manifest.json, CC-BY-3.0/CC0 from three different publishers, 20-36 roots and 2-4 recorded velocity bands each) and three honestly-declared synthesis types; all six are audibly distinct through the live graph (spectral cosine 0.61-0.88). The effect chain is real streaming DSP in an AudioWorklet: every one of the 25 listed types measurably changes a standardized signal (min pairwise diff 0.0389, all vsDry >= 0.063 except To Rotary, which is a route and was verified through the shared Rotary), reverb decay orders Booth<Room<Spring<Stage<Hall<Cathedral as specified, delay feedback filtering leaves the dry attack bit-identical, bypass is click-free (max jump 5.45e-4) and returns the exact dry signal. Exactly one AudioContext, two layer buses, one shared Rotary, master gain + limiter, one destination, no clipping (peak 0.145 on 12 voices). Chief shortfall: Delay Dry/Wet, delay feedback filter, Amp Drive, Amp Mid Freq, clock sync and Group mode exist only in a supplemental drawer, not on the panel.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Six types all sound through the published build's live graph and are spectrally distinct. Recording a ScriptProcessor tap on the master gain of build/ (served static, 1440x900, note C4 via real CDP KeyA events) gave RMS Grand 0.005135, Upright 0.017392, Electric 0.020796, Clav 0.003858, Digital 0.010099, Misc 0.007253, with 16-band normalised spectra whose cosine similarity is 0.751 (Grand/Upright), 0.792 (Grand/Electric), 0.613 (Upright/Electric), 0.880 (Clav/Digital), 0.843 (Digital/Misc) — no voice is relabelled.",
+            "Grand/Upright/Electric are genuine, independent recorded libraries, not one set re-pitched: build/samples/manifest.json lists 183 entries (Grand 78, Upright 63, Electric 42); every file in build/samples is real FLAC ('fLaC' magic), all 183 SHA256 digests match the manifest, all 183 digests are unique, totalling 153.0 MB. Grand has 26 root notes (MIDI 27-102) and 3 recorded velocity bands, Upright 36 roots (24-108) / 2 bands, Electric 20 roots (33-92) / 4 bands — from three different authors and licences (Alexander Holm CC-BY-3.0, FreePats CC0-1.0, Greg Sullivan CC-BY-3.0).",
+            "Per-type model identity reaches the panel: cycling #piano-piano-type six times walked the Program OLED through 'Salamander C5', 'Upright KW', 'Wurlitzer EP200', 'Plucked clav · synthesis', 'FM keys · synthesis', 'Vibraphone · synthesis' and wrapped back to Salamander C5.",
+            "Character of the three synthetic types is simplified in ways a player would notice: src/library.ts renderSynthetic is one analytic formula per type (Clav = 12 exponentially-decaying harmonics, Digital = single-operator FM, Misc = three inharmonic partials at 1/2.76/5.4), one model each, no velocity-dependent timbre layers — audibly thinner than the recorded sets and than Nord's Clav/Digital engines."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Every unit and every listed type measurably processes audio. Rendering the published build/audio/dsp.js Unit class at 8 kHz on a standardized 180 Hz + 1730 Hz burst, RMS difference from the same unit bypassed was: mod1 types [0.0824, 0.1225, 0.2387, 0.1949, 0.0865, 0.0609], mod2 [0.1487, 0.1947, 0.1614, 0.1982, 0.1390, 0.1331], ampEq [0.1033, 0.1130, 0.0946, 0.1564, 0.0630, 0.3050, 0.0], reverb [0.2506, 0.1655, 0.2559, 0.1888, 0.2459, 0.2344], delay 0.3019, compressor 0.1318. The single 0.0 is ampEq type 6 'To Rotary', which is a route by design and was verified audible through the shared Rotary separately (routed delta 0.2622 vs unrouted exactly 0.0).",
+            "No two types inside a unit render identically: worst-case pairwise RMS difference was mod1 0.0836 (A-Pan vs Tremolo), mod2 0.0524 (Chorus vs Ensemble), ampEq 0.0389 (Twin vs JC), reverb 0.0833 (Room vs Spring).",
+            "Namesake behaviour checks out. Reverb tail energy after 1.2 s grows in the specified order — Booth 0.0, Room 5.3e-5, Spring 1.5e-3, Stage 8.9e-3, Hall 1.09e-2, Cathedral 0.1015 — and Spring alone adds a dispersive allpass (build/audio/dsp.js line 62, type===2). Delay feedback filtering processes only the repeats: dry attack difference over the first 800 samples is exactly 0 while the region after 5000 samples differs by 0.0405 (LP), 0.0693 (HP), 0.0617 (BP). Compressor reduces RMS 0.23597 -> 0.05984 from amount 0 to 1.",
+            "Confirmed on the live build, not just in the DSP: with Reverb ON, Dry/Wet at max and type cycled to Cathedral, the recorded 8-segment envelope ran 0.00486/0.00759/0.00247/0.00187/0.00141/0.00072/0.00033/0.00020 versus dry 0.01061/0.00150/0/0/0/0/0/0; Delay (0.44 s, feedback 0.85) sustained audible repeats through all 8 segments; Tremolo at 3.07 Hz amplitude-modulated the envelope; the Layer Effects ON button restored the bit-identical dry envelope (0.01059/0.00167/0/0/0/0/0/0).",
+            "Bypass is click-free and parameter-accurate: driving mod1 Tremolo at full amount then switching it off gave a maximum inter-sample jump of 5.45e-4 and settled to exactly 0.50000, the dry input value. The full ChainDSP with all units off passes the input through with maximum deviation 0.0.",
+            "Two documented approximations a knowledgeable player would notice: Compressor Fast mode changes the rendered signal by only 0.00403 (versus 0.14913 for Amount), and Reverb Bright/Dark by 0.02009; Twin/JC/Small are a shared tanh drive plus a fixed lowpass colour (build/audio/dsp.js line 52, colors [0,3200,6500,1400]) rather than distinct speaker models, which IMPLEMENTATION_DETAILS.json declares."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Exactly one AudioContext in the running build. Wrapping window.AudioContext before the bundle loaded and then clicking 'Enable audio' produced __ctxs.length === 1, state 'running', sampleRate 48000.",
+            "Recorded AudioNode.connect edges match the specified order end to end: GainNode(bus) -> AudioWorkletNode(layer chain) for each of two layers, then AudioWorkletNode -> AudioWorkletNode at inputs 0 and 1 (one shared Rotary), Rotary outputs 0 and 1 -> per-layer GainNode levels -> master GainNode -> DynamicsCompressorNode -> AudioDestinationNode. One destination, one limiter, layer level after Rotary — exactly the requiredOrder in specs/nord-stage-4.effects.json. ORDER in build/audio/dsp.js is ['mod1','mod2','delay','ampEq','compressor','reverb'].",
+            "Nothing bypasses the master path: setting #performance-master-level to 0 produced a recorded RMS of exactly 0.000000 (all eight envelope segments 0) with a note sounding, and restoring it returned RMS 0.005135.",
+            "Sane gain staging with no clipping under load: across all 27 live captures, 0 samples reached |x| >= 0.999; peak was 0.0435 for one Grand note, 0.0869 for two layers, 0.1451 for twelve simultaneous keys. Limiter is a DynamicsCompressor at threshold -3 dB, knee 3, ratio 20, attack 3 ms, release 100 ms (src/layer-audio.ts:26).",
+            "Cleanup is real: dispose() kills voices, posts dispose to both chain worklets and the Rotary, closes their ports and disconnects buses, levels, master and limiter (src/layer-audio.ts:81); the artifact's own browser test asserts nodes/buses/chains/master/rotary are all empty afterwards or throws 'Leaked graph'. Zero console errors were logged in any of my six probe sessions against build/."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Both layers reach the audio graph independently. One layer gave recorded RMS 0.005135; clicking #piano-layer-b-on gave 0.010439 (≈2x, two owned voices); setting Layer B's level fader to 0 returned 0.005055, i.e. back to Layer A alone.",
+            "Enable, focus and octave all take effect: clicking #piano-layer-b-on moved the Program OLED from 'PIANO A Salamander C5' to 'PIANO B Salamander C5'; src/audio.ts:71-75 starts one voice per enabled layer at pending.note + settings.octave, and src/phase2.test.ts asserts notes [60, 72] with layers ['A','B'] for a +12 shift on B.",
+            "Disabling a layer kills only that layer's voices — src/audio.ts:87 kills voices whose layer is disabled while leaving the other layer's held voice intact (phase2.test.ts asserts kills === [2] with voice 1 still held).",
+            "FX focus follows layer focus and the panel reflects it: src/panel.ts:11 reads s.layers[s.fxFocus].effects, focusLayer() sets focus, fxFocus and fxSection together (src/instrument.ts:21), and I confirmed the Reverb Amount knob kept the focused layer's value 0.9 with title 'Reverb amount · 0.9' after re-focusing.",
+            "One behaviour a player would notice: moving a Layer level fader on the panel also steals layer focus (src/panel.ts:49 calls focusLayer on the target), so trimming Layer B's level silently re-targets piano and FX editing away from A."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "KB Touch, Dyn Comp, Unison, Soft Release, String Res and Master Level all measurably change the rendered signal in the published build. Recorded RMS at a fixed synthetic keystroke: Heavy 0.003998 < Medium 0.005220 < Light 0.012663; Dyn Comp 3 raised the soft-stroke level to 0.006538 from 0.005220 at Off (the artifact's own render test asserts this is monotonic across levels 0-3); Unison 3 gave 0.007791 with a changed spectrum (cosine 0.935 against Off) from three detuned sources panned -0.85/0/+0.85 (src/layer-audio.ts:62-64).",
+            "Soft Release lengthens the tail: envelope segment 3 read 0.000440 with Soft Release on against 0.000000 off (release 0.48 s vs 0.22 s, src/layer-audio.ts:72), and it is correctly disabled for Clav as the spec requires.",
+            "String Res adds sympathetic energy only alongside another held note: holding two keys gave 0.007744 with it on against 0.007174 off, and src/audio.ts:75 passes resonate only when a routed pedal is down or another voice of the same layer is held.",
+            "Panel feedback agrees with state for every one of these: control titles read 'KB touch · Medium', 'Dyn comp · 3', 'Timbre · Bright', 'Unison · 3', 'Master level · 0' after driving them.",
+            "Timbre is the weakest of the set: switching the Grand from Off to Bright shifted the 2.9-5.1 kHz share of the spectrum only from 1.913% to 2.317% (RMS 0.005220 -> 0.005151). It is a single biquad per voice with fixed frequencies and gains [0,0,5,7,10,-6] dB (src/layer-audio.ts:65), so Dyno 1/Dyno 2 are shelf variants rather than tine preamp emulations — a simplification the notes acknowledge.",
+            "Excluded detail is correctly absent rather than faked: there is no pedal-noise or half-pedal control anywhere in the 140-control panel, matching the piano spec's excluded list."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Computer-keyboard input is repeat-safe and polyphonic under stress: five synthetic autoRepeat keydowns on KeyA left exactly 1 key in the pressed state, and holding 17 mapped keys at once lit 17 keys and rendered RMS 0.017460 with peak 0.1451 and zero clipped samples.",
+            "Failures degrade visibly. Blocking exactly one of the 183 bundled recordings (*/samples/grand/A1v14.flac via CDP Network.setBlockedURLs) drove the status line to 'Sample failure · playable synthesis fallback · Grand', the Program OLED to 'SAMPLE FAILED · FALLBACK', added the .sample-failure class to the type LEDs, and relabelled the action button 'Retry samples' — while staying playable at RMS 0.007935. The primary library was never reported ready.",
+            "Recovery works: unblocking the URL and clicking 'Retry samples' returned the status line to 'Ready · bundled recorded piano library'.",
+            "All-notes-off on loss of focus is real: dispatching window blur while 17 keys were held left 0 keys pressed (src/inputs.ts:12 clears held and calls engine.allOff; src/App.tsx:44 adds the same on visibilitychange and disposes engine and MIDI on unmount).",
+            "MIDI reports its own state rather than pretending: the utility button read 'MIDI: not connected' and became 'MIDI: denied' after a denied requestMIDIAccess in the headless probe; src/inputs.ts:18-36 distinguishes unavailable, denied, no devices, connected and disconnected, and calls engine.allOff() when a port is lost.",
+            "Zero console errors or page errors were recorded across six separate probe sessions against build/ (CDP Log.entryAdded level=error and Runtime.exceptionThrown both empty), and 0 network requests failed on a clean load."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All six required types are present and selectable from the hardware panel: #piano-piano-type cycles Grand -> Upright -> Electric -> Clav -> Digital -> Misc -> Grand, and the six type LEDs render in the Piano section (.type-labels). A redundant select (#setting-piano-type) reaches the same state.",
+            "All six actually load and produce audio in the published build — measured RMS 0.005135 / 0.017392 / 0.020796 / 0.003858 / 0.010099 / 0.007253 respectively, with distinct spectra (see instrumentBreadth).",
+            "The three required recorded sets load offline from the published build: build/samples holds grand/, upright/ and electric/ plus each publisher's LICENSE and README, 183 FLAC files verified byte-for-byte against manifest.json SHA256 digests, served from the same origin with no network calls (0 failed requests, status 'Ready · bundled recorded piano library').",
+            "The optional multi-model features are honestly skipped rather than faked: the Model dial reports 'One bundled model per type' as its value text, and IMPLEMENTATION_DETAILS.json unsupported[2] declares model list, size classes and INFO view as absent."
+          ]
+        },
+        {
+          "id": "effectUnitCoverage",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "All six units plus the shared Rotary exist with every listed type reachable: the panel effects section carries 29 controls (effects-mod-1-{rate,amount,type,on}, effects-mod-2-{...}, effects-eq-{bass,mid,treble}, effects-amp-model, effects-amp-eq-on, effects-delay-{time,feedback,tap,on}, effects-compressor-{amount,dry-wet,mode,on}, effects-reverb-{amount,tone,type,on}) and the Rotary lives in the Performance section (performance-rotary-{drive,on,slow-fast,stop-mode,source}). Type cycling covers mod1 6, mod2 6, ampEq 7 including 'To Rotary', reverb 6 (src/instrument.ts:5).",
+            "Routing controls are on the panel and functional: effects-organ-focus / effects-piano-focus / effects-synth-focus set FX section, effects-effects-on is the all-effects bypass (verified to restore the bit-identical dry envelope on the live build), and Shift + a unit's On toggles global mode for Delay/Compressor/Reverb (src/panel.ts:65).",
+            "Routing into the Rotary works from the panel: cycling #effects-amp-model to 'To Rotary', enabling that unit and turning on #performance-rotary-on and #performance-rotary-slow-fast raised the recorded RMS to 0.005743 with a modulated envelope running out to segment 6, versus dry dying at segment 2.",
+            "Shortfall against 'reachable from the panel': six required parameters exist only in the supplemental 'Piano & effects settings' drawer beneath the instrument, not as panel controls — Delay Dry/Wet (#setting-delay-dry-wet), Delay feedback filter Off/LP/HP/BP (#setting-delay-feedback-filter), Amp Drive (#setting-amp-drive), Amp Mid/Filter Frequency (#setting-eq-mid-filter-frequency), Master Clock sync for Mod 1/Mod 2/Delay (#setting-mod1-clock-sync etc.) and Group mode (#setting-piano-group). The panel's Delay group has only Time and Feedback knobs where the hardware also has Dry/Wet, and there is no Group control on the panel at all.",
+            "The drawer parameters do reach audio, so this is placement rather than absence: enabling Delay from the drawer at Dry/Wet 1, 0.4 s and feedback 0.85 produced repeats across all eight envelope segments (0/0.0113/0.0099/0.0075/0.0058/0.0052/0.0042/0.0032) against a dry envelope that reached 0 by segment 2.",
+            "With Organ or Synth FX focus selected the panel effect knobs still present live-looking titles and values but silently snap back (setting Reverb Amount to 20 under Organ focus left it at 0.9); it refuses rather than fakes, but nothing on the panel says the target is unavailable."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Decorative claims verified by measurement, not by reading: of the 140 panel controls in the running build, 90 carry '(decorative)' in their accessible name and '— presentation only' in their title, and 50 are live. #organ-drawbar-16 reads 'Drawbar 16 — presentation only' and the Synth OLED reads 'SYNTH OFFLINE / Phase 2 / Decorative controls', matching unsupported[0]. All 140 are operable and hit-testable (0 unreachable under a 5x5 elementFromPoint grid at 1440x900; 0 missing aria-labels).",
+            "Declared-unsupported items really are absent: no soft or sostenuto pedal control exists anywhere (unsupported[1], and no approximation is claimed); performance-rotary-stop-mode and performance-rotary-source are excluded from functional() in src/panel.ts:9 as declared; src/inputs.ts:38-44 handles only note on/off, CC64 and CC120/123, so the declared absence of pitch bend, aftertouch and program change is accurate; program-master-clock is decorative while the effects clock is a separately disclosed drawer control.",
+            "Source honesty is exact. IMPLEMENTATION_DETAILS.json and build/samples/ATTRIBUTION.md name the three recorded libraries with author, publisher URL, licence and 'no modifications', and separately label Clav/Digital/Misc, the simulated resonance and the failure fallback as original generated PCM — and the files back that up (183 verified FLACs; renderSynthetic in src/library.ts is analytic). No generated source is described as a recording.",
+            "The declared gap about sample density is truthful and checkable: Electric roots are indeed sparser at the top (20 roots spanning MIDI 33-92, so E1 and E7 are transposed from outside the recorded range), Grand roots are minor-third spaced with 3 recorded velocity bands, Upright has 2 bands — exactly as declaredGaps[2] states.",
+            "Undeclared shortfall: nothing in unsupported or declaredGaps states that Delay Dry/Wet, the delay feedback filter, Amp Drive, Amp Mid Freq, clock sync and Group mode are absent from the hardware panel and reachable only from the drawer. declaredGaps[1] mentions that 'supplemental settings sit below the instrument' but does not identify these required effect parameters as panel-absent, so a reader of the declaration would not learn of the gap."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "effectUnitCoverage",
+      "title": "Six required effect parameters are reachable only from the supplemental drawer, not the panel",
+      "detail": "The panel's Layer Effects section holds 29 controls and its Delay group has only Time, Feedback, Tap and On. Delay Dry/Wet, the Delay feedback filter (Off/LP/HP/BP), Amp Drive, Amp Mid/Filter Frequency, Master Clock sync for Mod 1/Mod 2/Delay, and Group mode exist only as #setting-delay-dry-wet, #setting-delay-feedback-filter, #setting-amp-drive, #setting-eq-mid-filter-frequency, #setting-mod1-clock-sync/#setting-mod2-clock-sync/#setting-delay-clock-sync and #setting-piano-group inside the collapsed 'Piano & effects settings' drawer below the instrument. All of them do reach audio (drawer-driven Delay at Dry/Wet 1, 0.4 s, feedback 0.85 produced repeats across all eight recorded envelope segments), so this is control placement rather than missing behaviour — but specs/nord-stage-4.effects.json lists them as required unit parameters and the real panel carries a Dry/Wet knob and a Group path."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "Panel-absent effect parameters are not named in the declared gaps",
+      "detail": "IMPLEMENTATION_DETAILS.json declaredGaps[1] notes only that 'supplemental settings sit below the instrument, closed by default'. It does not say which required effect parameters (Delay Dry/Wet, feedback filter, Amp Drive, Amp Mid Freq, clock sync, Group) are unavailable on the panel itself, so the declaration does not disclose the gap a panel-driven evaluation finds."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectAudibility",
+      "title": "Compressor Fast mode and Reverb Bright/Dark are near-inaudible",
+      "detail": "Rendering build/audio/dsp.js at 8 kHz on a standardized burst, switching the compressor between Normal and Fast at amount 1 changed the signal by an RMS difference of only 0.00403, and sweeping Reverb Bright/Dark from 0 to 1 by 0.02009 — against 0.14913 for compressor Amount and 0.31326 for reverb Dry/Wet. The manual describes Fast mode as recovering quicker and pumping at high amounts, which this attack/release change (2/45 ms vs 12/250 ms) barely delivers on the rendered signal."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoControlDepth",
+      "title": "Timbre's effect on the acoustic pianos is very subtle",
+      "detail": "Switching the Grand from Timbre Off to Bright moved the 2.9-5.1 kHz share of the recorded live-graph spectrum only from 1.913% to 2.317% (RMS 0.005220 -> 0.005151). It is one biquad per voice with fixed frequency and gains [0,0,5,7,10,-6] dB (src/layer-audio.ts:65); Dyno 1 and Dyno 2 are further shelf variants rather than tine preamp emulations. The control is measurable and honestly documented, but shallower than the manual's Soft/Mid/Bright/Dyno description."
+    },
+    {
+      "severity": "minor",
+      "criterion": "layerBehavior",
+      "title": "Moving a Layer level fader steals layer and FX focus",
+      "detail": "src/panel.ts:49 calls focusLayer(state, target) whenever piano-layer-a-level or piano-layer-b-level changes, so trimming Layer B's level silently re-targets piano editing and the effect chain from A to B. I confirmed the side effect while probing: adjusting Layer B's fader moved subsequent effect edits onto Layer B's chain. Related: the drawer summary continued to read 'FX Piano A' after #effects-organ-focus set the FX section to Organ."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectUnitCoverage",
+      "title": "Panel effect knobs are silently inert under Organ/Synth FX focus",
+      "detail": "With #effects-organ-focus selected, src/panel.ts:63 gates effect edits on fxSection === 'Piano', so setting #effects-reverb-amount to 20 left it at its previous 0.9 with the title still reading 'Reverb amount · 0.9'. The control refuses rather than faking success, and IMPLEMENTATION_DETAILS.json notes[3] calls this 'a visibly unavailable audio target', but nothing on the panel itself marks the knobs as unavailable in that state."
+    }
+  ]
+}
