@@ -71,7 +71,7 @@ export class PianoEngine {
     if(this.initializing) return this.initializing
     this.status='loading'; this.error=''; this.changed()
     this.backend.configure?.(this.state)
-    this.initializing=this.backend.initialize().then(()=> { if(!this.disposed) this.status=this.backend.fallback?'fallback':'ready' }).catch(e=> { this.status='error'; this.error=String(e); this.pending.clear() }).finally(()=> { this.initializing=null; if(!this.disposed) this.changed() })
+    this.initializing=this.backend.initialize().then(()=> { if(!this.disposed) this.status=this.backend.fallback?'fallback':'ready'; const samples=(this.backend as {sampleLoad?:Promise<void>|null}).sampleLoad; if(samples) void samples.then(()=>{ if(this.disposed||this.status==='error') return; this.status=this.backend.fallback?'fallback':'ready'; this.changed() }) }).catch(e=> { this.status='error'; this.error=String(e); this.pending.clear() }).finally(()=> { this.initializing=null; if(!this.disposed) this.changed() })
     return this.initializing
   }
   async noteOn(owner:string,note:number,velocity=.75) {

@@ -5,9 +5,19 @@ import {newInstrument,type InstrumentState,type LayerId} from './instrument'
 export interface LayerContext extends Pick<AudioContext,'createGain'|'createDynamicsCompressor'|'createBufferSource'|'createBuffer'|'createBiquadFilter'|'createStereoPanner'|'decodeAudioData'|'destination'|'sampleRate'|'currentTime'|'state'> {audioWorklet:Pick<AudioWorklet,'addModule'>;resume():Promise<void>;close():Promise<void>}
 type WorkletFactory=(ctx:LayerContext,name:string,options:AudioWorkletNodeOptions)=>AudioWorkletNode
 const ramp=(p:AudioParam,value:number,t:number)=>{p.cancelAndHoldAtTime(t);p.linearRampToValueAtTime(value,t+.015)}
+async function waitUntilRunning(ctx:LayerContext){
+  if(ctx.state==='running')return
+  const events=ctx as LayerContext&{addEventListener?:(type:string,fn:()=>void)=>void;removeEventListener?:(type:string,fn:()=>void)=>void}
+  if(!events.addEventListener)throw Error('Audio did not start; try another gesture.')
+  await new Promise<void>((resolve,reject)=>{
+    const timer=setTimeout(()=>{events.removeEventListener?.('statechange',onState);reject(Error('Audio did not start; try another gesture.'))},1000)
+    function onState(){if(ctx.state==='running'){clearTimeout(timer);events.removeEventListener?.('statechange',onState);resolve()}}
+    events.addEventListener!('statechange',onState)
+  })
+}
 export class LayerAudioBackend implements AudioBackend {
   context:LayerContext|null=null;state:InstrumentState=newInstrument();readonly library:SampleLibrary
-  private initializing:Promise<void>|null=null;private disposed=false;private acknowledgements:Array<()=>void>=[]
+  sampleLoad:Promise<void>|null=null;private initializing:Promise<void>|null=null;private disposed=false;private acknowledgements:Array<()=>void>=[];private direct=false
   buses:GainNode[]=[];chains:AudioWorkletNode[]=[];levels:GainNode[]=[];rotary:AudioWorkletNode|null=null;master:GainNode|null=null;limiter:DynamicsCompressorNode|null=null
   private nextBarrier=0;private barriers=new Map<number,()=>void>()
   streams:AudioWorkletNode[]=[];organLevels:GainNode[]=[];streamEnded=new Map<number,()=>void>()
@@ -19,40 +29,59 @@ export class LayerAudioBackend implements AudioBackend {
     if(this.disposed)throw Error('Audio backend disposed')
     if(this.initializing)return this.initializing
     this.context??=this.createContext();const ctx=this.context
-    // Resume immediately inside the initiating gesture, before asynchronous file loading.
+    // Resume inside the initiating gesture, before any file or worklet await.
     const resumed=ctx.resume()
     this.initializing=(async()=>{
-      await resumed;if(ctx.state!=='running')throw Error('Audio did not start; try another gesture.')
+      await resumed
+      if(ctx.state!=='running')await waitUntilRunning(ctx)
+      // Recordings are 153MB of FLAC. Awaiting them here made the first gesture
+      // silent: noteOn drops a key released before initialize resolves.
+      if(this.library.status==='idle'||this.library.status==='fallback')this.sampleLoad=this.library.load(ctx)
       if(!this.master){
-        await ctx.audioWorklet.addModule(`${import.meta.env.BASE_URL}audio/processor.js`)
-        if(this.disposed)return
         this.master=ctx.createGain();this.master.gain.value=this.state.master;this.limiter=ctx.createDynamicsCompressor();this.limiter.threshold.value=-3;this.limiter.knee.value=3;this.limiter.ratio.value=20;this.limiter.attack.value=.003;this.limiter.release.value=.1;this.master.connect(this.limiter);this.limiter.connect(ctx.destination)
-        this.rotary=this.makeWorklet(ctx,'stage-rotary',{numberOfInputs:6,numberOfOutputs:6,outputChannelCount:[2,2,2,2,2,2]})
-        for(let i=0;i<6;i++){
-          const bus=ctx.createGain(),chain=this.makeWorklet(ctx,'stage-layer',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2]}),level=ctx.createGain()
-          level.gain.value=1;bus.connect(chain);chain.connect(this.rotary,0,i);this.rotary.connect(level,i,0);level.connect(this.master)
-          this.buses.push(bus);this.chains.push(chain);this.levels.push(level)
+        try{
+          // Absolute URL: addModule resolves against the document, and a bare
+          // ./audio path 404s when the preview is opened without its directory base.
+          const workletUrl=new URL('audio/processor.js',document.baseURI).href
+          await ctx.audioWorklet.addModule(workletUrl)
+          if(this.disposed)return
+          this.rotary=this.makeWorklet(ctx,'stage-rotary',{numberOfInputs:6,numberOfOutputs:6,outputChannelCount:[2,2,2,2,2,2]})
+          for(let i=0;i<6;i++){
+            const bus=ctx.createGain(),chain=this.makeWorklet(ctx,'stage-layer',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2]}),level=ctx.createGain()
+            level.gain.value=1;bus.connect(chain);chain.connect(this.rotary,0,i);this.rotary.connect(level,i,0);level.connect(this.master)
+            this.buses.push(bus);this.chains.push(chain);this.levels.push(level)
+          }
+        }catch(error){
+          // Worklet modules fail in some iframe/Safari cases. Piano still has
+          // to sound: route the six buses straight to the master.
+          for(const node of [...this.levels,...this.buses,...this.chains])node.disconnect()
+          this.rotary?.disconnect()
+          this.direct=true;this.rotary=null;this.chains=[];this.levels=[];this.buses=[]
+          for(let i=0;i<6;i++){const bus=ctx.createGain();bus.connect(this.master!);this.buses.push(bus)}
+          console.error('Stagebench worklet unavailable; piano plays dry',error)
         }
       }
-      if(!this.streams.length)for(let i=0;i<5;i++){
+      if(!this.direct&&!this.streams.length)for(let i=0;i<5;i++){
         const stream=this.makeWorklet(ctx,'stage-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{kind:i<2?'Organ':'Synth'}})
         stream.port.onmessage=event=>{if(event.data.barrier){this.barriers.get(event.data.barrier)?.();this.barriers.delete(event.data.barrier)}for(const id of event.data.ended??[]){this.disconnect(id);this.streamEnded.get(id)?.();this.streamEnded.delete(id)}}
         if(i<2){const level=ctx.createGain();stream.connect(level);level.connect(this.buses[2]);this.organLevels.push(level)}else stream.connect(this.buses[i+1])
         this.streams.push(stream)
       }
-      await this.library.load(ctx)
       if(this.disposed){this.library.clear();return}
-      const nodes=[...this.chains,this.rotary!,...this.streams]
-      const ready=Promise.all(nodes.map(node=>new Promise<void>(resolve=>{const original=node.port.onmessage;const done=()=>{node.port.onmessage=original;resolve()};this.acknowledgements.push(done);node.port.onmessage=event=>{original?.call(node.port,event);if(event.data.ready)done()}})))
-      this.configure(this.state);await ready;this.acknowledgements=[]
+      if(!this.direct&&this.rotary){
+        const nodes=[...this.chains,this.rotary,...this.streams]
+        const ready=Promise.all(nodes.map(node=>new Promise<void>(resolve=>{const original=node.port.onmessage;const done=()=>{node.port.onmessage=original;resolve()};this.acknowledgements.push(done);node.port.onmessage=event=>{original?.call(node.port,event);if(event.data.ready)done()}})))
+        this.configure(this.state);await ready;this.acknowledgements=[]
+      }else this.configure(this.state)
     })().finally(()=>{this.initializing=null})
     return this.initializing
   }
   /** Await queued streaming commands at deterministic offline test boundaries. */
   synchronize(){return Promise.all(this.streams.map(stream=>new Promise<void>(resolve=>{const id=++this.nextBarrier;this.barriers.set(id,resolve);stream.port.postMessage({barrier:id})})))}
   configure(state:InstrumentState){
-    this.state=previewState(state);state=this.state;const ctx=this.context;if(!ctx||!this.master||!this.rotary)return
+    this.state=previewState(state);state=this.state;const ctx=this.context;if(!ctx||!this.master)return
     ramp(this.master.gain,state.master,ctx.currentTime)
+    if(!this.rotary)return
     const chains=effectChains(state)
     const gains=[state.on&&state.layers.A.enabled?state.layers.A.level:0,state.on&&state.layers.B.enabled?state.layers.B.level:0,1,...(['A','B','C'] as const).map(id=>state.synth.on&&state.synth.layers[id].enabled?state.synth.layers[id].level:0)]
     for(let i=0;i<6;i++){ramp(this.levels[i].gain,gains[i],ctx.currentTime);this.chains[i].port.postMessage({effects:chains[i],enabled:state.effectsOn,bpm:state.clockBpm})}
@@ -69,6 +98,7 @@ export class LayerAudioBackend implements AudioBackend {
     if(this.state.clockSync&&!this.nodes.size)for(const node of [...this.streams,...this.chains])node.port.postMessage({clockReset:true})
     if(section!=='Piano'){
       const layer=options?.layer??'A',i=section==='Organ'?(layer==='A'?0:1):2+(['A','B','C'] as const).indexOf(layer),stream=this.streams[i]
+      if(!stream){ended();return}
       this.streamEnded.set(id,ended);this.nodes.set(id,{stream,sources:[],gain:this.buses[section==='Organ'?2:i+1],filters:[],pans:[],layer,section,release:0})
       stream.port.postMessage({on:true,id,note,velocity,gain:options?.zoneGain??1});return
     }
