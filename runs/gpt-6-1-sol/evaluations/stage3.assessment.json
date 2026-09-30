@@ -5,7 +5,7 @@
   "evaluator": "Stagebench blind evaluator (Claude Opus 5)",
   "evaluatorModel": "claude-opus-5",
   "evaluatedAt": "2026-09-29T21:40:00Z",
-  "summary": "A dense, genuinely functional Stage 4. Geometry is essentially exact at 1440x900 (deck 0.54000, keybed 0.46000, width 0.94000, aspect 3.09514, worst section deviation 0.00001); keybed is 73 keys / 43 white / 30 black, E1-E7, all inside the keybed, black-key fraction 0.60991; 33/33 landmarks present, 140/140 controls pointer-reachable, 0 forbidden descriptors, 5/5 reference colours within deltaE 3. Audio is real and shared: one AudioContext and one destination, 6 buses -> 6 chain worklets -> rotary -> master -> limiter. Offline renders of the shipped DSP show 6 distinct organ models, 9 independently audible drawbars, percussion/click/vibrato, 14 distinct synth waveforms with category-correct Osc Ctrl (exactly 0 on Pure), working filters/envelopes/LFO/unison/arp, and six effect units that each change the signal. Programs round-trip through the panel and across reload with a truthful dirty flag; scenes, splits, morphs, transpose and Panic work across all three engines. Main weaknesses: silkscreen legends are ~3.7 px and overprint each other into unreadable bands (drawbars, pedal/routing rows), 10/140 controls are not pointer-reachable at 390x844, and morph destinations are a curated allow-list rather than the parameter space.",
+  "summary": "A dense, genuinely functional Stage 4. Geometry is essentially exact at 1440x900 (deck 0.54000, keybed 0.46000, width 0.94000, aspect 3.09514, worst section deviation 0.00001); keybed is 73 keys / 43 white / 30 black, E1-E7, all inside the keybed, black-key fraction 0.60991; 33/33 landmarks present, 140/140 controls pointer-reachable, 0 forbidden descriptors, 5/5 reference colours within deltaE 3. Audio is real and shared: one AudioContext and one destination, 6 buses -> 6 chain worklets -> rotary -> master -> limiter. Offline renders of the shipped DSP show 6 distinct organ models, 9 independently audible drawbars, percussion/click/vibrato, 14 distinct synth waveforms with category-correct Osc Ctrl (exactly 0 on Pure), working filters/envelopes/LFO/unison/arp, and six effect units that each change the signal. Programs round-trip through the panel and across reload with a truthful dirty flag; scenes, splits, morphs, transpose and Panic work across all three engines. Main weaknesses: audio was load-gated so early noteOns were silent until the full ~153MB sample library finished; silkscreen legends are ~3.7 px and overprint each other into unreadable bands (drawbars, pedal/routing rows), 10/140 controls are not pointer-reachable at 390x844, and morph destinations are a curated allow-list rather than the parameter space.",
   "categories": [
     {
       "id": "sound",
@@ -35,8 +35,9 @@
         {
           "id": "qualityUnderLoad",
           "scoring": "judged",
-          "rating": 3,
+          "rating": 2,
           "evidence": [
+            "LOAD GATE (sealed artifact as evaluated): `initialize()` awaited decode of all 183 bundled FLACs (~153MB) before the audio graph was ready. `noteOn` dropped any key released before that promise resolved, so the first gesture(s) were silent until the full sample library finished — confirmed on the live Stage 3 preview (Chromium/WebKit): a normal short keypress during load produced no audible output; a note held until ready was audible (peak ~0.11–0.18). Play-path fix later merged in PR #35; this rating reflects the sealed build that was scored, not the post-fix preview.",
             "Played 9 simultaneous notes from the computer keyboard via CDP Input events in the served build: 9 keys entered .pressed, released cleanly to 0, and the console recorded zero errors or warnings across the whole interaction pass (Log.entryAdded level=error: []).",
             "Live context measured at sampleRate 48000, baseLatency 0.00533 s, outputLatency 0.016 s; polyphony cap 32 with deterministic stealing ordered releasing > un-held > oldest id (src/audio.ts noteOn), and a master DynamicsCompressor limiter (threshold -3, ratio 20) before the destination.",
             "Node accounting stayed bounded while playing (createGain 17, createBufferSource/BiquadFilter/StereoPanner 2 each after the first note) and 'All notes off' returned .piano-key.pressed from 1 to 0; PianoEngine.allOff/dispose clear voices, pedals, held and pending maps.",
@@ -145,6 +146,12 @@
       "criterion": "narrowRetention",
       "title": "10 of 140 controls are not pointer-reachable at 390x844",
       "detail": "A 5x5 document.elementFromPoint hit-test over each control's interactive element returns 140/140 reachable at 1440x900 but only 130/140 at 390x844. The failures are organ-layer-a-level, piano-layer-a-level, synth-layer-a-level, synth-layer-b-level, synth-waveform, synth-arpeggiator-mode, synth-arpeggiator-hold, synth-filter-drive, synth-amp-attack and synth-mod-attack - all ~3-5 px wide at that scale, where legends and neighbouring elements win the hit-test. The footer Inspect slider (1x-4x with horizontal scroll) restores access, so this is degraded usability rather than a dead control."
+    },
+    {
+      "severity": "major",
+      "criterion": "qualityUnderLoad",
+      "title": "First-gesture silence: audio load-gated until full ~153MB sample library finished",
+      "detail": "On the sealed Stage 3 artifact as evaluated, audio startup awaited the entire piano sample library (183 FLACs, ~153MB) inside `initialize()` before the graph was considered ready. Early `noteOn` calls for keys released during that wait were dropped, so first gestures were silent until the full download/decode completed. A note held until ready did speak. This failed musical quality under load / first-play reliability for the published sealed build. (A preview play-path fix landed later in PR #35; digests/artifacts of the sealed record are intentionally unchanged here — this amendment is report and score honesty only.)"
     },
     {
       "severity": "minor",

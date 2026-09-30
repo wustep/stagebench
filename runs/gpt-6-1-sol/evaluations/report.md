@@ -2,7 +2,7 @@
 
 - Run: `gpt-6-1-sol`
 - Status: complete
-- Aggregate: **91/100**
+- Aggregate: **90/100**
 - Coverage: 3/3 phases
 
 ## Phase scores
@@ -11,7 +11,7 @@
 | --- | --- | ---: |
 | 1 | Complete surface and basic piano | 94 |
 | 2 | Piano library and working effects | 85 |
-| 3 | Complete Stage 4 system | 88 |
+| 3 | Complete Stage 4 system | 86 |
 
 ## Audio provenance
 
@@ -118,15 +118,15 @@ Passed.
 
 ## Phase 3: Complete Stage 4 system
 
-**88/100**
+**86/100**
 
-A dense, genuinely functional Stage 4. Geometry is essentially exact at 1440x900 (deck 0.54000, keybed 0.46000, width 0.94000, aspect 3.09514, worst section deviation 0.00001); keybed is 73 keys / 43 white / 30 black, E1-E7, all inside the keybed, black-key fraction 0.60991; 33/33 landmarks present, 140/140 controls pointer-reachable, 0 forbidden descriptors, 5/5 reference colours within deltaE 3. Audio is real and shared: one AudioContext and one destination, 6 buses -> 6 chain worklets -> rotary -> master -> limiter. Offline renders of the shipped DSP show 6 distinct organ models, 9 independently audible drawbars, percussion/click/vibrato, 14 distinct synth waveforms with category-correct Osc Ctrl (exactly 0 on Pure), working filters/envelopes/LFO/unison/arp, and six effect units that each change the signal. Programs round-trip through the panel and across reload with a truthful dirty flag; scenes, splits, morphs, transpose and Panic work across all three engines. Main weaknesses: silkscreen legends are ~3.7 px and overprint each other into unreadable bands (drawbars, pedal/routing rows), 10/140 controls are not pointer-reachable at 390x844, and morph destinations are a curated allow-list rather than the parameter space.
+A dense, genuinely functional Stage 4. Geometry is essentially exact at 1440x900 (deck 0.54000, keybed 0.46000, width 0.94000, aspect 3.09514, worst section deviation 0.00001); keybed is 73 keys / 43 white / 30 black, E1-E7, all inside the keybed, black-key fraction 0.60991; 33/33 landmarks present, 140/140 controls pointer-reachable, 0 forbidden descriptors, 5/5 reference colours within deltaE 3. Audio is real and shared: one AudioContext and one destination, 6 buses -> 6 chain worklets -> rotary -> master -> limiter. Offline renders of the shipped DSP show 6 distinct organ models, 9 independently audible drawbars, percussion/click/vibrato, 14 distinct synth waveforms with category-correct Osc Ctrl (exactly 0 on Pure), working filters/envelopes/LFO/unison/arp, and six effect units that each change the signal. Programs round-trip through the panel and across reload with a truthful dirty flag; scenes, splits, morphs, transpose and Panic work across all three engines. Main weaknesses: audio was load-gated so early noteOns were silent until the full ~153MB sample library finished; silkscreen legends are ~3.7 px and overprint each other into unreadable bands (drawbars, pedal/routing rows), 10/140 controls are not pointer-reachable at 390x844, and morph destinations are a curated allow-list rather than the parameter space.
 
 ### Axis scores
 
 | Axis | Weight | Score |
 | --- | ---: | ---: |
-| Sound | 45% | 83 |
+| Sound | 45% | 77 |
 | Playability & control | 20% | 91 |
 | Feature completeness | 35% | 93 |
 
@@ -134,6 +134,7 @@ A dense, genuinely functional Stage 4. Geometry is essentially exact at 1440x900
 
 - **major** — Control legends overprint and are illegible at rendered size: src/styles.css sets .control-legend to font-size .27cqw (3.65 px at 1440x900) with white-space:nowrap, centred on each control. Because adjacent controls are closer than their captions are wide, legends overlap: in the organ band the nine drawbar captions ('DRAWBAR 16', 'DRAWBAR 5 1/3', ...) merge into one unreadable strip, and 'SUSTAIN PEDAL' overprints 'PITCH STICK ROUTING'; the piano band overlaps 'SOFT RELEASE'/'STRING RESONANCE' and 'PIANO TYPE'/'MODEL SELECTOR'; the synth band overlaps 'LFO AMOUNT'/'ENVELOPE AMOUNT'. On reference/nord-stage-4-73.jpg every caption is separately legible. Visible in scratch/deck-left.png and scratch/deck-right.png (3x upscales of the rendered build).
 - **major** — 10 of 140 controls are not pointer-reachable at 390x844: A 5x5 document.elementFromPoint hit-test over each control's interactive element returns 140/140 reachable at 1440x900 but only 130/140 at 390x844. The failures are organ-layer-a-level, piano-layer-a-level, synth-layer-a-level, synth-layer-b-level, synth-waveform, synth-arpeggiator-mode, synth-arpeggiator-hold, synth-filter-drive, synth-amp-attack and synth-mod-attack - all ~3-5 px wide at that scale, where legends and neighbouring elements win the hit-test. The footer Inspect slider (1x-4x with horizontal scroll) restores access, so this is degraded usability rather than a dead control.
+- **major** — First-gesture silence: audio load-gated until full ~153MB sample library finished: On the sealed Stage 3 artifact as evaluated, audio startup awaited the entire piano sample library (183 FLACs, ~153MB) inside `initialize()` before the graph was considered ready. Early `noteOn` calls for keys released during that wait were dropped, so first gestures were silent until the full download/decode completed. A note held until ready did speak. This failed musical quality under load / first-play reliability for the published sealed build. (A preview play-path fix landed later in PR #35; digests/artifacts of the sealed record are intentionally unchanged here — this amendment is report and score honesty only.)
 - **minor** — Morph destinations are a fixed allow-list: src/audio.ts morphDestinations enumerates roughly 90 paths (rotary speed, the seven layer levels, the 18 organ drawbars, synth ctrl/cutoff/res/LFO rate+amount/arp rate, and 11 effect parameters per chain). Anything outside it - filter type, envelope times, waveform selection, every switch parameter - silently cannot be morphed: arming a morph source and then moving such a control just changes the value with no assignment created. The behaviour is consistent and the panel shows which controls are assigned, but it is narrower than the hardware and is not called out in the UI's scope notes.
 - **minor** — Several controls carry non-hardware semantics, discoverable only in the footnote: Oscillator Mix drives coarse pitch, Oscillator Shape drives Osc Env amount, and the Amp/Mod 'Sustain' knobs set envelope *velocity* rather than a sustain level; Split Set is reachable only via a 500 ms long-press of Split On (src/App.tsx onPointerUp) and opens a settings dialog. These reassignments are declared honestly in the 'Unsupported controls & scope notes' paragraph, so no control fakes success, but the panel legends still read SUSTAIN/MIX/SHAPE and a player reading the surface would be misled.
 - **minor** — Worst-case polyphony load is untested: A note-on can start one voice per enabled layer (up to 7), and each organ/synth voice runs its own VoiceDSP additive/filter loop inside the worklet, so a 32-voice cap can mean 32 concurrent DSP voices across five stage-engine processors plus six stage-layer chains and the rotary. Nine simultaneous notes played cleanly with no console errors in this headless run, but nothing in the artifact's evidence or tests measures render-quantum overruns or dropouts at the polyphony limit.
