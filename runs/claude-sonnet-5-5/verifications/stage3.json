@@ -1,0 +1,105 @@
+{
+  "version": 3,
+  "runId": "claude-sonnet-5-5",
+  "stage": 3,
+  "verifiedAt": "2026-09-30T03:44:34.219Z",
+  "passed": true,
+  "artifactDigest": "433cdd53420e02e0ab26623eb3f6a45ecb9669e2a23685d0749be6afa37092f0",
+  "artifactFiles": 379,
+  "materials": {
+    "specs/benchmark-phases.json": {
+      "version": "2.0.0",
+      "digest": "2399bffa9bf89a628cbbc7e71037f280c10ba9256fa9e6935e82e5e0820ebfb3"
+    },
+    "specs/nord-stage-4.visual.json": {
+      "version": "1.4.0",
+      "digest": "f4a30f7fdc221056d345e37b51a525ee12ae4574791bebbb0ac2d40ac9acceac"
+    },
+    "specs/nord-stage-4.variants.json": {
+      "version": "1.0.0",
+      "digest": "983746df59536a485c44e5d77e508860391f178d2b84525768c4ce3e2eb167f6"
+    },
+    "bench/rubric.json": {
+      "version": "2.0.0",
+      "digest": "bec85b6f8c7f76ebb110032f3055f9319b0db78205cb6030e5f6564a960f1c0f"
+    }
+  },
+  "phaseContract": {
+    "specs": [
+      "specs/nord-stage-4.visual.json",
+      "specs/nord-stage-4.piano.json",
+      "specs/nord-stage-4.effects.json",
+      "specs/nord-stage-4.programs.json",
+      "specs/nord-stage-4.organ.json",
+      "specs/nord-stage-4.synth.json"
+    ],
+    "hardGates": 5
+  },
+  "featureMatrix": {
+    "coveredFeatures": 38,
+    "requiredFeatures": 38
+  },
+  "implementationDetails": {
+    "audioStrategy": "One AudioContext for the whole instrument. Piano layers A/B, Organ layers A/B and Synth layers A/B/C are sound sources; each has a bus/level and enters the Layer Effects chains: Piano A, Piano B, one shared Organ chain (Organ A and B mix into it after their own level and vibrato/chorus) and Synth A, B, C each have their own chain: source \u2192 Mod 1 \u2192 Mod 2 \u2192 Delay \u2192 Amp Sim/EQ \u2192 Compressor \u2192 Reverb \u2192 layer level \u2192 master gain \u2192 soft clip \u2192 limiter \u2192 destination; chains routed to the Rotary (Organ button, or \"To Rotary\" on any chain) pass through the one shared Rotary. Grand, Upright and Electric play bundled RECORDED sample sets (Ogg Vorbis, offline, several root notes and velocity layers). Clav, Digital, Misc, the four organ models and the whole synth are LIVE SYNTHESIS (oscillators, periodic waves, wave shapers, filters); they use no recordings. While a recorded set is loading, or if it fails to load or decode, notes play a labelled fallback: the GENERATED additive-synthesis buffers, and a plain oscillator if buffers cannot be created at all. Every effect is real Web Audio processing of the layer signal; reverb uses GENERATED impulse responses (not recordings). The program system (32 programs, 8 Live slots, splits, scenes, morphs, master clock) is state, not audio: the morph-resolved state drives one graph.",
+    "generatedSources": 4,
+    "sampleSources": 4
+  },
+  "checks": [
+    {
+      "id": "test",
+      "command": "pnpm run test",
+      "passed": true,
+      "durationMs": 14776,
+      "detail": "Passed"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm run typecheck",
+      "passed": true,
+      "durationMs": 1453,
+      "detail": "Passed"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm run lint",
+      "passed": true,
+      "durationMs": 564,
+      "detail": "Passed"
+    },
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "passed": true,
+      "durationMs": 1714,
+      "detail": "Passed"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence/stage3-desktop.png",
+      "passed": true,
+      "detail": "evidence/stage3-desktop.png \u00b7 1440x900"
+    },
+    {
+      "id": "evidence/stage3-narrow.png",
+      "passed": true,
+      "detail": "evidence/stage3-narrow.png \u00b7 390x844"
+    },
+    {
+      "id": "evidence/stage3-visual-audit.md",
+      "passed": true,
+      "detail": "evidence/stage3-visual-audit.md"
+    },
+    {
+      "id": "evidence/stage3-capture.json",
+      "passed": true,
+      "detail": "evidence/stage3-capture.json"
+    },
+    {
+      "id": "dist/index.html standards mode",
+      "advisory": true,
+      "passed": true,
+      "detail": "dist/index.html opens with <!doctype html>, so the browser measures it in standards mode"
+    }
+  ]
+}

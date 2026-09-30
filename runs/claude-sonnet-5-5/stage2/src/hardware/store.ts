@@ -1,0 +1,222 @@
+import type { ButtonSpec, ControlSpec } from './types'
+
+/**
+ * Normalized hardware model: where a knob is turned, whether a button is lit or held. The audio path never reads
+ * this module. Controls that are functional in the current phase are bound to the canonical instrument state by
+ * `engine/panelBindings.ts`, which listens to `onAction` / `subscribe` and writes canonical values back
+ * with `set` and `patch`; every other control stays presentation-only.
+ */
+export interface ControlState {
+  /** knob/fader/wheel: 0..1; drawbar: 0..8; encoder: detent index; button: 0/1 or option index */
+  value: number
+  held: boolean
+  /** short state description for assistive tech (e.g. "unavailable for Clav") */
+  note?: string
+  /** blinking LED: this control's layer has the focus */
+  focused?: boolean
+}
+
+export interface PressModifiers {
+  shift?: boolean
+}
+export interface ControlAction {
+  id: string
+  type: 'press' | 'release'
+  shift: boolean
+}
+
+export interface HardwareStore {
+  get(id: string): ControlState
+  subscribe(id: string, listener: () => void): () => void
+  subscribeAll(listener: () => void): () => void
+  set(id: string, value: number): void
+  step(id: string, direction: 1 | -1, coarse?: boolean): void
+  press(id: string, mods?: PressModifiers): void
+  release(id: string): void
+  /** presentation attributes written by the bindings (a11y note, focus blink) */
+  patch(id: string, attrs: { note?: string | undefined; focused?: boolean | undefined }): void
+  /** button press / release events, with modifier keys */
+  onAction(listener: (action: ControlAction) => void): () => void
+  /** panel LEDs that are not buttons (FX focus, rotary on, …) */
+  setIndicator(id: string, lit: boolean): void
+  getIndicator(id: string): boolean
+  subscribeIndicator(id: string, listener: () => void): () => void
+  home(id: string, target: 'min' | 'max' | 'center'): void
+  /** returns a plain object for tests and diagnostics */
+  snapshot(): Record<string, ControlState>
+  listenerCount(): number
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+export const buttonSteps = (spec: ButtonSpec): number => (spec.mode === 'cycle' ? Math.max(2, spec.options.length) : 2)
+
+const initialValue = (spec: ControlSpec): number => {
+  switch (spec.kind) {
+    case 'knob':
+    case 'fader':
+    case 'wheel':
+    case 'drawbar':
+      return spec.initial
+    case 'encoder':
+    case 'button':
+      return 0
+  }
+}
+
+export const stepSize = (spec: ControlSpec): number => {
+  switch (spec.kind) {
+    case 'knob':
+    case 'fader':
+      return 0.05
+    case 'wheel':
+      return 0.05
+    default:
+      return 1
+  }
+}
+
+export function createHardwareStore(specs: readonly ControlSpec[]): HardwareStore {
+  const byId = new Map(specs.map((s) => [s.id, s]))
+  const states = new Map<string, ControlState>()
+  const listeners = new Map<string, Set<() => void>>()
+  const allListeners = new Set<() => void>()
+  const actionListeners = new Set<(a: ControlAction) => void>()
+  const indicators = new Map<string, boolean>()
+  const indicatorListeners = new Map<string, Set<() => void>>()
+  for (const s of specs) states.set(s.id, { value: initialValue(s), held: false })
+
+  const spec = (id: string): ControlSpec => {
+    const s = byId.get(id)
+    if (!s) throw new Error(`unknown control ${id}`)
+    return s
+  }
+  const commit = (id: string, next: ControlState) => {
+    const prev = states.get(id)
+    if (prev && prev.value === next.value && prev.held === next.held && prev.note === next.note && prev.focused === next.focused) return
+    states.set(id, next)
+    listeners.get(id)?.forEach((l) => l())
+    allListeners.forEach((l) => l())
+  }
+  const quantize = (s: ControlSpec, v: number): number => {
+    switch (s.kind) {
+      case 'knob':
+      case 'fader':
+      case 'wheel':
+        return clamp(Math.round(v * 1000) / 1000, 0, 1)
+      case 'drawbar':
+        return clamp(Math.round(v), 0, 8)
+      case 'encoder': {
+        const n = s.detents
+        return ((Math.round(v) % n) + n) % n
+      }
+      case 'button':
+        return clamp(Math.round(v), 0, buttonSteps(s) - 1)
+    }
+  }
+
+  return {
+    get: (id) => {
+      const s = states.get(id)
+      if (!s) throw new Error(`unknown control ${id}`)
+      return s
+    },
+    subscribe(id, listener) {
+      let set = listeners.get(id)
+      if (!set) listeners.set(id, (set = new Set()))
+      set.add(listener)
+      return () => {
+        set.delete(listener)
+      }
+    },
+    subscribeAll(listener) {
+      allListeners.add(listener)
+      return () => {
+        allListeners.delete(listener)
+      }
+    },
+    set(id, value) {
+      const s = spec(id)
+      const cur = states.get(id)!
+      commit(id, { ...cur, value: quantize(s, value) })
+    },
+    step(id, direction, coarse = false) {
+      const s = spec(id)
+      const cur = states.get(id)!
+      const amount = stepSize(s) * (coarse ? (s.kind === 'knob' || s.kind === 'fader' || s.kind === 'wheel' ? 2 : 4) : 1)
+      commit(id, { ...cur, value: quantize(s, cur.value + direction * amount) })
+    },
+    press(id, mods = {}) {
+      const s = spec(id)
+      const cur = states.get(id)!
+      if (s.kind !== 'button') return
+      if (s.mode === 'latch') commit(id, { ...cur, value: cur.value ? 0 : 1, held: true })
+      else if (s.mode === 'cycle') commit(id, { ...cur, value: (cur.value + 1) % buttonSteps(s), held: true })
+      else commit(id, { ...cur, value: 1, held: true })
+      actionListeners.forEach((l) => l({ id, type: 'press', shift: !!mods.shift }))
+    },
+    release(id) {
+      const s = spec(id)
+      const cur = states.get(id)!
+      if (s.kind === 'button') {
+        if (!cur.held) return
+        commit(id, { ...cur, value: s.mode === 'momentary' ? 0 : cur.value, held: false })
+        actionListeners.forEach((l) => l({ id, type: 'release', shift: false }))
+      } else if (s.kind === 'wheel' && s.spring) {
+        commit(id, { ...cur, value: s.initial, held: false })
+      } else {
+        commit(id, { ...cur, held: false })
+      }
+    },
+    patch(id, attrs) {
+      spec(id)
+      const cur = states.get(id)!
+      const next: ControlState = { ...cur }
+      if ('note' in attrs) {
+        if (attrs.note === undefined) delete next.note
+        else next.note = attrs.note
+      }
+      if ('focused' in attrs) {
+        if (attrs.focused === undefined) delete next.focused
+        else next.focused = attrs.focused
+      }
+      commit(id, next)
+    },
+    onAction(listener) {
+      actionListeners.add(listener)
+      return () => {
+        actionListeners.delete(listener)
+      }
+    },
+    setIndicator(id, lit) {
+      if (indicators.get(id) === lit) return
+      indicators.set(id, lit)
+      indicatorListeners.get(id)?.forEach((l) => l())
+    },
+    getIndicator: (id) => indicators.get(id) ?? false,
+    subscribeIndicator(id, listener) {
+      let set = indicatorListeners.get(id)
+      if (!set) indicatorListeners.set(id, (set = new Set()))
+      set.add(listener)
+      return () => {
+        set.delete(listener)
+      }
+    },
+    home(id, target) {
+      const s = spec(id)
+      const cur = states.get(id)!
+      const max = s.kind === 'drawbar' ? 8 : s.kind === 'encoder' ? s.detents - 1 : 1
+      const value = target === 'min' ? 0 : target === 'max' ? max : s.kind === 'wheel' ? s.initial : max / 2
+      commit(id, { ...cur, value: quantize(s, value) })
+    },
+    snapshot() {
+      return Object.fromEntries(states)
+    },
+    listenerCount() {
+      let n = allListeners.size + actionListeners.size
+      listeners.forEach((s) => (n += s.size))
+      indicatorListeners.forEach((s) => (n += s.size))
+      return n
+    },
+  }
+}

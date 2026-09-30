@@ -1,0 +1,257 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-sonnet-5-5",
+  "stage": 2,
+  "stageName": "Piano library and working effects",
+  "status": "complete",
+  "evaluator": "stagebench-blind-evaluator (phase 2)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-30T04:25:41.000Z",
+  "summary": "Phase 2 is substantially real, not decorative. Measured in the sealed build: one AudioContext, exactly one connection into the destination (from the master limiter), per-layer buses, documented unit order. All six piano types load and render distinctly (centroid 886/831/659/887/263/295 Hz; tails 0.19-0.42 s); Grand/Upright/Electric are 236 bundled Ogg recordings with CC-BY/CC0 provenance, fetched offline with zero failures. Every effect unit and all 25 listed types measurably change the signal: delay repeats at 0.27 s with the filter acting on the loop only, reverb tails ordered Booth 0.29 s to Cathedral 3.42 s, compressor crest 4.72->1.96, amps and 24 dB filters reshaping the spectrum, rotary panning and driving. All-effects bypass returns exactly the dry signal. Master and layer level follow v^2 and are silent at 0; 20 keys at once peaked 0.80, no clipping, no console errors. Declarations are honest, including the one order deviation (rotary after layer level) forced by the single shared rotary. Detail is simplified where a Nord player would notice: synthesised Clav/Digital/Misc, close JC/Twin amps, no Master Clock sync. I drove layer A, not B, and no live MIDI device.",
+  "score": 85.4,
+  "rawScore": 85.4,
+  "categories": [
+    {
+      "id": "sound",
+      "label": "Sound",
+      "weight": 55,
+      "score": 82.5,
+      "contribution": 45.4,
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "label": "Instrument breadth & character",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "All six types selected from the panel and played (C4, vel 96) in the served build/: spectral centroid at 0.9 s = Grand 886.7 Hz, Upright 831.3, Electric 659.3, Clav 887.5, Digital 262.6, Misc 295.2 Hz; release tail above -50 dBFS = 0.192/0.235/0.299/0.075/0.309/0.416 s. No two types render alike (scratch/probe1.json).",
+            "Grand vs Upright are genuinely different recordings, not one set relabelled: 800-2500 Hz band energy 7.33e-6 vs 1.81e-5 (2.5x), centroid 886.7 vs 831.3 Hz, tail 0.192 vs 0.235 s; the status line named the actual model for each selection.",
+            "Electric carries two recorded models: stepping piano-model-dial moved to 'Pianet T, model 2 of 2' and the rendered centroid dropped 659.3 -> 383.0 Hz with status 'Ready: Pianet T (recorded samples)'.",
+            "Recordings are real and bundled: 236 .ogg files under build/samples (7.1 MB), 236 requests with 0 network failures during the pass; artifact/src/audio/library/manifest.json declares 4 sets (Salamander Grand CC-BY-3.0, 30 roots x 3 velocity layers; Upright KW CC0; Wurlitzer EP200 4 layers; Pianet T 2 layers).",
+            "Simplification a player would notice: Clav/Digital/Misc are live synthesis (artifact/src/audio/voices.ts startSynthVoice), and the Wurlitzer's softest layer maps roots up to 11 semitones apart so some soft notes are shifted by up to +/-6 semitones (declared in IMPLEMENTATION_DETAILS.json)."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "label": "Effect audibility & correctness",
+          "weight": 35,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Mod 1, all six types A/B'd against the dry note (dry: rms 0.0804, crest 4.57, channel imbalance 0.0000, centroid 871.8 Hz): Tremolo rms 0.0324 with a 1.76 Hz level modulation; A-Pan channel imbalance 0.9213; Ring Mod centroid 728.8 Hz; A-Wah 778.4; Wah 822.0; Pump modulation depth 0.952 at 4.21 Hz (scratch/probe2.json).",
+            "Delay behaves like a delay: release tail above -50 dBFS grew 0.288 s (off) -> 2.603 s (on, feedback 0.75, wet 0.65) and the decimated envelope shows discrete repeats ~0.27 s apart, matching delaySeconds(0.5)=0.268 s in artifact/src/audio/params.ts. The feedback filter processes the repeats only: tail centroid LP 643.4 / Off 837.0 / HP 1787.6 Hz with the held (dry) portion unchanged. Three taps ~440 ms apart moved the tempo knob to 0.678 (tempoFromSeconds -> ~0.65).",
+            "Reverb decay grows in the documented order: tail above -60 dBFS = Booth 0.288, Room 0.331, Stage 0.512, Spring 0.816, Hall 1.515, Cathedral 3.424 s; Spring is boingy and distinct (tail peak 1576 Hz, 800-2500 Hz energy 3.06e-6 vs Stage 6.85e-8). Bright/Dark move the tail centroid 858.6 vs 714.1 Hz. Dry/Wet is fully wet at max (wet=0: tail 0.288 s, held rms 0.132; wet=1: tail 0.939 s, held rms 0.073).",
+            "Compressor measurably reduces dynamic range on an 8-note chord: crest factor 4.72 -> 1.96 at amount 1.0 with make-up gain raising rms 0.165 -> 0.402; fast mode recovers quicker (crest 1.98, envelope crossing rate 24.5 vs 21.6 Hz).",
+            "Amp/EQ/filters process audio: EQ-only rms 0.0752 vs Small 0.3029 (crest 4.88 -> 1.79, centroid 883 -> 1330 Hz), JC 0.2370/1072 Hz, Twin 0.2380/1120 Hz; LP24 vs HP24 sub-200 Hz energy 8.6e-7 vs 1.2e-5 (14x); EQ bass max/min 6.25e-6 vs 1.54e-8, treble max/min 2.37e-8 vs 6.79e-11. The three amp models are not identical but JC and Twin sit closer together than the hardware's.",
+            "Rotary is real and reached via To Rotary: selecting it produced stereo, amplitude-modulated output (channel imbalance 0.345 slow / 0.489 fast, dry 0.0000) and my crossing-rate metric rose 0.32 -> 0.97 Hz after pressing rotary-speed; drive 0 -> 1 raised rms 0.135 -> 0.195 and 200-800 Hz energy 1.05e-3 -> 3.80e-3.",
+            "Bypass is exact, not cosmetic: with Reverb on the tail was 0.949 s; pressing effects-on (all-effects bypass) returned tail 0.288 s and held rms 0.1330, and turning only the reverb unit off gave 0.1323 with tail centroid 626.0 vs 625.9 Hz - both paths collapse to the dry signal."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "label": "Signal graph & gain staging",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Instrumented AudioNode.prototype.connect in the served build: exactly 1 AudioContext observed across the whole session, 203 connections, and exactly 1 connection into AudioDestinationNode, made by a DynamicsCompressorNode (the master limiter) - nothing reaches the output except through master gain, soft clip and limiter (scratch/probe1.json, scratch/probe2.json).",
+            "Per-layer buses and ordered units exist in artifact/src/audio/graph.ts (CHAIN_ORDER = mod1, mod2, delay, amp, comp, reverb; LayerGraph: bus -> 3-band timbre EQ -> chain -> level -> {master | rotary bus}); the measured node inventory matches (124 GainNode, 48 BiquadFilterNode, 12 DelayNode, 4 ConvolverNode, 7 WaveShaperNode, 3 DynamicsCompressorNode).",
+            "Gain staging holds under load: one note peaked 0.260-0.367, and 20 simultaneous computer keys (19 unique voices of a 24-voice budget) peaked 0.8027 with crest 2.69 - nothing clipped at or above 1.0 and no console errors were logged.",
+            "Master Level is a real quadratic taper into the master gain: rms 0.0275 (0.40), 0.0898 (0.72), 0.1725 (1.00) - the 3.27 ratio matches the 3.24 predicted by 1.15*v^2 in artifact/src/audio/params.ts - and 0 is silent (rms 0.000000).",
+            "Deviation found: the shared Rotary sits after the per-layer level (level -> rotary bus -> rotary -> master) rather than before it as specs/nord-stage-4.effects.json signalContract lists; reverb still precedes rotary and the deviation is declared in IMPLEMENTATION_DETAILS.json. It is forced by rotaryInstancesPerProgram = 1."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 20,
+      "score": 75,
+      "contribution": 15,
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "label": "Two-layer piano behaviour",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Layer A's level fader reaches the audio graph with the documented law: measured rms 0.0888 (0.95), 0.0994 (1.0), 0.0039 (0.20), 0.0000 (0.0) - the 0.95/0.20 ratio of 22.5 matches layerGain = v^2 (22.6) in artifact/src/audio/params.ts (scratch/probe1b.json).",
+            "The panel reflects layer state live: the Program OLED in the running build reads 'A > Grand - Salamander Grand / B off', and piano-level-a/-b, piano-layer-a-onoff/-b-onoff and the FX-focus LED all exist and are operable (I enumerated 182 controls with stable data-control-id; every Phase 2 id is present).",
+            "Two-layer routing, focus and octave are implemented per spec in artifact/src/audio/instrument.ts createRouter() (per-layer octave transpose, one voice per enabled layer), artifact/src/engine/state.ts pressLayer() (tap/hold/both/shift gestures, manual p. 23) and panelBindings.syncPanel() (effect focus follows layer focus); coverage is mapped in tests/feature-matrix.json piano.layers -> rendered.piano.test.ts, state.test.ts, panelBindings.test.ts.",
+            "Caveat on my own evidence: I measured layer A end to end but did not drive layer B's enable/focus gestures in the browser, so the two-layer audio path rests on source and the sealed tests rather than on my own rendered measurement."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "label": "Detailed piano controls",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Every listed control is wired panel -> canonical state -> audio: artifact/src/engine/panelBindings.ts binds piano-kb-touch, piano-dyn-comp, piano-timbre, piano-unison, piano-soft-release, piano-string-res and master-level, and artifact/src/audio/params.ts implements each as a signal mapping (touchVelocity exponents 1.45/1.0/0.68; dynCompGain x^-0.15L; timbreBands incl. Dyno 1/2; UNISON_CENTS [0,4,10,20] with stereo spread; releaseTime x2.4 acoustic / x0.45 electric for Soft Release; resonancePartners for String Res).",
+            "String Res really adds nodes rather than a flag: artifact/src/audio/webAudioSink.ts start() calls addResonance() only for recorded acoustic types, mixing slow-attack partner samples into the same voice envelope (artifact/src/audio/voices.ts addResonance).",
+            "The timbre EQ is present in the measured graph: each layer owns 3 biquads (lowshelf 180 / peaking 1500 / highshelf 4000) between bus and chain, consistent with the 48 BiquadFilterNode connections recorded in the running build.",
+            "Master Level, the one control of this group I drove end to end in the build, changed rendered level quadratically and silenced at 0 (rms 0.0275 / 0.0898 / 0.1725 / 0.0000). The other five are asserted through offline rendering in artifact/src/audio/rendered.piano.test.ts (322 lines), not by my own browser measurement.",
+            "Availability rules are honest rather than faked: Soft Release is unavailable for Clav and String Res only for Grand/Upright, and the built panel says so in aria-description ('Unavailable for Clav sounds', 'Unavailable: Grand and Upright only')."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "label": "Input reliability & failure behaviour",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Stress pass in the built app: 20 mapped computer keys pressed together yielded 'Voices 19/24' (19 unique notes, deterministic 24-voice budget), peak 0.8027 with no clipping, and every voice released to 'Voices 0/24' afterwards.",
+            "Zero console errors or exceptions across the whole session (~60 note events, ~80 synthetic control edits, six instrument loads); the only log entry was the ScriptProcessorNode deprecation warning produced by my own measurement tap, not by the app.",
+            "Status is truthful and never claims more than it has: the status bar read 'Audio starts on the first note' (phase idle) before the first key and 'Ready: Salamander Grand (recorded samples)' (phase ready) after loading, naming the actual model per type; 236 sample requests completed with 0 failures.",
+            "Failure behaviour degrades visibly by construction: artifact/src/audio/webAudioSink.ts falls back recorded -> generated additive buffers -> plain oscillator and reports 'loading'/'fallback' (never 'ready'), with the type LED flashing via App.tsx PanelStatusBridge; covered by artifact/src/audio/fallback.test.ts.",
+            "Caveat: headless Chromium exposes no MIDI devices, so I exercised pointer/computer-keyboard input and the status surface but not a live Web MIDI note; MIDI handling lives in artifact/src/input/midi.ts with tests in input.test.ts."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 25,
+      "score": 100,
+      "contribution": 25,
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "label": "Required piano instruments",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "All six required types are selectable from the panel and each actually loads and plays in the served build: piano-select cycled Grand, Upright, Electric, Clav, Digital, Misc - every one reached audio phase 'ready' and produced a distinct rendered note (scratch/probe1.json).",
+            "Grand, Upright and Electric are bundled recorded sample sets, not synthesis: 236 .ogg files in build/samples (grand-salamander 90, upright-kw 66, electric-wurlitzer 47, electric-pianet 33), all fetched from the local origin with 0 failures, and the status text labels them '(recorded samples)'.",
+            "More than one model per type where claimed: Electric offers Wurlitzer EP200 and Pianet T (dial reports 'model 2 of 2'), Clav 4 and Digital/Misc 2 each (artifact/src/audio/library/catalog.ts); switching models changed the rendered spectrum (centroid 659.3 -> 383.0 Hz).",
+            "Provenance is complete: artifact/src/audio/library/manifest.json records file, root note, cents, sample rate, duration, bytes, RMS, source and licence per sample (CC-BY-3.0 Salamander/Sullivan, CC0 FreePats Upright KW), and build/samples/ATTRIBUTION.md is linked from the page footer."
+          ]
+        },
+        {
+          "id": "effectUnitCoverage",
+          "label": "Required effect units and types",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "All six units plus the shared Rotary are present and reachable from the panel: I enumerated 182 controls with stable data-control-id in the built page and every Phase 2 effects id exists (fx-mod1-*, fx-mod2-*, fx-delay-*, fx-amp-*/fx-eq-*, fx-comp-*, fx-reverb-*, effects-on, effects-focus-piano, effects-shift, rotary-speed/-drive).",
+            "Every listed type in every unit was selected from the panel by accessible name and rendered: Mod 1 6/6 (A-Pan, Tremolo, Ring Mod, A-Wah, Wah, Pump), Mod 2 6/6 (Chorus, Flanger, Phaser, Vibe, Ensemble, Spin), Amp 7/7 including EQ only, Small, JC, Twin, LP24, HP24 and To Rotary, Reverb 6/6 (Room, Booth, Spring, Stage, Hall, Cathedral) - 25 rendered captures in scratch/probe2.json.",
+            "Routing controls exist beyond bypass: per-unit ON, all-effects ON (measured as a true bypass), Delay/Comp/Reverb Global tags plus Shift+ON handling, group mode on effects-focus-piano (Shift or long press) and per-layer focus, implemented in artifact/src/engine/panelBindings.ts and state.ts (setGroup/setGlobal copy the focused chain to the other layer).",
+            "Optional extras that are claimed do work: Delay Ping Pong is a real cross-fed two-delay stereo loop (artifact/src/audio/effects/delay.ts) and the delay filter offers Off/LP/HP/BP. Not implemented: Master Clock sync of LFO/Delay (declared Phase 3) and Rotary stop mode (spec-optional, annotated 'Stop mode is not supported; decorative')."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "label": "Declared gaps are accurate",
+          "weight": 20,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "The recorded/generated/synthesised distinction in artifact/IMPLEMENTATION_DETAILS.json matches behaviour: the four 'recorded-sample-set' entries correspond to the 236 .ogg files I saw fetched and to the '(recorded samples)' status; reverb impulse responses are declared generated and are indeed built by makeImpulseResponse() in artifact/src/audio/effects/reverb.ts; Clav/Digital/Misc are declared live synthesis and never called recordings.",
+            "Declared gaps are real gaps: soft/sostenuto pedal absent (sustain is full on/off in artifact/src/audio/lifecycle.ts), Master Clock sync absent, and pedal noise / half-pedalling / Triple Pedal / size classes / preset library / Variations / Chorale / Analog delay / close mic are controls that move only (EXCLUDED_IDS in panelBindings.ts, annotated 'Unsupported in this build (excluded feature)').",
+            "The declared signal-order deviation (layer level before the shared Rotary) matches what I measured in the running graph, as does the claim that nothing bypasses master gain and limiter: exactly one connection into AudioDestinationNode, from the limiter.",
+            "Decorative claims are annotated in the accessibility tree rather than merely asserted: the built page reports 'Decorative in this phase: it moves but does not change the sound' for Organ/Synth/Program controls and 'Organ and Synth effect chains arrive in a later phase; this button does not change the focus' for the two unusable focus buttons; the Synth OLED reads 'Not active yet / Panel is decorative / No synth audio'.",
+            "I found no undeclared missing behaviour inside Phase 2 scope: every required piano type, effect unit and effect type I drove responded, and tests/feature-matrix.json maps all 20 required feature ids to non-empty test files (verification.json: 20/20 covered; test, typecheck, lint and build all passed at sealing)."
+          ]
+        }
+      ]
+    }
+  ],
+  "runAxis": null,
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 10142,
+        "detail": "Passed"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 1349,
+        "detail": "Passed"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 796,
+        "detail": "Passed"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 1648,
+        "detail": "Passed"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      },
+      {
+        "id": "lint-coverage",
+        "label": "Lint covers candidate sources",
+        "advisory": true,
+        "passed": true,
+        "scannedDependencies": false,
+        "detail": "Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate's own sources."
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "minor",
+      "criterion": "effectUnitCoverage",
+      "title": "Master Clock sync for LFO and Delay is not implemented",
+      "detail": "specs/nord-stage-4.effects.json lists 'Master Clock sync' among Mod 1 and Delay parameters. The build has no working sync: program-master-clock-tap is annotated decorative and IMPLEMENTATION_DETAILS.json declares sync as Phase 3. Tap tempo and the tempo knob do agree (3 taps ~440 ms apart moved the knob to 0.678), so the gap is narrow and honestly declared."
+    },
+    {
+      "severity": "minor",
+      "criterion": "signalGraph",
+      "title": "Shared Rotary sits after the per-layer level, not before it",
+      "detail": "signalContract.requiredOrder puts Rotary before Layer level, but src/audio/graph.ts routes level -> toRotary -> shared rotary -> master. With rotaryInstancesPerProgram = 1 the layers must be levelled before they are summed, so the deviation is forced; reverb still precedes the rotary and the deviation is declared. Measured: one destination feeder, the limiter."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectAudibility",
+      "title": "JC and Twin amp models are only marginally apart",
+      "detail": "At drive 0.8 on the same note: Small rms 0.3029 / centroid 1330 Hz, JC 0.2370 / 1072 Hz, Twin 0.2380 / 1120 Hz. The three are measurably different (the spec's floor), but JC and Twin differ far less than a JC-120 and a Twin do; 2.5-6 kHz energy 1.72e-5 vs 2.39e-5 is the main separation."
+    },
+    {
+      "severity": "minor",
+      "criterion": "instrumentBreadth",
+      "title": "Wurlitzer's softest velocity layer is sparsely mapped",
+      "detail": "src/audio/library/manifest.json shows the electric-wurlitzer soft layer with 10 roots (up to 11 semitones apart), so some soft notes are pitch-shifted by up to +/-6 semitones and change timbre audibly. This is declared in IMPLEMENTATION_DETAILS.json; the other sets are denser (Grand 30 roots x 3 layers)."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoControlDepth",
+      "title": "Soft and sostenuto pedal behaviour absent (spec-optional)",
+      "detail": "Sustain is full on/off in src/audio/lifecycle.ts; no half-pedalling, soft or sostenuto behaviour. The piano spec lists these as optional with an honest approximation allowed, and IMPLEMENTATION_DETAILS.json states they are not implemented, so nothing is overclaimed."
+    }
+  ]
+}
