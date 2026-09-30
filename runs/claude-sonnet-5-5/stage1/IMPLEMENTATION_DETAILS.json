@@ -1,0 +1,32 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "audio": {
+    "strategy": "One piano-like voice made of GENERATED audio buffers. Each note is rendered on demand by src/audio/pianoDsp.ts (additive synthesis: up to 18 inharmonic partials with per-partial exponential decay, two slightly detuned strings for the lower partials, a filtered hammer-noise burst, four velocity layers for brightness) and played through AudioBufferSourceNode → voice gain → master gain → dynamics-compressor limiter → destination. No recordings, no network, no bundled sample files. If buffer generation is unavailable an oscillator (triangle) fallback voice plays and the UI reports status 'fallback'.",
+    "generatedSources": [
+      {
+        "name": "Additive piano voice (generated buffers)",
+        "kind": "generated-buffer",
+        "isRecording": false,
+        "implementation": "src/audio/pianoDsp.ts renderPianoNote()",
+        "sampleRate": 32000,
+        "coverage": "MIDI 21-108, buffers created lazily per note and velocity layer (24/56/88/116), LRU cache of 48",
+        "license": "Original code written for this benchmark; no third-party audio"
+      },
+      {
+        "name": "Oscillator fallback voice",
+        "kind": "live-synthesis",
+        "isRecording": false,
+        "implementation": "src/audio/webAudioSink.ts (OscillatorNode, triangle)",
+        "license": "Original code"
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "Nothing in this phase is a recording of a real piano. The piano sounds synthetic by design.",
+      "Panel controls (including Master Level) are presentation state only; they are not connected to the audio graph.",
+      "Sustain works from the on-screen pedal button, the Space key and MIDI CC64. Velocity comes from MIDI, from the strike position along a clicked key, and is fixed (96) for the computer keyboard."
+    ]
+  }
+}

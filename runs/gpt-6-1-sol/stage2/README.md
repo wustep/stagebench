@@ -1,0 +1,13 @@
+# Stage 4 73 — Phase 2
+
+Run `pnpm install --frozen-lockfile`, then `pnpm dev`. Piano, Layer Effects, shared Rotary and Master Level are functional. Organ, Synth and Program controls retain their decorative Phase 1 behavior.
+
+Click/touch keys, or play A W S E D F T G Y H U J K O L P ; (C4–E5). Space sustains outside buttons/ranges; focused keys play with Enter/Space. MIDI connects on request and accepts note/velocity and CC64. All notes off, blur, disconnect and unmount stop owned voices and clear effect tails.
+
+Layer buttons enable/focus A or B; moving a layer level fader also focuses it. Piano details edit that focused layer; effects focus follows. Manual FX focus is independent. Open **Piano & effects settings** for explicit layer focus, all parameters, group mode, global modes, dry/wet, feedback filter, local effects clock sync and tap tempo. Shift + Delay/Compressor/Reverb On also toggles global mode. Piano group edits both layers; global units apply to both existing Piano chains. Organ/Synth FX targets have no audio engine this phase. Select Amp/EQ **To Rotary**, enable that unit and turn Rotary on to route a Piano layer into the one shared rotor. Master affects every path.
+
+Grand, Upright and Electric use 183 bundled recordings (about 146 MiB), decoded locally after the first gesture. No runtime network audio service is used. A failed model flashes the type LED, reports **playable synthesis fallback**, and can be retried. Clav, Digital and Misc are original synthesis. One model per type is supplied. [Sample credits and licenses](public/samples/ATTRIBUTION.md) and the full manifest are included in the built artifact.
+
+Required gates: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`. Tests include headless Chromium, native OfflineAudioContext, AudioWorklets and the same DSP used in production. No network, device or speakers are needed. Chromium is supplied under `.browsers`; on a fresh checkout install the Playwright headless shell there or use the standard Playwright cache. Supplemental local browser validation: keep Vite at port 5173 and run `node tests/browser-check.mjs`. Its `stage2-local-*` files are validation evidence, not canonical parent captures.
+
+All Phase 1 test cases and feature IDs are retained, with phase-appropriate assertions for newly functional controls. `IMPLEMENTATION_DETAILS.json` documents audio sources, licenses, graph, approximations and exclusions; `tests/feature-matrix.json` maps all Phase 1/2 IDs. See `evidence/stage2-visual-audit.md` for the visual comparison. Canonical captures and verification are produced by the operator from the Stagebench repository with `pnpm bench seal gpt-6-1-sol`; no seal command is run in this workspace.

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "Original generated piano-like PCM buffers, synthesized analytically for each note and velocity. Not recordings or Nord samples.",
+    "sampleSources": [],
+    "generatedSources": [
+      {
+        "name": "Phase 1 analytic struck-string voice",
+        "source": "src/audio.ts: pianoSignal and renderPiano",
+        "license": "MIT; original implementation, see LICENSE",
+        "files": ["src/audio.ts"],
+        "notes": "Seven slightly inharmonic sinusoidal partials; 4 ms attack, partial-dependent exponential decay, velocity-dependent harmonic brightness and velocity^1.45 amplitude. Ten-second mono PCM generated at AudioContext sample rate for MIDI notes 28–100. No recorded samples, external assets, or network audio loading."
+      }
+    ],
+    "signalPath": "Generated PCM -> per-voice GainNode (220 ms damper release) -> fixed master GainNode at 0.42 -> DynamicsCompressorNode -> destination.",
+    "polyphony": 32,
+    "voiceStealing": "Releasing first, then oldest sustained/unheld, then oldest held; monotonic voice ID breaks ties. Every stolen source is stopped and disconnected immediately.",
+    "status": "Idle before first gesture; loading while context resumes; ready only for a running context; error includes the failure and allows retry. Synthesis is the primary source, not a sample fallback. No playable success is claimed when audio initialization fails.",
+    "notes": [
+      "Every panel input, including Master Level, changes only normalized presentation state. It never changes this audio graph.",
+      "Sustain is merged across the utility UI, computer Space, and per-port/channel MIDI CC64 owners. Pedal-up releases unheld voices only when the final pedal source is up.",
+      "AudioContext creation, backend, MIDI permission request, and browser input target are injectable. Audio-clock release uses source.stop rather than JavaScript timers.",
+      "Unit tests evaluate the exact PCM used by the backend and graph ownership. Browser tests additionally render the production audio graph through OfflineAudioContext, requiring no physical output device.",
+      "The synthesis approximates a struck-string piano; it does not claim the timbre or samples of a Nord instrument."
+    ]
+  },
+  "surface": {
+    "source": "inputs/reference/nord-stage-4-73.jpg",
+    "specs": ["inputs/specs/nord-stage-4.visual.json", "inputs/specs/nord-stage-4.piano.json", "inputs/specs/nord-stage-4.variants.json"],
+    "geometry": "3.0951 aspect; 54% deck, remaining 46% keybed including bottom rail; six fractions 14/20/8.5/12.5/25/20 per corrected visual spec.",
+    "keys": "73, E1–E7; 43 white / 30 black; black height 61% of white key height; hammer-action variant visual representation.",
+    "rendering": "React DOM and CSS; the reference photo is not used as a rendered background.",
+    "presentationState": "Flat stable-control-ID -> normalized 0–100 value map, independent from note/audio/MIDI state.",
+    "narrowInspection": "Fit shows the entire instrument. Inspect scales to 4x inside a horizontally scrollable viewport; Fit restores the overview."
+  },
+  "unsupported": [
+    "All physical panel audio/system features: Master Level, pitch stick, mod wheel, rotary, organ, piano selectors/detail/layers, programs, splits, morphs, scenes, clock, transpose, synth and layer effects. Their visual interaction is implemented; their functional behavior is not.",
+    "Recorded piano sample sets and multiple models (Phase 2).",
+    "MIDI pitch bend, aftertouch, program changes, pedal noise, half pedal, triple pedal and pedal hardware configuration.",
+    "Preset libraries, sample downloads, INFO/size menus and Nord Sound Manager."
+  ],
+  "declaredGaps": [
+    "The parent capture harness was not supplied in the isolated workspace. Candidate Playwright captures use the required viewports and filenames, with measurements and browser interaction evidence; these are not claimed as parent-harness captures.",
+    "Micro-legends and some secondary controls use compact grouped approximations of the photo; this is a CSS reconstruction, not pixel-identical hardware artwork."
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-sonnet-5-5",
+  "stage": 1,
+  "evaluator": "stagebench-phase1-blind-evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-09-30T04:01:47Z",
+  "summary": "Phase 1 is delivered in full and the honesty contract holds under measurement. Served build/ (python http.server, no rebuild) in headless Chromium at 1440x900 with an analyser tap spliced in front of ctx.destination: a pointer strike on MIDI 60 produced maxRMS 0.108, level stays within ~2.5 dB from E1 to E7 (0.0966-0.1282), decay is monotonic (0.1196 -> 0.0270 over 2.4 s) and release lands at 0.240 s. Velocity tracks strike position (5.7x) and MIDI velocity (16.9x, vel 10 vs 126). Pointer, independent multi-touch, mapped computer keys and a faked Web MIDI port each drive the same lifecycle; sustain from Space and CC64 holds past 1.2 s and releases in 0.315 s. 30 simultaneous note-ons cap at exactly 24/24 with peak 0.975 (no clipping), and blur, page-hidden and device removal each return 0/24 with RMS 0.00000. All 182 controls move on keydown and update aria values; 0 lack names, roles or values. Master Level driven to 0 leaves output unchanged, matching the declaration that the panel is presentation-only. No console errors in any pass. The voice itself is honestly synthetic and mono.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Dependable and even across the whole variant range: first-strike maxRMS measured on the served build at 1440x900 was note 28 0.12816, 40 0.11903, 52 0.11255, 64 0.11895, 76 0.11961, 88 0.12599, 100 0.09658 — a ~2.5 dB spread over E1-E7, with no dead or blown notes (scratch/range.mjs, analyser tap on ctx.destination).",
+            "Level, decay and release behave: a held note decayed monotonically 0.11961 (0-0.3 s) -> 0.07539 -> 0.04292 -> 0.02697 (1.5-2.4 s); on key-up without sustain RMS fell from 0.05451 to below 0.002 in 0.240 s, and release is pitch-scaled by releaseSeconds() in artifact/src/audio/pianoDsp.ts:33 (0.315 s measured at the pedal-up of MIDI 60).",
+            "Velocity is expressive in both directions: pointer strike at the back of the key vs the front gave maxRMS 0.02232 vs 0.12683 (5.68x), MIDI velocity 10 vs 126 gave 0.00809 vs 0.13679 (16.9x), backed by four rendered brightness layers (VELOCITY_LAYERS [24,56,88,116], artifact/src/audio/pianoDsp.ts:15).",
+            "Simplified in ways a player notices: the voice is additive synthesis (18 inharmonic partials, two detuned strings below partial 7, 14 ms filtered hammer burst) rendered mono at 32 kHz, and every buffer is peak-normalised (artifact/src/audio/pianoDsp.ts:113-116), so the natural loudness/brightness contour across the keyboard and inside a velocity layer is flattened; there is no stereo image, no sympathetic resonance and no release noise.",
+            "First-note buffer generation runs on the main thread but is not a stall: pointerdown-to-return was 16 ms for the coldest low note and 3 ms on a cached re-strike (scratch/range.mjs); no console errors or page errors in any audio pass."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "The declaration is exactly what the build does. artifact/IMPLEMENTATION_DETAILS.json declares generated buffers only (\"sampleSources\": [], \"No recordings, no network, no bundled sample files\") and the published build contains just index.html, assets/index-B1h9YzHW.js and assets/index-YDuLnEBX.css — no audio asset of any kind to load.",
+            "The declared graph was verified by splicing a gain/analyser tap in place of ctx.destination: signal appears only through it, and peak stayed at 0.9748 with 24 voices sounding, consistent with the declared master gain 0.85 into a DynamicsCompressor limiter (artifact/src/audio/webAudioSink.ts:88-101) rather than a raw sum.",
+            "The declared fallback is real and labelled: with AudioContext.createBuffer forced to throw, the first key press reported data-phase=\"fallback\", \"Fallback voice: plain triangle oscillator (piano buffers unavailable)\", and the Program OLED read \"AUDIO FALLBACK\" (scratch/fallback.mjs).",
+            "The note \"Panel controls (including Master Level) are presentation state only\" holds: driving master-level to data-value=0 changed the measured strike maxRMS only from 0.11685 to 0.12385 (+6%, inside the repeat-strike noise of this analyser sampling), and nothing in src/audio/* imports hardware/store.ts.",
+            "The velocity claims match behaviour item by item: MIDI velocity honoured (16.9x span), strike position honoured (5.68x span), and the computer keyboard fixed at 96 exactly as declared (KEY_VELOCITY = 96, artifact/src/input/computerKeyboard.ts:21)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Pointer: mouse down on [data-note=\"60\"] (box x646.6 y422.1 29.6x188.0) started audio (ctx.state \"running\", data-phase \"ready\") and produced maxRMS 0.10847; mouse up drove it to 0.000000 (scratch/audio1.mjs).",
+            "Independent multi-touch: two CDP Input.dispatchTouchEvent fingers on notes 48 and 55 gave \"Voices 2/24\" with both keys data-pressed=true; lifting finger 1 left note 55 pressed and sounding, and lifting both returned 0/24 (scratch/audio5.mjs).",
+            "Computer keyboard: KeyQ produced maxRMS 0.09161 and 1/24 voices; five synthetic repeat:true keydowns did not add a voice (repeat suppression); keyup returned 0/24. Space is the sustain key and is guarded against panel buttons/sliders that consume it (artifact/src/input/computerKeyboard.ts:38-44).",
+            "Web MIDI: with a faked navigator.requestMIDIAccess port, \"Connect MIDI\" moved status idle -> connected (\"MIDI: Probe Keys\"); 0x90 note-on produced maxRMS 0.09657, 0x80 released, CC64 sustained, CC 120/123 released the port. Denied (SecurityError) reported data-phase=\"denied\" with \"the on-screen and computer keyboards still work\"; a missing requestMIDIAccess reported \"unsupported\"; removing the device reported \"disconnected\" and dropped 1/24 to 0/24.",
+            "The keybed is also operable from the keyboard itself: keys are role=button with a roving tabIndex, aria-label note names and aria-pressed, Enter/Space plays and arrows/Home/End move focus (artifact/src/ui/Keybed.tsx:96-120)."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Velocity mapping measured in the running build: pointer strike position 5.68x (0.02232 -> 0.12683) and MIDI velocity 10 vs 126 16.90x (0.00809 -> 0.13679) in maxRMS.",
+            "Sustain across all three sources: holding Space then striking note 60 and releasing the key left it sounding past the full 1.2 s window (\"Voices 1/24 - Sustain on\"); pedal-up silenced it in 0.315 s. MIDI CC64=127 showed \"Sustain on\", a note-off left RMS 0.03206 still sounding after 0.9 s, and CC64=0 returned 0/24.",
+            "Voice stealing is capped and deterministic: 30 simultaneous MIDI note-ons settled at exactly \"Voices 24/24\" with peak 0.9748 (no clipping), and pickVictim() orders victims by state priority releasing<sustained<held then by monotonic seq (artifact/src/audio/lifecycle.ts:170-182); all note-offs returned 0/24.",
+            "All-notes-off on every required boundary: window blur took 5/24 -> 0/24 with maxRMS 0.00000; a visibilitychange to hidden took 3/24 -> 0/24; MIDI device removal took 1/24 -> 0/24 and reported \"MIDI device disconnected — notes and sustain released\"; unmount disposes the sink, closes the context and clears the buffer cache (artifact/src/audio/webAudioSink.ts:177-205, artifact/src/App.tsx:22-26).",
+            "Blemish: after stealing, keys whose pointer/MIDI source is still held keep rendering data-pressed=\"true\" — with 30 held sources and 24 voices, 30 keys showed pressed while only 24 were sounding, so the keybed can indicate a note that was stolen."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Every control moves and reports state: for all 182 [data-control-id] elements, a focused keydown changed data-value or the rendered class, and all 182 changed aria-valuenow or aria-pressed (scratch/controls2.mjs). Momentary buttons and the spring-loaded pitch stick correctly return to rest on key-up, which is why a naive down+up probe first showed 35 as static.",
+            "Pointer drag works for every control kind: knob master-level 0.77 -> 1 (aria 10), wheel mod-wheel 0.05 -> 0.15 (aria 15), fader organ-level-a 0.75 -> 1 (aria 100), drawbar organ-drawbar-1 6 -> 0 (aria 0), encoder piano-model-dial 1 -> 6, button rotary-organ latch 1 -> 0 (aria-pressed false).",
+            "Accessibility is clean across the surface: 0 of 182 controls lack an aria-label, 0 sliders lack aria-valuenow, 0 buttons lack aria-pressed, and 0 are unfocusable (tabIndex >= 0 everywhere).",
+            "No faked success: master-level at 0 left the measured strike level unchanged (0.11685 -> 0.12385, within noise), the Program OLED reads \"Programs: not yet\", the Synth OLED reads \"Not active yet / Panel is decorative / No synth audio\", and the status bar states \"Panel controls move and light but do not change the sound in this phase\".",
+            "Limitation: that inertness is disclosed globally (status bar, OLED text, IMPLEMENTATION_DETAILS notes) rather than per control — an individual decorative knob or LED is not marked inert in its own accessible description, so a screen-reader user driving one control in isolation gets no local signal."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "182 stably-identified controls across exactly the six ordered sections, with the density the photo implies: performance 8, organ 27, piano 19, program 29, synth 56, effects 43; by kind 26 knobs, 5 encoders, 7 faders, 9 drawbars, 2 wheels, 133 buttons (measured on the served build).",
+            "Every visual.json sectionLandmarks entry maps to a real, named control: performance has master-level, the five-control rotary block, pitch-stick and mod-wheel; organ has organ-drawbar-1..9 with LED ladders plus model and percussion (volume/decay/harmonic/third/fast); piano has piano-select cycling the six type LEDs (aria \"Piano type: Grand\"), piano-model-dial, piano-timbre, piano-level-a/b and six detail switches (soft-release, string-res, kb-touch, dyn-comp, unison, ped-noise).",
+            "Program has program-button-1..8, the program dial, page-prev/next, layer/scene, store and split, and three morph-assign controls; synth has osc, filter, envelope, LFO and arpeggiator groups plus layer levels; effects has fx-mod1, fx-mod2, amp+EQ, delay, compressor, reverb and the three FX-focus controls — the Phase 1 contract's \"complete visible control surface\".",
+            "Program and Synth are the only primary OLEDs: querying [data-oled] returns exactly [\"program\", \"synth\"], at 0.446 and 0.229 of their section widths per artifact/evidence/stage1-visual-audit.md, with no display element in the other four sections.",
+            "Controls are identifiable rather than anonymous: each carries aria-label text that matches its silkscreen (e.g. \"Rotary speaker stop mode, angle\", \"Delay ping pong\", \"Equalizer mid frequency\") and a stable id used by the tests."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All 11 Phase 1 IDs are present in artifact/tests/feature-matrix.json and each maps to existing, non-empty test files (inputs/verification.json reports coveredFeatures 11 of requiredFeatures 11, with test/typecheck/lint/build all passing at seal time).",
+            "visual.key-count, visual.section-layout and regression.chassis verified live: 73 keys (43 white, 30 black) inside the keybed, deck 236.156 / 437.328 = 0.5400 of instrument height, section fractions 0.1400/0.2000/0.0850/0.1250/0.2500/0.2000 in order, documentElement.scrollWidth 1440 = clientWidth (no overflow).",
+            "interaction.keys, piano.basic-inputs and piano.basic-sustain-polyphony exercised in the build: pointer, two-finger touch, mapped keys with repeat suppression, MIDI note/velocity/CC64/all-notes-off, a hard 24/24 voice cap on 30 note-ons, and pitch-scaled release (0.240 s free, 0.315 s after pedal-up).",
+            "piano.basic-status-cleanup verified through every branch: data-phase went idle -> ready (\"generated additive piano voice\"), fallback (\"plain triangle oscillator\") with createBuffer throwing, and error (\"Audio unavailable: this browser has no Web Audio support. The keys still move, silently.\") with AudioContext deleted; blur, hidden and disconnect each returned 0/24.",
+            "interaction.decorative-controls and accessibility.controls verified by exhaustive sweep rather than sampling: 182/182 controls change presentation state and aria value, with 0 missing names/roles/values."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Everything declared unimplemented really is: the note \"Panel controls (including Master Level) are presentation state only; they are not connected to the audio graph\" survived a direct test (master-level to 0, strike level unchanged at 0.11685 -> 0.12385) and src/audio/* never imports src/hardware/store.ts.",
+            "Nothing undeclared turned out missing. The Phase 1 contract items I probed were all present and working — three input paths, velocity, sustain from UI button/Space/CC64, polyphony with stealing, cleanup, and the labelled playable fallback required by inputs/specs/nord-stage-4.piano.json.",
+            "Declared audio provenance matches the build exactly: \"sampleSources\": [] with two generated sources, and the published build ships no audio file (build/ contains only index.html plus one JS and one CSS bundle) — a generated buffer is never described as a recording.",
+            "The evidence pack declares its own limits rather than overclaiming: artifact/evidence/stage1-visual-audit.md lists the CSS-drawn materials, the ~±6% horizontal refit of section content, unlit out-of-scope LEDs, and states plainly that audible output could not be verified through speakers in the capture environment — which my analyser tap independently confirmed as working.",
+            "Gap disclosure is prose-only, though: IMPLEMENTATION_DETAILS.json carries the gaps in audio.notes and the status-bar hint rather than in a structured unimplemented/excluded list, so there is no machine-readable declaration to diff against the spec's excluded set (schema permits this — only version, phase and audio are required)."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "minor",
+      "criterion": "voiceLifecycle",
+      "title": "Stolen voices leave their keys rendering as pressed",
+      "detail": "With 30 MIDI note-ons held, the voice pool correctly capped at 24/24 but 30 keys still reported data-pressed=\"true\"/aria-pressed=\"true\", because key state is derived from held input sources (NoteLifecycle.holders) rather than from live voices. The keybed therefore shows six notes as sounding that were stolen and are silent. Measured in scratch/audio5.mjs on the served build at 1440x900."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoVoice",
+      "title": "Mono voice with per-buffer peak normalisation flattens the level contour",
+      "detail": "artifact/src/audio/pianoDsp.ts:113-116 peak-normalises every rendered buffer and renders a single channel, so loudness comes only from velocityGain() at the voice gain. Measured first-strike maxRMS varied just 0.0966-0.1282 from E1 to E7 and the image is dead centre; a real piano loses level and brightness towards the top and has a stereo spread. Acceptable for a Phase 1 basic voice and honestly declared, but audible."
+    },
+    {
+      "severity": "minor",
+      "criterion": "controlBoundary",
+      "title": "Decorative inertness is disclosed globally, not per control",
+      "detail": "All 182 controls move and report state, and the status bar, both OLEDs and IMPLEMENTATION_DETAILS.json say the panel does not change the sound. No individual control carries an aria-description or visual affordance marking it inert, so a user operating one knob in isolation — particularly through a screen reader — gets no local signal that it is presentation-only."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "No machine-readable declaration of unimplemented scope",
+      "detail": "Gaps are declared truthfully but only in free text (IMPLEMENTATION_DETAILS.json audio.notes, IMPLEMENTATION_PLAN.md, the status-bar hint). There is no structured field listing unimplemented or spec-excluded controls (e.g. piano-ped-noise, which the piano spec excludes), so the declaration cannot be diffed automatically against the spec's excluded set as later phases add real behaviour."
+    }
+  ]
+}

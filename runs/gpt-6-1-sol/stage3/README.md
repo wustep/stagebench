@@ -1,0 +1,21 @@
+# Stage 4 73 — Phase 3
+
+Run `pnpm install --frozen-lockfile`, then `pnpm dev`. Piano A/B, Organ A/B, Synth A/B/C, six effect chains, one shared Rotary and the complete Program/performance system are functional in one AudioContext. The inherited 73-key E1–E7 surface and recorded Piano library are retained.
+
+Play by pointer/touch, A W S E D F T G Y H U J K O L P ; (C4–E5), focused Enter/Space, or MIDI notes/velocity. Space sustains outside controls. MIDI CC64 sustains; CC1 and CC11 drive Wheel and Control Pedal. Panic, blur, disconnect, visibility and unmount reset input ownership and voices.
+
+Layer buttons enable/focus; faders focus while leveling. Effects follow focus or use manual section focus. Piano/Synth grouping edits that section; Shift + Delay/Compressor/Reverb On applies globally to all six chains. Organ A/B share effects. Piano/Synth route through Amp/EQ “To Rotary”; Organ uses Rotary Source. Slow/Fast/Stop and continuous speed accelerate. Every path passes Master and limiter.
+
+Eight program buttons × four pages address 32 slots. Program dial browses; Shift + Enter or Shift pointer on the dial opens the numeric list. Ten factory setups demonstrate Piano, Organ, Synth, splits and layers. Store captures edits, auditions selected destinations, and confirms on the second Store. Shift + Store opens Store As naming; the native text input supports character insertion/deletion. Exit/Escape or Shift + Store cancels. Selecting a regular program discards unstored edits; E truthfully indicates a changed snapshot. Live Mode switches to eight automatically persistent slots. Store copies between Live and regular slots. Master Level is excluded from programs.
+
+Open **Program, performance, Organ & Synth settings** for editable three split points, eleven positions, Off/±6/±12 crossfades, contiguous zone assignments on every layer, and all engine parameters. Split LEDs show active points; layer zone LEDs show ranges. Scene I/II stores only independent layer enable configurations. Hold a morph source while moving controls, or latch it by clicking/double-tapping; unlatch to interpolate with Wheel/Pedal. Shift + source clears assignments; settings allow per-destination clearing. Assigned hardware controls light green, and fader/drawbar graphs show endpoint ranges.
+
+Tap Master Clock four times or hold it while turning Program dial. The explicit BPM control spans 30–300. Arp, LFO, Delay and Mod1 sync to that clock with editable subdivisions. Keyboard sync resets modulation/arp timing on the first note. Transpose spans ±6; Shift + Transpose is Panic.
+
+Organ: B3/Vox/Farf/Pipe are distinct original DSP approximations; B3 Bass reuses limited B3 ranks and Pipe 2 adds brighter Pipe partials. Synth: all fourteen required Pure/Sync/Multi/Super/FM-H waveforms, four filters, three ADR envelopes, LFO, voice modes and deterministic sample-clock Arp/Poly/Gate. Pure Osc Ctrl intentionally does not change audio. Compact inherited aliases are disclosed in scope notes. Only Organ Preset, Aftertouch Morph and Monitor remain decorative; complete exclusions are listed in the UI and audit.
+
+Grand/Upright/Electric use 183 bundled, redistributable recordings. Clav/Digital/Misc/fallback use analytic buffers; Organ/Synth use live synthesis. No runtime external audio service is needed. Failed samples explicitly report playable synthesis fallback. Sources, licenses, hashes, algorithms and approximations are declared in `IMPLEMENTATION_DETAILS.json`; [sample attribution](public/samples/ATTRIBUTION.md) is bundled.
+
+Required checks inside candidate: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`. Tests include native OfflineAudioContext and production AudioWorklets, complete inherited tests and all 18 Phase 3 feature IDs. Chromium uses the supplied local shell if available or the standard Playwright cache. The preserved `tests/browser-check.mjs` is inherited Phase 2 validation and is not a Phase 3 capture harness.
+
+See [visual audit](evidence/stage3-visual-audit.md) and [control audit](evidence/stage3-control-audit.md). Direct Playwright CLI screenshots named `stage3-review-*` are local visual QA only. Canonical PNG/JSON captures and the verification digest are produced by the operator with `pnpm bench seal gpt-6-1-sol`; no candidate seal/capture harness was created.
