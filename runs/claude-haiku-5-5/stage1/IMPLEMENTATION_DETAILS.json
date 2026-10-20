@@ -1,0 +1,27 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "audio": {
+    "strategy": "Live synthesis only. The single Phase 1 piano voice is generated in the browser with Web Audio oscillators (six inharmonic sine partials, per-partial exponential decay, velocity-dependent partial levels and low-pass cutoff). No recorded or bundled audio files are used.",
+    "generatedSources": [
+      {
+        "name": "Phase 1 additive piano voice",
+        "type": "live-synthesis",
+        "description": "Six sine partials per note at equal-tempered frequencies with a small inharmonic stretch (B = 0.0004), amplitudes proportional to k^-1.1 and rising with velocity, a velocity-scaled low-pass (1.2–10.2 kHz), exponential decay with a note-length-dependent time constant, and a release ramp on note-off. Generated at note-on; not a recording.",
+        "voiceLimit": 16,
+        "stealing": "released tails first, then sustained voices, then held voices; oldest first within each class"
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "No sample sets are bundled in Phase 1. Grand, Upright and Electric recorded sample sets are Phase 2 scope; the piano spec allows honest synthesis for Phase 1.",
+      "No generated buffer is described as a recording. Nothing in the bundle is recorded audio.",
+      "The Web Audio path is: each voice -> voice low-pass -> master gain (0.3) -> AudioContext destination. No bypass.",
+      "The AudioContext is created on the first user gesture. If Web Audio is missing the instrument reports a labelled silent fallback; if the context refuses to resume it reports an error. The status line in the page shows which applies.",
+      "Pointer and computer-keyboard velocity is fixed at 100 in Phase 1 (KB Touch is Phase 2). MIDI uses the incoming note velocity.",
+      "Sustain applies to every voice in Phase 1 because there are no layers yet. Per-layer SUSTPED routing is Phase 2.",
+      "Known audio gaps: no pedal noise, no string resonance, no unison or soft-release shaping, no timbre filtering, no layer behaviour. All panel controls in the piano, effects, organ, synth and program sections are decorative in Phase 1."
+    ]
+  }
+}

@@ -1,0 +1,290 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "claude-haiku-5-5",
+  "stage": 1,
+  "evaluator": "Stagebench Phase 1 blind evaluator (claude-opus-5)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-10-20T00:50:13Z",
+  "summary": "A disciplined, honest Phase 1. Geometry is near-exact at 1440x900: deck 0.5400 / keybed 0.4600, width 0.9400, aspect 3.09514, 73/43/30 keys all inside the keybed, black-key height 0.60996, and all five reference colours at CIE76 dE 0.00. All 33 section landmarks render in their own band, no forbiddenDetection rule fires, and only the synth width fraction (0.01315) falls outside tolerance. The piano voice is genuinely live-synthesised — three network requests, no sample APIs in the bundle — and it is dependable: velocity 12.1x over MIDI, sustain holding a tail to RMS 0.0091 at 600 ms against 0.0000 unsustained, 16-voice stealing, and clean all-notes-off on blur, visibility change and MIDI disconnect, with zero console output throughout. The deck is where it falls down. A dead onPointerEnd handler leaves all 52 continuous controls tracking a released pointer and the pitch stick never recentring; row overflow buries piano.layer-b-octave and program.button-8 beyond any pointer; legends overprint each other in all six sections and knob caps render as ellipses. The audit is candid but wrongly claims no control leaves its section.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "pianoVoice",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Measured on the served build at 1440x900 with an AnalyserNode tapped onto the AudioContext destination: one note at velocity 100 reaches peak 0.0290 / RMS 0.0140 from the computer keyboard and peak 0.0290 / RMS 0.0140 from a real mouse press — identical, as IMPLEMENTATION_DETAILS says (fixed velocity 100 for both). Idle output is exactly 0.",
+            "The voice is even across the whole keybed: a real mouse press on the lowest key (MIDI 28, E1) measured RMS 0.0151 and on the highest (MIDI 100, E7) RMS 0.0137.",
+            "Decay and release behave: with no pedal, RMS after note-off falls 0.0144 -> 0.00277 at 150 ms -> 0.00041 at 300 ms -> 0.0000 by 600 ms, matching the 0.09 s release time constant in artifact/src/audio/pianoVoice.ts:28; held notes decay naturally over seconds via per-partial setTargetAtTime.",
+            "Level staging is sane: 16 simultaneous voices peak at 0.136 through the 0.3 master gain, so there is no clipping under full polyphony.",
+            "Timbre is six sine partials with a 0.0004 inharmonic stretch and a velocity-scaled low-pass (pianoVoice.ts:96-120). It is a credible basic piano, but there is no attack/hammer transient, no sympathetic resonance and no release layer, which a knowledgeable player hears immediately."
+          ]
+        },
+        {
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Verified by exercising the build, not by reading the file: a full load-and-play pass logged exactly three network requests — /, /assets/index-C78WQnSD.js, /assets/index-BYvmwvXd.css. No audio asset is fetched at any point, and build/ contains only those three files.",
+            "Grepping the shipped bundle finds createOscillator (1), createBiquadFilter (1), createGain (3), setTargetAtTime (4) and zero occurrences of decodeAudioData, createBufferSource, .mp3/.wav/.ogg or data:audio — so the declared 'live synthesis only, no recorded or bundled audio files' is exactly what runs.",
+            "Testable clauses of the declaration all held: voiceLimit 16 (20 simultaneous MIDI notes produced exactly 16 held voices / 96 oscillators), 'each voice -> master gain -> destination, no bypass' (every sounding voice appeared on a tap inserted at context.destination), 'context created on the first user gesture' (status moved idle -> 'Piano voice ready (live synthesis, no samples)' only after the first key), 'MIDI uses the incoming note velocity' (peak 0.0415 at velocity 127 vs 0.0034 at velocity 15).",
+            "IMPLEMENTATION_DETAILS.json lists sampleSources as empty and states 'No generated buffer is described as a recording', and the notes block declares the Phase 1 audio gaps (no pedal noise, string resonance, unison, soft release, timbre filtering) rather than implying them."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "All three inputs reach the same NoteController lifecycle, each exercised on the served build: real mouse press on key 60 sounded (RMS 0.0140) and set .pressed, released on mouse-up; page.keyboard.down('a') sounded MIDI 60 and a 900 ms hold still showed 1 pressed key and 6 oscillators, so auto-repeat is suppressed; an injected Web MIDI access produced 'MIDI input ready', and note-on/note-off, velocity and CC64 all drove the same voices.",
+            "Independent multi-touch verified in the browser via CDP Input.dispatchTouchEvent: three concurrent touch points held ['60','67','72'] and lifting only touch id 2 left ['60','72'] — each pointer owns its own note source (artifact/src/components/Keybed.tsx:28-46).",
+            "Edge behaviour is correct: pointer drag glissandos (60 -> 64, old note released, 0 held after mouse-up), out-of-range MIDI notes 20 and 110 are rejected (0 oscillators, 0 pressed keys), and dropping the last MIDI input flips the status line to 'No MIDI input connected. Keyboard and pointer still play the piano.' with every MIDI note released and output back to 0.",
+            "Coverage gaps: the computer-key map covers only MIDI 60-76 (artifact/src/input/computerKeys.ts:4-21), 17 of the 73 keys, and the octave-shift control is decorative in Phase 1, so 56 keys are unreachable from the computer keyboard.",
+            "The 73 .key elements carry no role, no aria-label and no tabIndex (measured: keyTabbable 0, keyWithRole 0, keyWithAriaLabel 0), so the keybed itself is not exposed to assistive technology or operable by Tab, unlike the 103 panel controls."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Velocity mapping measured over MIDI on the same note: velocity 127 peaked at 0.0415 and velocity 15 at 0.0034, a 12.1x difference, with the upper partials also rising (pianoVoice.ts:107-110).",
+            "Sustain measured as a tail-length difference on identical notes: with CC64 held, RMS after note-off was 0.0129 at 150 ms, 0.0111 at 300 ms, 0.0091 at 600 ms; without the pedal the same note read 0.0028, 0.0004 and 0.0000. Releasing CC64 then dropped it to 0.0053. Pedal UI, Shift and CC64 are independent sustain sources (artifact/src/engine/noteController.ts:95-118) and all three light #sustain-pedal.",
+            "Deterministic voice stealing: 20 MIDI note-ons in one burst left exactly 16 held keys and 96 live oscillators (16 voices x 6 partials, MAX_POLYPHONY 16); chooseVictim orders released tails, then sustained, then held, oldest first within each class (noteController.ts:170-181).",
+            "All-notes-off verified three ways on the running build: window blur -> 0 pressed keys, 0 live oscillators, output 0; document visibilitychange to hidden -> 0 pressed keys and output 0; MIDI input disconnect -> all MIDI notes released and output 0.",
+            "Node accounting returns to baseline: a 10-note burst raised live oscillators from 0 to 60 and they fell back to exactly 0 after note-off and decay, so nothing leaks (pianoVoice.ts:126-134 disconnects every node on end).",
+            "Pointer and computer-keyboard velocity is fixed at 100 so velocity is only expressive over MIDI; that is declared in IMPLEMENTATION_DETAILS.json and KB Touch is Phase 2 scope in specs/nord-stage-4.piano.json."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "The decorative boundary itself is honest: dragging synth.filter-cutoff with a real mouse moved aria-valuenow 70 -> 100 while the analyser read exactly 0.0 throughout, and #engine-status stayed 'Piano voice ready' — no panel control touches audio. Driving all 103 controls from the keyboard produced zero console messages and zero sound.",
+            "Controls do move and report state: knob transform went rotate(-45deg) -> rotate(135deg) at 70 -> 100, organ.drawbar-1 cap bottom 0% -> 70% with its LED ladder 00000000 -> 00111111, piano.layer-a-level cap 75% -> 100% with LED graph 11111100 -> 11111111, effects.delay-on aria-pressed false -> true with the lamp gradient lit, piano.type data-step 0 -> 1 with LEDs 100000 -> 010000.",
+            "DEFECT — the drag gesture never ends. useContinuous returns a handler named onPointerEnd (artifact/src/components/Controls.tsx:75-83) which is spread onto the element at lines 109, 123, 138, 152 and 166; onPointerEnd is not a React DOM event, so it is never bound and drag.current is never cleared. Measured: after pressing, dragging and releasing synth.filter-cutoff (value 96), moving the mouse over it with no button pressed drove it to 38. This affects all 52 continuous controls.",
+            "DEFECT — the same dead handler means the pitch stick never springs back: performance.pitch-stick went 50 -> 94 on a drag and stayed at 94 after mouse-up (capBottom 94.4074%), where Controls.tsx:79-82 intends to reset it to 0.5.",
+            "Two of the 103 controls cannot be operated by pointer at all (piano.layer-b-octave, program.button-8); both are still keyboard-operable, and both are counted once under hardwareInventory reachability."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "All 33 sectionLandmarks entries render in their own section, and the deck carries 103 controls each with a stable <section>.<name> id and a non-empty aria-label (measured: 103 controls, 103 tabbable, 0 without an accessible name, 52 role=slider all carrying aria-valuenow/min/max, 51 role=button).",
+            "The contract's named hardware is all there: nine drawbars with 8-LED ladders, faders with LED graphs, a modulation wheel, a pitch stick, cycle selectors with per-step LEDs, and exactly two OLEDs located in Program and Synth and nowhere else.",
+            "Against reference/nord-stage-4-73.jpg the inventory is a thin subset: the photo's LAYER EFFECTS alone carries the MOD 1 / MOD 2 type matrices, per-unit ON and VARIATION switches, delay TAP/SET, ANALOG, PING PONG and FILTER, COMP ACTIVE/FAST and the reverb ROOM/BOOTH/SPRING/STAGE/HALL/CATH matrix, against 22 controls here; section ON switches, octave-shift buttons, KB-zone buttons and the monitor/headphone row are absent throughout.",
+            "Identifiability fails visually in four sections: at 1440x900 the piano band prints 'Layer A focus', 'Layer A on', 'Piano type' and 'Layer A octave' on top of one another and the program band overprints 'PAGE' and 'STORE AND SPLIT' across the Program 2-7 legends (3x crops captured at scratch/eval1-crop-piano.png and eval1-crop-program.png)."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "piano.basic-note-lifecycle verified live: note on/off from all three inputs, a second note-on from the same source without a note-off created no duplicate voice (6 oscillators before and after), overlapping notes summed (single RMS 0.0148 -> three-note RMS 0.0249, 18 oscillators), and a 10-note burst returned live oscillators to exactly 0 after release.",
+            "piano.basic-inputs verified live: real mouse, three independent CDP touch points, the mapped computer keyboard with auto-repeat suppressed over a 900 ms hold, and MIDI note/velocity/CC64 plus CC123; with no injected access the page reports 'MIDI access denied. Keyboard and pointer still play the piano.' and keeps playing.",
+            "piano.basic-sustain-polyphony verified live: CC64 held the tail to RMS 0.0091 at 600 ms against 0.0000 unsustained, 20 simultaneous notes produced exactly 16 voices with deterministic stealing, and velocity 127 vs 15 differed by 12.1x in peak.",
+            "piano.basic-status-cleanup verified live: #engine-status moved idle -> 'Piano voice ready (live synthesis, no samples)' with data-engine-state tracking, #midi-status reported ready/denied/disconnected truthfully as the injected access changed, and blur, visibilitychange-hidden and MIDI disconnect each stopped every owned voice (0 pressed keys, 0 oscillators, output 0).",
+            "tests/feature-matrix.json maps all 11 required Phase 1 IDs to real, non-empty test files. Caveat: every audio assertion runs against artifact/src/audio/testing/fakeAudioContext.ts with no rendered-signal test, which falls short of the task's rule that a state-only test with fakes is not enough for claimed-audible behaviour — the behaviour itself is nevertheless real in the build, as measured above."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Everything declared unimplemented really is: IMPLEMENTATION_DETAILS.json says all panel controls in the piano, effects, organ, synth and program sections are decorative, and driving every one of the 103 controls produced exactly 0.0 analyser output and left #engine-status unchanged; the two OLEDs read 'NOT ACTIVE IN PHASE 1' rather than faking a program or patch name.",
+            "The visual audit is unusually self-critical and accurate where I could check it: it declares the legend collisions, the 1000px narrow-viewport scroll region, the virtual sustain pedal outside the chassis, and that the program OLED is wider than the photo's — I measured it at 0.811 of its section width, matching the declared 81%.",
+            "INACCURATE — evidence/stage1-visual-audit.md states 'Controls or groups outside their section | 0 | 0 | pass'. Measured at 1440x900, 11 controls render outside their own section's box: piano.layer-a-on (-30.4px left), piano.layer-b-octave (+31.5px right), piano.layer-a-focus, piano.layer-b-level, piano.soft-release, piano.section-on, program.button-1 (-28.0px), program.button-7, program.button-8 (+29.0px), and both performance expression controls (+1.8px bottom).",
+            "UNDECLARED — the audit says the legend collisions are 'a visual defect, not a functional one', but the same overflow leaves piano.layer-b-octave and program.button-8 with zero pointer-reachable pixels, and neither the dead onPointerEnd handler (sticky drag on all 52 continuous controls) nor the pitch stick's failure to recentre is mentioned anywhere.",
+            "Declared deviation 7 ('browser logged a MidiSysEx permission notice') did not reproduce here: a full load, interaction and teardown pass on the served build logged zero console messages and zero page errors of any kind."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "hardwareInventory",
+      "title": "Two panel controls are impossible to operate with a pointer",
+      "detail": "At 1440x900, piano.layer-b-octave (rect x 638.2 w 17.2) overflows 31.5px past the piano section and program.button-8 (rect x 798.1 w 25.0) overflows 29.0px past the program section; both are covered by the neighbouring section's .row. An exhaustive 1-pixel elementFromPoint scan of each bounding box found zero reachable points, and a real page.mouse press-drag at each centre left aria-valuenow at 50 and aria-pressed at 'false'. This contradicts the Phase 1 hard gate 'Every visible panel control moves or presses accessibly'. Cause: .row uses flex-wrap: nowrap with .section overflow: visible (artifact/src/styles.css:106,153-161), so rows wider than their section spill into the next band."
+    },
+    {
+      "severity": "major",
+      "criterion": "controlBoundary",
+      "title": "Drag gestures never end: all 52 continuous controls follow a released pointer",
+      "detail": "useContinuous returns a handler named onPointerEnd (artifact/src/components/Controls.tsx:75-83), spread onto each control at lines 109, 123, 138, 152 and 166. onPointerEnd is not a React DOM event name, so it is never bound and drag.current is never cleared on pointer up. Measured: synth.filter-cutoff was dragged to 96 and released, then moving the mouse over it with no button pressed drove it to 38. The same dead handler means performance.pitch-stick never springs back to centre — it read 94 and stayed at 94 after mouse-up, where the code intends to reset it to 0.5."
+    },
+    {
+      "severity": "major",
+      "criterion": "typographyDetail",
+      "title": "Legends overprint each other in all six sections",
+      "detail": "At the rendered 236px deck height, legend text clamps to its 6px floor and still collides. In the piano band 'Layer A focus', 'Layer A on', 'Piano type' and 'Layer A octave' are printed on top of one another; in the program band the group titles 'PAGE' and 'STORE AND SPLIT' overprint the Program 2-7 legends; in the synth band the four envelope legends collide under overlapping 'FILTER' and 'ENVELOPE' titles. Captured at 3x in scratch/eval1-crop-piano.png, -program.png and -synth.png. The artifact declares the collisions but calls them purely visual; they also make several controls unidentifiable on the panel. reviewer: re-measured - the collisions are not confined to four sections. Legend-on-legend intersections at 1440x900: organ 1, piano 4, synth 4, effects 1; group-title-on-legend intersections: performance 3, organ 5, piano 4, program 7, synth 2. All six sections are affected. Legend font-size resolves to 7.58012px, not the 6px clamp floor (clamp(6px, 0.56cqw, 9px) at a 1353.59px container)."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Knob caps render as ellipses and slivers rather than circles",
+      "detail": "styles.css:284-291 sizes .knob-face with equal width and height but leaves it a shrinkable flex child, so it is compressed vertically wherever the row is tight. effects.amp-drive, effects.amp-tone and effects.amp-level render as near-flat slivers, and the synth, effects, performance and organ knobs are all tall ellipses. A knob that is not round is the first thing a player notices on a Nord panel. reviewer: mechanism and defect confirmed (.knob-face is width/height var(--d) with border-radius 50% at styles.css:284-291, compressed as a shrinkable flex child), but two details corrected: effects.amp-drive measures 10.97x13.89 and is a tall ellipse, not a sliver - amp-tone and amp-level at 15.48x2.31 are the slivers; and 26 of 38 knob faces deviate more than 12% from square, most of them flattened rather than tall, while 12 are effectively round. Worse than reported: piano.layer-a-octave and piano.layer-b-octave render with a .knob-face height of exactly 0."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "Visual audit claims zero controls outside their section; 11 are",
+      "detail": "evidence/stage1-visual-audit.md records 'Controls or groups outside their section | 0 | 0 | pass'. Measured against each section's own box at 1440x900: piano.layer-a-on -30.4px, piano.layer-a-focus, piano.layer-b-level, piano.layer-b-octave +31.5px, piano.soft-release, piano.section-on, program.button-1 -28.0px, program.button-7, program.button-8 +29.0px, performance.pitch-stick and performance.mod-wheel +1.8px bottom. Two of them are the unreachable pair above."
+    },
+    {
+      "severity": "minor",
+      "criterion": "chassisGeometry",
+      "title": "Synth section width fraction is just outside tolerance",
+      "detail": "The synth band measures 0.23685 of the instrument width against the specified 0.25, a deviation of 0.01315 against a 0.012 tolerance; it is the worst of the six (next worst: organ and effects at 0.00859). Sections are flex-grown from the spec fractions but each one's padding and inset-plate margins are consumed inside the flex item (styles.css:105,114), so the wider sections lose proportionally more width."
+    },
+    {
+      "severity": "minor",
+      "criterion": "narrowRetention",
+      "title": "Only 37% of the instrument is reachable at 390x844, with no scroll affordance",
+      "detail": "The instrument keeps a fixed 1000px width inside a nested overflow-x: auto region (styles.css:590-599). Nothing clips or collapses and geometry is exact, but key 60 sits at x=458.9 — off-screen at the scroller's origin — and macOS overlay scrollbars give no visible cue that the region scrolls. Declared as a deliberate deviation in the visual audit. reviewer: all numbers reproduce. Kept as a minor issue, but narrowRetention is re-rated 3 rather than 2 - see that criterion's reviewer note."
+    },
+    {
+      "severity": "minor",
+      "criterion": "inputCoverage",
+      "title": "Keybed keys carry no role, name or tab stop; computer keys reach 17 of 73 notes",
+      "detail": "All 73 .key elements measured with tabIndex < 0, no role and no aria-label, so the keybed is invisible to assistive technology and cannot be played from the keyboard focus ring, unlike the 103 panel controls which are all tabbable and named. The computer-key map covers MIDI 60-76 only (artifact/src/input/computerKeys.ts:4-21) and the octave-shift control is decorative in Phase 1, leaving 56 of the 73 keys unreachable without a pointer or MIDI."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoFeatureCoverage",
+      "title": "Every audio test runs against a fake AudioContext",
+      "detail": "artifact/src/audio/pianoVoice.test.ts, engine/pianoEngine.test.ts and engine/noteController.test.ts all assert against artifact/src/audio/testing/fakeAudioContext.ts; there is no OfflineAudioContext or rendered-signal test anywhere in the artifact (grep for OfflineAudioContext returns nothing). The task's audio test rules require more than a state-only test with fakes when behaviour is claimed audible. The behaviour is in fact audible — I measured it — so this is a test-evidence gap, not a functional one."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Synth OLED truncates its own text",
+      "detail": "#synth\\.oled renders 'SYNTH / NOT ACTIVE IN PHA…' — .readout-line sets text-overflow: ellipsis with nowrap (styles.css:487-494) and the display is only 38% of its section width, so the honest status message is cut mid-word. The accessible name still carries the full string. reviewer: confirmed - the second .readout-line has scrollWidth 113 against clientWidth 98. The display is 36.4% of its section width, not 38%."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage1",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.54,
+          "keybedFraction": 0.46,
+          "widthFraction": 0.94,
+          "aspectRatio": 3.0951,
+          "sectionFractionMaxDeviation": 0.0132
+        },
+        "evidence": [
+          "At 1440x900 the served build (build/assets/index-C78WQnSD.js, sha256 090a29cf… matching build/ on disk) renders .chassis at 1353.59x437.33 CSS px: widthFraction 1353.59/1440 = 0.9400 (in [0.88,0.97]), aspectRatio 1353.59/437.33 = 3.09514 vs 3.0951 specified (deviation 0.00004).",
+          ".deck measures 236.16px of the 437.33px chassis = 0.53999; the remaining band to the chassis bottom (keybed incl. bottom rail, the spec's keybedIncludingBottomRail) is 201.17px = 0.46000. Set in artifact/src/styles.css:95 (height:54%) and :84 (height: calc(100cqw / 3.0951)).",
+          "Six sections render in spec order with measured width fractions performance 0.1362, organ 0.1914, piano 0.0869, program 0.1233, synth 0.2368, effects 0.1914 against 0.14/0.20/0.085/0.125/0.25/0.20; the worst deviation is synth at 0.01315, just outside the 0.012 tolerance. Section padding and inset-plate margins (styles.css:105,114) are consumed inside each flex item, so the larger sections lose width.",
+          "document.documentElement.scrollHeight is 900 at 1440x900, so the instrument is visible without vertical scroll as presentation.instrumentVisibleWithoutVerticalScrollAtDesktop requires.",
+          "Measured keybed element (the key-bearing box only, styles.css:498-509) is 182.23px = 0.4167 of the chassis; the 0.46 reported above is the full band including the 6.8px top gap and 12.2px bottom rail, which is what keybedIncludingBottomRail names and what makes deck+keybed sum to 1.0."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 33,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 100,
+          "controlsTotal": 103,
+          "forbiddenPresent": 0
+        },
+        "evidence": [
+          "All 33 sectionLandmarks entries render inside their own section at 1440x900: performance 5/5 (master-level xl knob, rotary speed/brake/level on exposed red chassis, pitch stick, mod wheel, 'nord stage 4' brand div), organ 4/4 (exactly 9 .drawbar controls each with an 8-LED .led-ladder, B3/Pipe1/Pipe2, 5 percussion controls), piano 5/5, program 7/7 (one .oled, xl dial, 8 program buttons, page up/down, live-mode + layer-scene, store + split, 3 morph), synth 6/6 (exactly one .oled), effects 6/6.",
+          "Reachability by the specified method (5x5 elementFromPoint grid per control bounding box, 1440x900, unscrolled, no framework click): 100 of 103 .control elements had >=1 grid point resolve to themselves or a descendant. The three failures are piano.layer-a-octave, piano.layer-b-octave and program.button-8.",
+          "program.button-8 (rect x 798.1 w 25.0) renders 29.0px past its own section's right edge (program ends at x 794.2) and is covered by the synth section's .row; an exhaustive 1px scan of its box found zero reachable pixels, and a real page.mouse press-drag at its centre left aria-pressed unchanged at 'false'. Cause: .row uses flex-wrap:nowrap with 8 buttons of min-width 2.2cqw inside a 167px section (styles.css:153-161,426).",
+          "piano.layer-b-octave (rect x 638.2 w 17.2) overflows 31.5px past the piano section into program and is fully buried (0 of 81 points on a 9x9 grid, 0 pixels on an exhaustive scan); piano.layer-a-octave is covered by piano.layer-b-level's .led-graph at every 5x5 grid point (6 of 81 on a 9x9 grid, all at the extreme edge) and a real mouse drag at its centre left aria-valuenow at 50.",
+          "forbiddenPresent=0, each forbiddenDetection rule applied literally once per section: only two displayElements exist in the whole page (#program.oled, #synth.oled), so 'OLED display' is 0 for performance and effects and 'wide OLED display' is 0 for organ and piano; synth's OLED is 0.364 of its section width (<0.5) so 'wide display spanning the section' is 0; program holds exactly one displayElement so 'multiple primary displays' is 0; organ carries 9 drawbar-like controls (h>=3w) so 'generic equal-width control grid' cannot fire; piano carries 0 drawbar-like controls so 'drawbar bank' is 0; the largest dark fill in the performance band covers 0.034 of its area (<0.8) so 'full dark inset plate' is 0; synth's largest equal-width-and-height control set is 5 (<8) and effects' is 1, so 'uniform repeated knob matrix' and 'single undifferentiated control grid' are 0.",
+          "Spec/photo disagreement reported: visual.json's effects landmark 'two effect groups' is rendered as a single role=group 'Mod' holding Mod 1 and Mod 2 rate/amount knobs, where reference/nord-stage-4-73.jpg shows MOD 1 and MOD 2 as two separately bordered blocks. Counted present (both units' controls are rendered in the effects band) but the visible separation the photograph shows is absent.",
+          "reviewer: all three measurements reproduce independently - 33/33 landmarks, 100/103 reachable by the specified 5x5 elementFromPoint grid (the same three failures: piano.layer-a-octave, piano.layer-b-octave, program.button-8; layer-a-octave reaches 6/81 points on a 9x9 grid and 0/25 on the specified 5x5, so the 5x5 rule is what makes it unreachable), and forbiddenPresent 0 with every rule re-applied literally: performance largest dark fill 0.034 of the band (<0.8) and 0 displayElements; organ 9 drawbar-like controls so the equal-width-grid rule cannot fire; piano 0 drawbar-like controls; program exactly 1 displayElement; synth OLED 0.3644 of its section width (<0.5); effects 0 displayElements. One sub-number corrected: the largest equal-width-and-height control set in effects is 7 (mod1/mod2 rate and amount, delay time/feedback/level), not 1. The rule still resolves to 0 because 'uniform repeated knob matrix' needs at least 8 and the effects controls do not form one undifferentiated grid - 3 distinct row pitches across 5 titled groups. forbiddenPresent stays 0."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 73,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.61
+        },
+        "evidence": [
+          "At 1440x900 the rendered keybed holds exactly 73 .key elements, 43 .white and 30 .black, data-note spanning MIDI 28 (E1) to MIDI 100 (E7) — the stage-4-73 variant's 73/43/30 and E-to-E range exactly.",
+          "All 73 key boxes fall inside the .keybed box (left 55.38, right 1384.63, top 407.25, bottom 589.48) with a 0.5px tolerance: keysInsideKeybed 73/73.",
+          "Median black-key height 111.16px against median white-key height 182.23px = 0.60996 vs the 0.61 specified (deviation 0.00004); styles.css:529 sets height:61%.",
+          "Median black-key width 18.55px against white 30.91px = 0.600 (artifact/src/model/keybed.ts sets blackWidth = whiteWidth * 0.6); black keys are centred on the white-key boundary rather than offset per pitch class as on the hardware, a simplification visible at rendered size."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "A 1353x437 screenshot of .chassis at 1440x900 was histogrammed (11830 distinct colours) and each referenceColors value compared in CIE76 Lab: chassisMid #851a25 dE 0.00 (3.36% of chassis pixels), chassisDark #5a0c13 dE 0.00 (1.02%), panelBlueGray #3c424d dE 0.00 (0.13%), keyBlack #0b0b0b dE 0.00 (0.56%), keyWhite #dcdcdc dE 0.00 (0.80%) — 5 of 5 within dE 12.",
+          "The exact hits are not coincidence: artifact/src/styles.css:3-8 declares the five referenceColors verbatim as custom properties and uses them as gradient endpoints, so each colour survives as a flat run of pixels rather than only as a blend."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "Silkscreen legends are not legible at rendered size in four of six sections. 3x crops at 1440x900 (scratch/eval1-crop-piano.png, -program.png, -synth.png, -effects.png) show 'Layer A focus' / 'Layer A on' / 'Piano type' / 'Layer A octave' printed over each other in piano, the group titles 'PAGE' and 'STORE AND SPLIT' overprinting the Program 2-7 legends, and 'Envelope attack/decay/sustain/release' colliding under the overlapping 'FILTER' and 'ENVELOPE' titles in synth. Legend font-size resolves to the clamp floor of 6px in these bands (styles.css:211).",
+          "Knob caps do not render as circles. .knob-face is a flex child with width and height both var(--d) but no flex-shrink guard (styles.css:284-291), so it is compressed vertically: effects.amp-drive, amp-tone and amp-level render as near-flat slivers and every synth, effects and performance knob is a tall ellipse rather than a round cap.",
+          "What does work: the nine drawbars carry real caps and 8-step LED ladders whose lit count tracks value (measured 00000000 -> 00111111 at value 70), faders carry an 8-LED graph (11111100 at 75), buttons have a distinct unlit/lit lamp gradient, and the chassis and inset plates use the spec's referenceColors verbatim (all five matched at CIE76 dE 0.00).",
+          "OLED treatment is plausible (dark teal #06222a ground, #7ff2dc monospace ink, inset shadow) but the synth display clips its own text to 'NOT ACTIVE IN PHA…' via text-overflow: ellipsis (styles.css:487-494), and neither display carries the reference's multi-line patch readout.",
+          "reviewer: findings confirmed, two measurements corrected and the extent widened. (1) Legend font-size does NOT resolve to the 6px clamp floor: styles.css:211 is clamp(6px, 0.56cqw, 9px) and at the 1353.59px container that interpolates to 7.58012px, measured identically on all 103 .legend elements. (2) Overprinting is not confined to four sections - measured bounding-box intersections at 1440x900 give legend-on-legend collisions in organ 1, piano 4, synth 4, effects 1, and group-title-on-legend collisions in performance 3, organ 5, piano 4, program 7, synth 2, i.e. all six sections are affected, so the rating-2 evidence is if anything understated. (3) effects.amp-drive is not a near-flat sliver: its .knob-face measures 10.97x13.89 (taller than wide); amp-tone and amp-level are the slivers at 15.48x2.31. 'Every synth, effects and performance knob is a tall ellipse' also overstates direction and scope - 26 of 38 knob faces deviate more than 12% from square and most are flattened (wider than tall), while 12 are effectively round. The underlying defect is real and worse than described: piano.layer-a-octave and piano.layer-b-octave render with a .knob-face height of exactly 0. (4) The synth OLED truncation is confirmed - its second .readout-line has scrollWidth 113 against clientWidth 98 with text-overflow: ellipsis - though the display is 36.4% of its section width, not 38%. Rating 2 kept."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "Every control position tracks its parameter, measured by driving controls with a real mouse and reading back both ARIA and computed style: performance.master-level 70 -> 100 with the knob face transform going rotate(-45deg) -> rotate(135deg); organ.drawbar-1 0 -> 70 with cap bottom 0% -> 70% and LED ladder 00000000 -> 00111111; piano.layer-a-level 75 -> 100 with cap 75% -> 100% and LED graph 11111100 -> 11111111; effects.delay-on aria-pressed false -> true with the lamp switching to its lit radial gradient; piano.type data-step 0 -> 1 with the cycle LEDs stepping 100000 -> 010000.",
+          "Playing state is shown truthfully: pressing MIDI 60 adds .pressed with translateY(1px) and a darker gradient and removes it on release; #sustain-pedal lights (class 'pedal lit', aria-pressed true) from the pointer, from Shift and from MIDI CC64, and clears when the last source lifts; #engine-status and #midi-status read live values ('Audio idle…' -> 'Piano voice ready (live synthesis, no samples)'; 'MIDI input ready' -> 'No MIDI input connected…').",
+          "The two displays never read a live value — both are static placards ('PROGRAMS / NOT ACTIVE IN PHASE 1', 'SYNTH / NOT ACTIVE IN PHASE 1'). Honest for Phase 1, but no display reads a parameter.",
+          "No LED follows an active layer or section: the count of .lit elements inside .deck is 64 whether a note is sounding or not, so nothing on the panel itself reflects that the instrument is playing; the piano layer A/B on and focus buttons are free-running toggles rather than a mutually exclusive focus indicator."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "At 390x844 on the served build the instrument keeps a fixed 1000px design width inside a horizontal scroller (styles.css:590-599): .chassis measures 1000x323.08 against a 390px viewport, .stage has scrollWidth 1032 against clientWidth 390 and overflow-x: auto, and only 37.4% of the instrument is on screen at a time.",
+          "Nothing collapses or clips and geometry is fully retained: deck fraction 0.5400, aspect ratio 3.0952, all 73 keys present and all 73 inside the keybed box, document scrollWidth 390 and scrollHeight 844 so the page itself neither scrolls sideways nor vertically, and zero console messages at this viewport.",
+          "Usability is materially reduced: with the scroller at its left origin, key 60 (middle C) sits at x=458.9, off-screen, and only about two octaves of the keybed are playable without first scrolling; macOS overlay scrollbars give no visible affordance that the region scrolls at all (scratch/eval1-narrow-left.png).",
+          "All 35 controls that fall inside the 390x844 viewport are pointer-reachable by the 5x5 elementFromPoint test, and the smallest of them (piano.layer-a-octave, 12.7x12.7 px) is well under a 24px touch target; the deviation is declared in evidence/stage1-visual-audit.md item 4 as a deliberate choice.",
+          "reviewer: re-measured at 390x844 on the same served build and every number above reproduces (chassis 1000x323.08, .stage scrollWidth 1032 vs clientWidth 390 with overflow-x auto, deckFraction 0.53997, aspect 3.09523, 73/73 keys inside the keybed, document scrollWidth 390 / scrollHeight 844, key 60 at x=458.9, 35/35 in-view controls reachable by the 5x5 elementFromPoint test, zero console messages). Rating raised 2 -> 3: none of the rating-2 triggers fires here - no measurement is outside tolerance, no required element is absent, and nothing is materially incomplete. The criterion's stated failure modes, collapsing and clipping, do not occur, and the rendered narrow view is legible (scratch/review1-narrow-left.png) because the 1000px design width gives each section more room than it has at 1440x900. A fixed-width scroller instead of a responsive narrow layout is exactly 'detail simplified in ways a knowledgeable player would notice', which is the rating-3 anchor. The scroll-affordance and 37%-visible deficiencies remain recorded as a minor issue. One correction: the smallest in-view control is piano.timbre at 16.5x17.5 px, not piano.layer-a-octave at 12.7x12.7; it is still well under a 24px touch target, so that point stands."
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,713 @@
+/* Tokens: reference colours from specs/nord-stage-4.visual.json (referenceColors). */
+:root {
+  --chassis-mid: #851a25;
+  --chassis-dark: #5a0c13;
+  --panel-blue-gray: #3c424d;
+  --panel-blue-gray-dark: #2a2f38;
+  --key-black: #0b0b0b;
+  --key-white: #dcdcdc;
+  --legend: #f6eeee;
+  --led-lit: #ffb13b;
+  --led-off: #3d2a22;
+  --oled-ink: #7ff2dc;
+  --oled-bg: #06222a;
+  --focus: #ffd166;
+  --page-bg: #f3f1ef;
+  --ink: #191717;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--ink);
+  background: var(--page-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --page-bg: #15171b;
+    --ink: #eae6e6;
+  }
+}
+
+:root[data-theme='dark'] {
+  --page-bg: #15171b;
+  --ink: #eae6e6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page-bg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- page and scroll region ---------- */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px 0 20px;
+}
+
+.stage {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* The instrument is sized by its own width; every internal measure uses cqw so it scales with it. */
+.instrument {
+  container-type: inline-size;
+  width: 94vw;
+  flex: none;
+}
+
+.chassis {
+  position: relative;
+  width: 100%;
+  height: calc(100cqw / 3.0951);
+  border-radius: 1.1cqw;
+  background: linear-gradient(180deg, var(--chassis-mid), var(--chassis-dark));
+  box-shadow: 0 1.2cqw 2.4cqw rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+/* ---------- deck: 54% of the instrument height ---------- */
+
+.deck {
+  position: relative;
+  height: 54%;
+  display: flex;
+  padding: 0.6cqw 0.7cqw 0;
+}
+
+.section {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5cqw 0.45cqw;
+  overflow: visible;
+}
+
+.section + .section {
+  border-left: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.surface-dark-inset {
+  margin: 0.35cqw 0.25cqw 0;
+  padding-top: 0.5cqw;
+  border-radius: 0.4cqw;
+  background: linear-gradient(180deg, var(--panel-blue-gray), var(--panel-blue-gray-dark));
+  box-shadow: inset 0 0 0 0.3cqw var(--chassis-mid), inset 0 0 0 0.45cqw rgba(0, 0, 0, 0.35);
+}
+
+.section-heading {
+  margin: 0;
+  font-size: clamp(7px, 0.78cqw, 12px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--legend);
+  line-height: 1.2;
+}
+
+.surface-exposed-chassis .section-heading {
+  color: #fff3ef;
+}
+
+.brand {
+  margin-top: 0.4cqw;
+  font-size: clamp(9px, 1.5cqw, 22px);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #fff3ef;
+}
+
+.section-body {
+  zoom: var(--section-zoom, 1);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 0.6cqw;
+}
+
+.row {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 0.25cqw;
+}
+
+/* Per-section density: the deck is 54% of a 3.1:1 instrument, so the busiest sections scale their contents down. */
+.section-piano {
+  --section-zoom: 0.7;
+}
+
+.section-synth {
+  --section-zoom: 0.64;
+}
+
+/* Phase 3 added layers, envelopes, voice, and arpeggiator controls to the synth: its legends pack tighter. */
+.section-synth .legend {
+  max-width: 3.1cqw;
+}
+
+.section-organ {
+  --section-zoom: 0.76;
+}
+
+.section-effects {
+  --section-zoom: 0.78;
+}
+
+/* The effects section carries eight to ten controls per group now, so its groups pack tighter. */
+.section-effects .group-controls {
+  gap: 0.15cqw;
+}
+
+.section-effects .legend {
+  max-width: 3.8cqw;
+}
+
+.section-program {
+  --section-zoom: 0.7;
+}
+
+/* ---------- groups and legends ---------- */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.group-title {
+  margin-bottom: 0.15cqw;
+  font-size: clamp(6px, 0.56cqw, 9px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--legend);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.group-controls {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.3cqw 0.3cqw;
+}
+
+.legend {
+  display: block;
+  max-width: 4.2cqw;
+  margin-top: 0.2cqw;
+  font-size: clamp(6px, 0.56cqw, 9px);
+  line-height: 1.1;
+  color: var(--legend);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ---------- shared control shell ---------- */
+
+.control {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.size-xs {
+  --d: 1.3cqw;
+}
+.size-sm {
+  --d: 1.8cqw;
+}
+.size-md {
+  --d: 2.2cqw;
+}
+.size-lg {
+  --d: 2.6cqw;
+}
+.size-xl {
+  --d: 3.4cqw;
+}
+
+/* ---------- LEDs ---------- */
+
+.led {
+  display: block;
+  width: 0.5cqw;
+  height: 0.5cqw;
+  min-width: 4px;
+  min-height: 4px;
+  border-radius: 50%;
+  background: var(--led-off);
+  box-shadow: inset 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.led.lit {
+  background: var(--led-lit);
+  box-shadow: 0 0 0.6cqw rgba(255, 177, 59, 0.75);
+}
+
+/* ---------- knobs ---------- */
+
+.knob {
+  width: calc(var(--d) * 1.25);
+  height: calc(var(--d) * 1.25);
+  justify-content: flex-start;
+}
+
+.knob-face {
+  width: var(--d);
+  height: var(--d);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3a3a3a, #0b0b0b 70%);
+  box-shadow: 0 0 0 1px #bfbfbf, 0 0.2cqw 0.4cqw rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.knob-mark {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 0.18cqw;
+  height: 34%;
+  min-width: 1.5px;
+  transform: translateX(-50%);
+  background: #fff;
+  border-radius: 1px;
+}
+
+.knob.dial .knob-face {
+  box-shadow: 0 0 0 2px #cfcfcf, 0 0 0 3px #333, 0 0.3cqw 0.6cqw rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- faders, drawbars, wheels, pitch stick ---------- */
+
+.fader {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.3cqw;
+  height: calc(var(--d) * 2.6);
+  width: calc(var(--d) * 1.9);
+}
+
+.fader .led-graph {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.2cqw 0;
+}
+
+.fader-slot {
+  position: relative;
+  flex: 1;
+  width: 0.6cqw;
+  min-width: 3px;
+  align-self: stretch;
+  margin: 0.2cqw auto;
+  border-radius: 2px;
+  background: #15171b;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+.fader-cap {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  width: calc(var(--d) * 0.9);
+  height: 0.9cqw;
+  min-height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #f2f2f2, #9a9a9a);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.drawbar {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.2cqw;
+  height: 7cqw;
+  width: 1.6cqw;
+  min-width: 12px;
+}
+
+.drawbar .led-ladder {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.1cqw 0;
+}
+
+.drawbar-slot {
+  position: relative;
+  flex: 1;
+  width: 0.8cqw;
+  min-width: 4px;
+  margin: 0 auto;
+  border-radius: 2px;
+  background: #101216;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+.drawbar-cap {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  width: 1.5cqw;
+  min-width: 8px;
+  height: 0.9cqw;
+  min-height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #f5ead2, #bfae8a);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.wheel,
+.pitch {
+  width: calc(var(--d) * 1.1);
+  height: calc(var(--d) * 1.6);
+}
+
+.wheel-well,
+.pitch-well {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  border-radius: 0.6cqw;
+  background: #15171b;
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.9);
+}
+
+.wheel-grip,
+.pitch-stick {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  height: 8%;
+  min-height: 8px;
+  transform: translateY(50%);
+  border-radius: 3px;
+  background: linear-gradient(180deg, #2b2b2b, #0b0b0b);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* ---------- buttons and cycle selectors ---------- */
+
+.button,
+.cycle {
+  justify-content: center;
+  min-width: 2.2cqw;
+  gap: 0.25cqw;
+}
+
+.button .lamp {
+  display: block;
+  width: calc(var(--d) * 1.1);
+  height: calc(var(--d) * 0.6);
+  min-width: 10px;
+  min-height: 6px;
+  border-radius: 3px;
+  background: #2a211c;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.button.lit .lamp {
+  background: radial-gradient(circle at 50% 40%, #ffe2a8, var(--led-lit) 70%);
+  box-shadow: 0 0 0.7cqw rgba(255, 177, 59, 0.8);
+}
+
+.button.size-xs,
+.cycle.size-xs {
+  width: 2.2cqw;
+}
+
+.cycle-leds {
+  display: flex;
+  gap: 0.15cqw;
+}
+
+.cycle-leds .led {
+  width: 0.45cqw;
+  height: 0.45cqw;
+}
+
+/* ---------- OLED primary displays (Program and Synth only) ---------- */
+
+.oled {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2cqw;
+  margin: 0.5cqw auto 0;
+  padding: 0.5cqw 0.7cqw;
+  border-radius: 0.3cqw;
+  background: var(--oled-bg);
+  color: var(--oled-ink);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  box-shadow: inset 0 0 1cqw rgba(0, 0, 0, 0.7), 0 0 0 1px #0b0b0b;
+}
+
+#program\.oled {
+  width: 88%;
+  height: 4.6cqw;
+}
+
+#synth\.oled {
+  width: 38%;
+  height: 4.2cqw;
+}
+
+.readout-line {
+  display: block;
+  font-size: clamp(6px, 0.62cqw, 10px);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- keybed (46% of the instrument height) ---------- */
+
+.keybed {
+  position: absolute;
+  left: 0.9cqw;
+  right: 0.9cqw;
+  top: calc(54% + 0.5cqw);
+  bottom: 0.9cqw;
+  background: #0b0b0b;
+  border-radius: 0.3cqw 0.3cqw 0.5cqw 0.5cqw;
+  touch-action: none;
+  user-select: none;
+  overflow: hidden;
+}
+
+.key {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.key.white {
+  background: linear-gradient(180deg, #ffffff 0%, var(--key-white) 82%, #bdbdbd 100%);
+  border-right: 1px solid #8f8f8f;
+  border-radius: 0 0 0.3cqw 0.3cqw;
+  z-index: 1;
+}
+
+.key.black {
+  top: 0;
+  height: 61%;
+  z-index: 2;
+  background: linear-gradient(180deg, #3a3a3a 0%, var(--key-black) 60%, #000 100%);
+  border-radius: 0 0 0.25cqw 0.25cqw;
+  box-shadow: 0 0.3cqw 0.5cqw rgba(0, 0, 0, 0.6);
+}
+
+.key.white.pressed {
+  background: linear-gradient(180deg, #d8d8d8 0%, #c2c2c2 100%);
+  transform: translateY(1px);
+}
+
+.key.black.pressed {
+  background: linear-gradient(180deg, #5a5a5a 0%, #2a2a2a 100%);
+}
+
+/* ---------- below the instrument ---------- */
+
+.below {
+  width: min(94vw, 760px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.pedal {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: 1px solid #5c5c5c;
+  background: linear-gradient(180deg, #f6f6f6, #cfcfcf);
+  color: #191717;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.pedal.lit {
+  background: linear-gradient(180deg, #ffe2a8, #ffb13b);
+}
+
+.pedal:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.status,
+.note {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.note {
+  opacity: 0.75;
+}
+
+/* ---------- narrow viewport: keep the instrument inspectable, scroll inside its region ---------- */
+
+@media (max-width: 800px) {
+  .stage {
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding: 0 16px;
+  }
+
+  .instrument {
+    width: 1000px;
+  }
+}
+
+/* Phase 3: morph-tracked controls keep their layout (display: contents); a morph destination lights a green ring. */
+.morph-slot {
+  display: contents;
+}
+
+.morph-slot[data-morph='on'] > .control {
+  box-shadow: 0 0 0 2px #4fbf6a;
+}
+
+/* Phase 3: program dialogs (Store As and the numeric list view). */
+.program-dialog {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f4f4f4;
+  color: #111;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 10;
+}
+
+.program-dialog label {
+  display: block;
+  margin-top: 8px;
+}
+
+.program-dialog input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font: inherit;
+  padding: 6px 8px;
+}
+
+.program-dialog-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.program-list-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  max-height: 50vh;
+  margin: 8px 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.program-list-items button {
+  width: 100%;
+  padding: 4px 6px;
+  font: inherit;
+  text-align: left;
+}
+
+.program-list-items button[aria-current='true'] {
+  font-weight: 700;
+}
+
+/* Phase 3 density: the split points and the master clock sit in a three-column grid inside the narrow program section. */
+.group-program-split-points .group-controls,
+.group-program-clock .group-controls {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: center;
+  row-gap: 0.3cqw;
+}
+
+/* The piano layers now carry a zone switch; the narrow piano section wraps them instead of overlapping. */
+.section-piano .group-controls {
+  flex-wrap: wrap;
+  row-gap: 0.4cqw;
+}
+
+/* Phase 3 density: layer groups and the split and clock groups already print each control's legend, so their
+   group heading is hidden from sight (it stays in the accessible name of the group). */
+.group-organ-layer-a .group-title,
+.group-organ-layer-b .group-title,
+.group-piano-layer-a .group-title,
+.group-piano-layer-b .group-title,
+.group-synth-layer-a .group-title,
+.group-synth-layer-b .group-title,
+.group-synth-layer-c .group-title,
+.group-program-split-points .group-title,
+.group-program-clock .group-title {
+  display: none;
+}
