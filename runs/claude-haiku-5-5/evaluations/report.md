@@ -2,8 +2,8 @@
 
 - Run: `claude-haiku-5-5`
 - Status: complete
-- Aggregate: **86/100**
-- Coverage: 2/3 phases
+- Aggregate: **87/100**
+- Coverage: 3/3 phases
 
 ## Phase scores
 
@@ -11,7 +11,7 @@
 | --- | --- | ---: |
 | 1 | Complete surface and basic piano | 80 |
 | 2 | Piano library and working effects | 88 |
-| 3 | complete | — |
+| 3 | Complete Stage 4 system | 85 |
 
 ## Audio provenance
 
@@ -109,6 +109,33 @@ Phase 2 is substantially delivered and honest. One AudioContext is created on fi
 - **minor** — Rotary Drive and Delay Tap tempo have no panel control and are not declared gaps: specs/nord-stage-4.effects.json lists Drive among the Rotary parameters and Tap tempo among the Delay parameters. The rendered panel carries performance.rotary-speed, rotary-brake and rotary-level only, and the Delay group carries time, feedback, mix, filter and on. Neither absence appears in the declared-gap list in IMPLEMENTATION_DETAILS.json.
 - **minor** — Timbre and the Program display do not report the values the piano spec asks for: The Timbre control is a knob whose aria-valuetext reads '0 percent' / '60 percent' / '100 percent'; src/model/audioSettings.ts does map it onto the spec's named steps and the audio follows (centroid 821 -> 877 -> 1100 Hz), but the panel never names the step. The Program OLED reads 'PROGRAMS / NOT ACTIVE IN PHASE 2' rather than the model name that specs/nord-stage-4.piano.json asks be shown in the program display; the model name appears in a status line below the instrument instead.
 - **minor** — Upright is the thinnest recorded set: two velocity layers against Grand's four and Electric's five: build/samples/upright/manifest.json holds 66 zones over 38 roots in two velocity ranges, lovel 1-80 (30 zones) and 81-127 (36 zones); 28 roots carry both layers, 2 are soft-only and 8 loud-only. Grand is 25 roots x 4 layers (100 zones) and Electric 15 x 5 (75), so Upright is the thinnest of the three recorded sets. IMPLEMENTATION_DETAILS.json declares 'Upright has 10 soft-only roots', which has the number of single-layer roots right and the direction wrong. reviewer: this issue previously read 'The Upright sample set has a single velocity layer', citing zones that were all lovel 1 / hivel 80; re-measured from the manifest that is not so, so the claim is corrected and the severity stays minor.
+
+### Technical gate
+
+Passed.
+
+## Phase 3: Complete Stage 4 system
+
+**85/100**
+
+Phase 3 is a complete, honest instrument. One AudioContext, one limiter to the destination, and organ, piano and synth all inherit the Phase 2 effect chain and rotary. All 14 synth waveforms, four filters, three envelopes, LFO, voice modes, vibrato and a clock-locked arpeggiator are measurably real, as are the organ's drawbars, four models, percussion, vibrato and accelerating rotary. Programs are strongest: 32 slots, 9 factory programs, a truthful E flag, edit-discard, Store/Store As, 8 auto-storing Live slots, list view, a 177/180 round trip surviving reload. Splits, zone crossfades, scenes, morphs, transpose (±6 exact) and Panic behave. Real defects: the pitch stick does not spring back and bends only the piano, not the organ or synth; Panic sits on its own button rather than Shift+Transpose; morphed faders show assignment but not range; B3 and Vox are indistinguishable at the shipped registration. Geometry, keybed and colour are near-exact (aspect 3.09514, 73/43/30 keys all inside the keybed, 5/5 colours at deltaE 0), but the deck is over-packed: 16 colliding legend pairs and 4.9-5.3 px type in three bands, which the artifact's own audit declares.
+
+### Axis scores
+
+| Axis | Weight | Score |
+| --- | ---: | ---: |
+| Sound | 45% | 90 |
+| Playability & control | 20% | 75 |
+| Feature completeness | 35% | 86 |
+
+### Priority issues
+
+- **major** — Pitch stick does not spring back to centre, and never reaches organ or synth: After a full real-mouse drag through the stick's travel and release, aria-valuenow stayed at 96 in three separate runs instead of returning to the 50 centre: artifact/src/components/Controls.tsx:76-83 returns the reset handler as onPointerEnd, which is not a React DOM event name, so the rendered element carries no pointerup handler and the dispatch to 0.5 never fires. src/model/audioSettings.ts:360 computes bendCents for the piano chain only, so the organ and synth never bend - measured 261.75 Hz at centre against 261.71 Hz at full deflection on the synth, and 132.01 against 129.15 Hz on the organ - although organ.json and synth.json both specify pitchStickRangeSemitones 2. reviewer: the original issue also said the stick 'bends nothing already sounding'; withdrawn. With C5 held on the computer keyboard and the stick dragged vertically with real mouse input, the piano's sounding fundamental moved 524.00 -> 583.59 Hz (+1.86 semitones at aria-valuenow 96) in three runs (scratch/review3-pitch4.json). The control is vertical-drag only, so a horizontal drag, or one attempted while the same mouse button holds a key, leaves aria-valuenow at 50 and nothing bends.
+- **major** — Deck legends collide and fall to 4.9-5.3 px in three sections: At 1440x900 the Synth, Piano, Program and Organ bands print legends at median 4.9-5.8 px with 15 overlapping legend pairs and 6 legends overprinting the ORGAN and PIANO headings; the Synth OLED also truncates its own live text ('Layer off · ARP S…'). Visible in scratch/eval3-crop-synth.png and -piano.png taken from build/. The artifact declares this itself in evidence/stage3-visual-audit.md ('Declared deviation … the visual regression gate is not met at desktop density'), which is honest, but it is still a regression against the Phase 2 surface. reviewer: re-measured against build/: 180 legends at CSS 7.58 px times section zoom give medians of 7.58 / 5.76 / 5.31 / 5.31 / 4.85 / 5.91 px for performance / organ / piano / program / synth / effects; 16 legend pairs overlap by bounding box and 6 legends overprint the ORGAN and PIANO headings; the synth OLED's second line overflows (scrollWidth 108 vs clientWidth 98 px). Confirmed as reported.
+- **minor** — One control is buried under its neighbours and unreachable by pointer: A 5x5 elementFromPoint grid at 1440x900, page unscrolled, found 0 live points for program.panic, covered by a group title and program.morph-2. It remains operable with the keyboard, which is how Panic was exercised, so this is reachability rather than missing inventory. 51 further controls have fewer than 25 of 25 live points but at least one. reviewer: the original issue named three buried controls. organ.layer-a-zone (2/25) and program.xfade-mid (10/25) are reachable, and were operated with real mouse input at a live point - Zone1-4 -> Zone1 and FadeOff -> Fade+/-6 (scratch/review3-reach-click.json). Deterministic over three fresh loads; four of five grid conventions give 179/180 reachable, and only 5x5 cell centres gives 177 (scratch/review3-reach-conventions.json).
+- **minor** — B3 and Vox are the same spectrum at the default registration: With the shipped drawbar positions (1⅓' and 1' closed) the two models are the same spectrum, because Vox reuses B3's ratios for the seven drawbars that are open. They do separate under a full registration (shape SD 7.39 dB with all nine drawbars out), so the engines are distinct, but at the registration the instrument ships with, a player hears no difference at all. reviewer: the original issue described a constant 3.53 dB level offset; re-measured at the true footage frequencies of C4 with percussion and vibrato off, B3 minus Vox is +0.29/+0.04/-0.12/-0.08/-0.27/-0.58/-0.64/+0.77/+0.90 dB - mean 0.03 dB, spread 0.51 dB - so the two are indistinguishable rather than offset (scratch/review3-organ2.json).
+- **minor** — Panic is a dedicated button, not the documented Shift+Transpose: programs.json specifies 'Shift+Transpose sends an internal All Notes Off'. Shift-clicking program.transpose changes nothing (rms 0.0455 before, 0.0462 after). The function itself is present and correct on its own program.panic button (0.0461 -> 0.000000 with keys still held), so the behaviour exists under a different gesture. reviewer: re-measured: Shift-clicking program.transpose with three keys held left rms at 0.0402 -> 0.0457, while the program.panic button took 0.0402 -> 0.0156 inside the next 400 ms window and to silence as the release tails ran out (scratch/review3-panic.json).
+- **minor** — Morphed faders and drawbars show assignment but not the morphed range: programs.json morph.indicators asks that 'Assigned knobs light their green morph LED; level faders and drawbars show the morphed range on their LED graphs (manual p. 39)'. This build marks every morph destination identically - a 2 px green ring on the control, artifact/src/styles.css:625 (.morph-slot[data-morph='on'] > .control) - so a morphed fader or drawbar shows that it is assigned but not the range it will travel. reviewer: added by the reviewer; the assignment, interpolation and per-source clearing all work as the original assessment recorded.
 
 ### Technical gate
 
