@@ -36,4 +36,4 @@ const only = argv('models')?.split(',');
 const toRecord = process.argv.includes('--compose') ? [] : (only || S.models.map((m) => m.id));
 for (const id of toRecord) node('record.mjs', '--model', id);
 for (const m of S.models) node('prep.mjs', '--model', m.id);
-node('compose.mjs');
+node(S.show.composer || 'compose.mjs'); // og-video.json composes with og.mjs

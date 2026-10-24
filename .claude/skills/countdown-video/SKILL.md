@@ -13,6 +13,8 @@ description: >-
 
 The pipeline, fixtures and docs live in `recording/`. Read `recording/README.md` first: it has the levers, the house style and the hard-won capture details. This skill covers how to drive it.
 
+The site's 1200×630 `og:video` (`public/og.mp4`) is built by the same pipeline from `recording/shows/og-video.json` with its own composer, `scripts/og.mjs`. To remake it, see the README's "Social preview" section; the house-style rules below don't apply to it.
+
 ## 1. Pin down the levers
 
 Start from `recording/shows/etude6-countdown.json` and copy it to `recording/shows/<new-name>.json`. Ask about any of these the user hasn't settled, in one `AskUserQuestion`:

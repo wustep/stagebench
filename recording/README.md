@@ -6,6 +6,8 @@ The first show is `shows/etude6-countdown.json`, which renders `output/etude6-co
 
 This is separate from `.claude/skills/bench-video`, which records full-screen segments that restart the song for each model. The Claude skill for this pipeline is `.claude/skills/countdown-video`.
 
+The same takes also make the site's social preview, `public/og.mp4`. See [Social preview](#social-preview-og-videojson).
+
 ## Run it
 
 Requirements:
@@ -45,6 +47,7 @@ Record serially and leave the machine alone while the audio passes run. They pla
 | `loudness.targetLufs` | Final integrated loudness (−14). |
 | `leveling` | Gentle per-block nudges: `strength` 0.4, `deadbandDb` 2, `maxBoostDb` 3, `maxCutDb` 1.5. Each `barsPerModel` block more than `deadbandDb` from the median moves `strength` of its distance toward it, within the caps. Gains ramp inside a model's turn and step at cuts. Keep it gentle; the song's dynamics are the point. |
 | `previewBase`, `stage` | Where previews load from (production by default) and which phase. |
+| `composer` | The script that composes the prepped takes. It defaults to `compose.mjs`, the house style. `og-video.json` uses `og.mjs`. |
 
 **Duration.** Duration is roughly `models × barsPerModel × (seconds per bar)` plus the last model's extra bars. At this tempo one 8-bar cycle is about 7 s. Use `--plan` to see the exact timeline before recording.
 
@@ -95,6 +98,44 @@ Each model is recorded on one prepared page, with Playwright driving a headless 
 - `click: <selector>` clicks once, for cycle buttons with no readable state. Verify it with `abtest.mjs`.
 
 **Target sound: just the grand plus basic reverb.** Reverb is on only where the tail test shows it works, and set to about 35% of its dry/wet range, which is Opus 5.5's default. Some previews render toggles as cycle buttons whose `aria-pressed` is always `true`, such as Kimi's Piano Unison, Dyn Comp and Timbre. `pressIfOff`/`pressOffIfOn` would toggle those blindly: the old Kimi fixture's "unison off" step actually switched unison **on**. A/B any step with `scripts/abtest.mjs` before trusting it.
+
+## Social preview (`og-video.json`)
+
+`public/og.mp4` is the site's `og:video`, and `public/og-video-poster.png` is its poster. Both are built from this pipeline: `shows/og-video.json` records takes like any show, then sets `"composer": "og.mjs"` in place of the house style.
+
+```sh
+node scripts/make.mjs --show shows/og-video.json                     # record 4 takes, prep, compose (~10 min)
+node scripts/og.mjs --show shows/og-video.json                       # recompose; recaptures the live gallery (~4 min)
+node scripts/og.mjs --show shows/og-video.json --reuse-gallery       # recompose from the last gallery capture
+```
+
+The film is 1200×630, 30 fps, silent and 8.5 s long. It is made to autoplay muted and loop:
+
+1. **Card, 0.6 s.** `public/og.png`, unchanged.
+2. **Gallery, 2.2 s.** The card is stacked on top of the live site (`og.galleryUrl`), and one eased scroll carries it up through the hero to the Runs leaderboard. Each frame blends sub-frame screenshots, about 2 px of travel apart, across a 180° shutter, so the fast middle of the scroll gets real motion blur.
+3. **Keyboards, 4.7 s.** These are the octave-hit bars 93–97 of the Étude: one bar each for #9 Grok 4.7, #6 GPT-6 Astra and #3 Fable 5.1, then two bars for #1 Opus 5.5. Each one sits under an og.png-style header showing rank, name, score and the wordmark. Ranks and scores come from `runs/<id>/run.json`, and scores are floored like the gallery's. Every cut opens on the first frame with that downbeat's chord down.
+4. **Card, 0.9 s.** A hard cut back to `og.png` on the next downbeat. The last frame and the first frame are the same, so the loop point doesn't show. The poster is frame 0, which is `og.png`, so playback starts without a jump.
+
+The `og` block in the show config overrides these defaults in `scripts/og.mjs`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `galleryUrl` | production | The page that scrolls under the card. |
+| `hold`, `scroll`, `settle` | 0.6, 1.7, 0.5 s | Card before the scroll, the scroll itself, and the leaderboard before the first keyboard. |
+| `scrollTo`, `scrollToText`, `scrollMargin` | `h2`, `Runs`, 20 | Where the scroll stops. |
+| `shutter`, `blurStep` | 0.5, 2 px | Motion blur. |
+| `band` | 136 px | Height of the red header in the keyboard shots. |
+| `card`, `cardSecs` | `../public/og.png`, 0.9 s | The end card. It must be 1200×630. |
+| `crf` | 16 | x264 quality. CRF 16 comes to about 1.4 MB. |
+| `poster`, `posterFrame` | `../public/og-video-poster.png`, 0 | Which frame of the lossless master becomes the poster. |
+
+Notes:
+
+- **Requirements.** The type is the gallery's own: Barlow Condensed 800 and Manrope. It loads from the repo root's `node_modules`, so run `pnpm install` there too.
+- **Color.** The video is tagged with BT.709 matrix and primaries plus the **sRGB transfer** (`iec61966-2-1`). With that tag, Chrome and Safari show og.png's reds exactly. A `bt709` or missing transfer tag renders them about 4% brighter.
+- **Checking it.** `og.mjs` writes `.takes/og-video/_work/og-contact.png`, a frame every 0.5 s, and `og-report.json` with the frame ranges and the take placement. `qa.mjs` is for the house-style shows and doesn't apply here.
+- **Keeping it current.** Rerun the show when the leaderboard or the gallery changes.
+- **Takes.** As in any show, the C1 and C♯1 octave hits are below a Stage 73's E1, so the keybed doesn't show them. The film is silent, so the takes only supply the picture.
 
 ## Hard-won details
 
