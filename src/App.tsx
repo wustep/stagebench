@@ -212,6 +212,33 @@ function App() {
         </button>
       </section>
 
+      <section className="film-band" aria-labelledby="film-heading">
+        <div className="film-copy">
+          <span className="film-flag">Countdown film</span>
+          <h2 id="film-heading">Glass Étude No.{' '}6, ranked</h2>
+          <p>
+            The leaderboard counts down from #9 to #1, each model playing Philip Glass&rsquo;s
+            Étude No.{' '}6 on its own on-screen keybed.
+          </p>
+          <span className="film-meta">88 sec · Phase 3 builds · sound on</span>
+        </div>
+        <div className="film-frame">
+          {/* preload="none": the poster stands in until someone presses play,
+              so the 5.6 MB film never loads on a plain page visit. */}
+          <video
+            controls
+            playsInline
+            preload="none"
+            poster="/media/etude6-countdown-poster.jpg"
+            width={1920}
+            height={1080}
+            aria-label="StageBench countdown: nine models play Philip Glass's Étude No. 6"
+          >
+            <source src="/media/etude6-countdown.mp4" type="video/mp4" />
+          </video>
+        </div>
+      </section>
+
       <section className="run-index" id="runs">
         <div className="run-index-heading">
           <h2>Runs</h2>
