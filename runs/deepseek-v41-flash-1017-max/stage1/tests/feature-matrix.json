@@ -1,0 +1,134 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 1,
+  "stage": 1,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "summary": "Exact variant key count, range, white/black pattern and geometry: 73 keys, E1-E7 (MIDI 28-100), 43 white / 30 black, black keys 0.61 of white height, black width 0.62 of white, derived from the MIDI range and re-verified against the variant.",
+      "tests": [
+        "src/tests/visual-key-count.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/measured/keybed",
+        "evidence/stage1-visual-audit.md#4-keybed"
+      ]
+    },
+    {
+      "id": "visual.section-layout",
+      "summary": "Six ordered sections at the photo-measured 14/20/8.5/12.5/25/20 widths, 54/46 deck/keybed split, one continuous chassis with the two bands as siblings inside it.",
+      "tests": [
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/visual-forbidden-hardware.test.tsx",
+        "src/tests/visual-section-layout.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/measured/sections",
+        "evidence/stage1-visual-audit.md#3-section-widths"
+      ]
+    },
+    {
+      "id": "visual.control-inventory",
+      "summary": "167 addressable controls with stable dotted IDs; per-section landmarks present; Program and Synth are the only primary OLED locations, with the synth OLED at 0.40 of its section width and the program band carrying one display.",
+      "tests": [
+        "src/tests/interaction-decorative-controls.test.tsx",
+        "src/tests/visual-control-inventory.test.ts",
+        "src/tests/visual-forbidden-hardware.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/measured/controls",
+        "evidence/stage1-capture.json#/forbiddenChecks",
+        "evidence/stage1-visual-audit.md#5-landmarks"
+      ]
+    },
+    {
+      "id": "interaction.keys",
+      "summary": "Pointer down/up/cancel, glissando across keys, independent multi-touch, mapped computer keyboard with repeat suppression and blur cleanup, and unmount cleanup, all through one note lifecycle.",
+      "tests": [
+        "src/tests/interaction-keys.test.tsx",
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/piano-note-lifecycle.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "summary": "Every visible control moves or presses and writes only to the normalized presentation store; with a recording engine injected, operating any panel control starts no audio, ends no voice and never starts the engine.",
+      "tests": [
+        "src/tests/interaction-decorative-controls.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage1-visual-audit.md#5-landmarks"
+      ]
+    },
+    {
+      "id": "accessibility.controls",
+      "summary": "Accessible names, roles (slider/switch/button/radiogroup), values, keyboard operation and visible focus for all 167 controls, plus named section landmarks and labeled displays.",
+      "tests": [
+        "src/tests/accessibility-controls.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage1-visual-audit.md#5-landmarks"
+      ]
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "summary": "Note on/off through one lifecycle, repeated press suppression, overlapping re-strike with a new attack, release, all-notes-off with a recorded reason, and node counts returning to baseline.",
+      "tests": [
+        "src/tests/piano-note-lifecycle.test.ts",
+        "src/tests/piano-status-cleanup.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "piano.basic-inputs",
+      "summary": "Pointer, independent multi-touch, mapped computer keyboard with repeat suppression, MIDI note/velocity and sustain CC64, and truthful denied/unsupported/disconnected MIDI states that leave the keybed playable.",
+      "tests": [
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/interaction-keys.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "summary": "Sustain transitions (pedal-down hold, pedal-up damping, held-through-pedal-lift notes, independent pedal owners), concurrent voices, deterministic oldest-first voice stealing at the cap, and velocity carried into every voice.",
+      "tests": [
+        "src/tests/piano-sustain-polyphony.test.ts",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/audio"
+      ]
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "summary": "Truthful idle/loading/ready/suspended/error/fallback status surfaced in the Program display, every voice stopped on blur, MIDI disconnect and unmount, and the Web Audio graph reclaiming its nodes while keeping one master path.",
+      "tests": [
+        "src/tests/piano-status-cleanup.test.ts",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage1-capture.json#/audio"
+      ]
+    },
+    {
+      "id": "regression.chassis",
+      "summary": "One continuous chassis, no marketing hero above it, no reference photograph as background, a complete 73-key keybed inside its box, no horizontal scroll container, and the front rail attached to the keybed, verified structurally at both canonical viewports.",
+      "tests": [
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/interaction-keys.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage1-desktop.png",
+        "evidence/stage1-narrow.png",
+        "evidence/stage1-capture.json#/measured/page"
+      ]
+    }
+  ]
+}

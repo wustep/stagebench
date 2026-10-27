@@ -1,0 +1,52 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "Live synthesis only. One piano-like voice is generated in JavaScript from an additive partial bank with per-partial inharmonicity, per-partial decay, a deterministic hammer transient and a per-note release curve. The rendered samples are written into an AudioBuffer and played through Web Audio (source -> voice gain -> master gain -> destination). No recorded audio is loaded, bundled, fetched or streamed anywhere in this project.",
+    "generatedSources": [
+      {
+        "name": "Modelled piano voice",
+        "generator": "src/audio/pianoModel.ts",
+        "description": "Deterministic additive synthesis: up to 24 stretched partials per note (inharmonicity 0.00022 + 0.00085 * register), amplitudes tilted by 1/n^0.95 and rolled off by exp(-(n-1) * (1.05 - 0.98 * velocity)), plus a 14 ms deterministic noise burst shaped by the same velocity. Velocity changes both level (0.84 * v^1.25) and spectrum, so a hard stroke is brighter rather than merely louder.",
+        "renderedAs": "AudioBuffer via AudioContext.createBuffer, one per voice",
+        "licence": "Original work authored for this candidate. No third-party samples, IRs or impulse responses."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "The Program display labels the voice 'Modelled piano' so the interface never implies a recorded grand.",
+      "No sample set is used for any type, so the piano.json requirement for recorded Grand/Upright/Electric sets is out of Phase 1 scope and is not claimed here.",
+      "Polyphony is capped at 16 voices with deterministic oldest-first stealing; both the cap and the stealing order are covered by tests.",
+      "Sustain is a real lifecycle state: released notes are held while the pedal is down and damped when it lifts.",
+      "Master path: every voice connects through one master gain node at 0.72 fixed gain, then to destination. Nothing bypasses it.",
+      "Release is a scheduled gain curve (1 -> 0 over 0.46 to 0.18 s depending on register), applied to the voice's own gain node; the source is stopped just after the curve completes.",
+      "Velocity-0 strikes render silence rather than a very quiet note.",
+      "The engine reports its real state (idle / loading / ready / suspended / error / fallback) and the Program display prints it verbatim. A browser without Web Audio gets a 'NO AUDIO OUTPUT' fallback in which the keybed still responds but is honestly silent."
+    ]
+  },
+  "boundaries": {
+    "audio": "src/audio/types.ts declares the minimal Web Audio surface; src/audio/webAudioEngine.ts consumes it; src/audio/adapters.ts adapts the platform AudioContext to it; src/audio/fakes.ts provides a recording fake for tests.",
+    "midi": "src/input/midi.ts declares MidiAccessLike/MidiInputLike and the bridge; adapters.ts adapts the platform MIDIAccess; tests drive plain objects with no device.",
+    "timing": "src/audio/clock.ts declares a Clock interface with a system implementation and a manual implementation for tests.",
+    "injection": "src/instrument/useInstrument.ts accepts InstrumentDeps (engine, createAudioContext, requestMidiAccess, clock, disableAudio). Nothing in the app reaches for a global without going through it."
+  },
+  "scope": {
+    "functional": [
+      "The 73-key keybed, from pointer, touch, computer keyboard and Web MIDI",
+      "Sustain from the on-screen pedal, the space bar and MIDI CC64",
+      "One modelled piano voice with velocity, release, sustain, 16-voice polyphony and stealing",
+      "Panic and all-notes-off cleanup on blur, MIDI disconnect and unmount",
+      "Truthful audio and MIDI status in the Program display"
+    ],
+    "decorativeOnly": [
+      "Every control on the six panel sections: 167 controls that move or press accessibly and write only to the presentation store"
+    ],
+    "notImplementedAndLabelled": [
+      "The Synth engine: the synth OLED says 'Not available in this phase' rather than showing a waveform",
+      "Programs, Live slots, splits, scenes, morphs, transpose and master clock: the controls are present and inert",
+      "Organ audio and effects audio: no control reaches the audio graph"
+    ]
+  }
+}

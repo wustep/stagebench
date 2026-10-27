@@ -1,0 +1,250 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 2,
+  "stage": 2,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "summary": "Exact variant key count, range, white/black pattern and geometry: 73 keys, E1-E7 (MIDI 28-100), 43 white / 30 black, black keys 0.61 of white height, black width 0.62 of white, derived from the MIDI range and re-verified against the variant.",
+      "tests": [
+        "src/tests/visual-key-count.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/desktop/keybed",
+        "evidence/stage2-desktop.png"
+      ]
+    },
+    {
+      "id": "visual.section-layout",
+      "summary": "Six ordered sections at the photo-measured 14/20/8.5/12.5/25/20 widths, 54/46 deck/keybed split, one continuous chassis with the two bands as siblings inside it, unchanged by the phase 2 feature work.",
+      "tests": [
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/visual-forbidden-hardware.test.tsx",
+        "src/tests/visual-section-layout.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/desktop/instrument",
+        "evidence/stage2-capture.json#/desktop/sections"
+      ]
+    },
+    {
+      "id": "visual.control-inventory",
+      "summary": "167 addressable controls with stable dotted IDs; per-section landmarks present; Program and Synth remain the only primary OLED locations, with exactly one display element in the program band and a synth OLED under half its band width.",
+      "tests": [
+        "src/tests/interaction-decorative-controls.test.tsx",
+        "src/tests/visual-control-inventory.test.ts",
+        "src/tests/visual-forbidden-hardware.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/desktop/forbidden",
+        "evidence/stage2-capture.json#/desktop/controls"
+      ]
+    },
+    {
+      "id": "interaction.keys",
+      "summary": "Pointer down/up/cancel, glissando across keys, independent multi-touch, mapped computer keyboard with repeat suppression and blur cleanup, and unmount cleanup, all through one note lifecycle that now fans out to two layers.",
+      "tests": [
+        "src/tests/interaction-keys.test.tsx",
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/piano-note-lifecycle.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "summary": "Every control that Phase 2 did not make functional still moves or presses and writes only to the presentation store; with a recording engine injected, operating an Organ, Synth or Program control starts no audio and ends no voice.",
+      "tests": [
+        "src/tests/interaction-decorative-controls.test.tsx",
+        "src/tests/panel-bindings.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/interactionPass/controlsOperated"
+      ]
+    },
+    {
+      "id": "accessibility.controls",
+      "summary": "Accessible names, roles (slider/switch/button/radiogroup), values, keyboard operation and visible focus for all 167 controls, plus named section landmarks and labeled displays that now report real piano and effect state.",
+      "tests": [
+        "src/tests/accessibility-controls.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/desktop/controls"
+      ]
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "summary": "Note on/off through one lifecycle, repeated press suppression, overlapping re-strike with a new attack, release, all-notes-off with a recorded reason, and node counts returning to baseline.",
+      "tests": [
+        "src/tests/piano-note-lifecycle.test.ts",
+        "src/tests/piano-status-cleanup.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "piano.basic-inputs",
+      "summary": "Pointer, independent multi-touch, mapped computer keyboard with repeat suppression, MIDI note/velocity and sustain CC64, and truthful denied/unsupported/disconnected MIDI states that leave the keybed playable.",
+      "tests": [
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/interaction-keys.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "summary": "Sustain transitions (pedal-down hold, pedal-up damping, held-through-pedal-lift notes, independent pedal owners), concurrent voices, deterministic oldest-first voice stealing at the cap, and velocity carried into every voice.",
+      "tests": [
+        "src/tests/piano-sustain-polyphony.test.ts",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio"
+      ]
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "summary": "Truthful idle/loading/ready/suspended/error/fallback status surfaced in the Program display, every voice stopped on blur, MIDI disconnect and unmount, and the Web Audio graph reclaiming its nodes while keeping one master path.",
+      "tests": [
+        "src/tests/piano-status-cleanup.test.ts",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio"
+      ]
+    },
+    {
+      "id": "regression.chassis",
+      "summary": "One continuous chassis, no marketing hero above it, no reference photograph as background, a complete 73-key keybed inside its box, no horizontal scroll container, and the front rail attached to the keybed.",
+      "tests": [
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/interaction-keys.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage2-desktop.png",
+        "evidence/stage2-narrow.png",
+        "evidence/stage2-capture.json#/desktop/instrument"
+      ]
+    },
+    {
+      "id": "piano.instrument-library",
+      "summary": "Six selectable piano types each with at least one model. Grand (Salamander Grand Piano V3), Upright (VSCO 2 CE Upright Piano) and Electric (Greg Sullivan CP80) are bundled recorded sample sets loaded from the bundle with no network at runtime, measured as audibly distinct in level and spectrum; Clav, Digital and Misc are declared modelled synthesis. Provenance, root notes and velocity layers are declared per file in IMPLEMENTATION_DETAILS.json.",
+      "tests": [
+        "src/tests/piano-instrument-library.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio/types",
+        "evidence/stage2-capture.json#/audio/sampleSummary",
+        "evidence/stage2-capture.json#/audio/libraryGrand",
+        "evidence/stage2-visual-audit.md#7-audio-library-and-provenance"
+      ]
+    },
+    {
+      "id": "piano.layers",
+      "summary": "Two layers with enable, focus, level fader and octave shift, each owning its own voices: a single key press starts one voice per enabled layer, each layer carries its own model and octave into the sounding pitch, layer polyphony and stealing are independent, and disabling a layer stops exactly its voices.",
+      "tests": [
+        "src/tests/piano-layers.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/interactionPass",
+        "evidence/stage2-capture.json#/audio/graph/voicesByLayer"
+      ]
+    },
+    {
+      "id": "piano.velocity-controls",
+      "summary": "KB Touch (three curves), Dyn Comp (Off/1/2/3), Timbre (per type family, including the electric Dyno preamps), Unison (Off/1/2/3 stereo widening) and Soft Release each measurably change rendered audio, and Master Level changes the master bus gain linearly below the limiter.",
+      "tests": [
+        "src/tests/piano-velocity-controls.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio/controls",
+        "evidence/stage2-capture.json#/audio/master",
+        "evidence/stage2-visual-audit.md#7-audio-library-and-provenance"
+      ]
+    },
+    {
+      "id": "piano.pedals",
+      "summary": "Sustain from the on-screen pedal, the computer keyboard and MIDI CC64, with the conventional 64 threshold, per-owner independence, and per-layer SUSTPED routing that holds only the layers it is enabled for. Soft pedal, sostenuto and half-pedaling are deliberately absent and CC66/CC67 are ignored rather than silently mapped.",
+      "tests": [
+        "src/tests/piano-pedals.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/interactionPass/sustainedAfterPointerRelease"
+      ]
+    },
+    {
+      "id": "piano.fallback",
+      "summary": "A failed sample load reports 'Piano not found' with a failure count, never reports the library ready, keeps the modelled voice playable for the same key, and clears the fallback once the model loads successfully. A modelled type reports ready with no files to load.",
+      "tests": [
+        "src/tests/piano-fallback.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio/fallback"
+      ]
+    },
+    {
+      "id": "effects.graph",
+      "summary": "One AudioContext builds two independent layer chains plus one shared rotary, each chain in the documented order (Mod 1, Mod 2, Delay, Amp/EQ, Compressor, Reverb), into a layer level stage, then a master gain and limiter, with exactly one connection to the destination. Voice and node counts return to baseline after cleanup.",
+      "tests": [
+        "src/tests/effects-graph-routing.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio/graph"
+      ]
+    },
+    {
+      "id": "effects.routing",
+      "summary": "Focus follows the layer focus and the manual Piano A/B buttons; Piano group mode makes both layers share one chain; Delay, Compressor and Reverb support global mode across layers; per-unit bypass and the Layer Effects ON all-effects bypass both change the rendered signal; To Rotary is the only route into the shared rotary and the rotary is last in the path.",
+      "tests": [
+        "src/tests/effects-graph-routing.test.ts",
+        "src/tests/panel-bindings.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio/bypass",
+        "evidence/stage2-capture.json#/interactionPass/effects",
+        "evidence/stage2-capture.json#/interactionPass/fxFocusAfterManual"
+      ]
+    },
+    {
+      "id": "effects.processing",
+      "summary": "Every effect unit and every listed type measurably changes a standardized rendered signal: six Mod 1 types, six Mod 2 types, delay with decaying and progressively filtered repeats plus ping-pong, seven Amp/EQ models including the 24 dB filters, a compressor that narrows dynamic range, six reverb types with decay length growing Booth to Cathedral, and a rotary that modulates level and stereo position.",
+      "tests": [
+        "src/tests/effects-processing.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/audio/units",
+        "evidence/stage2-capture.json#/audio/reverb",
+        "evidence/stage2-capture.json#/audio/delay"
+      ]
+    },
+    {
+      "id": "regression.phase1",
+      "summary": "All 201 Phase 1 tests remain present and green, and every Phase 1 feature ID still maps to real tests: the surface, keybed, input lifecycle, sustain and polyphony, status and cleanup, accessibility, and the chassis regression.",
+      "tests": [
+        "src/tests/regression-phase1.test.ts",
+        "src/tests/interaction-keys.test.tsx",
+        "src/tests/piano-note-lifecycle.test.ts",
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/piano-sustain-polyphony.test.ts",
+        "src/tests/piano-status-cleanup.test.ts",
+        "src/tests/accessibility-controls.test.tsx",
+        "src/tests/interaction-decorative-controls.test.tsx",
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/visual-key-count.test.ts",
+        "src/tests/visual-section-layout.test.ts",
+        "src/tests/visual-control-inventory.test.ts",
+        "src/tests/visual-forbidden-hardware.test.tsx",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage2-capture.json#/console",
+        "evidence/stage2-desktop.png",
+        "evidence/stage2-narrow.png"
+      ]
+    }
+  ]
+}

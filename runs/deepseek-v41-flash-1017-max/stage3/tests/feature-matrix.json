@@ -1,0 +1,457 @@
+{
+  "$schema": "https://stagebench.local/schemas/feature-matrix.schema.json",
+  "version": 3,
+  "stage": 3,
+  "features": [
+    {
+      "id": "visual.key-count",
+      "summary": "Exact variant key count, range, white/black pattern and geometry: 73 keys, E1-E7 (MIDI 28-100), 43 white / 30 black, black keys 0.61 of white height, black width 0.62 of white, derived from the MIDI range and re-verified against the variant.",
+      "tests": [
+        "src/tests/visual-key-count.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/desktop/keybed",
+        "evidence/stage3-desktop.png"
+      ]
+    },
+    {
+      "id": "visual.section-layout",
+      "summary": "Six ordered sections at the photo-measured 14/20/8.5/12.5/25/20 widths, 54/46 deck/keybed split, one continuous chassis with the two bands as siblings inside it; the Phase 3 split/zone/morph editors render inside the deck so the silhouette is unchanged.",
+      "tests": [
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/visual-forbidden-hardware.test.tsx",
+        "src/tests/visual-section-layout.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/desktop/instrument",
+        "evidence/stage3-capture.json#/desktop/sections"
+      ]
+    },
+    {
+      "id": "visual.control-inventory",
+      "summary": "167 addressable controls with stable dotted IDs; per-section landmarks present; Program and Synth remain the only primary OLED locations, with exactly one display element in the program band and a synth OLED under half its band width.",
+      "tests": [
+        "src/tests/interaction-decorative-controls.test.tsx",
+        "src/tests/visual-control-inventory.test.ts",
+        "src/tests/visual-forbidden-hardware.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/desktop/forbidden",
+        "evidence/stage3-capture.json#/desktop/controls"
+      ]
+    },
+    {
+      "id": "interaction.keys",
+      "summary": "Pointer down/up/cancel, glissando across keys, independent multi-touch, mapped computer keyboard with repeat suppression and blur cleanup, and unmount cleanup, all through one note lifecycle that now fans a press out to every organ, piano and synth layer the program enables.",
+      "tests": [
+        "src/tests/interaction-keys.test.tsx",
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/piano-note-lifecycle.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "interaction.decorative-controls",
+      "summary": "The controls the specs exclude still move or press accessibly and change presentation state only; with a recording engine injected, operating one starts no audio, and every non-bound control is named in the unsupported list with the spec bullet that excludes it.",
+      "tests": [
+        "src/tests/interaction-decorative-controls.test.tsx",
+        "src/tests/panel-bindings.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/interactionPass/controlsOperated"
+      ]
+    },
+    {
+      "id": "accessibility.controls",
+      "summary": "Accessible names, roles (slider/switch/button/radiogroup), values, keyboard operation and visible focus for all 167 controls, plus named section landmarks and labeled displays that report real program, engine and effect state.",
+      "tests": [
+        "src/tests/accessibility-controls.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/desktop/controls"
+      ]
+    },
+    {
+      "id": "piano.basic-note-lifecycle",
+      "summary": "Note on/off through one lifecycle, repeated press suppression, overlapping re-strike with a new attack, release, all-notes-off with a recorded reason, and node counts returning to baseline.",
+      "tests": [
+        "src/tests/piano-note-lifecycle.test.ts",
+        "src/tests/piano-status-cleanup.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "piano.basic-inputs",
+      "summary": "Pointer, independent multi-touch, mapped computer keyboard with repeat suppression, MIDI note/velocity and sustain CC64, and truthful denied/unsupported/disconnected MIDI states that leave the keybed playable.",
+      "tests": [
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/interaction-keys.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/interactionPass"
+      ]
+    },
+    {
+      "id": "piano.basic-sustain-polyphony",
+      "summary": "Sustain transitions (pedal-down hold, pedal-up damping, held-through-pedal-lift notes, independent pedal owners), concurrent voices, deterministic oldest-first voice stealing at the cap, and velocity carried into every voice.",
+      "tests": [
+        "src/tests/piano-sustain-polyphony.test.ts",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio"
+      ]
+    },
+    {
+      "id": "piano.basic-status-cleanup",
+      "summary": "Truthful idle/loading/ready/suspended/error/fallback status surfaced in the Program display, every voice stopped on blur, MIDI disconnect and unmount, and the Web Audio graph reclaiming its nodes while keeping one master path.",
+      "tests": [
+        "src/tests/piano-status-cleanup.test.ts",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio"
+      ]
+    },
+    {
+      "id": "regression.chassis",
+      "summary": "One continuous chassis, no marketing hero above it, no reference photograph as background, a complete 73-key keybed inside its box, no horizontal scroll container, and the front rail attached to the keybed; the deck's editor overlay is inside the deck so the two bands stay siblings.",
+      "tests": [
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/interaction-keys.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-desktop.png",
+        "evidence/stage3-narrow.png",
+        "evidence/stage3-capture.json#/desktop/instrument"
+      ]
+    },
+    {
+      "id": "piano.instrument-library",
+      "summary": "Six selectable piano types each with at least one model. Grand (Salamander Grand Piano V3), Upright (VSCO 2 CE Upright Piano) and Electric (Greg Sullivan CP80) are bundled recorded sample sets loaded from the bundle with no network at runtime, measured as audibly distinct in level and spectrum; Clav, Digital and Misc are declared modelled synthesis. Provenance, root notes and velocity layers are declared per file in IMPLEMENTATION_DETAILS.json.",
+      "tests": [
+        "src/tests/piano-instrument-library.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio/types",
+        "evidence/stage3-capture.json#/audio/sampleSummary",
+        "evidence/stage3-capture.json#/audio/libraryGrand",
+        "evidence/stage3-visual-audit.md#7-audio-library-and-provenance"
+      ]
+    },
+    {
+      "id": "piano.layers",
+      "summary": "Two layers with enable, focus, level fader and octave shift, each owning its own voices: a single key press starts one voice per enabled layer, each layer carries its own model and octave into the sounding pitch, layer polyphony and stealing are independent, and disabling a layer stops exactly its voices.",
+      "tests": [
+        "src/tests/piano-layers.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/interactionPass",
+        "evidence/stage3-capture.json#/audio/graph/voicesByLayer"
+      ]
+    },
+    {
+      "id": "piano.velocity-controls",
+      "summary": "KB Touch (three curves), Dyn Comp (Off/1/2/3), Timbre (per type family, including the electric Dyno preamps), Unison (Off/1/2/3 stereo widening) and Soft Release each measurably change rendered audio, and Master Level changes the master bus gain linearly below the limiter.",
+      "tests": [
+        "src/tests/piano-velocity-controls.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio/controls",
+        "evidence/stage3-capture.json#/audio/master",
+        "evidence/stage3-visual-audit.md#7-audio-library-and-provenance"
+      ]
+    },
+    {
+      "id": "piano.pedals",
+      "summary": "Sustain from the on-screen pedal, the computer keyboard and MIDI CC64, with the conventional 64 threshold, per-owner independence, and per-layer SUSTPED routing that holds only the layers it is enabled for — now including the Organ and Synth layers, each with their own routing toggle. Soft pedal, sostenuto and half-pedaling are deliberately absent and CC66/CC67 are ignored rather than silently mapped.",
+      "tests": [
+        "src/tests/piano-pedals.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/interactionPass/sustainedAfterPointerRelease"
+      ]
+    },
+    {
+      "id": "piano.fallback",
+      "summary": "A failed sample load reports 'Piano not found' with a failure count, never reports the library ready, keeps the modelled voice playable for the same key, and clears the fallback once the model loads successfully. A modelled type reports ready with no files to load.",
+      "tests": [
+        "src/tests/piano-fallback.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio/fallback"
+      ]
+    },
+    {
+      "id": "effects.graph",
+      "summary": "One AudioContext builds all six chain instances the spec documents (Piano A, Piano B, the one shared Organ chain, Synth A/B/C) plus one shared rotary, each chain in the documented order (Mod 1, Mod 2, Delay, Amp/EQ, Compressor, Reverb), into a layer level stage, then a master gain and limiter, with exactly one connection to the destination. Voice and node counts return to baseline after cleanup.",
+      "tests": [
+        "src/tests/effects-graph-routing.test.ts",
+        "src/tests/system-integration.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio/graph"
+      ]
+    },
+    {
+      "id": "effects.routing",
+      "summary": "Focus follows the layer focus and the manual Piano A/B and Synth A/B/C buttons and the Organ pair; Piano group mode makes both piano layers share one chain; Delay, Compressor and Reverb support global mode across layers; per-unit bypass and the Layer Effects ON all-effects bypass both change the rendered signal; To Rotary routes Piano and Synth into the shared rotary, the Organ routes via its ORGAN button, and the rotary is last in the path.",
+      "tests": [
+        "src/tests/effects-graph-routing.test.ts",
+        "src/tests/panel-bindings.test.tsx",
+        "src/tests/organ-engine.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio/bypass",
+        "evidence/stage3-capture.json#/interactionPass/effects",
+        "evidence/stage3-capture.json#/interactionPass/fxFocusAfterManual"
+      ]
+    },
+    {
+      "id": "effects.processing",
+      "summary": "Every effect unit and every listed type measurably changes a standardized rendered signal: six Mod 1 types, six Mod 2 types, delay with decaying and progressively filtered repeats plus ping-pong, seven Amp/EQ models including the 24 dB filters, a compressor that narrows dynamic range, six reverb types with decay length growing Booth to Cathedral, and a rotary that modulates level and stereo position.",
+      "tests": [
+        "src/tests/effects-processing.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio/units",
+        "evidence/stage3-capture.json#/audio/reverb",
+        "evidence/stage3-capture.json#/audio/delay"
+      ]
+    },
+    {
+      "id": "regression.phase1",
+      "summary": "All Phase 1 tests remain present and green, and every Phase 1 feature ID still maps to real tests: the surface, keybed, input lifecycle, sustain and polyphony, status and cleanup, accessibility, and the chassis regression.",
+      "tests": [
+        "src/tests/regression-phase1.test.ts",
+        "src/tests/interaction-keys.test.tsx",
+        "src/tests/piano-note-lifecycle.test.ts",
+        "src/tests/piano-inputs.test.ts",
+        "src/tests/piano-sustain-polyphony.test.ts",
+        "src/tests/piano-status-cleanup.test.ts",
+        "src/tests/accessibility-controls.test.tsx",
+        "src/tests/interaction-decorative-controls.test.tsx",
+        "src/tests/regression-chassis.test.tsx",
+        "src/tests/visual-key-count.test.ts",
+        "src/tests/visual-section-layout.test.ts",
+        "src/tests/visual-control-inventory.test.ts",
+        "src/tests/visual-forbidden-hardware.test.tsx",
+        "src/tests/piano-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/console",
+        "evidence/stage3-desktop.png",
+        "evidence/stage3-narrow.png"
+      ]
+    },
+    {
+      "id": "regression.phase2",
+      "summary": "All Phase 1-2 test files are still present with their cases intact, the piano library and effect suites are unchanged, and the four package gates are green; the Phase 2 feature IDs still map to the same real test files.",
+      "tests": [
+        "src/tests/regression-phase1.test.ts",
+        "src/tests/piano-instrument-library.test.ts",
+        "src/tests/piano-layers.test.ts",
+        "src/tests/piano-velocity-controls.test.ts",
+        "src/tests/piano-pedals.test.ts",
+        "src/tests/piano-fallback.test.ts",
+        "src/tests/effects-graph-routing.test.ts",
+        "src/tests/effects-processing.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/console",
+        "evidence/stage3-capture.json#/audio/graph"
+      ]
+    },
+    {
+      "id": "programs.roundtrip",
+      "summary": "Storing and re-loading any of the 32 slots restores every supported field: piano, organ and synth selection and parameters, all six effect chains and their routing, splits and zones, both layer scenes, the morph assignments, the clock and transpose. The dirty indicator is a comparison of the live state against the slot's committed state, so it is clean on load, dirty after one edit, and clean again when the edit is undone or stored; Master Level is excluded because a program does not store it.",
+      "tests": [
+        "src/tests/programs-roundtrip.test.ts",
+        "src/tests/programs-navigation.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/programs"
+      ]
+    },
+    {
+      "id": "programs.store-live",
+      "summary": "Store takes two presses (destination, then confirm) and can retarget with the dial; Store As asks for a name first and stores under it; the eight Live slots store every edit automatically, keep each slot independent, and survive a reload through the injected persistence boundary; Shift/Exit cancels a pending store without touching the slot.",
+      "tests": [
+        "src/tests/programs-store-live.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/programs/live"
+      ]
+    },
+    {
+      "id": "programs.undo-cancel",
+      "summary": "Selecting another program discards unsaved edits, exactly as the manual states: the state played after a program change is the slot's, not the discarded edit. Re-selecting the lit program is a no-op so it cannot throw an edit away by accident. The single-level undo the spec allows as optional restores exactly the discarded state and the slot it belonged to.",
+      "tests": [
+        "src/tests/programs-undo-cancel.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/programs/dirty"
+      ]
+    },
+    {
+      "id": "programs.navigation",
+      "summary": "32 programs in 4 pages of 8 with the page.button slot label the display prints (for example 3.2), the eight program buttons addressing the current page, the program dial browsing and wrapping inside the bank, the four page buttons, and the numeric list view that lists all 32 slots.",
+      "tests": [
+        "src/tests/programs-navigation.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/programs/navigation"
+      ]
+    },
+    {
+      "id": "layers.routing",
+      "summary": "Every layer of every engine has enable, focus, level and octave state and a chain target: Piano A and B each own a chain, the two Organ layers share one, and Synth A, B and C each own one. A press fans out to exactly the enabled layers, each layer's octave reaches its sounding pitch, disabling a layer stops only its voices, and enabling one focuses its chain.",
+      "tests": [
+        "src/tests/system-integration.test.tsx",
+        "src/tests/organ-engine.test.ts",
+        "src/tests/synth-engine.test.ts",
+        "src/tests/effects-graph-routing.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audio/graph/voicesByLayer"
+      ]
+    },
+    {
+      "id": "splits.zones",
+      "summary": "Three editable split points on the eleven documented positions create up to four zones; each layer of each engine is assignable to any zone; and Off / ±6 / ±12 crossfades fade across that many semitones on each side, with the two neighbouring zones summing to unity through the band. Notes route to only the layers assigned to them, and a routing change re-evaluates the keys still held.",
+      "tests": [
+        "src/tests/splits-scenes-morphs.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/splits"
+      ]
+    },
+    {
+      "id": "morph.assignments",
+      "summary": "Wheel and Control Pedal each hold their own assignments with a start and an end value, interpolated linearly from the source position so one destination can rise while another falls; only the spec-listed destinations are assignable; each assignment shows its range and current value, and clearing works per source or per assignment.",
+      "tests": [
+        "src/tests/splits-scenes-morphs.test.ts",
+        "src/tests/system-integration.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/morphs"
+      ]
+    },
+    {
+      "id": "scenes.switching",
+      "summary": "Two layer scenes per program. Applying a scene writes the layer enable flags, so a scene is the layer on/off state viewed two ways rather than a second gate: switching scenes changes what sounds, leaves every sound parameter untouched, and switching back restores the other configuration. Pressing a layer button records the state into the active scene.",
+      "tests": [
+        "src/tests/splits-scenes-morphs.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/scenes"
+      ]
+    },
+    {
+      "id": "organ.engine",
+      "summary": "Two organ layers with enable, focus, level, octave and zone assignment, each owning its voices; a press starts one voice per enabled organ layer, disabling a layer stops exactly its voices, SUSTPED holds per layer, and all-notes-off and unmount reclaim every voice and node. Both layers play through the one shared organ chain.",
+      "tests": [
+        "src/tests/organ-engine.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/organ/layers",
+        "evidence/stage3-capture.json#/audio/graph"
+      ]
+    },
+    {
+      "id": "organ.models-drawbars",
+      "summary": "B3, Vox, Farf and Pipe 1 render measurably distinct spectra from genuinely different registrations (tonewheel sine partials with leakage, reedy formant partials plus a filtered/unfiltered mix drawbar, on/off register selectors each with its own voice, and nine principal ranks). Every drawbar movement changes the rendered spectrum and the LED graph, B3 percussion (2nd/3rd harmonic, normal/soft, slow/fast, single-triggered or poly) and key click each measurably change the audio, and the six vibrato/chorus settings differ with depth rising 1 to 3.",
+      "tests": [
+        "src/tests/organ-synth-model.test.ts",
+        "src/tests/organ-engine.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/organ/models",
+        "evidence/stage3-capture.json#/organ/drawbars"
+      ]
+    },
+    {
+      "id": "organ.rotary",
+      "summary": "The ORGAN button routes the Organ into the shared rotary (while Piano and Synth route with To Rotary); slow, fast and stop are selectable; speed changes ramp the horn and drum LFO rates over 0.4 s so acceleration is audible; drive changes the saturation; speed is a morph destination; and the routed signal decorrelates the stereo image, which is the rotary's defining behaviour.",
+      "tests": [
+        "src/tests/organ-engine.test.ts",
+        "src/tests/effects-processing.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/organ/rotary"
+      ]
+    },
+    {
+      "id": "synth.sources",
+      "summary": "Three synth layers with independent state and their own chains. Every required waveform is selectable through the three dials, and the five categories are genuinely different synthesis techniques: a single table oscillator, a hard-synced oscillator, stacked detuned saws, a wide seven-voice supersaw, and a two-operator FM algorithm. Osc Ctrl has no effect for Pure and a real, category-specific effect for the other four.",
+      "tests": [
+        "src/tests/synth-engine.test.ts",
+        "src/tests/organ-synth-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/synth/sources"
+      ]
+    },
+    {
+      "id": "synth.filter-envelopes",
+      "summary": "LP12, LP24, HP and BP filters, each measurably different (LP24 steeper than LP12), with keyboard tracking Off/1-3/2-3/1 moving the cutoff by the documented ratio, resonance and drive both changing the signal, and the filter envelope amount sweeping it. Oscillator, filter and amplifier envelopes each have attack, decay and release with an audible effect, decay at maximum acting as sustain mode, the Amp Velocity switch honouring Off/1/2/3, and Env To Pitch retargeting the oscillator envelope onto pitch.",
+      "tests": [
+        "src/tests/synth-engine.test.ts",
+        "src/tests/organ-synth-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/synth/filter"
+      ]
+    },
+    {
+      "id": "synth.voice-modes",
+      "summary": "Poly stacks voices while Mono and Legato sound one note at a time, replacing the previous one; note priority Off/Low/High resolves which held note sounds; glide passes a previous-pitch source in mono/legato (and never in poly) and audibly starts the note at the old pitch; unison stacks and detunes the source; and the Wheel vibrato mode follows the mod wheel while On runs free.",
+      "tests": [
+        "src/tests/synth-engine.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/synth/voice"
+      ]
+    },
+    {
+      "id": "synth.arp-gate",
+      "summary": "The arpeggiator walks the held synth notes on its own clock, deterministically: the step order is Up, Down, Up-Down or a seeded Random, the range expands across octaves, the rate locks to the master clock when synced (and is tempo-independent when not), KB HOLD keeps it running after the keys are lifted, and ARP RUN starts and stops it and clears its voices. The gate envelope chops a rendered voice into audible steps.",
+      "tests": [
+        "src/tests/synth-engine.test.ts",
+        "src/tests/organ-synth-model.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/synth/arp"
+      ]
+    },
+    {
+      "id": "system.integration",
+      "summary": "All three engines are one instrument: exactly one AudioContext, six chain instances plus one shared rotary, one master gain and limiter, and one destination, verified by counting destination connections on a real offline graph. One program state carries every engine's settings plus splits, scenes, morphs, clock and transpose; Panic clears every voice of every engine; and the source contains exactly one AudioContext construction site.",
+      "tests": [
+        "src/tests/system-integration.test.tsx",
+        "src/tests/splits-scenes-morphs.test.ts"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/integration",
+        "evidence/stage3-capture.json#/audio/graph"
+      ]
+    },
+    {
+      "id": "hardware.bindings",
+      "summary": "A real audit over the real catalog: each of the 167 controls is either bound to real state in a named store or explicitly listed as unsupported with the spec bullet that excludes it; no control is unaccounted for, no binding names a control that does not exist, and no control is both bound and excluded. The unsupported list is also printed in the UI.",
+      "tests": [
+        "src/tests/system-integration.test.tsx",
+        "src/tests/regression-phase1.test.ts",
+        "src/tests/panel-bindings.test.tsx"
+      ],
+      "evidence": [
+        "evidence/stage3-capture.json#/audit",
+        "evidence/stage3-visual-audit.md#10-control-binding-audit"
+      ]
+    }
+  ]
+}

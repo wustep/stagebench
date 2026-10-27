@@ -1,0 +1,2067 @@
+/* ==========================================================================
+   Nord Stage 4 — Phase 1 surface
+   Colours and proportions come from specs/nord-stage-4.visual.json.
+   The instrument is a size container, so every dimension below is expressed in
+   cqw/cqh of the instrument itself: one set of numbers, no breakpoint drift.
+   ========================================================================== */
+
+:root {
+  --chassis-mid: #851a25;
+  --chassis-dark: #5a0c13;
+  --chassis-light: #9d2733;
+  --panel: #3c424d;
+  --panel-hi: #454b57;
+  --panel-lo: #2f343e;
+  --key-white: #dcdcdc;
+  --key-white-shade: #bfbfbf;
+  --key-black: #0b0b0b;
+  --oled-bg: #06120f;
+  --oled-ink: #9df2d0;
+  --oled-dim: #4f9c82;
+  --oled-warn: #f2c46a;
+  --oled-bad: #f2796a;
+  --led-red: #ff3b30;
+  --led-green: #4be07a;
+  --led-amber: #ffb020;
+  --study-bg: #efece8;
+  --font: 'Helvetica Neue', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--study-bg);
+  font-family: var(--font);
+  color: #241a1c;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Product study. One instrument on a neutral sweep, no hero, no page scroll
+   at the canonical desktop viewport.
+   -------------------------------------------------------------------------- */
+
+.stage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.6vh 2.6vw;
+  background: radial-gradient(115% 88% at 50% 4%, #fcfbf9 0%, #f0ede9 44%, #ded8d2 100%);
+}
+
+.instrument {
+  container-type: size;
+  container-name: inst;
+  position: relative;
+  width: 95vw;
+  max-width: 1368px;
+  aspect-ratio: 3.0951;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.75cqw 0.75cqw 0.5cqw 0.5cqw;
+  background: linear-gradient(180deg, var(--chassis-light) 0%, var(--chassis-mid) 38%, var(--chassis-dark) 100%);
+  box-shadow:
+    0 0.08cqw 0 rgba(255, 255, 255, 0.3) inset,
+    0 0.2cqw 0.4cqw rgba(0, 0, 0, 0.22),
+    0 1.6cqw 3.4cqw -1.2cqw rgba(60, 12, 18, 0.5);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Brushed-metal grain: two micro-gradients, never a bitmap. */
+.instrument::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, rgba(0, 0, 0, 0.035) 1px 2px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.014) 0 2px, rgba(0, 0, 0, 0.02) 2px 4px);
+  mix-blend-mode: overlay;
+}
+
+/* ================================ deck ================================== */
+
+.deck {
+  flex: 0 0 54%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* The program editors open as an overlay anchored to the deck, so the deck is the
+     containing block for them. */
+  position: relative;
+}
+
+.rear-rail {
+  flex: 0 0 3.2cqh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2%;
+  padding: 0 2.2%;
+  font-size: 0.32cqw;
+  letter-spacing: 0.1em;
+  color: rgba(255, 233, 236, 0.46);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.deck-inner {
+  flex: 1 1 auto;
+  display: grid;
+  /* 14 / 20 / 8.5 / 12.5 / 25 / 20 — photo-measured, nord-stage-4.visual.json */
+  grid-template-columns: 14% 20% 8.5% 12.5% 25% 20%;
+  min-height: 0;
+  padding-bottom: 0.5cqh;
+}
+
+.section {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dark inset plate with the red perimeter left visible around it. */
+.section.surface-inset-plate::before {
+  content: '';
+  position: absolute;
+  inset: 3% 3.5% 2.5%;
+  border-radius: 0.12cqw;
+  background: linear-gradient(168deg, var(--panel-hi) 0%, var(--panel) 42%, var(--panel-lo) 100%);
+  box-shadow:
+    0 0.06cqw 0 rgba(255, 255, 255, 0.16) inset,
+    0 -0.08cqw 0.14cqw rgba(0, 0, 0, 0.55) inset,
+    0 0.08cqw 0.16cqw rgba(0, 0, 0, 0.35);
+  z-index: 0;
+}
+
+/* Program is the red-and-dark central area, not a full inset plate. */
+.section.surface-red-and-dark::before {
+  content: '';
+  position: absolute;
+  inset: 3% 3% 2.5%;
+  border-radius: 0.12cqw;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.26) 0%, rgba(0, 0, 0, 0.06) 42%, rgba(0, 0, 0, 0.18) 100%);
+  z-index: 0;
+}
+
+.section.surface-exposed-chassis::before {
+  content: none;
+}
+
+.section-blocks {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9cqh;
+  padding: 4.6% 5% 3.4%;
+}
+
+/* ------------------------------ performance ----------------------------- */
+
+.section-performance .section-blocks {
+  display: grid;
+  grid-template-areas:
+    'wheels master'
+    'rotary rotary';
+  grid-template-columns: 1.1fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 1.4cqh 1.6cqw;
+  padding: 5% 5% 3%;
+}
+
+.branding {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1cqh;
+  padding: 0 6% 1.4cqh;
+  flex: 0 0 auto;
+}
+
+.brand-wordmark {
+  font-size: 1.85cqw;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  color: #fff;
+  line-height: 0.92;
+}
+
+.brand-stage {
+  font-size: 0.92cqw;
+  font-weight: 300;
+  letter-spacing: 0.26em;
+  color: #fff;
+  line-height: 1;
+}
+
+.brand-action {
+  margin-top: 0.55cqh;
+  font-size: 0.3cqw;
+  letter-spacing: 0.32em;
+  color: rgba(255, 255, 255, 0.62);
+  white-space: nowrap;
+}
+
+/* -------------------------------- blocks -------------------------------- */
+
+.block {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35cqh;
+}
+
+.block-legend {
+  margin: 0;
+  font-size: 0.33cqw;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.66);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1.2;
+}
+
+.block-controls {
+  display: grid;
+  grid-template-columns: repeat(var(--block-columns, 1), minmax(0, 1fr));
+  gap: 0.5cqh 0.22cqw;
+  align-items: start;
+  justify-items: center;
+  min-height: 0;
+}
+
+.block-note {
+  margin: 0;
+  font-size: 0.28cqw;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* -------------------------------- organ --------------------------------- */
+
+.section-organ .section-blocks {
+  display: grid;
+  grid-template-areas:
+    'layer model vib perc'
+    'layer drawbars drawbars drawbars';
+  grid-template-columns: 1.15fr 0.78fr 0.62fr 0.82fr;
+  grid-template-rows: 0.8fr 1.2fr;
+  gap: 1.1cqh 1.1cqw;
+  padding: 4.6% 4.4% 3%;
+}
+
+.block-organ-layer {
+  grid-area: layer;
+  height: 100%;
+}
+
+/* The layer faders run the full height of the band, as they do on the instrument. */
+.block-organ-layer .ctl-fader {
+  height: 100%;
+}
+.block-organ-layer .ctl-fader .ctl-track,
+.block-organ-layer .ctl-fader .led-ladder {
+  height: 100%;
+  max-height: none;
+}
+.block-organ-layer .ctl-body {
+  height: 100%;
+  align-items: stretch;
+}
+.block-organ-model {
+  grid-area: model;
+}
+.block-organ-vib {
+  grid-area: vib;
+}
+.block-organ-percussion {
+  grid-area: perc;
+}
+.block-organ-drawbars {
+  grid-area: drawbars;
+  align-self: stretch;
+  height: 100%;
+}
+.block-organ-drawbars .ctl {
+  height: 100%;
+  align-self: stretch;
+}
+
+.block-organ-layer .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42cqh 0.34cqw;
+  justify-items: start;
+}
+
+.block-organ-drawbars .block-controls {
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 0.1cqw;
+  align-items: stretch;
+  height: 100%;
+}
+
+/* -------------------------------- piano --------------------------------- */
+
+/*
+ * The piano band is the narrowest section (8.5% of the deck) and the densest after the
+ * synth. It is a single tight column: layer faders, acoustics, dynamics, select, timbre
+ * — the same top-to-bottom order as the photograph.
+ */
+.section-piano .section-blocks {
+  display: grid;
+  grid-template-areas:
+    'layer'
+    'acoustics'
+    'dynamics'
+    'select'
+    'timbre';
+  grid-template-rows: auto auto auto auto auto;
+  align-content: start;
+  gap: 0.55cqh;
+  padding: 4% 5.4% 2%;
+}
+
+.block-piano-layer {
+  grid-area: layer;
+}
+.block-piano-acoustics {
+  grid-area: acoustics;
+}
+.block-piano-dynamics {
+  grid-area: dynamics;
+}
+.block-piano-select {
+  grid-area: select;
+}
+.block-piano-timbre {
+  grid-area: timbre;
+}
+
+/* Two level faders side by side, then compact switch rows. */
+.block-piano-layer .block-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.16cqh 0.14cqw;
+  justify-items: center;
+}
+
+/* The two level faders take the full width of the row above the switch cluster. */
+.block-piano-layer .ctl-fader {
+  grid-column: span 2;
+}
+
+/* In this 8.5%-wide band the faders are short; the organ band carries the tall ones. */
+.section-piano .ctl-fader .ctl-track,
+.section-piano .ctl-fader .led-ladder {
+  height: 4.4cqh;
+}
+
+.section-piano .ctl-track-toggle {
+  width: 0.7cqw;
+  height: 0.38cqw;
+  min-width: 7px;
+  min-height: 5px;
+}
+
+.section-piano .ctl-option {
+  font-size: 0.23cqw;
+  padding: 0 0.04cqw;
+}
+
+.section-piano .ctl-legend {
+  font-size: 0.275cqw;
+}
+
+.block-piano-layer .ctl-toggle {
+  justify-self: start;
+}
+
+.block-piano-acoustics .block-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.16cqh 0.12cqw;
+  justify-items: start;
+}
+
+.block-piano-dynamics .block-controls,
+.block-piano-select .block-controls {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.18cqh;
+  justify-items: stretch;
+}
+
+.block-piano-select .ctl-selector[data-control-id='piano.type'] .ctl-selector-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.1cqh 0.16cqw;
+}
+
+.block-piano-timbre .block-controls {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+}
+
+/* ------------------------------- program -------------------------------- */
+
+.section-program .section-blocks {
+  display: grid;
+  grid-template-areas:
+    'presets presets'
+    'morph morph'
+    'nav global'
+    'slots slots';
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 0.9cqh 1.1cqw;
+  padding: 4.8% 4.4% 3.2%;
+}
+
+.block-program-presets {
+  grid-area: presets;
+}
+.block-program-morph {
+  grid-area: morph;
+}
+.block-program-nav {
+  grid-area: nav;
+}
+.block-program-global {
+  grid-area: global;
+}
+.block-program-slots {
+  grid-area: slots;
+}
+
+.block-program-presets .block-controls,
+.block-program-morph .block-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.2cqh 0.24cqw;
+}
+
+.block-program-nav .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4cqh 0.3cqw;
+  align-items: center;
+}
+
+.block-program-global .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42cqh 0.24cqw;
+}
+
+.block-program-slots .block-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.22cqh 0.28cqw;
+}
+
+/* -------------------------------- synth --------------------------------- */
+
+.section-synth .section-blocks {
+  display: grid;
+  grid-template-areas:
+    'layer dials mode'
+    'lfo osc filter'
+    'amp arp voice';
+  grid-template-columns: 0.85fr 1fr 0.9fr;
+  grid-template-rows: auto 1fr 1fr;
+  gap: 1cqh 0.9cqw;
+  padding: 4.4% 4.2% 2.8%;
+}
+
+.block-synth-layer {
+  grid-area: layer;
+}
+.block-synth-dials {
+  grid-area: dials;
+}
+.block-synth-mode {
+  grid-area: mode;
+}
+.block-synth-osc {
+  grid-area: osc;
+}
+.block-synth-filter {
+  grid-area: filter;
+}
+.block-synth-amp {
+  grid-area: amp;
+}
+.block-synth-lfo {
+  grid-area: lfo;
+}
+.block-synth-arp {
+  grid-area: arp;
+}
+.block-synth-voice {
+  grid-area: voice;
+}
+
+/* Three level faders on top, the layer switches in two rows beneath them. */
+.block-synth-layer .block-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.18cqh 0.16cqw;
+  justify-items: center;
+}
+
+.section-synth .ctl-fader .ctl-track,
+.section-synth .ctl-fader .led-ladder {
+  height: 5.6cqh;
+}
+
+.block-synth-layer .ctl-toggle {
+  justify-self: start;
+}
+
+.block-synth-dials .block-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.2cqh 0.24cqw;
+}
+
+.block-synth-osc .block-controls,
+.block-synth-amp .block-controls,
+.block-synth-lfo .block-controls,
+.block-synth-arp .block-controls,
+.block-synth-voice .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.24cqh 0.22cqw;
+  justify-items: start;
+  align-items: start;
+}
+
+.block-synth-filter .block-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.24cqh 0.2cqw;
+  justify-items: center;
+  align-items: start;
+}
+
+.block-synth-filter .ctl-selector {
+  grid-column: 1 / -1;
+}
+
+/* ------------------------------- effects -------------------------------- */
+
+.section-effects .block-legend {
+  font-size: 0.29cqw;
+}
+
+.section-effects .ctl-legend {
+  font-size: 0.285cqw;
+}
+
+.section-effects .ctl-track-toggle {
+  width: 0.78cqw;
+  height: 0.4cqw;
+  min-width: 8px;
+  min-height: 5px;
+}
+
+.section-effects .ctl-option {
+  font-size: 0.245cqw;
+  padding: 0 0.03cqw;
+}
+
+.section-effects .section-blocks {
+  display: grid;
+  grid-template-areas:
+    'mod1 mod2 focus'
+    'amp delay focus'
+    'amp comp reverb';
+  grid-template-columns: 1fr 1fr 0.9fr;
+  grid-template-rows: 1.1fr 0.95fr 0.95fr;
+  gap: 0.8cqh 1cqw;
+  padding: 2.6% 4% 2.2%;
+}
+
+.block-effects-mod1 {
+  grid-area: mod1;
+}
+.block-effects-mod2 {
+  grid-area: mod2;
+}
+.block-effects-amp {
+  grid-area: amp;
+}
+.block-effects-delay {
+  grid-area: delay;
+}
+.block-effects-comp {
+  grid-area: comp;
+}
+.block-effects-reverb {
+  grid-area: reverb;
+}
+.block-effects-focus {
+  grid-area: focus;
+}
+
+.block-effects-mod1 .block-controls,
+.block-effects-mod2 .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.34cqh 0.18cqw;
+  justify-items: start;
+}
+
+.block-effects-amp .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.36cqh 0.18cqw;
+  justify-items: start;
+}
+
+.block-effects-delay .block-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.34cqh 0.16cqw;
+}
+
+.block-effects-comp .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3cqh 0.2cqw;
+  justify-items: start;
+}
+
+.block-effects-reverb .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3cqh 0.18cqw;
+  justify-items: start;
+}
+
+.block-effects-focus .block-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.24cqh 0.12cqw;
+  justify-items: start;
+}
+
+/* The two effect groups are visibly separate, not one uniform matrix. */
+.block-effects-amp,
+.block-effects-delay,
+.block-effects-comp,
+.block-effects-reverb {
+  border-left: 1px solid rgba(150, 162, 178, 0.2);
+  padding-left: 5%;
+}
+
+/* =============================== controls =============================== */
+
+.ctl {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18cqh;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ctl-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.14cqw;
+  min-width: 0;
+}
+
+.ctl-legend {
+  font-size: 0.31cqw;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.18;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.ctl-scale {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.24cqw;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+/* --- knobs, dials, wheels, pitch stick --- */
+
+.ctl-track {
+  position: relative;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 26%, #5c626d 0%, #34383f 46%, #15181d 100%);
+  box-shadow:
+    0 0.04cqw 0 rgba(255, 255, 255, 0.22) inset,
+    0 -0.06cqw 0.1cqw rgba(0, 0, 0, 0.6) inset,
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.45);
+  cursor: ns-resize;
+  touch-action: none;
+  flex: 0 0 auto;
+  outline: none;
+}
+
+.ctl-knob .ctl-track,
+.ctl-dial .ctl-track {
+  width: 1.05cqw;
+  height: 1.05cqw;
+}
+
+.ctl-sm .ctl-track {
+  width: 0.82cqw;
+  height: 0.82cqw;
+}
+
+.ctl-lg .ctl-track {
+  width: 1.45cqw;
+  height: 1.45cqw;
+}
+
+/* The indicator line: a 2px sliver from the centre to the rim, rotated by value. */
+.ctl-cap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.09cqw;
+  height: 42%;
+  min-width: 1px;
+  border-radius: 1px;
+  background: linear-gradient(180deg, #fbf7f2 0%, #cdc7c1 100%);
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -100%) rotate(var(--ctl-angle, 0deg));
+  pointer-events: none;
+}
+
+.ctl-indicator {
+  position: absolute;
+  inset: -0.09cqw;
+  border-radius: 50%;
+  border: 0.05cqw solid rgba(0, 0, 0, 0.34);
+  pointer-events: none;
+}
+
+.ctl-track:focus-visible,
+.ctl-track-toggle:focus-visible,
+.ctl-option:focus-visible,
+.pedal:focus-visible {
+  outline: max(1.5px, 0.11cqw) solid #8fd8ff;
+  outline-offset: 1.5px;
+}
+
+/* --- faders and drawbars --- */
+
+.ctl-fader .ctl-track,
+.ctl-drawbar .ctl-track {
+  border-radius: 0.1cqw;
+  background: linear-gradient(90deg, #0c0e11 0%, #262a31 45%, #0a0c0f 100%);
+  box-shadow:
+    0 0.04cqw 0.1cqw rgba(0, 0, 0, 0.8) inset,
+    0 0 0 0.04cqw rgba(0, 0, 0, 0.4);
+  cursor: ns-resize;
+}
+
+.ctl-fader .ctl-track {
+  width: 0.5cqw;
+  height: 11cqh;
+}
+
+/* A drawbar is at least 3x taller than it is wide, as the forbidden-detection
+   rule for the organ band requires. */
+.ctl-drawbar .ctl-track {
+  width: 0.34cqw;
+  height: 17cqh;
+  min-height: 40px;
+}
+
+.ctl-fader .ctl-cap,
+.ctl-drawbar .ctl-cap {
+  left: 50%;
+  top: calc((100 - var(--ctl-pct, 50)) * 1%);
+  width: 210%;
+  height: 4.6%;
+  min-height: 3px;
+  border-radius: 0.04cqw;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(180deg, #4b5059 0%, #23262c 58%, #131519 100%);
+  box-shadow:
+    0 0.04cqw 0 rgba(255, 255, 255, 0.24) inset,
+    0 0.08cqw 0.12cqw rgba(0, 0, 0, 0.55);
+}
+
+.ctl-drawbar .cap-white {
+  background: linear-gradient(180deg, #f6f2ec 0%, #d8d2c9 58%, #a9a39b 100%);
+}
+
+.ctl-drawbar .cap-brown {
+  background: linear-gradient(180deg, #8f6437 0%, #654221 58%, #3d2712 100%);
+}
+
+.ctl-drawbar .cap-black {
+  background: linear-gradient(180deg, #3c4047 0%, #191b1f 58%, #05070a 100%);
+}
+
+.ctl-drawbar {
+  height: 100%;
+  justify-content: flex-end;
+  gap: 0.22cqh;
+}
+
+.ctl-drawbar .ctl-body {
+  height: 100%;
+  align-items: stretch;
+}
+
+.ctl-drawbar .ctl-track {
+  height: 100%;
+  max-height: none;
+}
+
+.ctl-drawbar .ctl-legend {
+  font-size: 0.27cqw;
+  white-space: normal;
+  line-height: 1.12;
+  min-height: 1.9em;
+}
+
+.ctl-drawbar .ctl-scale {
+  font-size: 0.22cqw;
+}
+
+/* --- LED ladders --- */
+
+.led-ladder {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  gap: 1px;
+  align-items: center;
+  height: 100%;
+  padding: 2% 0;
+}
+
+.led-ladder-dot {
+  width: 0.16cqw;
+  height: 0.16cqw;
+  min-width: 1.5px;
+  min-height: 1.5px;
+  border-radius: 50%;
+  background: #1a1d22;
+}
+
+.led-ladder-dot.lit {
+  background: var(--led-red);
+  box-shadow: 0 0 0.12cqw rgba(255, 59, 48, 0.8);
+}
+
+.ctl-drawbar .led-ladder {
+  height: 100%;
+}
+
+.ctl-fader .led-ladder {
+  height: 11cqh;
+}
+
+/* --- buttons and toggles --- */
+
+.ctl-toggle {
+  align-items: center;
+}
+
+.ctl-track-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.14cqw;
+  border: none;
+  border-radius: 0.06cqw;
+  padding: 0 0.1cqw;
+  width: 0.92cqw;
+  height: 0.52cqw;
+  background: linear-gradient(180deg, #4e535c 0%, #2c3037 54%, #1a1d22 100%);
+  box-shadow:
+    0 0.04cqw 0 rgba(255, 255, 255, 0.26) inset,
+    0 -0.04cqw 0 rgba(0, 0, 0, 0.55) inset,
+    0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  font: inherit;
+  outline: none;
+  flex: 0 0 auto;
+}
+
+.ctl-sm .ctl-track-toggle {
+  width: 0.8cqw;
+  height: 0.44cqw;
+}
+
+.ctl-md .ctl-track-toggle {
+  width: 1.1cqw;
+  height: 0.62cqw;
+}
+
+.ctl-lg .ctl-track-toggle {
+  width: 1.5cqw;
+  height: 0.78cqw;
+}
+
+.ctl-track-toggle .ctl-face {
+  position: absolute;
+  inset: 0.04cqw;
+  border-radius: 0.04cqw;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.1));
+  pointer-events: none;
+}
+
+.ctl-track-toggle.is-pressed {
+  background: linear-gradient(180deg, #24272d 0%, #363b42 100%);
+  box-shadow: 0 0.06cqw 0.1cqw rgba(0, 0, 0, 0.6) inset;
+}
+
+.ctl-track-toggle.is-on {
+  background: linear-gradient(180deg, #5d636d 0%, #2f343b 62%, #1b1e23 100%);
+}
+
+.led {
+  width: 0.2cqw;
+  height: 0.2cqw;
+  min-width: 1.6px;
+  min-height: 1.6px;
+  border-radius: 50%;
+  background: #1c1f25;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.led-red.lit,
+.is-on .led-red {
+  background: var(--led-red);
+  box-shadow: 0 0 0.16cqw rgba(255, 59, 48, 0.9);
+}
+
+.led-green.lit,
+.is-on .led-green {
+  background: var(--led-green);
+  box-shadow: 0 0 0.16cqw rgba(75, 224, 122, 0.9);
+}
+
+.led-amber.lit,
+.is-on .led-amber {
+  background: var(--led-amber);
+  box-shadow: 0 0 0.16cqw rgba(255, 176, 32, 0.9);
+}
+
+/* --- selectors --- */
+
+.ctl-selector {
+  align-items: stretch;
+  width: 100%;
+}
+
+.ctl-selector-options {
+  display: flex;
+  gap: 0.02cqw;
+  align-items: center;
+  min-width: 0;
+}
+
+.ctl-selector-column .ctl-selector-options {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ctl-selector-row .ctl-selector-options {
+  flex-direction: row;
+}
+
+.ctl-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1cqw;
+  padding: 0.02cqw 0.06cqw;
+  border: none;
+  border-radius: 0.04cqw;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  font-family: inherit;
+  font-size: 0.26cqw;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.3;
+  min-width: 0;
+  outline: none;
+  text-align: left;
+}
+
+.ctl-option.is-on {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ctl-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- pitch stick and mod wheel --- */
+
+.ctl-pitch-stick .ctl-track {
+  width: 0.62cqw;
+  height: 6.4cqh;
+  border-radius: 0.1cqw;
+  background: linear-gradient(90deg, #6d4b2b 0%, #ab7742 44%, #4d331b 100%);
+  box-shadow: 0 0.06cqw 0.12cqw rgba(0, 0, 0, 0.55) inset;
+}
+
+.ctl-wheel .ctl-track {
+  width: 0.95cqw;
+  height: 5.2cqh;
+  border-radius: 42%;
+  background: repeating-linear-gradient(0deg, #b8bbc1 0 1px, #6b6f77 1px 2.5px);
+  box-shadow: 0 0.06cqw 0.14cqw rgba(0, 0, 0, 0.55) inset;
+}
+
+.ctl-wheel .ctl-cap,
+.ctl-pitch-stick .ctl-cap {
+  display: none;
+}
+
+.ctl-wheel .ctl-indicator,
+.ctl-pitch-stick .ctl-indicator {
+  border-radius: 0.1cqw;
+}
+
+/* ================================= OLED ================================= */
+
+.glass {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.16cqh;
+  margin: 0 5% 0.4cqh;
+  padding: 2.2% 4% 1.8%;
+  border-radius: 0.1cqw;
+  background: linear-gradient(180deg, #0c1d18 0%, var(--oled-bg) 52%, #040b09 100%);
+  border: 0.06cqw solid #040706;
+  color: var(--oled-ink);
+  font-family: var(--mono);
+  box-shadow:
+    0 0 0 0.05cqw rgba(255, 255, 255, 0.08),
+    0 -0.08cqw 0.16cqw rgba(0, 0, 0, 0.65) inset,
+    0 0 1.4cqw rgba(60, 210, 165, 0.1) inset;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.glass-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4%;
+  font-size: 0.28cqw;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+}
+
+.glass-head {
+  color: var(--oled-dim);
+}
+
+.glass-bank {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--oled-ink);
+}
+
+.glass-status {
+  letter-spacing: 0.1em;
+  font-size: 0.92em;
+}
+
+.glass-title {
+  font-size: 0.5cqw;
+  letter-spacing: 0.05em;
+  color: #dbfff2;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.glass-voice {
+  justify-content: flex-start;
+  gap: 5%;
+}
+
+.glass-icon {
+  color: var(--oled-dim);
+  letter-spacing: 0.13em;
+  font-size: 0.9em;
+  flex: 0 0 auto;
+}
+
+.glass-value {
+  color: #bdf8e1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass-meta {
+  justify-content: flex-start;
+  gap: 2.5%;
+  flex-wrap: wrap;
+}
+
+.glass-chip {
+  border: 1px solid rgba(157, 242, 208, 0.22);
+  border-radius: 0.04cqw;
+  padding: 0.02cqw 0.1cqw;
+  color: var(--oled-dim);
+  font-size: 0.88em;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.glass-foot {
+  color: var(--oled-dim);
+  font-size: 0.24cqw;
+  line-height: 1.32;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 5%;
+}
+
+.tone-ok {
+  color: var(--oled-ink);
+}
+.tone-warn {
+  color: var(--oled-warn);
+}
+.tone-bad {
+  color: var(--oled-bad);
+}
+
+/* The program OLED sits directly under the preset row, above the eight buttons. */
+.section-program > .glass-program {
+  margin: 0 5% 0.5cqh;
+}
+
+.section-synth > .glass-synth {
+  /* The spec forbids a display spanning the synth band: this OLED stays narrow and the
+     control surface keeps the rest of the width. */
+  margin: 0 30% 0.6cqh 4.4%;
+  align-self: flex-start;
+  width: 40%;
+}
+
+/* ================================ keybed ================================ */
+
+.keybed-deck {
+  flex: 1 1 46%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.keybed {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: linear-gradient(180deg, #09090a 0%, #1a1b1d 5%, #101113 100%);
+  border-top: 0.08cqw solid rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.piano-key {
+  position: absolute;
+  bottom: 0;
+  border-radius: 0 0 0.1cqw 0.1cqw;
+  transition: background 45ms linear;
+}
+
+.key-white {
+  background: linear-gradient(180deg, #f4f4f2 0%, var(--key-white) 64%, var(--key-white-shade) 100%);
+  border-left: 0.04cqw solid rgba(0, 0, 0, 0.26);
+  box-shadow: 0 -0.08cqw 0 rgba(0, 0, 0, 0.3) inset;
+  z-index: 1;
+}
+
+.key-black {
+  background: linear-gradient(180deg, #262626 0%, var(--key-black) 46%, #000 100%);
+  border-radius: 0 0 0.06cqw 0.06cqw;
+  box-shadow:
+    0 -0.06cqw 0 rgba(255, 255, 255, 0.14) inset,
+    0 0.14cqw 0.2cqw rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+
+.key-white.is-held {
+  background: linear-gradient(180deg, #d6dbe0 0%, #b6bec6 62%, #949ea8 100%);
+}
+
+.key-black.is-held {
+  background: linear-gradient(180deg, #303a44 0%, #161e25 50%, #05080b 100%);
+}
+
+.key-white.is-sustained {
+  background: linear-gradient(180deg, #e9ecef 0%, #ced3d9 64%, #b4bbc3 100%);
+}
+
+.key-black.is-sustained {
+  background: linear-gradient(180deg, #2b2e34 0%, #14171b 50%, #06080a 100%);
+}
+
+.keybed-legend {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.octave-label {
+  position: absolute;
+  bottom: 0.16cqh;
+  transform: translateX(50%);
+  font-size: 0.26cqw;
+  letter-spacing: 0.06em;
+  color: rgba(24, 26, 30, 0.4);
+  text-align: center;
+  line-height: 1;
+}
+
+/* =============================== front rail ============================= */
+
+.front-rail {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.6%;
+  padding: 0.4cqh 1.4%;
+  background: linear-gradient(180deg, var(--chassis-dark) 0%, #470810 100%);
+  box-shadow: 0 -0.05cqw 0 rgba(255, 255, 255, 0.09) inset;
+}
+
+.pedal-unit {
+  display: flex;
+  align-items: center;
+  gap: 0.7cqw;
+}
+
+.pedal {
+  width: 2.1cqw;
+  height: 1.05cqh;
+  min-height: 7px;
+  border: none;
+  border-radius: 0.06cqw;
+  padding: 0;
+  cursor: pointer;
+  background: linear-gradient(180deg, #4c5159 0%, #262a30 62%, #13161a 100%);
+  box-shadow:
+    0 0.04cqw 0 rgba(255, 255, 255, 0.24) inset,
+    0 0.12cqw 0.18cqw rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+
+.pedal.is-down {
+  background: linear-gradient(180deg, #2b2f35 0%, #464b52 100%);
+  box-shadow: 0 0.06cqw 0.12cqw rgba(0, 0, 0, 0.7) inset;
+  transform: translateY(1px);
+}
+
+.pedal-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.06cqh;
+  font-size: 0.28cqw;
+  letter-spacing: 0.1em;
+  color: rgba(255, 235, 238, 0.66);
+  text-transform: uppercase;
+  line-height: 1.24;
+  white-space: nowrap;
+}
+
+.pedal-caption strong {
+  font-weight: 600;
+  color: #fff;
+}
+
+.rail-keys {
+  font-size: 0.24cqw;
+  letter-spacing: 0.16em;
+  color: rgba(255, 235, 238, 0.5);
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.rail-keys-sep {
+  margin: 0 0.3em;
+  opacity: 0.6;
+}
+
+.rail-serial {
+  font-size: 0.24cqw;
+  letter-spacing: 0.12em;
+  color: rgba(255, 235, 238, 0.36);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =========================================================================
+   Narrow: 390x844.
+   The deck is presented as a vertical stack of the same six sections in the
+   same order, so every landmark stays readable and nothing is cropped. The
+   keybed keeps its exact key count and fits the viewport width.
+   ========================================================================= */
+
+@media (max-width: 720px) {
+  .stage {
+    display: block;
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .instrument {
+    container-type: normal;
+    width: 100%;
+    max-width: none;
+    aspect-ratio: auto;
+    border-radius: 8px;
+    --k: 1;
+  }
+
+  .deck {
+    flex: 0 0 auto;
+    padding: 0 2px;
+  }
+
+  .rear-rail {
+    flex-basis: auto;
+    font-size: 7px;
+    padding: 6px 10px 2px;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .deck-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 8px 10px;
+  }
+
+  .section {
+    padding: 0;
+  }
+
+  .section.surface-inset-plate::before,
+  .section.surface-red-and-dark::before {
+    inset: 0;
+    border-radius: 4px;
+  }
+
+  .section-blocks {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: auto !important;
+    grid-template-areas: none !important;
+    gap: 10px 12px !important;
+    padding: 10px 12px 12px !important;
+  }
+
+  .section-blocks > .block {
+    grid-area: auto !important;
+    min-width: 0;
+  }
+
+  .section-organ .section-blocks,
+  .section-synth .section-blocks,
+  .section-effects .block-legend {
+  font-size: 0.29cqw;
+}
+
+.section-effects .ctl-legend {
+  font-size: 0.285cqw;
+}
+
+.section-effects .ctl-track-toggle {
+  width: 0.78cqw;
+  height: 0.4cqw;
+  min-width: 8px;
+  min-height: 5px;
+}
+
+.section-effects .ctl-option {
+  font-size: 0.245cqw;
+  padding: 0 0.03cqw;
+}
+
+.section-effects .section-blocks {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .section-performance .section-blocks {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .block-organ-drawbars {
+    grid-column: 1 / -1;
+  }
+
+  .block-controls {
+    gap: 8px 10px !important;
+  }
+
+  .block-legend {
+    font-size: 9px;
+  }
+
+  .block-note {
+    font-size: 8px;
+  }
+
+  .ctl-legend {
+    font-size: 8.5px;
+    white-space: normal;
+  }
+
+  .ctl-scale {
+    font-size: 7.5px;
+  }
+
+  .ctl-knob .ctl-track,
+  .ctl-dial .ctl-track {
+    width: 26px;
+    height: 26px;
+  }
+
+  .ctl-sm .ctl-track {
+    width: 20px;
+    height: 20px;
+  }
+
+  .ctl-lg .ctl-track {
+    width: 34px;
+    height: 34px;
+  }
+
+  .ctl-fader .ctl-track {
+    width: 10px;
+    height: 92px;
+  }
+
+  .ctl-fader .led-ladder {
+    height: 92px;
+  }
+
+  .ctl-drawbar .ctl-track {
+    width: 9px;
+    height: 118px;
+  }
+
+  .ctl-track-toggle,
+  .ctl-sm .ctl-track-toggle,
+  .ctl-md .ctl-track-toggle {
+    width: 30px;
+    height: 20px;
+  }
+
+  .ctl-lg .ctl-track-toggle {
+    width: 40px;
+    height: 24px;
+  }
+
+  .ctl-option {
+    font-size: 8.5px;
+    padding: 3px 5px;
+    min-height: 24px;
+    gap: 4px;
+  }
+
+  .led {
+    width: 5px;
+    height: 5px;
+    min-width: 5px;
+    min-height: 5px;
+  }
+
+  .led-ladder-dot {
+    width: 4px;
+    height: 4px;
+    min-width: 4px;
+    min-height: 4px;
+  }
+
+  .ctl-pitch-stick .ctl-track {
+    width: 16px;
+    height: 60px;
+  }
+
+  .ctl-wheel .ctl-track {
+    width: 24px;
+    height: 50px;
+  }
+
+  .brand-wordmark {
+    font-size: 22px;
+  }
+
+  .brand-stage {
+    font-size: 11px;
+  }
+
+  .brand-action {
+    font-size: 8px;
+  }
+
+  .branding {
+    padding: 0 2px 8px;
+  }
+
+  .glass {
+    margin: 8px 10px 6px;
+    padding: 8px 10px;
+    gap: 4px;
+    border-radius: 3px;
+  }
+
+  .section-program > .glass-program,
+  .section-synth > .glass-synth {
+    margin: 8px 10px 4px;
+  }
+
+  .glass-row {
+    font-size: 9px;
+  }
+
+  .glass-title {
+    font-size: 13px;
+  }
+
+  .glass-foot {
+    font-size: 8px;
+    white-space: normal;
+  }
+
+  .keybed-deck {
+    flex: 0 0 auto;
+    padding: 0 2px;
+  }
+
+  .keybed {
+    height: 150px;
+    flex: 0 0 150px;
+  }
+
+  .octave-label {
+    font-size: 6px;
+    bottom: 2px;
+  }
+
+  .front-rail {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 8px 10px;
+  }
+
+  .rail-keys {
+    font-size: 7px;
+    letter-spacing: 0.08em;
+    order: -1;
+    flex: 1 1 100%;
+  }
+
+  .pedal {
+    width: 52px;
+    height: 20px;
+    min-height: 20px;
+  }
+
+  .pedal-caption {
+    font-size: 8px;
+  }
+
+  .rail-keys {
+  font-size: 0.24cqw;
+  letter-spacing: 0.16em;
+  color: rgba(255, 235, 238, 0.5);
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.rail-keys-sep {
+  margin: 0 0.3em;
+  opacity: 0.6;
+}
+
+.rail-serial {
+    font-size: 7px;
+    white-space: normal;
+  }
+}
+
+/* Front-rail utilities: the two global actions that are functional in Phase 1. */
+.rail-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.6cqw;
+}
+
+.rail-tool {
+  height: 1.15cqh;
+  min-height: 8px;
+  padding: 0 0.6cqw;
+  border: 1px solid rgba(255, 235, 238, 0.28);
+  border-radius: 0.06cqw;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 235, 238, 0.8);
+  font-family: inherit;
+  font-size: 0.26cqw;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: none;
+}
+
+.rail-tool:hover {
+  background: rgba(0, 0, 0, 0.34);
+}
+
+@media (max-width: 720px) {
+  .rail-tool {
+    height: 26px;
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 9px;
+  }
+}
+
+/* Printed section legends, silkscreened on the chassis above each inset plate. */
+.section-print {
+  margin: 0;
+  padding: 1.2% 5% 0;
+  font-size: 0.31cqw;
+  font-weight: 700;
+  letter-spacing: 0.19em;
+  color: rgba(255, 255, 255, 0.72);
+  text-transform: uppercase;
+  line-height: 1.2;
+  flex: 0 0 auto;
+}
+
+.section-surface-exposed-chassis .section-print {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+/* With a printed legend, the block area starts where the plate starts. */
+.section > .section-print + .section-blocks {
+  flex: 1 1 auto;
+}
+
+/* ==========================================================================
+   Program editors — split points, keyboard zones and the morph sources.
+
+   The hardware reaches these with press-and-hold and Shift gestures, which a
+   browser cannot discover. They live in a collapsed strip under the deck, so
+   the section geometry, the 54/46 band split and the keybed are untouched
+   while the state stays editable. They are real controls: labelled, focusable,
+   and readable by assistive technology.
+   ========================================================================== */
+
+.program-editors {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2cqh;
+  padding: 0 0.6cqw 0.35cqh;
+  min-height: 0;
+}
+
+.editors-toggle {
+  height: 1.1cqh;
+  min-height: 9px;
+  padding: 0 0.7cqw;
+  border: 1px solid rgba(255, 235, 238, 0.3);
+  border-radius: 0.06cqw;
+  background: rgba(0, 0, 0, 0.24);
+  color: rgba(255, 235, 238, 0.85);
+  font-family: inherit;
+  font-size: 0.25cqw;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: none;
+}
+
+.editors-toggle:hover,
+.editors-toggle[aria-expanded='true'] {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 235, 238, 0.5);
+}
+
+.editors-toggle:focus-visible {
+  outline: 2px solid #ffe0a3;
+  outline-offset: 1px;
+}
+
+.editors-body {
+  position: absolute;
+  right: 0.6cqw;
+  bottom: 0.5cqh;
+  left: 0.6cqw;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 0.8cqw;
+  max-height: 26cqh;
+  padding: 0.7cqh 0.9cqw;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.16cqw;
+  background: linear-gradient(180deg, rgba(18, 20, 24, 0.97), rgba(9, 10, 12, 0.98));
+  box-shadow: 0 0.4cqw 1.2cqw rgba(0, 0, 0, 0.5);
+  color: #d8dee7;
+  font-size: 0.26cqw;
+  line-height: 1.35;
+}
+
+.editors-body[hidden] {
+  display: none;
+}
+
+.split-editor,
+.morph-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35cqh;
+  min-width: 0;
+}
+
+.split-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5cqw;
+}
+
+.split-title {
+  margin: 0;
+  font-size: 0.28cqw;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.62);
+  text-transform: uppercase;
+}
+
+.split-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28cqw;
+  padding: 0.1cqh 0.4cqw;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.05cqw;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.24cqw;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.split-toggle.is-on {
+  border-color: rgba(255, 176, 32, 0.6);
+}
+
+.split-toggle .led {
+  opacity: 0.22;
+}
+
+.split-toggle.is-on .led {
+  opacity: 1;
+  box-shadow: 0 0 0.3cqw rgba(255, 176, 32, 0.8);
+}
+
+.split-points {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4cqw;
+}
+
+.split-point {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12cqh;
+  padding: 0.25cqh 0.35cqw;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.06cqw;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.split-point-name {
+  font-size: 0.24cqw;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+}
+
+.split-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.2cqw;
+}
+
+.split-field-label {
+  font-size: 0.22cqw;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.06em;
+}
+
+.split-field select {
+  flex: 0 0 auto;
+  padding: 0.06cqh 0.14cqw;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.04cqw;
+  background: #14161b;
+  color: #dfe6ef;
+  font-family: inherit;
+  font-size: 0.23cqw;
+}
+
+.zone-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.23cqw;
+}
+
+.zone-caption {
+  padding-bottom: 0.2cqh;
+  text-align: left;
+  font-size: 0.22cqw;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.06em;
+}
+
+.zone-table th,
+.zone-table td {
+  padding: 0.07cqh 0.18cqw;
+  text-align: left;
+  font-weight: 400;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.zone-table thead th {
+  font-size: 0.21cqw;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+}
+
+.zone-range {
+  display: block;
+  font-size: 0.19cqw;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.32);
+  text-transform: none;
+}
+
+.zone-cell {
+  width: 0.85cqw;
+  height: 0.85cqw;
+  min-width: 10px;
+  min-height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.04cqw;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  padding: 0;
+}
+
+.zone-cell .led {
+  display: block;
+  margin: 0 auto;
+  opacity: 0.2;
+}
+
+.zone-cell.is-on {
+  border-color: rgba(75, 224, 122, 0.55);
+  background: rgba(75, 224, 122, 0.1);
+}
+
+.zone-cell.is-on .led {
+  opacity: 1;
+  box-shadow: 0 0 0.24cqw rgba(75, 224, 122, 0.8);
+}
+
+.morph-source {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15cqh;
+  padding: 0.25cqh 0.35cqw;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.06cqw;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.morph-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4cqw;
+}
+
+.morph-position {
+  display: flex;
+  align-items: center;
+  gap: 0.3cqw;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.morph-position input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: #ffb020;
+}
+
+.morph-readout {
+  font-family: var(--mono);
+  font-size: 0.21cqw;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 2.2em;
+  text-align: right;
+}
+
+.morph-clear {
+  padding: 0.06cqh 0.34cqw;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.04cqw;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.21cqw;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.morph-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.morph-empty {
+  margin: 0;
+  font-size: 0.21cqw;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.morph-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.06cqh;
+}
+
+.morph-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.3cqw;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 0.2cqw;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.morph-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.morph-range {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.morph-value {
+  color: #ffd48a;
+}
+
+.morph-item button {
+  padding: 0 0.18cqw;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.22cqw;
+  cursor: pointer;
+}
+
+/* The narrow viewport stacks the editors and scales their text up to a readable size. */
+@media (max-width: 720px) {
+  .editors-body {
+    grid-template-columns: 1fr;
+    position: static;
+    max-height: none;
+    font-size: 11px;
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .split-title,
+  .split-point-name,
+  .zone-table,
+  .zone-table thead th,
+  .zone-range,
+  .morph-item,
+  .morph-empty,
+  .morph-readout,
+  .morph-clear,
+  .editors-toggle {
+    font-size: 10px;
+  }
+
+  .split-field select,
+  .split-field-label {
+    font-size: 10px;
+  }
+
+  .morph-item button {
+    font-size: 13px;
+  }
+}

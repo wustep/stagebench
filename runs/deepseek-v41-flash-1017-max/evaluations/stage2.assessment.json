@@ -1,0 +1,258 @@
+{
+  "rubricVersion": "2.0.0",
+  "runId": "deepseek-v41-flash-1017-max",
+  "stage": 2,
+  "evaluator": "stagebench-blind-evaluator",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-10-27T00:41:54Z",
+  "summary": "Geometry, keybed, colour and inventory are spec-exact at 1440x900: 0.540/0.460 deck split, 0.948 width, aspect 3.095, section fractions within 1e-5, 73 keys (43/30, 0.61 black height) inside the keybed, 167/167 controls reachable, 5/5 colours, 0 forbidden. The Phase 2 audio is real but uneven. One AudioContext, three recorded sample sets and six distinct piano types work, and most piano detail controls measurably change output. In the live build, though, Ring Mod and the HP24 filter are silent, the Rotary does not modulate, and octave shift does nothing. All-effects bypass, group and global modes exist only in state, with no panel control. The effect panel shows stale values when FX focus changes layers. The artifact's evidence comes from a harness path that bypasses the live adapters, so it overclaims several of these. Narrow view stacks into a 4121 px column with a 9 px-key keybed at the bottom.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Live build (scratch/a1.mjs, destination analyser): C4 spectral centroid Grand 787 Hz, Upright 661, Electric 758, Clav 686, Digital 574, Misc 2179; E5 energy 1.17/0.90/1.48/0.83/1.34/0.83 — six types render differently.",
+            "build/samples ships 3 recorded sets: Salamander Grand 78 files/26 roots/3 vel layers, VSCO2 Upright 57 files, Greg Sullivan CP80 100 files (23 derived re-pitches), all declared in IMPLEMENTATION_DETAILS.json.",
+            "Spec asks for a tine or reed Electric; CP80 is an electric grand, so the Electric character is a stretch of piano.json sourceRules."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "Live A/B on C4 (scratch/fx.mjs, nopatch.mjs): Mod1 Ring Mod peak 0.0000 at amount 0/3/10 (dry 0.264); Amp HP24 peak 0.0000 at freq 0 and 10; LP24 at max freq max-RMS 0.0002.",
+            "Rotary via To Rotary: stereo side/mid 0.000 and identical AM for rotary off, on-slow and on-fast (scratch/rot.mjs); A-Pan 0.145 and ping-pong 0.558 prove the probe sees stereo.",
+            "Working units: Tremolo/Flanger/Phaser/Ensemble change level/modulation; Chorus side 0.926, Vibe spectral distance 7.7 dB vs 2.4 noise; delay feedback max tail 0.083; reverb tail grows Booth 0.0000 to Cath 0.0067; comp narrows modulation 0.072 to 0.020."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "Wrapped AudioContext in live build: exactly 1 context, 1 connection to destination, no console errors over full interaction pass.",
+            "Gain staging uneven: Amp JC raises max RMS 0.111 to 0.574 (+14 dB), Compressor max 0.305; reverb fully wet only 0.018 (-16 dB).",
+            "harness.html renders RM (0.046) and HP24 (0.086) fine but the live engine (adapters path) is silent for both, so the evidence path differs from the shipped graph; stress glissando peak 0.427 with no clipping."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "Layer A level Home gives silence and End max RMS 0.142; enabling B adds level (A+B 0.230 vs 0.111); A Grand + B Electric play together; enabling B moves FX focus LED to PIANO B and manual PIANO A focus works.",
+            "Octave up/down has no effect: C4 dominant bin stays 527.3 Hz after click, Enter and 3 downs (scratch/oct.mjs); display never shows octave.",
+            "Effects panel stale on focus change: with B focused the panel shows Reverb ON/wet 10 while B is dry (FX OFF); first press sets it false; back on A it shows OFF while A still reverberates (scratch/state2.mjs). No group-mode control exists."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Live C4 max RMS: KB Touch heavy 0.110 vs light 0.125; Dyn Comp 3 0.126 vs off 0.110; Unison 3 0.151, centroid 990; Timbre Soft 780 Hz, Mid 969, Bright 1252.",
+            "Soft Release energy 1.735 vs 1.611; String Res 1.883 vs 1.611; sustain tail 0.0066 with SUSTPED on vs 0 with SUSTPED off (space key); Master Level Home gives silence and End 0.144.",
+            "Timbre panel has no Off position; at load the MID LED is lit but the display and audio say Soft (centroid 789 = Soft, Mid measures 969)."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Stress: 6 chord hits of 17 mapped keys plus a pointer glissando across 73 keys: peak 0.427, display returns to 0/73 KEYS, 0A/0B VOICES, no errors.",
+            "Window blur while a key and pointer are held drops output to 0 RMS; PANIC rail button silences held notes (0 RMS).",
+            "With samples blocked (route abort) the chip reads PIANO NOT FOUND and the modelled fallback stays playable (max RMS 0.106), but the model line still says 'Salamander Grand (recorded)'."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "All six piano.type radios select and play: display shows Salamander Grand (recorded), Ivy Upright (recorded), CP80 Electric Grand (recorded), Clav D6 / Digital Layer / Mallet (modelled).",
+            "Samples load offline from build/samples (8.3 MB); library line goes from 78 to 178 samples after Electric is selected; no network beyond the static server.",
+            "Electric set is a CP80 electric grand rather than the tine/reed set specs/nord-stage-4.piano.json asks for."
+          ]
+        },
+        {
+          "id": "effectUnitCoverage",
+          "scoring": "judged",
+          "rating": 2,
+          "evidence": [
+            "Panel has every unit and listed type: Mod1 6, Mod2 6, Amp 7 (incl. To Rotary, LP/HP), Delay filter Off/LP/HP/BP, Reverb 6, Comp Fast, Rotary on/drive/speed (catalog.ts lines 857-944).",
+            "There is no Layer Effects ON (all-bypass), Piano group or Shift+On global control: EffectState.allOn/pianoGroup/global exist but no panel binding writes them (grep src/audio/panelBindings.ts).",
+            "Ring Mod and HP24 are silent and the Rotary does not modulate in the live build, so 3 of the reachable types/units don't process audio correctly."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 1,
+          "evidence": [
+            "IMPLEMENTATION_DETAILS.json scope.functional claims Piano group mode, Delay/Comp/Reverb global mode and the Layer Effects ON bypass, but none can be operated from the panel.",
+            "evidence/stage2-visual-audit.md lists octave down/up as functional and reports Ring Mod/HP24 as processed (harness-measured); the live build shows no octave pitch change and silence for RM/HP24.",
+            "Decorative declarations are accurate: Organ drawbar moves 8 to 7 with no sound, synth OLED text says 'Not available in this phase', and excluded items (pedal noise, variations) are inert."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "major",
+      "criterion": "effectAudibility",
+      "title": "Ring Mod and HP24 filter output silence in the live build",
+      "detail": "Peak 0.0000 for Mod1 RM at all amounts and Amp HP24 at all Freq settings (also LP24 ~0.0002 at max freq); the harness renders them, but the shipped engine path does not."
+    },
+    {
+      "severity": "major",
+      "criterion": "effectAudibility",
+      "title": "Rotary speaker produces no rotation",
+      "detail": "Via To Rotary, rotary off/on-slow/on-fast give identical stereo (side/mid 0.000) and AM; only a static tone change from routing is heard."
+    },
+    {
+      "severity": "major",
+      "criterion": "effectUnitCoverage",
+      "title": "No panel control for all-effects bypass, group or global mode",
+      "detail": "EffectState.allOn, pianoGroup and per-unit global are never written by any panel binding, yet IMPLEMENTATION_DETAILS lists them as functional."
+    },
+    {
+      "severity": "major",
+      "criterion": "panelState",
+      "title": "Effect controls show stale values after FX focus change",
+      "detail": "Switching focus A to B leaves the knobs/LEDs showing the previous layer; the next toggle press writes the inverse of the displayed value to the newly focused chain."
+    },
+    {
+      "severity": "major",
+      "criterion": "layerBehavior",
+      "title": "Piano octave shift does nothing",
+      "detail": "piano.octave.up/down leave the played pitch unchanged (dominant bin 527.3 Hz throughout) and no octave state is displayed."
+    },
+    {
+      "severity": "minor",
+      "criterion": "pianoControlDepth",
+      "title": "Timbre LED disagrees with engine at load; no Off position",
+      "detail": "MID LED lit while display/audio use Soft (centroid 789 vs 969 for Mid)."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Synth OLED hidden and several legends clipped/overlapping",
+      "detail": "Synth OLED painted under the plate; organ layer legends clipped; VOICE/VIBRATO overprints filter FREQ."
+    },
+    {
+      "severity": "minor",
+      "criterion": "narrowRetention",
+      "title": "Narrow layout puts a 9 px-key keybed 3900 px down",
+      "detail": "At 390x844 the page is 4121 px tall and no key is reachable without scrolling."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage2",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.54,
+          "keybedFraction": 0.46,
+          "widthFraction": 0.948,
+          "aspectRatio": 3.0952,
+          "sectionFractionMaxDeviation": 0
+        },
+        "evidence": [
+          "At 1440x900 (scratch/geom.mjs): instrument 1365.1x441.0 px; deck 238.16 px = 0.5400, keybed-deck 202.89 px = 0.4600; width 1365.1/1440 = 0.948; aspect 3.0952.",
+          "Section widths / deck: 0.1400, 0.2000, 0.0850, 0.1250, 0.2500, 0.2000 — max deviation 0.00001; no page overflow (scroll 1440x900)."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 33,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 167,
+          "controlsTotal": 167,
+          "forbiddenPresent": 0
+        },
+        "evidence": [
+          "All 33 sectionLandmarks are found in their own section (scratch/inv.mjs): rotary block, master level, stick, wheel and branding in performance; 9 drawbars and LED ladders in organ; program OLED, dial, 8 slots, morph x3 in program, etc. Synth OLED is in the DOM but painted under the plate.",
+          "5x5 elementFromPoint grid, unscrolled: 167/167 [data-control-id] controls and 244/244 interactive elements reachable (scratch/reach.mjs).",
+          "forbiddenDetection applied literally (scratch/forb.mjs): display elements only program OLED (1, wf 0.90) and synth OLED (wf 0.40 < 0.5); largest same-size control cluster 9 drawbars in organ (excluded by drawbar rule), synth 4, effects 7 (<8); performance band red. Count 0."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 73,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.61
+        },
+        "evidence": [
+          "73 [data-key-id] keys E1-E7, 43 white / 30 black; all 73 boxes inside the keybed rect (1365.1x189.7 at y 467.6).",
+          "White key 31.7x188.7 px, black 19.7x115.1 px gives height fraction 0.610; all 73 keys pass the hit test; pointer press plays notes."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "CIE76 on scratch/desk.png: chassis (140,30,41) dE 2.3 to chassisMid; front rail (75,9,16) dE 6.8 to chassisDark; plate (59,64,75) dE 0.9 to panelBlueGray.",
+          "Black key (17,17,17) dE 2.0 to keyBlack; white key (233,233,232) dE 4.6 to keyWhite — 5/5 within 12."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "2x crops (scratch/crop-*.png): knob caps with indicators, drawbar caps in coloured tabs, red LED ladders on layer faders, and silkscreen block legends read clearly at 1x.",
+          "Defects: organ LAYER column legends clipped at the plate edge ('PSTICK', 'B AUX KB'); drawbar footage labels overlap; synth 'VOICE / VIBRATO' overprints the filter FREQ knob; section titles are cut by the plates.",
+          "Synth OLED (136.5x21.8 at 803,253) is painted under the inset plate (elementFromPoint returns the section), so the synth shows no display."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "Program OLED tracks live state: 'A 80 ◂ Soft | B 60', model name, FX PIANO A/B, active units (REV/DLY/AMP ROT), voices, SUSTAIN, library status; fader LED ladder goes 6 to 0 lit when A level hits 0.",
+          "Effect knobs/switches don't refresh on FX focus change: B focused shows Reverb ON/wet 10 while B is dry; back on A the panel shows OFF while reverb plays (scratch/state2.mjs).",
+          "At load the Timbre MID LED disagrees with the engine's Soft; octave buttons show no state anywhere."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 2,
+        "evidence": [
+          "390x844 (scratch/narrow.png): no horizontal overflow (scrollWidth 390); the six sections stack vertically with legible controls and red chassis.",
+          "Page is 4121 px tall and the keybed starts at y 3898: 0 of 73 keys are hit-testable without scrolling, and keys are 9 px wide; 29/167 controls fall in the first viewport, so the silhouette is not retained."
+        ]
+      }
+    ]
+  }
+}

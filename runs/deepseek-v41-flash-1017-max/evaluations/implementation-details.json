@@ -1,0 +1,3146 @@
+{
+  "version": 1,
+  "runId": "deepseek-v41-flash-1017-max",
+  "generatedAt": "2026-10-27T02:40:48.703Z",
+  "description": "Generated from phase package manifests, detected audio assets, and benchmark-authored audio provenance.",
+  "phases": [
+    {
+      "phase": 1,
+      "phaseName": "Complete surface and basic piano",
+      "status": "complete",
+      "artifactPath": "runs/deepseek-v41-flash-1017-max/stage1",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Live synthesis only. One piano-like voice is generated in JavaScript from an additive partial bank with per-partial inharmonicity, per-partial decay, a deterministic hammer transient and a per-note release curve. The rendered samples are written into an AudioBuffer and played through Web Audio (source -> voice gain -> master gain -> destination). No recorded audio is loaded, bundled, fetched or streamed anywhere in this project.",
+        "generatedSources": [
+          {
+            "name": "Modelled piano voice",
+            "generator": "src/audio/pianoModel.ts",
+            "description": "Deterministic additive synthesis: up to 24 stretched partials per note (inharmonicity 0.00022 + 0.00085 * register), amplitudes tilted by 1/n^0.95 and rolled off by exp(-(n-1) * (1.05 - 0.98 * velocity)), plus a 14 ms deterministic noise burst shaped by the same velocity. Velocity changes both level (0.84 * v^1.25) and spectrum, so a hard stroke is brighter rather than merely louder.",
+            "renderedAs": "AudioBuffer via AudioContext.createBuffer, one per voice",
+            "licence": "Original work authored for this candidate. No third-party samples, IRs or impulse responses."
+          }
+        ],
+        "sampleSources": [],
+        "detectedFiles": [],
+        "notes": [
+          "The Program display labels the voice 'Modelled piano' so the interface never implies a recorded grand.",
+          "No sample set is used for any type, so the piano.json requirement for recorded Grand/Upright/Electric sets is out of Phase 1 scope and is not claimed here.",
+          "Polyphony is capped at 16 voices with deterministic oldest-first stealing; both the cap and the stealing order are covered by tests.",
+          "Sustain is a real lifecycle state: released notes are held while the pedal is down and damped when it lifts.",
+          "Master path: every voice connects through one master gain node at 0.72 fixed gain, then to destination. Nothing bypasses it.",
+          "Release is a scheduled gain curve (1 -> 0 over 0.46 to 0.18 s depending on register), applied to the voice's own gain node; the source is stopped just after the curve completes.",
+          "Velocity-0 strikes render silence rather than a very quiet note.",
+          "The engine reports its real state (idle / loading / ready / suspended / error / fallback) and the Program display prints it verbatim. A browser without Web Audio gets a 'NO AUDIO OUTPUT' fallback in which the keybed still responds but is honestly silent."
+        ]
+      }
+    },
+    {
+      "phase": 2,
+      "phaseName": "Piano library and working effects",
+      "status": "complete",
+      "artifactPath": "runs/deepseek-v41-flash-1017-max/stage2",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "node-web-audio-api",
+            "version": "^2.2.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "playwright",
+            "version": "^1.64.1"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Hybrid, and declared per type. Grand, Upright and Electric play bundled *recordings* (three separate licensed sample sets, shipped inside the build and loaded from the bundle with no network at runtime). Clav, Digital and Misc are *modelled*: they are generated in JavaScript from the additive partial bank in src/audio/pianoModel.ts, with per-model character applied in src/audio/pianoVoice.ts. Every voice — sampled or modelled — then runs through the same layer effect chain, layer level, master gain, limiter and single destination.",
+        "generatedSources": [
+          {
+            "name": "Modelled piano body (Grand/Upright/Electric asset-failure fallback)",
+            "generator": "src/audio/pianoModel.ts",
+            "description": "Deterministic additive synthesis used only when a recorded set fails to load. Up to 24 stretched partials with per-partial inharmonicity and decay, a deterministic hammer transient, velocity-dependent brightness, and a per-note damper release. This is never presented as a recording: the display reports 'Piano not found' and the library status reports state=fallback.",
+            "licence": "Original work authored for this candidate. No third-party samples, IRs or impulse responses."
+          },
+          {
+            "name": "Clav (modelled)",
+            "generator": "src/audio/pianoVoice.ts",
+            "description": "The additive model with a clavinet character: a fast exponential decay and an added third-harmonic transient for the plucked bite. Declared 'modelled' in the model catalogue and printed as 'Clav D6 (modelled)' in the display.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Digital (modelled)",
+            "generator": "src/audio/pianoVoice.ts",
+            "description": "The additive model with a clean digital-piano character: a gentle high roll-off, a slightly longer sustain and no hammer noise.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Misc mallet (modelled)",
+            "generator": "src/audio/pianoVoice.ts",
+            "description": "The additive model with a marimba/vibraphone character: a hard fast decay plus strong 4x and 7x partials.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Reverb impulse responses",
+            "generator": "src/audio/effectGraph.ts",
+            "description": "Six generated impulse responses (Room, Booth, Spring, Stage, Hall, Cathedral) built from a deterministic PRNG: a pre-delay, early reflections and an exponential noise tail whose length comes from the type's declared decay. Spring additionally has five dispersive taps. No recorded IRs are used.",
+            "licence": "Original work authored for this candidate.",
+            "entryPoint": "buildImpulseResponse"
+          },
+          {
+            "name": "Amp / cabinet / drive curves",
+            "generator": "src/audio/effectGraph.ts",
+            "description": "A fixed tanh soft-clip transfer curve shared by every saturator (drive is applied as input gain), plus a transparent-below-the-knee output ceiling curve. The Twin, JC and Small models are documented approximations built from a tone stack and cabinet corner frequencies, not measured impulse responses.",
+            "licence": "Original work authored for this candidate.",
+            "alsoGeneratedBy": [
+              "src/audio/nodes.ts"
+            ]
+          }
+        ],
+        "sampleSources": [
+          {
+            "name": "Salamander Grand Piano V3 — Yamaha C5",
+            "type": "Grand (recorded)",
+            "source": "https://github.com/sfzinstruments/SalamanderGrandPiano — recorded by Alexander Holm; original release at https://archive.org/details/SalamanderGrandPianoV3",
+            "author": "Alexander Holm",
+            "license": "CC BY 3.0 Unported (https://creativecommons.org/licenses/by/3.0/)",
+            "licenseFile": "public/samples/LICENSE-salamander.txt",
+            "attribution": "Salamander Grand Piano V3 by Alexander Holm, licensed CC BY 3.0. Trimmed to 3 s, converted to mono 44.1 kHz MP3; no EQ or other tone shaping applied.",
+            "processing": "Trim to 3.0 s with a 0.55 s fade-out; downmix to mono; resample to 44.1 kHz; MP3 encode at 96 kbps. Derived roots (where one exists) are pitch-shifted by at most 4 semitones using asetrate+atempo so duration is preserved; each such file is marked kind=derived in src/audio/sample-manifest.json.",
+            "files": [
+              "public/samples/grand/C1-v1.mp3",
+              "public/samples/grand/Ds1-v1.mp3",
+              "public/samples/grand/Fs1-v1.mp3",
+              "public/samples/grand/A1-v1.mp3",
+              "public/samples/grand/C2-v1.mp3",
+              "public/samples/grand/Ds2-v1.mp3",
+              "public/samples/grand/Fs2-v1.mp3",
+              "public/samples/grand/A2-v1.mp3",
+              "public/samples/grand/C3-v1.mp3",
+              "public/samples/grand/Ds3-v1.mp3",
+              "public/samples/grand/Fs3-v1.mp3",
+              "public/samples/grand/A3-v1.mp3",
+              "public/samples/grand/C4-v1.mp3",
+              "public/samples/grand/Ds4-v1.mp3",
+              "public/samples/grand/Fs4-v1.mp3",
+              "public/samples/grand/A4-v1.mp3",
+              "public/samples/grand/C5-v1.mp3",
+              "public/samples/grand/Ds5-v1.mp3",
+              "public/samples/grand/Fs5-v1.mp3",
+              "public/samples/grand/A5-v1.mp3",
+              "public/samples/grand/C6-v1.mp3",
+              "public/samples/grand/Ds6-v1.mp3",
+              "public/samples/grand/Fs6-v1.mp3",
+              "public/samples/grand/A6-v1.mp3",
+              "public/samples/grand/C7-v1.mp3",
+              "public/samples/grand/Ds7-v1.mp3",
+              "public/samples/grand/C1-v2.mp3",
+              "public/samples/grand/Ds1-v2.mp3",
+              "public/samples/grand/Fs1-v2.mp3",
+              "public/samples/grand/A1-v2.mp3",
+              "public/samples/grand/C2-v2.mp3",
+              "public/samples/grand/Ds2-v2.mp3",
+              "public/samples/grand/Fs2-v2.mp3",
+              "public/samples/grand/A2-v2.mp3",
+              "public/samples/grand/C3-v2.mp3",
+              "public/samples/grand/Ds3-v2.mp3",
+              "public/samples/grand/Fs3-v2.mp3",
+              "public/samples/grand/A3-v2.mp3",
+              "public/samples/grand/C4-v2.mp3",
+              "public/samples/grand/Ds4-v2.mp3",
+              "public/samples/grand/Fs4-v2.mp3",
+              "public/samples/grand/A4-v2.mp3",
+              "public/samples/grand/C5-v2.mp3",
+              "public/samples/grand/Ds5-v2.mp3",
+              "public/samples/grand/Fs5-v2.mp3",
+              "public/samples/grand/A5-v2.mp3",
+              "public/samples/grand/C6-v2.mp3",
+              "public/samples/grand/Ds6-v2.mp3",
+              "public/samples/grand/Fs6-v2.mp3",
+              "public/samples/grand/A6-v2.mp3",
+              "public/samples/grand/C7-v2.mp3",
+              "public/samples/grand/Ds7-v2.mp3",
+              "public/samples/grand/C1-v3.mp3",
+              "public/samples/grand/Ds1-v3.mp3",
+              "public/samples/grand/Fs1-v3.mp3",
+              "public/samples/grand/A1-v3.mp3",
+              "public/samples/grand/C2-v3.mp3",
+              "public/samples/grand/Ds2-v3.mp3",
+              "public/samples/grand/Fs2-v3.mp3",
+              "public/samples/grand/A2-v3.mp3",
+              "public/samples/grand/C3-v3.mp3",
+              "public/samples/grand/Ds3-v3.mp3",
+              "public/samples/grand/Fs3-v3.mp3",
+              "public/samples/grand/A3-v3.mp3",
+              "public/samples/grand/C4-v3.mp3",
+              "public/samples/grand/Ds4-v3.mp3",
+              "public/samples/grand/Fs4-v3.mp3",
+              "public/samples/grand/A4-v3.mp3",
+              "public/samples/grand/C5-v3.mp3",
+              "public/samples/grand/Ds5-v3.mp3",
+              "public/samples/grand/Fs5-v3.mp3",
+              "public/samples/grand/A5-v3.mp3",
+              "public/samples/grand/C6-v3.mp3",
+              "public/samples/grand/Ds6-v3.mp3",
+              "public/samples/grand/Fs6-v3.mp3",
+              "public/samples/grand/A6-v3.mp3",
+              "public/samples/grand/C7-v3.mp3",
+              "public/samples/grand/Ds7-v3.mp3"
+            ],
+            "fileCount": 78,
+            "recordedFileCount": 78,
+            "derivedFileCount": 0,
+            "rootNotes": [
+              24,
+              27,
+              30,
+              33,
+              36,
+              39,
+              42,
+              45,
+              48,
+              51,
+              54,
+              57,
+              60,
+              63,
+              66,
+              69,
+              72,
+              75,
+              78,
+              81,
+              84,
+              87,
+              90,
+              93,
+              96,
+              99
+            ],
+            "rootNoteCount": 26,
+            "velocityLayers": [
+              1,
+              2,
+              3
+            ],
+            "velocityLayerRanges": {
+              "1": [
+                1,
+                43
+              ],
+              "2": [
+                44,
+                80
+              ],
+              "3": [
+                81,
+                127
+              ]
+            },
+            "maxPlaybackShiftSemitones": 2,
+            "format": "mono 44.1 kHz MP3, 3.0 s with a 0.55 s fade-out"
+          },
+          {
+            "name": "VSCO 2 Community Edition — Upright Piano",
+            "type": "Upright (recorded)",
+            "source": "https://github.com/sgossner/VSCO-2-CE — 'Upright Piano' folder, recorded by Simon Dalzell of Ivy Audio, Winter 2015-16; redistributed by Versilian Studios LLC",
+            "author": "Simon Dalzell (Ivy Audio) / Versilian Studios LLC",
+            "license": "CC0 1.0 Universal (public domain dedication)",
+            "licenseFile": "public/samples/LICENSE-vsco2.txt",
+            "attribution": "VSCO 2 Community Edition Upright Piano, recorded by Simon Dalzell of Ivy Audio, released CC0 1.0 by Versilian Studios LLC.",
+            "processing": "Trim to 3.0 s with a 0.55 s fade-out; downmix to mono; resample to 44.1 kHz; MP3 encode at 96 kbps. No pitch shifting on any upright file (every root is an original recording).",
+            "files": [
+              "public/samples/upright/F1-v1.mp3",
+              "public/samples/upright/A1-v1.mp3",
+              "public/samples/upright/Cs2-v1.mp3",
+              "public/samples/upright/F2-v1.mp3",
+              "public/samples/upright/A2-v1.mp3",
+              "public/samples/upright/Cs3-v1.mp3",
+              "public/samples/upright/F3-v1.mp3",
+              "public/samples/upright/A3-v1.mp3",
+              "public/samples/upright/Cs4-v1.mp3",
+              "public/samples/upright/F4-v1.mp3",
+              "public/samples/upright/A4-v1.mp3",
+              "public/samples/upright/Cs5-v1.mp3",
+              "public/samples/upright/F5-v1.mp3",
+              "public/samples/upright/A5-v1.mp3",
+              "public/samples/upright/Cs6-v1.mp3",
+              "public/samples/upright/F6-v1.mp3",
+              "public/samples/upright/A6-v1.mp3",
+              "public/samples/upright/Cs7-v1.mp3",
+              "public/samples/upright/F7-v1.mp3",
+              "public/samples/upright/F1-v2.mp3",
+              "public/samples/upright/A1-v2.mp3",
+              "public/samples/upright/Cs2-v2.mp3",
+              "public/samples/upright/F2-v2.mp3",
+              "public/samples/upright/A2-v2.mp3",
+              "public/samples/upright/Cs3-v2.mp3",
+              "public/samples/upright/F3-v2.mp3",
+              "public/samples/upright/A3-v2.mp3",
+              "public/samples/upright/Cs4-v2.mp3",
+              "public/samples/upright/F4-v2.mp3",
+              "public/samples/upright/A4-v2.mp3",
+              "public/samples/upright/Cs5-v2.mp3",
+              "public/samples/upright/F5-v2.mp3",
+              "public/samples/upright/A5-v2.mp3",
+              "public/samples/upright/Cs6-v2.mp3",
+              "public/samples/upright/F6-v2.mp3",
+              "public/samples/upright/A6-v2.mp3",
+              "public/samples/upright/Cs7-v2.mp3",
+              "public/samples/upright/F7-v2.mp3",
+              "public/samples/upright/F1-v3.mp3",
+              "public/samples/upright/A1-v3.mp3",
+              "public/samples/upright/Cs2-v3.mp3",
+              "public/samples/upright/F2-v3.mp3",
+              "public/samples/upright/A2-v3.mp3",
+              "public/samples/upright/Cs3-v3.mp3",
+              "public/samples/upright/F3-v3.mp3",
+              "public/samples/upright/A3-v3.mp3",
+              "public/samples/upright/Cs4-v3.mp3",
+              "public/samples/upright/F4-v3.mp3",
+              "public/samples/upright/A4-v3.mp3",
+              "public/samples/upright/Cs5-v3.mp3",
+              "public/samples/upright/F5-v3.mp3",
+              "public/samples/upright/A5-v3.mp3",
+              "public/samples/upright/Cs6-v3.mp3",
+              "public/samples/upright/F6-v3.mp3",
+              "public/samples/upright/A6-v3.mp3",
+              "public/samples/upright/Cs7-v3.mp3",
+              "public/samples/upright/F7-v3.mp3"
+            ],
+            "fileCount": 57,
+            "recordedFileCount": 54,
+            "derivedFileCount": 3,
+            "rootNotes": [
+              29,
+              33,
+              37,
+              41,
+              45,
+              49,
+              53,
+              57,
+              61,
+              65,
+              69,
+              73,
+              77,
+              81,
+              85,
+              89,
+              93,
+              97,
+              101
+            ],
+            "rootNoteCount": 19,
+            "velocityLayers": [
+              1,
+              2,
+              3
+            ],
+            "velocityLayerRanges": {
+              "1": [
+                1,
+                43
+              ],
+              "2": [
+                44,
+                88
+              ],
+              "3": [
+                89,
+                127
+              ]
+            },
+            "maxPlaybackShiftSemitones": 2,
+            "format": "mono 44.1 kHz MP3, 3.0 s with a 0.55 s fade-out"
+          },
+          {
+            "name": "Greg Sullivan's E-Pianos — Yamaha CP80 Electric Grand",
+            "type": "Electric (recorded)",
+            "source": "https://github.com/sfzinstruments/GregSullivan.E-Pianos — 'CP80' instrument, sampled by Greg Sullivan (http://www.sullivang.net/), SFZ mapping by kinwie",
+            "author": "Greg Sullivan",
+            "license": "CC BY 3.0 Unported (https://creativecommons.org/licenses/by/3.0/)",
+            "licenseFile": "public/samples/LICENSE-gregsullivan-epianos.txt",
+            "attribution": "Yamaha CP80 Electric Grand from Greg Sullivan's E-Pianos, sampled by Greg Sullivan, licensed CC BY 3.0.",
+            "processing": "Trim to 3.0 s with a 0.55 s fade-out; downmix to mono; resample to 44.1 kHz; MP3 encode at 96 kbps. Derived roots are pitch-shifted by at most 4 semitones and marked kind=derived in the manifest.",
+            "files": [
+              "public/samples/electric/cp80/Ds1-v1.mp3",
+              "public/samples/electric/cp80/Fs1-v1.mp3",
+              "public/samples/electric/cp80/As1-v1.mp3",
+              "public/samples/electric/cp80/D2-v1.mp3",
+              "public/samples/electric/cp80/Fs2-v1.mp3",
+              "public/samples/electric/cp80/As2-v1.mp3",
+              "public/samples/electric/cp80/D3-v1.mp3",
+              "public/samples/electric/cp80/F3-v1.mp3",
+              "public/samples/electric/cp80/A3-v1.mp3",
+              "public/samples/electric/cp80/C4-v1.mp3",
+              "public/samples/electric/cp80/Ds4-v1.mp3",
+              "public/samples/electric/cp80/F4-v1.mp3",
+              "public/samples/electric/cp80/Gs4-v1.mp3",
+              "public/samples/electric/cp80/C5-v1.mp3",
+              "public/samples/electric/cp80/E5-v1.mp3",
+              "public/samples/electric/cp80/Gs5-v1.mp3",
+              "public/samples/electric/cp80/As5-v1.mp3",
+              "public/samples/electric/cp80/Cs6-v1.mp3",
+              "public/samples/electric/cp80/E6-v1.mp3",
+              "public/samples/electric/cp80/G6-v1.mp3",
+              "public/samples/electric/cp80/As6-v1.mp3",
+              "public/samples/electric/cp80/Cs7-v1.mp3",
+              "public/samples/electric/cp80/Ds7-v1.mp3",
+              "public/samples/electric/cp80/Fs7-v1.mp3",
+              "public/samples/electric/cp80/Gs7-v1.mp3",
+              "public/samples/electric/cp80/Ds1-v2.mp3",
+              "public/samples/electric/cp80/Fs1-v2.mp3",
+              "public/samples/electric/cp80/As1-v2.mp3",
+              "public/samples/electric/cp80/D2-v2.mp3",
+              "public/samples/electric/cp80/Fs2-v2.mp3",
+              "public/samples/electric/cp80/As2-v2.mp3",
+              "public/samples/electric/cp80/D3-v2.mp3",
+              "public/samples/electric/cp80/F3-v2.mp3",
+              "public/samples/electric/cp80/A3-v2.mp3",
+              "public/samples/electric/cp80/C4-v2.mp3",
+              "public/samples/electric/cp80/Ds4-v2.mp3",
+              "public/samples/electric/cp80/F4-v2.mp3",
+              "public/samples/electric/cp80/Gs4-v2.mp3",
+              "public/samples/electric/cp80/C5-v2.mp3",
+              "public/samples/electric/cp80/E5-v2.mp3",
+              "public/samples/electric/cp80/Gs5-v2.mp3",
+              "public/samples/electric/cp80/As5-v2.mp3",
+              "public/samples/electric/cp80/Cs6-v2.mp3",
+              "public/samples/electric/cp80/E6-v2.mp3",
+              "public/samples/electric/cp80/G6-v2.mp3",
+              "public/samples/electric/cp80/B6-v2.mp3",
+              "public/samples/electric/cp80/Cs7-v2.mp3",
+              "public/samples/electric/cp80/Ds7-v2.mp3",
+              "public/samples/electric/cp80/Fs7-v2.mp3",
+              "public/samples/electric/cp80/Gs7-v2.mp3",
+              "public/samples/electric/cp80/Ds1-v3.mp3",
+              "public/samples/electric/cp80/G1-v3.mp3",
+              "public/samples/electric/cp80/B1-v3.mp3",
+              "public/samples/electric/cp80/D2-v3.mp3",
+              "public/samples/electric/cp80/Fs2-v3.mp3",
+              "public/samples/electric/cp80/As2-v3.mp3",
+              "public/samples/electric/cp80/D3-v3.mp3",
+              "public/samples/electric/cp80/F3-v3.mp3",
+              "public/samples/electric/cp80/A3-v3.mp3",
+              "public/samples/electric/cp80/C4-v3.mp3",
+              "public/samples/electric/cp80/Ds4-v3.mp3",
+              "public/samples/electric/cp80/F4-v3.mp3",
+              "public/samples/electric/cp80/Gs4-v3.mp3",
+              "public/samples/electric/cp80/C5-v3.mp3",
+              "public/samples/electric/cp80/E5-v3.mp3",
+              "public/samples/electric/cp80/Gs5-v3.mp3",
+              "public/samples/electric/cp80/As5-v3.mp3",
+              "public/samples/electric/cp80/Cs6-v3.mp3",
+              "public/samples/electric/cp80/E6-v3.mp3",
+              "public/samples/electric/cp80/G6-v3.mp3",
+              "public/samples/electric/cp80/B6-v3.mp3",
+              "public/samples/electric/cp80/Cs7-v3.mp3",
+              "public/samples/electric/cp80/Ds7-v3.mp3",
+              "public/samples/electric/cp80/Fs7-v3.mp3",
+              "public/samples/electric/cp80/Gs7-v3.mp3",
+              "public/samples/electric/cp80/Ds1-v4.mp3",
+              "public/samples/electric/cp80/G1-v4.mp3",
+              "public/samples/electric/cp80/B1-v4.mp3",
+              "public/samples/electric/cp80/D2-v4.mp3",
+              "public/samples/electric/cp80/Fs2-v4.mp3",
+              "public/samples/electric/cp80/As2-v4.mp3",
+              "public/samples/electric/cp80/D3-v4.mp3",
+              "public/samples/electric/cp80/F3-v4.mp3",
+              "public/samples/electric/cp80/A3-v4.mp3",
+              "public/samples/electric/cp80/C4-v4.mp3",
+              "public/samples/electric/cp80/Ds4-v4.mp3",
+              "public/samples/electric/cp80/F4-v4.mp3",
+              "public/samples/electric/cp80/Gs4-v4.mp3",
+              "public/samples/electric/cp80/C5-v4.mp3",
+              "public/samples/electric/cp80/E5-v4.mp3",
+              "public/samples/electric/cp80/Gs5-v4.mp3",
+              "public/samples/electric/cp80/As5-v4.mp3",
+              "public/samples/electric/cp80/Cs6-v4.mp3",
+              "public/samples/electric/cp80/E6-v4.mp3",
+              "public/samples/electric/cp80/G6-v4.mp3",
+              "public/samples/electric/cp80/B6-v4.mp3",
+              "public/samples/electric/cp80/Cs7-v4.mp3",
+              "public/samples/electric/cp80/Ds7-v4.mp3",
+              "public/samples/electric/cp80/Fs7-v4.mp3",
+              "public/samples/electric/cp80/Gs7-v4.mp3"
+            ],
+            "fileCount": 100,
+            "recordedFileCount": 77,
+            "derivedFileCount": 23,
+            "rootNotes": [
+              27,
+              30,
+              31,
+              34,
+              35,
+              38,
+              42,
+              46,
+              50,
+              53,
+              57,
+              60,
+              63,
+              65,
+              68,
+              72,
+              76,
+              80,
+              82,
+              85,
+              88,
+              91,
+              94,
+              95,
+              97,
+              99,
+              102,
+              104
+            ],
+            "rootNoteCount": 28,
+            "velocityLayers": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "velocityLayerRanges": {
+              "1": [
+                1,
+                37
+              ],
+              "2": [
+                38,
+                69
+              ],
+              "3": [
+                70,
+                97
+              ],
+              "4": [
+                98,
+                127
+              ]
+            },
+            "maxPlaybackShiftSemitones": 2,
+            "format": "mono 44.1 kHz MP3, 3.0 s with a 0.55 s fade-out"
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/cp80/A3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/A3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/A3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/A3-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B1-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B6-v4.mp3",
+            "bytes": 29510
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v1.mp3",
+            "bytes": 35152
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v4.mp3",
+            "bytes": 34839
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v1.mp3",
+            "bytes": 35152
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v4.mp3",
+            "bytes": 34839
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v1.mp3",
+            "bytes": 30450
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v2.mp3",
+            "bytes": 33898
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v3.mp3",
+            "bytes": 31077
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v4.mp3",
+            "bytes": 33585
+          },
+          {
+            "path": "public/samples/electric/cp80/G1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G1-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v3.mp3",
+            "bytes": 30764
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v2.mp3",
+            "bytes": 35466
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v1.mp3",
+            "bytes": 30450
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v2.mp3",
+            "bytes": 33585
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v3.mp3",
+            "bytes": 30764
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v4.mp3",
+            "bytes": 33271
+          },
+          {
+            "path": "public/samples/grand/A1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C7-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds7-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/upright/A1-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A1-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A1-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A2-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A2-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A2-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A3-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A3-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A3-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A4-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A4-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A4-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A5-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A5-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A5-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A6-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A6-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A6-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs2-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs2-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs2-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs3-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs3-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs3-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs4-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs4-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs4-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs5-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs5-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs5-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs6-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs6-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs6-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs7-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs7-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs7-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F1-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F1-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F1-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F2-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F2-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F2-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F3-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F3-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F3-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F4-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F4-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F4-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F5-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F5-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F5-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F6-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F6-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F6-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F7-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F7-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F7-v3.mp3",
+            "bytes": 36795
+          }
+        ],
+        "notes": [
+          "Recorded and modelled sources are never mixed silently: the model catalogue declares each model's source, the Program display prints 'recorded' only for the three sample sets, and the library chip reports SAMPLES READY, LOADING SAMPLES, MODELLED or PIANO NOT FOUND.",
+          "Root notes and velocity layers are per file in src/audio/sample-manifest.json, which also marks every file as kind=recorded or kind=derived (a derived file is a re-pitched copy of a stated source root, used only to fill a gap wider than four semitones).",
+          "Per-file level trims live in src/audio/sample-gains.json. They are gains only — no EQ, compression or other tone shaping — measured from each file's own loudness so a quiet ppp layer is audible while the layer ordering stays natural.",
+          "Polyphony is 16 voices per layer with deterministic oldest-first stealing; each layer steals independently.",
+          "Sustain is a real per-layer route: SUSTPED decides whether the pedal holds that layer's notes, and lift damps exactly the layers it was holding.",
+          "Only the sustain pedal is implemented. Soft pedal, sostenuto and half-pedaling are deliberately not claimed, and MIDI CC66/CC67 are ignored rather than silently mapped.",
+          "Every audible parameter change uses a short ramp (setTargetAtTime, ~12-20 ms), and unit bypass is a crossfaded gain pair rather than a disconnect, so switching never clicks.",
+          "The chain output has a soft ceiling so panel EQ boosts (+/-15 dB) cannot leave a chain above full scale; below that knee the stage is transparent, and the master limiter remains the only stage that acts on normal playing.",
+          "Organ, Synth and Program audio are not implemented in this phase and are listed as unsupported below."
+        ]
+      }
+    },
+    {
+      "phase": 3,
+      "phaseName": "Complete Stage 4 system",
+      "status": "complete",
+      "artifactPath": "runs/deepseek-v41-flash-1017-max/stage3",
+      "libraries": {
+        "application": [
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "node-web-audio-api",
+            "version": "^2.2.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "playwright",
+            "version": "^1.64.1"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Hybrid, and declared per source. Grand, Upright and Electric play bundled *recordings* (three separate licensed sample sets loaded from the bundle). Clav, Digital and Misc are modelled additive synthesis. The Organ and Synth engines are live *synthesis* with no sample content at all: organ registrations are rendered to looped buffers from harmonic partial tables, and synth notes are rendered sample-by-sample from the oscillator, filter, envelope and LFO generators. Reverb impulse responses are generated at runtime; no recorded IRs are bundled. Every source is declared below, and no generated buffer is described as a recording.",
+        "generatedSources": [
+          {
+            "name": "Modelled piano body (Grand/Upright/Electric asset-failure fallback)",
+            "generator": "src/audio/pianoModel.ts",
+            "description": "Deterministic additive synthesis used only when a recorded set fails to load. Up to 24 stretched partials with per-partial inharmonicity and decay, a deterministic hammer transient, velocity-dependent brightness, and a per-note damper release. This is never presented as a recording: the display reports 'Piano not found' and the library status reports state=fallback.",
+            "licence": "Original work authored for this candidate. No third-party samples, IRs or impulse responses."
+          },
+          {
+            "name": "Clav (modelled)",
+            "generator": "src/audio/pianoVoice.ts",
+            "description": "The additive model with a clavinet character: a fast exponential decay and an added third-harmonic transient for the plucked bite. Declared 'modelled' in the model catalogue and printed as 'Clav D6 (modelled)' in the display.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Digital (modelled)",
+            "generator": "src/audio/pianoVoice.ts",
+            "description": "The additive model with a clean digital-piano character: a gentle high roll-off, a slightly longer sustain and no hammer noise.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Misc mallet (modelled)",
+            "generator": "src/audio/pianoVoice.ts",
+            "description": "The additive model with a marimba/vibraphone character: a hard fast decay plus strong 4x and 7x partials.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Reverb impulse responses",
+            "generator": "src/audio/effectGraph.ts",
+            "description": "Six generated impulse responses (Room, Booth, Spring, Stage, Hall, Cathedral) built from a deterministic PRNG: a pre-delay, early reflections and an exponential noise tail whose length comes from the type's declared decay. Spring additionally has five dispersive taps. No recorded IRs are used.",
+            "licence": "Original work authored for this candidate.",
+            "entryPoint": "buildImpulseResponse"
+          },
+          {
+            "name": "Amp / cabinet / drive curves",
+            "generator": "src/audio/effectGraph.ts",
+            "description": "A fixed tanh soft-clip transfer curve shared by every saturator (drive is applied as input gain), plus a transparent-below-the-knee output ceiling curve. The Twin, JC and Small models are documented approximations built from a tone stack and cabinet corner frequencies, not measured impulse responses.",
+            "licence": "Original work authored for this candidate.",
+            "alsoGeneratedBy": [
+              "src/audio/nodes.ts"
+            ]
+          },
+          {
+            "name": "Organ tonewheel registration (B3)",
+            "generator": "src/audio/organModel.ts",
+            "description": "Looped buffer rendered from nine sine partials at the tonewheel footage intervals, each with a low-level octave and twelfth leakage. No sample content.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Organ transistor registration (Vox)",
+            "generator": "src/audio/organModel.ts",
+            "description": "Seven reedy partials through a fixed formant, plus a filtered/unfiltered mix drawbar and a squared divider component. No sample content.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Organ register-sum registration (Farf)",
+            "generator": "src/audio/organModel.ts",
+            "description": "Nine on/off register selectors, each contributing its own voice character (flute, oboe, trumpet, string) as a harmonic series. No sample content.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Organ pipe registration (Pipe 1 and Pipe 2)",
+            "generator": "src/audio/organModel.ts",
+            "description": "Nine principal ranks, each a full harmonic series; Pipe 2 uses a brighter weighting of the same ranks. No sample content.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "B3 percussion and key click",
+            "generator": "src/audio/organModel.ts",
+            "description": "A single decaying envelope over the 2nd or 3rd harmonic for percussion, and a seeded short noise burst for the key click. Both generated at note on.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Synth oscillators",
+            "generator": "src/audio/synthModel.ts",
+            "description": "Pure shapes from band-limited single-cycle tables; a hard-synced oscillator; three- and six-saw Multi stacks; a seven-voice Super stack with spread panning; and a two-operator FM algorithm. No sample content.",
+            "licence": "Original work authored for this candidate."
+          },
+          {
+            "name": "Synth filter, envelopes and LFO",
+            "generator": "src/audio/synthModel.ts",
+            "description": "RBJ biquad coefficients for LP12/LP24/HP/BP with per-sample cutoff modulation, AD/AR envelopes, tanh drive, and five LFO waveforms including a seeded Sample & Hold. No sample content.",
+            "licence": "Original work authored for this candidate."
+          }
+        ],
+        "sampleSources": [
+          {
+            "name": "Salamander Grand Piano V3 — Yamaha C5",
+            "type": "Grand (recorded)",
+            "source": "https://github.com/sfzinstruments/SalamanderGrandPiano — recorded by Alexander Holm; original release at https://archive.org/details/SalamanderGrandPianoV3",
+            "author": "Alexander Holm",
+            "license": "CC BY 3.0 Unported (https://creativecommons.org/licenses/by/3.0/)",
+            "licenseFile": "public/samples/LICENSE-salamander.txt",
+            "attribution": "Salamander Grand Piano V3 by Alexander Holm, licensed CC BY 3.0. Trimmed to 3 s, converted to mono 44.1 kHz MP3; no EQ or other tone shaping applied.",
+            "processing": "Trim to 3.0 s with a 0.55 s fade-out; downmix to mono; resample to 44.1 kHz; MP3 encode at 96 kbps. Derived roots (where one exists) are pitch-shifted by at most 4 semitones using asetrate+atempo so duration is preserved; each such file is marked kind=derived in src/audio/sample-manifest.json.",
+            "files": [
+              "public/samples/grand/C1-v1.mp3",
+              "public/samples/grand/Ds1-v1.mp3",
+              "public/samples/grand/Fs1-v1.mp3",
+              "public/samples/grand/A1-v1.mp3",
+              "public/samples/grand/C2-v1.mp3",
+              "public/samples/grand/Ds2-v1.mp3",
+              "public/samples/grand/Fs2-v1.mp3",
+              "public/samples/grand/A2-v1.mp3",
+              "public/samples/grand/C3-v1.mp3",
+              "public/samples/grand/Ds3-v1.mp3",
+              "public/samples/grand/Fs3-v1.mp3",
+              "public/samples/grand/A3-v1.mp3",
+              "public/samples/grand/C4-v1.mp3",
+              "public/samples/grand/Ds4-v1.mp3",
+              "public/samples/grand/Fs4-v1.mp3",
+              "public/samples/grand/A4-v1.mp3",
+              "public/samples/grand/C5-v1.mp3",
+              "public/samples/grand/Ds5-v1.mp3",
+              "public/samples/grand/Fs5-v1.mp3",
+              "public/samples/grand/A5-v1.mp3",
+              "public/samples/grand/C6-v1.mp3",
+              "public/samples/grand/Ds6-v1.mp3",
+              "public/samples/grand/Fs6-v1.mp3",
+              "public/samples/grand/A6-v1.mp3",
+              "public/samples/grand/C7-v1.mp3",
+              "public/samples/grand/Ds7-v1.mp3",
+              "public/samples/grand/C1-v2.mp3",
+              "public/samples/grand/Ds1-v2.mp3",
+              "public/samples/grand/Fs1-v2.mp3",
+              "public/samples/grand/A1-v2.mp3",
+              "public/samples/grand/C2-v2.mp3",
+              "public/samples/grand/Ds2-v2.mp3",
+              "public/samples/grand/Fs2-v2.mp3",
+              "public/samples/grand/A2-v2.mp3",
+              "public/samples/grand/C3-v2.mp3",
+              "public/samples/grand/Ds3-v2.mp3",
+              "public/samples/grand/Fs3-v2.mp3",
+              "public/samples/grand/A3-v2.mp3",
+              "public/samples/grand/C4-v2.mp3",
+              "public/samples/grand/Ds4-v2.mp3",
+              "public/samples/grand/Fs4-v2.mp3",
+              "public/samples/grand/A4-v2.mp3",
+              "public/samples/grand/C5-v2.mp3",
+              "public/samples/grand/Ds5-v2.mp3",
+              "public/samples/grand/Fs5-v2.mp3",
+              "public/samples/grand/A5-v2.mp3",
+              "public/samples/grand/C6-v2.mp3",
+              "public/samples/grand/Ds6-v2.mp3",
+              "public/samples/grand/Fs6-v2.mp3",
+              "public/samples/grand/A6-v2.mp3",
+              "public/samples/grand/C7-v2.mp3",
+              "public/samples/grand/Ds7-v2.mp3",
+              "public/samples/grand/C1-v3.mp3",
+              "public/samples/grand/Ds1-v3.mp3",
+              "public/samples/grand/Fs1-v3.mp3",
+              "public/samples/grand/A1-v3.mp3",
+              "public/samples/grand/C2-v3.mp3",
+              "public/samples/grand/Ds2-v3.mp3",
+              "public/samples/grand/Fs2-v3.mp3",
+              "public/samples/grand/A2-v3.mp3",
+              "public/samples/grand/C3-v3.mp3",
+              "public/samples/grand/Ds3-v3.mp3",
+              "public/samples/grand/Fs3-v3.mp3",
+              "public/samples/grand/A3-v3.mp3",
+              "public/samples/grand/C4-v3.mp3",
+              "public/samples/grand/Ds4-v3.mp3",
+              "public/samples/grand/Fs4-v3.mp3",
+              "public/samples/grand/A4-v3.mp3",
+              "public/samples/grand/C5-v3.mp3",
+              "public/samples/grand/Ds5-v3.mp3",
+              "public/samples/grand/Fs5-v3.mp3",
+              "public/samples/grand/A5-v3.mp3",
+              "public/samples/grand/C6-v3.mp3",
+              "public/samples/grand/Ds6-v3.mp3",
+              "public/samples/grand/Fs6-v3.mp3",
+              "public/samples/grand/A6-v3.mp3",
+              "public/samples/grand/C7-v3.mp3",
+              "public/samples/grand/Ds7-v3.mp3"
+            ],
+            "fileCount": 78,
+            "recordedFileCount": 78,
+            "derivedFileCount": 0,
+            "rootNotes": [
+              24,
+              27,
+              30,
+              33,
+              36,
+              39,
+              42,
+              45,
+              48,
+              51,
+              54,
+              57,
+              60,
+              63,
+              66,
+              69,
+              72,
+              75,
+              78,
+              81,
+              84,
+              87,
+              90,
+              93,
+              96,
+              99
+            ],
+            "rootNoteCount": 26,
+            "velocityLayers": [
+              1,
+              2,
+              3
+            ],
+            "velocityLayerRanges": {
+              "1": [
+                1,
+                43
+              ],
+              "2": [
+                44,
+                80
+              ],
+              "3": [
+                81,
+                127
+              ]
+            },
+            "maxPlaybackShiftSemitones": 2,
+            "format": "mono 44.1 kHz MP3, 3.0 s with a 0.55 s fade-out"
+          },
+          {
+            "name": "VSCO 2 Community Edition — Upright Piano",
+            "type": "Upright (recorded)",
+            "source": "https://github.com/sgossner/VSCO-2-CE — 'Upright Piano' folder, recorded by Simon Dalzell of Ivy Audio, Winter 2015-16; redistributed by Versilian Studios LLC",
+            "author": "Simon Dalzell (Ivy Audio) / Versilian Studios LLC",
+            "license": "CC0 1.0 Universal (public domain dedication)",
+            "licenseFile": "public/samples/LICENSE-vsco2.txt",
+            "attribution": "VSCO 2 Community Edition Upright Piano, recorded by Simon Dalzell of Ivy Audio, released CC0 1.0 by Versilian Studios LLC.",
+            "processing": "Trim to 3.0 s with a 0.55 s fade-out; downmix to mono; resample to 44.1 kHz; MP3 encode at 96 kbps. No pitch shifting on any upright file (every root is an original recording).",
+            "files": [
+              "public/samples/upright/F1-v1.mp3",
+              "public/samples/upright/A1-v1.mp3",
+              "public/samples/upright/Cs2-v1.mp3",
+              "public/samples/upright/F2-v1.mp3",
+              "public/samples/upright/A2-v1.mp3",
+              "public/samples/upright/Cs3-v1.mp3",
+              "public/samples/upright/F3-v1.mp3",
+              "public/samples/upright/A3-v1.mp3",
+              "public/samples/upright/Cs4-v1.mp3",
+              "public/samples/upright/F4-v1.mp3",
+              "public/samples/upright/A4-v1.mp3",
+              "public/samples/upright/Cs5-v1.mp3",
+              "public/samples/upright/F5-v1.mp3",
+              "public/samples/upright/A5-v1.mp3",
+              "public/samples/upright/Cs6-v1.mp3",
+              "public/samples/upright/F6-v1.mp3",
+              "public/samples/upright/A6-v1.mp3",
+              "public/samples/upright/Cs7-v1.mp3",
+              "public/samples/upright/F7-v1.mp3",
+              "public/samples/upright/F1-v2.mp3",
+              "public/samples/upright/A1-v2.mp3",
+              "public/samples/upright/Cs2-v2.mp3",
+              "public/samples/upright/F2-v2.mp3",
+              "public/samples/upright/A2-v2.mp3",
+              "public/samples/upright/Cs3-v2.mp3",
+              "public/samples/upright/F3-v2.mp3",
+              "public/samples/upright/A3-v2.mp3",
+              "public/samples/upright/Cs4-v2.mp3",
+              "public/samples/upright/F4-v2.mp3",
+              "public/samples/upright/A4-v2.mp3",
+              "public/samples/upright/Cs5-v2.mp3",
+              "public/samples/upright/F5-v2.mp3",
+              "public/samples/upright/A5-v2.mp3",
+              "public/samples/upright/Cs6-v2.mp3",
+              "public/samples/upright/F6-v2.mp3",
+              "public/samples/upright/A6-v2.mp3",
+              "public/samples/upright/Cs7-v2.mp3",
+              "public/samples/upright/F7-v2.mp3",
+              "public/samples/upright/F1-v3.mp3",
+              "public/samples/upright/A1-v3.mp3",
+              "public/samples/upright/Cs2-v3.mp3",
+              "public/samples/upright/F2-v3.mp3",
+              "public/samples/upright/A2-v3.mp3",
+              "public/samples/upright/Cs3-v3.mp3",
+              "public/samples/upright/F3-v3.mp3",
+              "public/samples/upright/A3-v3.mp3",
+              "public/samples/upright/Cs4-v3.mp3",
+              "public/samples/upright/F4-v3.mp3",
+              "public/samples/upright/A4-v3.mp3",
+              "public/samples/upright/Cs5-v3.mp3",
+              "public/samples/upright/F5-v3.mp3",
+              "public/samples/upright/A5-v3.mp3",
+              "public/samples/upright/Cs6-v3.mp3",
+              "public/samples/upright/F6-v3.mp3",
+              "public/samples/upright/A6-v3.mp3",
+              "public/samples/upright/Cs7-v3.mp3",
+              "public/samples/upright/F7-v3.mp3"
+            ],
+            "fileCount": 57,
+            "recordedFileCount": 54,
+            "derivedFileCount": 3,
+            "rootNotes": [
+              29,
+              33,
+              37,
+              41,
+              45,
+              49,
+              53,
+              57,
+              61,
+              65,
+              69,
+              73,
+              77,
+              81,
+              85,
+              89,
+              93,
+              97,
+              101
+            ],
+            "rootNoteCount": 19,
+            "velocityLayers": [
+              1,
+              2,
+              3
+            ],
+            "velocityLayerRanges": {
+              "1": [
+                1,
+                43
+              ],
+              "2": [
+                44,
+                88
+              ],
+              "3": [
+                89,
+                127
+              ]
+            },
+            "maxPlaybackShiftSemitones": 2,
+            "format": "mono 44.1 kHz MP3, 3.0 s with a 0.55 s fade-out"
+          },
+          {
+            "name": "Greg Sullivan's E-Pianos — Yamaha CP80 Electric Grand",
+            "type": "Electric (recorded)",
+            "source": "https://github.com/sfzinstruments/GregSullivan.E-Pianos — 'CP80' instrument, sampled by Greg Sullivan (http://www.sullivang.net/), SFZ mapping by kinwie",
+            "author": "Greg Sullivan",
+            "license": "CC BY 3.0 Unported (https://creativecommons.org/licenses/by/3.0/)",
+            "licenseFile": "public/samples/LICENSE-gregsullivan-epianos.txt",
+            "attribution": "Yamaha CP80 Electric Grand from Greg Sullivan's E-Pianos, sampled by Greg Sullivan, licensed CC BY 3.0.",
+            "processing": "Trim to 3.0 s with a 0.55 s fade-out; downmix to mono; resample to 44.1 kHz; MP3 encode at 96 kbps. Derived roots are pitch-shifted by at most 4 semitones and marked kind=derived in the manifest.",
+            "files": [
+              "public/samples/electric/cp80/Ds1-v1.mp3",
+              "public/samples/electric/cp80/Fs1-v1.mp3",
+              "public/samples/electric/cp80/As1-v1.mp3",
+              "public/samples/electric/cp80/D2-v1.mp3",
+              "public/samples/electric/cp80/Fs2-v1.mp3",
+              "public/samples/electric/cp80/As2-v1.mp3",
+              "public/samples/electric/cp80/D3-v1.mp3",
+              "public/samples/electric/cp80/F3-v1.mp3",
+              "public/samples/electric/cp80/A3-v1.mp3",
+              "public/samples/electric/cp80/C4-v1.mp3",
+              "public/samples/electric/cp80/Ds4-v1.mp3",
+              "public/samples/electric/cp80/F4-v1.mp3",
+              "public/samples/electric/cp80/Gs4-v1.mp3",
+              "public/samples/electric/cp80/C5-v1.mp3",
+              "public/samples/electric/cp80/E5-v1.mp3",
+              "public/samples/electric/cp80/Gs5-v1.mp3",
+              "public/samples/electric/cp80/As5-v1.mp3",
+              "public/samples/electric/cp80/Cs6-v1.mp3",
+              "public/samples/electric/cp80/E6-v1.mp3",
+              "public/samples/electric/cp80/G6-v1.mp3",
+              "public/samples/electric/cp80/As6-v1.mp3",
+              "public/samples/electric/cp80/Cs7-v1.mp3",
+              "public/samples/electric/cp80/Ds7-v1.mp3",
+              "public/samples/electric/cp80/Fs7-v1.mp3",
+              "public/samples/electric/cp80/Gs7-v1.mp3",
+              "public/samples/electric/cp80/Ds1-v2.mp3",
+              "public/samples/electric/cp80/Fs1-v2.mp3",
+              "public/samples/electric/cp80/As1-v2.mp3",
+              "public/samples/electric/cp80/D2-v2.mp3",
+              "public/samples/electric/cp80/Fs2-v2.mp3",
+              "public/samples/electric/cp80/As2-v2.mp3",
+              "public/samples/electric/cp80/D3-v2.mp3",
+              "public/samples/electric/cp80/F3-v2.mp3",
+              "public/samples/electric/cp80/A3-v2.mp3",
+              "public/samples/electric/cp80/C4-v2.mp3",
+              "public/samples/electric/cp80/Ds4-v2.mp3",
+              "public/samples/electric/cp80/F4-v2.mp3",
+              "public/samples/electric/cp80/Gs4-v2.mp3",
+              "public/samples/electric/cp80/C5-v2.mp3",
+              "public/samples/electric/cp80/E5-v2.mp3",
+              "public/samples/electric/cp80/Gs5-v2.mp3",
+              "public/samples/electric/cp80/As5-v2.mp3",
+              "public/samples/electric/cp80/Cs6-v2.mp3",
+              "public/samples/electric/cp80/E6-v2.mp3",
+              "public/samples/electric/cp80/G6-v2.mp3",
+              "public/samples/electric/cp80/B6-v2.mp3",
+              "public/samples/electric/cp80/Cs7-v2.mp3",
+              "public/samples/electric/cp80/Ds7-v2.mp3",
+              "public/samples/electric/cp80/Fs7-v2.mp3",
+              "public/samples/electric/cp80/Gs7-v2.mp3",
+              "public/samples/electric/cp80/Ds1-v3.mp3",
+              "public/samples/electric/cp80/G1-v3.mp3",
+              "public/samples/electric/cp80/B1-v3.mp3",
+              "public/samples/electric/cp80/D2-v3.mp3",
+              "public/samples/electric/cp80/Fs2-v3.mp3",
+              "public/samples/electric/cp80/As2-v3.mp3",
+              "public/samples/electric/cp80/D3-v3.mp3",
+              "public/samples/electric/cp80/F3-v3.mp3",
+              "public/samples/electric/cp80/A3-v3.mp3",
+              "public/samples/electric/cp80/C4-v3.mp3",
+              "public/samples/electric/cp80/Ds4-v3.mp3",
+              "public/samples/electric/cp80/F4-v3.mp3",
+              "public/samples/electric/cp80/Gs4-v3.mp3",
+              "public/samples/electric/cp80/C5-v3.mp3",
+              "public/samples/electric/cp80/E5-v3.mp3",
+              "public/samples/electric/cp80/Gs5-v3.mp3",
+              "public/samples/electric/cp80/As5-v3.mp3",
+              "public/samples/electric/cp80/Cs6-v3.mp3",
+              "public/samples/electric/cp80/E6-v3.mp3",
+              "public/samples/electric/cp80/G6-v3.mp3",
+              "public/samples/electric/cp80/B6-v3.mp3",
+              "public/samples/electric/cp80/Cs7-v3.mp3",
+              "public/samples/electric/cp80/Ds7-v3.mp3",
+              "public/samples/electric/cp80/Fs7-v3.mp3",
+              "public/samples/electric/cp80/Gs7-v3.mp3",
+              "public/samples/electric/cp80/Ds1-v4.mp3",
+              "public/samples/electric/cp80/G1-v4.mp3",
+              "public/samples/electric/cp80/B1-v4.mp3",
+              "public/samples/electric/cp80/D2-v4.mp3",
+              "public/samples/electric/cp80/Fs2-v4.mp3",
+              "public/samples/electric/cp80/As2-v4.mp3",
+              "public/samples/electric/cp80/D3-v4.mp3",
+              "public/samples/electric/cp80/F3-v4.mp3",
+              "public/samples/electric/cp80/A3-v4.mp3",
+              "public/samples/electric/cp80/C4-v4.mp3",
+              "public/samples/electric/cp80/Ds4-v4.mp3",
+              "public/samples/electric/cp80/F4-v4.mp3",
+              "public/samples/electric/cp80/Gs4-v4.mp3",
+              "public/samples/electric/cp80/C5-v4.mp3",
+              "public/samples/electric/cp80/E5-v4.mp3",
+              "public/samples/electric/cp80/Gs5-v4.mp3",
+              "public/samples/electric/cp80/As5-v4.mp3",
+              "public/samples/electric/cp80/Cs6-v4.mp3",
+              "public/samples/electric/cp80/E6-v4.mp3",
+              "public/samples/electric/cp80/G6-v4.mp3",
+              "public/samples/electric/cp80/B6-v4.mp3",
+              "public/samples/electric/cp80/Cs7-v4.mp3",
+              "public/samples/electric/cp80/Ds7-v4.mp3",
+              "public/samples/electric/cp80/Fs7-v4.mp3",
+              "public/samples/electric/cp80/Gs7-v4.mp3"
+            ],
+            "fileCount": 100,
+            "recordedFileCount": 77,
+            "derivedFileCount": 23,
+            "rootNotes": [
+              27,
+              30,
+              31,
+              34,
+              35,
+              38,
+              42,
+              46,
+              50,
+              53,
+              57,
+              60,
+              63,
+              65,
+              68,
+              72,
+              76,
+              80,
+              82,
+              85,
+              88,
+              91,
+              94,
+              95,
+              97,
+              99,
+              102,
+              104
+            ],
+            "rootNoteCount": 28,
+            "velocityLayers": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "velocityLayerRanges": {
+              "1": [
+                1,
+                37
+              ],
+              "2": [
+                38,
+                69
+              ],
+              "3": [
+                70,
+                97
+              ],
+              "4": [
+                98,
+                127
+              ]
+            },
+            "maxPlaybackShiftSemitones": 2,
+            "format": "mono 44.1 kHz MP3, 3.0 s with a 0.55 s fade-out"
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/cp80/A3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/A3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/A3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/A3-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As2-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/As6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B1-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/B6-v4.mp3",
+            "bytes": 29510
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/C5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs6-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v1.mp3",
+            "bytes": 35152
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Cs7-v4.mp3",
+            "bytes": 34839
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D2-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/D3-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds1-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v1.mp3",
+            "bytes": 35152
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Ds7-v4.mp3",
+            "bytes": 34839
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/E6-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F3-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/F4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs2-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v1.mp3",
+            "bytes": 30450
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v2.mp3",
+            "bytes": 33898
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v3.mp3",
+            "bytes": 31077
+          },
+          {
+            "path": "public/samples/electric/cp80/Fs7-v4.mp3",
+            "bytes": 33585
+          },
+          {
+            "path": "public/samples/electric/cp80/G1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G1-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v3.mp3",
+            "bytes": 30764
+          },
+          {
+            "path": "public/samples/electric/cp80/G6-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs4-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v2.mp3",
+            "bytes": 35466
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs5-v4.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v1.mp3",
+            "bytes": 30450
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v2.mp3",
+            "bytes": 33585
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v3.mp3",
+            "bytes": 30764
+          },
+          {
+            "path": "public/samples/electric/cp80/Gs7-v4.mp3",
+            "bytes": 33271
+          },
+          {
+            "path": "public/samples/grand/A1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/A6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C7-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/C7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds7-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds7-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Ds7-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs1-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs1-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs1-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs2-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs2-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs2-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs3-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs3-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs3-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs4-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs4-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs4-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs5-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs5-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs5-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs6-v1.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs6-v2.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/grand/Fs6-v3.mp3",
+            "bytes": 36719
+          },
+          {
+            "path": "public/samples/upright/A1-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A1-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A1-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A2-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A2-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A2-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A3-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A3-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A3-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A4-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A4-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A4-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A5-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A5-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A5-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A6-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/A6-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/A6-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs2-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs2-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs2-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs3-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs3-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs3-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs4-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs4-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs4-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs5-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs5-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs5-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs6-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs6-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs6-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs7-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/Cs7-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/Cs7-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F1-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F1-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F1-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F2-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F2-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F2-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F3-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F3-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F3-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F4-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F4-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F4-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F5-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F5-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F5-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F6-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F6-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F6-v3.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F7-v1.mp3",
+            "bytes": 36794
+          },
+          {
+            "path": "public/samples/upright/F7-v2.mp3",
+            "bytes": 36795
+          },
+          {
+            "path": "public/samples/upright/F7-v3.mp3",
+            "bytes": 36795
+          }
+        ],
+        "notes": [
+          "Recorded and modelled sources are never mixed silently: the model catalogue declares each model's source, the Program display prints 'recorded' only for the three sample sets, and the library chip reports SAMPLES READY, LOADING SAMPLES, MODELLED or PIANO NOT FOUND.",
+          "Root notes and velocity layers are per file in src/audio/sample-manifest.json, which also marks every file as kind=recorded or kind=derived (a derived file is a re-pitched copy of a stated source root, used only to fill a gap wider than four semitones).",
+          "Per-file level trims live in src/audio/sample-gains.json. They are gains only — no EQ, compression or other tone shaping — measured from each file's own loudness so a quiet ppp layer is audible while the layer ordering stays natural.",
+          "Polyphony is 16 voices per layer with deterministic oldest-first stealing; each layer steals independently.",
+          "Sustain is a real per-layer route: SUSTPED decides whether the pedal holds that layer's notes, and lift damps exactly the layers it was holding.",
+          "Only the sustain pedal is implemented. Soft pedal, sostenuto and half-pedaling are deliberately not claimed, and MIDI CC66/CC67 are ignored rather than silently mapped.",
+          "Every audible parameter change uses a short ramp (setTargetAtTime, ~12-20 ms), and unit bypass is a crossfaded gain pair rather than a disconnect, so switching never clicks.",
+          "The chain output has a soft ceiling so panel EQ boosts (+/-15 dB) cannot leave a chain above full scale; below that knee the stage is transparent, and the master limiter remains the only stage that acts on normal playing.",
+          "The Organ and Synth engines contain no recorded audio. Their buffers are rendered at runtime from the tables and generators in src/audio/organModel.ts and src/audio/synthModel.ts, and are described as synthesis everywhere.",
+          "Every rendered organ registration is a seamless whole-cycle loop whose pitch is corrected by the source's playback rate, so the played note is in tune rather than a few cents sharp.",
+          "Synth voices are rendered to a buffer and played as one source. The array the browser plays is the array the tests measure, which is why the filter, envelope and LFO claims are asserted sample-for-sample.",
+          "The arpeggiator steps on an injected clock, so a fixed tempo and note set produce a deterministic sequence in the tests.",
+          "Master Level is a performance control and is deliberately absent from the program state, so a program change neither stores nor restores it."
+        ]
+      }
+    }
+  ]
+}
