@@ -41,4 +41,7 @@ pnpm bench new --model <model-id> --target <1|2|3> [--variant stage-4-73] [--tit
 
 ## Finish
 
-When all selected phases are sealed and scored, the run is complete and already indexed. Verify the gallery renders it (`pnpm dev`) and report the phase scores, aggregate, preview link, and report link to the user.
+When all selected phases are sealed and scored, generate the gallery hover thumbnail before committing or publishing the run:
+
+1. `pnpm bench thumbs <run-id>` — shoot the published preview and write `public/previews/<run-id>/stage<N>/thumb.jpg`, where `stage<N>` is the stage in that run's `previewPath`. The gallery derives the hover URL from `previewPath` by replacing `index.html` with `thumb.jpg`. A published preview without this file still plays; its leaderboard row simply shows no hover card. This does not re-seal, re-score, or edit `run.json`.
+2. The run is already indexed. Verify the gallery renders it (`pnpm dev`), including the hover thumbnail on the new row, and report the phase scores, aggregate, preview link, and report link to the user.

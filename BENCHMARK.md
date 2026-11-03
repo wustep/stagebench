@@ -36,6 +36,14 @@ pnpm bench seal <run-id>      # per phase: import + checks + capture + verify + 
 pnpm bench score <run-id>     # per phase: run twice — builds the evaluator workspace, then registers the filled assessment
 ```
 
+After the selected phases are sealed and scored, and before committing or publishing the run, generate the gallery hover thumbnail from the published preview:
+
+```sh
+pnpm bench thumbs <run-id>
+```
+
+`thumbs` screenshots the published build at `public/previews/<run-id>/stage<N>/` (the stage named by `previewPath`) and writes `thumb.jpg` next to `index.html`. The gallery addresses that image by swapping `index.html` for `thumb.jpg` on `previewPath`, so the run record gains no new field. A published preview without `thumb.jpg` still plays; its leaderboard row simply has no hover card. The command does not re-seal or re-score.
+
 **Workspaces live outside the repo.** All transient workspaces (implementation, evaluation, gate scratch) are created under `~/.stagebench/<repo-key>/` — never inside the repository tree — so a candidate or evaluator agent cannot reach `runs/`, `showcase/`, or other solutions with a relative `../..`. Override the base with `STAGEBENCH_HOME`. `pnpm bench clean <run-id>` (or `--all`) removes them; `bench status` surfaces any that linger.
 
 **Implementation isolation.** `start` builds `<home>/work/<id>/stage<N>/` containing `candidate/` (the starter, or the preceding sealed artifact) and `inputs/` with exactly the phase's materials: the phase prompt, the assigned specs, `TASK.md` and `specs/benchmark-phases.json` filtered to phases ≤ the current one, only the assigned variant's entry (also pinned as `defaultVariant`), the implementation-details schema, the manual, and the variant photo. The implementation agent works there and never sees `runs/`, other solutions, future phase details, scoring materials, or the harness. For hard isolation, run the candidate's commands inside Docker: `pnpm bench exec <run-id> --command "pnpm test"` mounts the candidate writable and the inputs read-only with no network (pass `--network registry` to allow package installs).
@@ -75,4 +83,4 @@ Running `bench score` again validates the assessment, confirms the sealed digest
 
 ## Run records
 
-`runs/<id>/run.json` is the only authoritative run record; `src/data/runs.json` is a generated projection (`pnpm bench reindex`, run automatically before dev/build). Sealed phases record artifact digests; scored phases record evaluations and static HTML reports under `public/reports/<id>/`.
+`runs/<id>/run.json` is the only authoritative run record; `src/data/runs.json` is a generated projection (`pnpm bench reindex`, run automatically before dev/build). Sealed phases record artifact digests; scored phases record evaluations and static HTML reports under `public/reports/<id>/`. Gallery hover thumbnails are `public/previews/<id>/stage<N>/thumb.jpg`, produced by `pnpm bench thumbs <id>` after the preview is published.
