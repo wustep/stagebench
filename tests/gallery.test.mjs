@@ -119,3 +119,19 @@ test('viewer search validates run ids and phase shape, falling back on garbage',
   // A valid in-range phase is still honored.
   assert.deepEqual(parseViewerSearch(`?run=${pianoOnly.id}&phase=1`, [pianoOnly]), { run: pianoOnly, phase: 1 })
 })
+
+// Token telemetry is not comparable across harnesses yet, so the leaderboard
+// and run drawer hide it while the data contract (runs.json) keeps it.
+test('the gallery leaderboard and run drawer do not render token counts', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../src/components/RunList.tsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, />\s*Tokens\s*</, 'no Tokens column heading')
+  for (const label of ['Total tokens', 'Tokens in', 'Tokens out', 'Reasoning']) {
+    assert.equal(source.includes(label), false, `run drawer does not render "${label}"`)
+  }
+  assert.equal(source.includes('formatTokens'), false, 'no token cell in the row')
+  assert.ok(source.includes('>Time<'), 'Time column is kept')
+  assert.ok(source.includes('Wall time'), 'Wall time stays in the drawer')
+  assert.ok(source.includes('Cost'), 'Cost stays in the drawer')
+  assert.ok(runs.some((run) => run.telemetry?.totalTokens != null), 'raw token data is still in runs.json')
+})
