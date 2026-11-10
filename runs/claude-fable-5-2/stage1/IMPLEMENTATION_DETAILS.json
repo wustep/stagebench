@@ -1,0 +1,83 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 1,
+  "variant": "stage-4-73",
+  "audio": {
+    "strategy": "Live synthesis only. One piano-like voice is computed sample by sample by a TypeScript DSP kernel (additive synthesis: a bank of exponentially decaying sine partials per note). The kernel runs in an AudioWorklet; if the worklet cannot load, the same kernel runs in a ScriptProcessorNode and the status reads 'Fallback'. No recorded samples are bundled, fetched, or played, and no audio buffers are generated or stored.",
+    "generatedSources": [
+      {
+        "name": "Basic Piano partial bank",
+        "kind": "live-synthesis",
+        "isRecording": false,
+        "usesStoredBuffer": false,
+        "description": "Per note: up to 32 sine partials at stretched (inharmonic) frequencies, amplitudes shaped by strike position and a velocity-dependent spectral slope and felt lowpass, each decaying exponentially with higher partials decaying faster; the lowest 6 partials also carry a slower, 0.9-cent-sharp aftersound component for two-stage decay and beating. Attack ramp of 1-4 ms, pitch-dependent damper release, mild note-dependent stereo pan.",
+        "files": ["src/audio/dsp/kernel.ts"],
+        "license": "Original code written for this candidate; no third-party audio or DSP code."
+      },
+      {
+        "name": "Hammer noise burst",
+        "kind": "live-synthesis",
+        "isRecording": false,
+        "usesStoredBuffer": false,
+        "description": "A 12 ms decaying burst of lowpassed pseudo-random noise per strike, generated per sample by a xorshift32 generator seeded from the note number and strike order (deterministic). It is computed live; it is not a noise buffer.",
+        "files": ["src/audio/dsp/kernel.ts"],
+        "license": "Original code written for this candidate."
+      }
+    ],
+    "sampleSources": [],
+    "notes": [
+      "There are zero audio files in this candidate: no .wav, .mp3, .ogg, .flac, or encoded sample data of any kind.",
+      "The voice is a synthesized approximation of a piano. It is described as synthesis in the UI ('synthesized piano voice (live additive synthesis, not a recording)') and is never presented as a recording or as a Nord piano model.",
+      "Recorded Grand / Upright / Electric sample sets required by specs/nord-stage-4.piano.json are Phase 2 scope and are not present.",
+      "Signal path: voices -> sum -> master gain (fixed 0.7 in Phase 1) -> soft limiter -> one output node -> AudioContext.destination. There is exactly one connection to the destination and nothing bypasses the master stage.",
+      "Polyphony is 32 voices with deterministic stealing: released voices first, then pedal-held, then held keys; oldest strike first within a class.",
+      "The panel's Master Level knob is decorative in Phase 1 and is not connected to the master gain."
+    ]
+  },
+  "inputs": {
+    "pointerAndTouch": "Pointer Events on the keybed; every pointer is tracked separately (multi-touch chords, glissando). Strike position along the key sets velocity (0.30 at the back to 0.95 at the front edge).",
+    "computerKeyboard": "Physical-position mapping (event.code): A W S E D F T G Y H U J K O L P ; ' = C to F an octave and a fourth up, starting on C4. Z / X shift the octave. Space is sustain unless a control has focus. Auto-repeat is suppressed. Fixed velocity 0.72.",
+    "midi": "Web MIDI, enabled by an explicit button. Note on/off with velocity on any channel, sustain CC64, CC120/CC123. States reported: unsupported, off, asking permission, connected, no input connected, denied, error.",
+    "sustain": "Space, MIDI CC64, and an on-screen latching pedal button below the instrument."
+  },
+  "functionalInThisPhase": [
+    "73-key keybed (E1-E7) playing one synthesized piano voice",
+    "Sustain input",
+    "Audio and MIDI status reporting"
+  ],
+  "decorativeInThisPhase": {
+    "summary": "All 146 panel controls (97 buttons, 49 knobs/dials/faders/drawbars/wheel/stick) move or press and are stored as presentation state only. They change no audio, no program state, and no OLED text.",
+    "howItIsEnforced": "Panel state lives in src/hardware/store.ts, which imports nothing from src/audio, src/input, or src/platform. tests/interaction.decorative-controls.test.tsx operates every control and proves the rendered audio is bit-identical, nothing is sent to the synthesis host, and no readout changes.",
+    "initialPanelState": "LEDs, drawbars, and faders start in the positions shown on the reference photo (drawbars and faders are placed to match their LED graphs). This is presentation only.",
+    "oleds": "Program OLED shows the true voice name ('Basic Piano') and live audio/MIDI/sustain/voice status. Synth OLED reads 'Not active - Phase 1 - no synth engine - panel is decorative'."
+  },
+  "unsupported": [
+    "Any panel control affecting sound, including Master Level, Piano type/model/timbre/acoustics, layer on/off and levels, octave shift, and all effects",
+    "Organ and Synth engines",
+    "Programs, Live mode, splits, layer scenes, morphs, master clock, transpose, panic",
+    "Recorded piano sample sets; multiple piano models",
+    "Aftertouch, pitch stick and modulation wheel as performance inputs (they move but are not routed)"
+  ],
+  "platformBoundaries": {
+    "definition": "src/platform/types.ts",
+    "browserBinding": "src/platform/browser.ts",
+    "injected": ["audio (AudioContext, worklet node, worklet URL)", "midi (requestMIDIAccess)", "events (keyboard, blur, visibility, resize, viewport)", "timing (now, setTimeout, clearTimeout)", "storage (getItem, setItem)"],
+    "testDoubles": "tests/support/fakes.ts. The fake worklet node hosts the real DSP kernel, so tests measure real rendered samples."
+  },
+  "storage": {
+    "keys": ["stage4.keyboard.baseNote"],
+    "purpose": "Remembers the computer-keyboard octave. Nothing else is persisted."
+  },
+  "evidence": {
+    "captures": ["evidence/stage1-desktop.png", "evidence/stage1-narrow.png", "evidence/stage1-capture.json"],
+    "visualAudit": "evidence/stage1-visual-audit.md",
+    "captureScript": "scripts/capture-stage1.js",
+    "captureMethod": "Playwright (Chromium) against `vite preview` of the production build. The parent capture harness named in prompts/stage1.md was not reachable from the workspace, so the captures were produced with the script above."
+  },
+  "knownDeviations": [
+    "prompts/stage1.md lists section widths 13/21/15/9/21/21 %; specs/nord-stage-4.visual.json v1.4.0 lists 14/20/8.5/12.5/25/20 % and matches the photo. The spec values are used.",
+    "Legend typefaces are system condensed/extended sans-serifs chosen to resemble the panel printing; they are not Nord's fonts.",
+    "The photo's perspective (rear jacks, bevels, key fronts) is flattened to an orthographic top view."
+  ]
+}
