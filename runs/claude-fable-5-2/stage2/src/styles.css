@@ -1,0 +1,1325 @@
+/*
+ * Two coordinate systems live in this file.
+ *
+ *  1. Page chrome (.app, .stage, .console) uses ordinary CSS px.
+ *  2. Everything inside .instrument uses "design px": 1 design px = 1 px of the reference
+ *     photo (the instrument is 9013 × 2912). The whole instrument is then scaled to fit with
+ *     a single transform, so every measurement taken from the photo is used as-is.
+ *     --s holds the current scale so focus rings can stay a constant thickness on screen.
+ */
+
+:root {
+  --page: #eceae6;
+  --ink: #1d1b1a;
+  --ink-soft: #5d5955;
+  --line: #d3cfc9;
+  --card: #f7f6f3;
+  --accent: #9a1f2b;
+
+  /* Reference colours from specs/nord-stage-4.visual.json */
+  --chassis: #851a25;
+  --chassis-dark: #5a0c13;
+  --panel: #3c424d;
+  --key-black: #0b0b0b;
+  --key-white: #dcdcdc;
+
+  --panel-light: #b8c2d4;
+  --legend: #f4f2ef;
+  --legend-dark: #181d28;
+  --focus: #ffd23f;
+
+  --font-legend: 'Avenir Next Condensed', 'DIN Condensed', 'Roboto Condensed', 'Helvetica Neue Condensed',
+    'Arial Narrow', 'Liberation Sans Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --font-wide: 'Eurostile Extended', 'Eurostile', 'Microgramma', 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+  --font-logo: 'Avenir Next', 'Century Gothic', 'Futura', 'Helvetica Neue', Arial, sans-serif;
+  --font-oled: 'Menlo', 'SF Mono', 'DejaVu Sans Mono', 'Consolas', 'Liberation Mono', monospace;
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* The spec calls for a neutral light product-study surface in every colour scheme. */
+  color-scheme: light;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background: var(--page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(120% 70% at 50% 30%, #f8f7f4 0%, #eceae6 55%, #e1ded9 100%) fixed,
+    var(--page);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Page chrome ─────────────────────────────────────────────────────────── */
+
+.app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 10;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 24px 0 20px;
+}
+
+/* Zoomed in: the stage becomes a pan area. The page itself never scrolls. */
+.app--zoomed {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.stage--zoomed {
+  justify-content: flex-start;
+  align-items: flex-start;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 3vw 20px;
+}
+
+.instrument-frame {
+  position: relative;
+  flex: none;
+  filter: drop-shadow(0 18px 22px rgba(60, 40, 30, 0.28)) drop-shadow(0 3px 4px rgba(40, 20, 10, 0.3));
+}
+
+.console {
+  width: min(94vw, 1180px);
+  margin: 0 auto;
+  padding: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.console__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.console__row--tools {
+  align-items: center;
+}
+
+.chip {
+  flex: 1 1 320px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.chip__key {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.chip__value {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chip[data-status='ready'] .chip__value,
+.chip[data-status='connected'] .chip__value {
+  color: #1f6b3a;
+}
+
+.chip[data-status='fallback'] .chip__value,
+.chip[data-status='no-inputs'] .chip__value,
+.chip[data-status='loading'] .chip__value,
+.chip[data-status='requesting'] .chip__value {
+  color: #8a5a00;
+}
+
+.chip[data-status='error'] .chip__value,
+.chip[data-status='denied'] .chip__value {
+  color: #a3261f;
+}
+
+.chip__detail {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.tool,
+.readout {
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool {
+  cursor: pointer;
+}
+
+.tool:hover:not(:disabled) {
+  border-color: #b3aea7;
+  background: #fff;
+}
+
+.tool:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tool[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.tool--pedal[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tool:focus-visible,
+.skip-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.readout {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+}
+
+.tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.console__note,
+.console__help {
+  margin: 0 0 6px;
+  max-width: 100ch;
+}
+
+.console__note strong,
+.console__help strong {
+  color: var(--ink);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #fff;
+  font: 600 11px/1.5 var(--font-ui);
+  text-align: center;
+  color: var(--ink);
+}
+
+/* ── Instrument (design px from here down) ───────────────────────────────── */
+
+.instrument {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  border-radius: 64px 64px 86px 86px;
+  background: var(--chassis);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.instrument :focus {
+  outline: none;
+}
+
+.instrument :focus-visible {
+  outline: calc(3px / var(--s, 1)) solid var(--focus);
+  outline-offset: calc(2px / var(--s, 1));
+  z-index: 20;
+}
+
+.chassis,
+.chassis > span {
+  position: absolute;
+  pointer-events: none;
+}
+
+.chassis {
+  inset: 0;
+}
+
+/* Powder-coated red deck: lit from the back edge, darker toward the keys. */
+.chassis__deck {
+  left: 0;
+  right: 0;
+  top: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 190, 180, 0.2) 0, rgba(255, 190, 180, 0.07) 70px, rgba(0, 0, 0, 0) 150px),
+    linear-gradient(180deg, #92202c 0%, #8a1c27 18%, var(--chassis) 55%, #7c1721 100%);
+}
+
+/* Front lip of the deck overhanging the keys. */
+.chassis__lip {
+  left: 0;
+  right: 0;
+  height: 118px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(40, 4, 8, 0.25) 45%, rgba(40, 4, 8, 0.62) 100%);
+}
+
+.chassis__well {
+  bottom: 0;
+  background: #050505;
+}
+
+.chassis__block {
+  bottom: 0;
+  background: linear-gradient(90deg, #6d1119, #7a161f 50%, #651017);
+}
+
+/* End cheeks: stained red wood, a shade deeper than the metal. */
+.chassis__cheek {
+  top: 0;
+  bottom: 0;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.035) 0 5px, rgba(255, 255, 255, 0.015) 5px 13px),
+    linear-gradient(90deg, #7c1620 0%, #8b1d28 45%, #74131c 100%);
+}
+
+.chassis__cheek--left {
+  left: 0;
+  box-shadow: inset -6px 0 8px rgba(0, 0, 0, 0.28);
+}
+
+.chassis__cheek--right {
+  right: 0;
+  box-shadow: inset 6px 0 8px rgba(0, 0, 0, 0.28);
+}
+
+.deck {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+}
+
+.section {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.keybed-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* ── Plates ──────────────────────────────────────────────────────────────── */
+
+.plate {
+  position: absolute;
+  pointer-events: none;
+}
+
+.plate--dark {
+  background: linear-gradient(180deg, #40464f 0%, var(--panel) 35%, #393f49 100%);
+  box-shadow:
+    0 0 0 3px rgba(40, 6, 10, 0.45),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.05);
+}
+
+.plate--light {
+  background: linear-gradient(180deg, #c0c9da 0%, var(--panel-light) 100%);
+}
+
+.plate--frame {
+  border: 5px solid #a9b3c5;
+}
+
+.plate--frame-red {
+  border: 5px solid #b9c0d1;
+}
+
+.plate--led-box {
+  background: #0b0c0e;
+  box-shadow: 0 0 0 3px #1b1d21;
+}
+
+.plate--arch {
+  background: var(--panel);
+  border-top-left-radius: 92px !important;
+  border-top-right-radius: 92px !important;
+}
+
+.plate--red-box {
+  background: #8b1c26;
+}
+
+.plate--rule {
+  background: #ecebea;
+}
+
+.plate--rule-dark {
+  background: var(--legend-dark);
+}
+
+/* White arc printed around Master Level, open at the bottom. */
+.plate--ring {
+  background: conic-gradient(from 225deg, #f3f3f3 0 270deg, transparent 270deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 61px, #000 62px);
+  mask: radial-gradient(circle, transparent 0 61px, #000 62px);
+}
+
+/* ── Legends ─────────────────────────────────────────────────────────────── */
+
+.lbl {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: pre;
+  line-height: 0.98;
+  text-align: center;
+  font-family: var(--font-legend);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--legend);
+  pointer-events: none;
+}
+
+.lbl--legend {
+  /* The panel's legend face is narrower than any font we can rely on being installed. */
+  transform: translate(-50%, -50%) scaleX(0.88);
+}
+
+.lbl--left {
+  transform: translate(0, -50%);
+  text-align: left;
+}
+
+.lbl--right {
+  transform: translate(-100%, -50%);
+  text-align: right;
+}
+
+.lbl--wide {
+  font-family: var(--font-wide);
+  font-weight: 900;
+  font-stretch: 125%;
+  letter-spacing: 0.05em;
+  line-height: 0.92;
+}
+
+.lbl--dark {
+  color: var(--legend-dark);
+}
+
+.lbl--dim {
+  color: #c9ced8;
+}
+
+.lbl--pink {
+  color: #e9a3a6;
+}
+
+.lbl--outline {
+  padding: 3px 7px 1px;
+  border: 3px solid currentColor;
+  border-radius: 6px;
+}
+
+.lbl--filled {
+  padding: 4px 8px 2px;
+  border-radius: 4px;
+  background: var(--panel-light);
+}
+
+.lbl--red {
+  padding: 5px 9px 3px;
+  border-radius: 3px;
+  background: #8b1c26;
+}
+
+.lbl--cut-dark {
+  padding: 0 14px;
+  background: var(--panel);
+}
+
+.lbl--cut-light {
+  padding: 7px 16px 5px;
+  border-radius: 12px;
+  background: #c0c9da;
+}
+
+.lbl--cut-red {
+  padding: 5px 14px 3px;
+  border-radius: 10px;
+  background: var(--chassis);
+}
+
+.lbl--vertical {
+  writing-mode: vertical-rl;
+  transform: translate(-50%, -50%) rotate(180deg);
+  letter-spacing: 0.08em;
+}
+
+.lbl--logo {
+  font-family: var(--font-logo);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  color: #f6f3f0;
+}
+
+.lbl--logo-sub {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: 1.02em;
+  color: #f1ecea;
+}
+
+/* ── LEDs ────────────────────────────────────────────────────────────────── */
+
+.led {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  pointer-events: none;
+}
+
+.led--round {
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #8a847c 0%, #5a554f 55%, #34312e 100%);
+  box-shadow:
+    0 0 0 3px #25262a,
+    inset 0 2px 3px rgba(0, 0, 0, 0.45);
+}
+
+.led--round.led--red.is-lit {
+  background: radial-gradient(circle at 40% 35%, #ffc9bd 0%, #ff4a36 50%, #c2200f 100%);
+  box-shadow:
+    0 0 0 3px #40140f,
+    0 0 20px 8px rgba(255, 64, 40, 0.55);
+}
+
+.led--round.led--green.is-lit {
+  background: radial-gradient(circle at 40% 35%, #f4ffc4 0%, #b4f52f 50%, #5fa80d 100%);
+  box-shadow:
+    0 0 0 3px #2b3a10,
+    0 0 20px 8px rgba(170, 245, 50, 0.55);
+}
+
+.led--round.led--yellow.is-lit {
+  background: radial-gradient(circle at 40% 35%, #fff4c0 0%, #ffc526 50%, #c78600 100%);
+  box-shadow:
+    0 0 0 3px #44310a,
+    0 0 20px 8px rgba(255, 196, 40, 0.55);
+}
+
+/* Triangle LEDs inside the black selector windows. */
+.led--left,
+.led--right,
+.led--up,
+.led--down {
+  width: 20px;
+  height: 22px;
+  margin: -11px 0 0 -10px;
+  background: #3b3d41;
+}
+
+.led--left {
+  clip-path: polygon(100% 0, 100% 100%, 0 50%);
+}
+
+.led--right {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.led--up {
+  width: 24px;
+  height: 20px;
+  margin: -10px 0 0 -12px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.led--down {
+  width: 24px;
+  height: 20px;
+  margin: -10px 0 0 -12px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.led--left.is-lit,
+.led--right.is-lit,
+.led--up.is-lit,
+.led--down.is-lit {
+  background: #ff4a36;
+}
+
+/* ── Controls: shared ────────────────────────────────────────────────────── */
+
+.ctl {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  touch-action: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+.btn {
+  border-radius: 7px;
+  background: #0b0c0e;
+  box-shadow:
+    0 0 0 3px rgba(8, 8, 10, 0.5),
+    0 7px 9px rgba(0, 0, 0, 0.42);
+  cursor: pointer;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 12px 17px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #4a4c50 0%, #2d2f33 55%, #1f2023 100%);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.14),
+    0 3px 4px rgba(0, 0, 0, 0.6);
+  transition:
+    transform 70ms ease-out,
+    filter 70ms ease-out;
+}
+
+.btn--vertical::before {
+  inset: 17px 12px;
+}
+
+.btn--light {
+  background: #85878a;
+}
+
+.btn--light::before {
+  background: linear-gradient(180deg, #d6d7d8 0%, #bbbcbe 55%, #a3a4a6 100%);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.5),
+    0 3px 4px rgba(0, 0, 0, 0.35);
+}
+
+.btn--red {
+  background: #7a2022;
+}
+
+.btn--red::before {
+  background: linear-gradient(180deg, #d95f55 0%, #c1443d 55%, #a8322d 100%);
+}
+
+/* Red printed surround used around several Synth buttons. */
+.btn--surround {
+  box-shadow:
+    0 0 0 11px #8b1c26,
+    0 7px 9px rgba(0, 0, 0, 0.3);
+}
+
+.btn:hover::before {
+  filter: brightness(1.12);
+}
+
+/* Pressed: the cap sinks into the well. */
+.btn.is-down::before {
+  transform: scale(0.9);
+  filter: brightness(0.62);
+}
+
+.btn.is-down {
+  box-shadow:
+    0 0 0 3px rgba(8, 8, 10, 0.5),
+    inset 0 0 0 5px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Knobs and dials ─────────────────────────────────────────────────────── */
+
+.knob {
+  border-radius: 50%;
+  cursor: ns-resize;
+}
+
+.knob__cap {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.075) 0 5deg, rgba(0, 0, 0, 0) 5deg 10deg),
+    radial-gradient(circle at 42% 36%, #565656 0%, #303030 36%, #171717 70%, #090909 100%);
+  box-shadow:
+    0 12px 16px rgba(0, 0, 0, 0.55),
+    0 0 0 2px #050505,
+    inset 0 3px 4px rgba(255, 255, 255, 0.16);
+}
+
+.knob__cap::after {
+  content: '';
+  position: absolute;
+  inset: 13%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 34%, #4c4c4c 0%, #2a2a2a 55%, #1a1a1a 100%);
+}
+
+.knob__pointer {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 2%;
+  width: 11px;
+  height: 46%;
+  margin-left: -5.5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ffffff, #dcdcdc);
+}
+
+.knob__dimple {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 7%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: #5d5d5d;
+  box-shadow: inset 0 2px 2px rgba(0, 0, 0, 0.7);
+}
+
+.knob--ring {
+  box-shadow: 0 0 0 11px #a9b3c5;
+}
+
+.knob:hover .knob__cap {
+  filter: brightness(1.15);
+}
+
+.knob__scale {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.knob__scale > span {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font: 700 21px/1 var(--font-legend);
+  color: var(--legend);
+  white-space: nowrap;
+}
+
+/* Knob numerals printed on a light block are dark. */
+.knob--on-light .knob__scale > span {
+  color: var(--legend-dark);
+}
+
+/* Red segmented arc behind the arpeggiator Range knob. */
+.knob__scale > .knob__arc {
+  left: 50%;
+  top: 50%;
+  width: 176px;
+  height: 176px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -88deg,
+    #a3222c 0 42deg,
+    transparent 42deg 45deg,
+    #a3222c 45deg 87deg,
+    transparent 87deg 90deg,
+    #a3222c 90deg 132deg,
+    transparent 132deg 135deg,
+    #a3222c 135deg 176deg,
+    transparent 176deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 0 60px, #000 61px);
+  mask: radial-gradient(circle, transparent 0 60px, #000 61px);
+}
+
+/* ── Faders and their LED ladders ────────────────────────────────────────── */
+
+.fader {
+  cursor: ns-resize;
+}
+
+.fader__slot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  margin-left: -14px;
+  border-radius: 5px;
+  background: #08090a;
+  box-shadow: inset 0 0 0 2px #17181b;
+}
+
+.fader__cap {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 70px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #d2d3d4 0%, #b1b2b3 42%, #8f9092 52%, #a7a8a9 100%);
+  box-shadow:
+    0 9px 11px rgba(0, 0, 0, 0.5),
+    inset 0 2px 1px rgba(255, 255, 255, 0.55);
+}
+
+.fader:hover .fader__cap {
+  filter: brightness(1.07);
+}
+
+.ladder {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 38px;
+  padding: 6px;
+  border-radius: 3px;
+  background: #121416;
+  box-shadow: 0 0 0 2px #24272b;
+  pointer-events: none;
+}
+
+.ladder > i {
+  flex: none;
+  height: 21px;
+  border-radius: 2px;
+  background: #33373a;
+}
+
+.ladder > i.is-lit {
+  background: linear-gradient(180deg, #c8ff62, #8be318);
+  box-shadow: 0 0 10px 2px rgba(150, 240, 40, 0.5);
+}
+
+/* ── Drawbars and their LED graphs ───────────────────────────────────────── */
+
+.drawbar {
+  cursor: ns-resize;
+  z-index: 2;
+}
+
+.drawbar__slot {
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  bottom: 44px;
+  width: 28px;
+  margin-left: -14px;
+  border-radius: 4px;
+  background: #08090a;
+}
+
+.drawbar__cap {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 235px;
+  border-radius: 9px 9px 14px 14px;
+  box-shadow:
+    0 14px 16px rgba(0, 0, 0, 0.55),
+    inset 0 2px 1px rgba(255, 255, 255, 0.25);
+}
+
+.drawbar__cap--white {
+  background: linear-gradient(180deg, #f6f3ec 0%, #ece8df 46%, #c9c5bb 49%, #f4f1ea 55%, #e4e0d6 100%);
+}
+
+.drawbar__cap--black {
+  background: linear-gradient(180deg, #303030 0%, #212121 46%, #070707 49%, #2e2e2e 55%, #181818 100%);
+}
+
+.drawbar__cap--brown {
+  background: linear-gradient(180deg, #3a2a22 0%, #2a1d17 46%, #0c0705 49%, #37271f 55%, #20150f 100%);
+}
+
+.drawbar:hover .drawbar__cap {
+  filter: brightness(1.08);
+}
+
+.bar-graph {
+  position: absolute;
+  z-index: 1;
+  width: 88px;
+  height: 343px;
+  padding: 10px 0 0;
+  background: var(--panel-light);
+  pointer-events: none;
+}
+
+.bar-graph__row {
+  display: flex;
+  align-items: center;
+  height: 42px;
+}
+
+.bar-graph__row > b {
+  width: 34px;
+  text-align: center;
+  font: 700 30px/1 var(--font-legend);
+  color: var(--legend-dark);
+}
+
+.bar-graph__row > i {
+  width: 42px;
+  height: 34px;
+  border: 3px solid #17191c;
+  background: #53565a;
+}
+
+.bar-graph__row > i.is-lit {
+  background: linear-gradient(180deg, #ff7a66, #ff3b2a);
+  box-shadow: 0 0 12px 2px rgba(255, 70, 50, 0.45);
+}
+
+/* ── Modulation wheel and pitch stick ────────────────────────────────────── */
+
+.wheel {
+  border-radius: 50px;
+  background: #060606;
+  box-shadow:
+    inset 0 0 0 4px #1a0507,
+    0 0 0 3px rgba(60, 8, 12, 0.6);
+  cursor: ns-resize;
+}
+
+.wheel__body {
+  position: absolute;
+  inset: 12px 16px;
+  border-radius: 40px;
+  background: linear-gradient(90deg, #5c5d60 0%, #c9cacc 30%, #f2f2f3 48%, #b4b5b8 70%, #66676a 100%);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.wheel__notch {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  height: 74px;
+  border-radius: 30px;
+  background: radial-gradient(ellipse at 50% 60%, #9b9c9f 0%, #6b6c70 70%, #4f5053 100%);
+  box-shadow: inset 0 7px 9px rgba(0, 0, 0, 0.5);
+}
+
+.stick {
+  background: #050505;
+  box-shadow: 0 0 0 3px rgba(60, 8, 12, 0.6);
+  cursor: ew-resize;
+}
+
+.stick__wood {
+  position: absolute;
+  inset: 14px 44px 14px 30px;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(4deg, rgba(120, 60, 10, 0.16) 0 5px, rgba(255, 220, 160, 0.1) 5px 11px),
+    linear-gradient(180deg, #f0b467 0%, #d99843 40%, #b9762a 100%);
+  box-shadow:
+    inset 0 4px 4px rgba(255, 235, 200, 0.5),
+    inset -14px 0 14px rgba(110, 55, 10, 0.5),
+    0 6px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* ── OLED windows ────────────────────────────────────────────────────────── */
+
+.oled {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 18px 20px;
+  border-radius: 5px;
+  background: #06080a;
+  box-shadow:
+    0 0 0 5px #121417,
+    inset 0 0 40px rgba(0, 0, 0, 0.9);
+  color: #a4d9ee;
+  font-family: var(--font-oled);
+  font-weight: 700;
+  text-shadow: 0 0 9px rgba(120, 200, 240, 0.55);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.px-small {
+  font-size: 27px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.px-big {
+  font-size: 54px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.px-rule {
+  height: 4px;
+  margin: 2px 0 4px;
+  background: #a4d9ee;
+}
+
+.px-row {
+  font-size: 27px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+}
+
+.px-bar {
+  margin: -4px -6px 6px;
+  padding: 5px 8px 3px;
+  background: #86bfe0;
+  color: #06080a;
+  font-size: 30px;
+  line-height: 1;
+  text-align: center;
+  text-shadow: none;
+  letter-spacing: 0.08em;
+}
+
+/* ── Keybed ──────────────────────────────────────────────────────────────── */
+
+.keybed {
+  position: relative;
+  touch-action: none;
+}
+
+.key {
+  position: absolute;
+  top: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.key--white {
+  z-index: 1;
+  border-radius: 0 0 13px 13px;
+  background: linear-gradient(180deg, #c4c4c4 0%, #e6e6e6 3.5%, #e3e3e3 60%, var(--key-white) 100%);
+  box-shadow:
+    inset -4px 0 0 rgba(132, 126, 112, 0.6),
+    inset 3px 0 0 rgba(255, 255, 255, 0.65),
+    inset 0 -16px 12px -8px rgba(0, 0, 0, 0.22);
+}
+
+.key--black {
+  z-index: 2;
+  border-radius: 0 0 9px 9px;
+  background: linear-gradient(
+    90deg,
+    #3a3a38 0%,
+    #3a3a38 9%,
+    #151515 10%,
+    var(--key-black) 22%,
+    var(--key-black) 90%,
+    #262625 91%,
+    #262625 100%
+  );
+  box-shadow: 0 10px 8px -3px rgba(0, 0, 0, 0.5);
+}
+
+.key--black::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 9%;
+  border-radius: 0 0 9px 9px;
+  background: linear-gradient(180deg, #2a2a28 0%, #55554f 55%, #3a3a37 100%);
+}
+
+.key--white:hover {
+  filter: brightness(1.03);
+}
+
+/* Pressed keys sink: the surface darkens and picks up shadow from its neighbours. */
+.key--white.is-down {
+  background: linear-gradient(180deg, #8f8f8f 0%, #b9b9b9 5%, #bdbdbd 60%, #adadad 100%);
+  box-shadow:
+    inset 9px 0 12px -4px rgba(0, 0, 0, 0.45),
+    inset -9px 0 12px -4px rgba(0, 0, 0, 0.45),
+    inset 0 40px 40px -22px rgba(0, 0, 0, 0.5);
+}
+
+.key--black.is-down {
+  background: linear-gradient(90deg, #5a5a57 0%, #3a3a39 14%, #2f2f2f 30%, #2f2f2f 78%, #474745 100%);
+  box-shadow: 0 3px 4px rgba(0, 0, 0, 0.5);
+}
+
+.key:focus-visible {
+  outline-offset: calc(-4px / var(--s, 1));
+}
+
+/* Shadow the deck lip throws across the back of the keys. */
+.keybed__shadow {
+  position: absolute;
+  z-index: 3;
+  left: 150px;
+  right: 150px;
+  top: 0;
+  height: 54px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
+/* Front rail under the keys. */
+.keybed__rail {
+  position: absolute;
+  left: 150px;
+  right: 150px;
+  bottom: 0;
+  height: 74px;
+  background: linear-gradient(180deg, #000 0%, #0c0c0c 60%, #1a1a1a 100%);
+  pointer-events: none;
+}
+
+/* ── Small screens and motion ────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .stage {
+    padding: 28px 0 22px;
+  }
+
+  .console {
+    font-size: 12.5px;
+  }
+
+  .tool,
+  .readout {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn::before {
+    transition: none;
+  }
+}
+
+/* ── Phase 2: functional feedback ─────────────────────────────────────────── */
+
+/* A blinking LED: the focused layer when both are on, or a piano type whose samples are missing. */
+.led.is-blinking {
+  animation: led-blink 0.9s steps(1, end) infinite;
+}
+
+@keyframes led-blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0.18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .led.is-blinking {
+    animation: none;
+    outline: 3px dashed rgba(255, 255, 255, 0.85);
+    outline-offset: 3px;
+  }
+}
+
+/* Shift latched for the next control. */
+.btn.is-latched {
+  box-shadow:
+    0 0 0 5px #ffd95a,
+    0 0 22px 6px rgba(255, 217, 90, 0.6);
+}
+
+/* The Program display carries more lines in Phase 2, so its rows are set a little smaller. */
+.oled--program {
+  gap: 3px;
+  padding: 13px 20px;
+}
+
+.oled--program .px-small,
+.oled--program .px-row {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.oled--program .px-big {
+  line-height: 1.02;
+}
+
+.oled--program .px-rule {
+  height: 3px;
+  margin: 1px 0 2px;
+}
+
+.oled--program .px-row--notice {
+  min-height: 24px;
+  color: #d8f3ff;
+}
+
+/*
+ * The status console carries a third chip and the Shift help in Phase 2. On a wide screen each
+ * chip stays on one line (the full sentence is in its tooltip and in the accessibility tree) and
+ * the notes use the full width, so the console is no taller than it was and the instrument
+ * stays where Phase 1 put it.
+ */
+@media (min-width: 1000px) {
+  .chip {
+    flex: 1 1 0;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .chip__key,
+  .chip__value {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .chip__detail {
+    flex: 1 1 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .console__note,
+  .console__help {
+    max-width: none;
+  }
+
+  .console__help[data-help='shift'] {
+    margin-top: -6px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Sample credits: a button in the tools row that opens a panel above it, so it adds no height. */
+.credits {
+  position: relative;
+}
+
+.credits > summary {
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+}
+
+.credits > summary::-webkit-details-marker {
+  display: none;
+}
+
+.credits__panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  width: min(560px, 88vw);
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 10px 28px rgba(40, 30, 20, 0.22);
+  overflow-wrap: anywhere;
+}
+
+.credits__panel p,
+.credits__panel ul {
+  margin: 0 0 8px;
+}
+
+.credits__panel ul {
+  padding-left: 18px;
+}
+
+@media (min-width: 1000px) {
+  /* The audio sentence is shown whole when it is short; the piano chip gets most of the rest. */
+  .chip[data-status-kind='audio'] {
+    flex: 0 1 auto;
+    max-width: 520px;
+  }
+
+  .chip[data-status-kind='midi'] {
+    flex: 1 1 0;
+  }
+
+  .chip[data-status-kind='piano'] {
+    flex: 2.2 1 0;
+  }
+}
