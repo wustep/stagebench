@@ -28,11 +28,29 @@ if [ -n "${STAGEBENCH_GATEWAY:-}" ]; then
   fi
 fi
 
+# The npm registry a protocol-3 box installs from: a loopback server over the
+# tarballs baked into this image (see npm-mirror.mjs). It has no upstream, so
+# there is nothing behind it to read. A box that is not given the offline
+# registry (STAGEBENCH_OFFLINE_REGISTRY=0) does not start it.
+if [ "${STAGEBENCH_OFFLINE_REGISTRY:-1}" = "1" ] && [ -d /opt/stagebench/npm-mirror ]; then
+  node /opt/stagebench/npm-mirror.mjs serve > /tmp/stagebench-registry.log 2>&1 &
+  attempt=0
+  while [ "$attempt" -lt 50 ]; do
+    curl -fsS --noproxy '*' --max-time 1 http://127.0.0.1:4874/-/ping > /dev/null 2>&1 && break
+    attempt=$((attempt + 1))
+    sleep 0.1
+  done
+fi
+# pnpm reads the registry from .npmrc in a few places where it ignores the
+# environment, so say it there too. Never overwrites one that is already there.
+if [ -n "${STAGEBENCH_REGISTRY:-}" ] && [ -w "$HOME" ] && [ ! -e "$HOME/.npmrc" ]; then
+  printf 'registry=%s\n' "$STAGEBENCH_REGISTRY" > "$HOME/.npmrc"
+fi
+
 # Playwright looks for browsers in one directory. The image's builds are
 # read-only under /opt, so link them into the writable default cache: the
-# pinned Chromium is found without a download, and a candidate that picks
-# another Playwright version downloads its browser (through the mirror) into
-# the home volume instead of into its own source tree.
+# pinned Chromium is found without a download. (The offline mirror carries
+# only the Playwright version these builds belong to.)
 if [ -d /opt/ms-playwright ] && [ -w "$HOME" ]; then
   mkdir -p "$HOME/.cache/ms-playwright"
   for build in /opt/ms-playwright/*; do

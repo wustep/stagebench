@@ -1,9 +1,13 @@
-# Stagebench lockdown images. One file, two targets:
+# Stagebench lockdown images. One file, two targets (and one build stage):
 #
 #   gateway    the egress gateway (bench/lockdown/image/gateway.mjs) — the only
 #              container with a route to the internet.
+#   mirror     build stage only: downloads the offline npm mirror named by
+#              npm-mirror.lock.json and verifies every tarball's sha512.
 #   candidate  the box a candidate agent, its tools, its MCP servers, its
-#              subprocesses, and the seal/score gates all run in.
+#              subprocesses, the evaluator, canonical capture, and the
+#              seal/score gates all run in. It carries the mirror and Chromium,
+#              so nothing has to be fetched once a run starts.
 #
 # Build both with `pnpm bench lockdown-setup`. Tags are content-addressed from
 # this directory, so an image digest in a run record names an exact toolchain.
@@ -21,8 +25,17 @@ EXPOSE 3128 4873
 ENTRYPOINT ["node", "/opt/stagebench/gateway.mjs"]
 
 # ---------------------------------------------------------------------------
+# The only step in the whole protocol that reads the npm registry, and it reads
+# exactly the tarballs the lock names. A mismatch fails the build.
+FROM ${NODE_IMAGE} AS mirror
+COPY npm-mirror.mjs npm-mirror.lock.json /build/
+RUN node /build/npm-mirror.mjs build --lock /build/npm-mirror.lock.json --out /opt/stagebench/npm-mirror \
+  && node /build/npm-mirror.mjs verify --lock /build/npm-mirror.lock.json --root /opt/stagebench/npm-mirror
+
+# ---------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS candidate
-ARG PNPM_VERSION=11.28.7
+# The starter pins this pnpm, so no candidate ever needs to fetch another.
+ARG PNPM_VERSION=11.7.0
 ARG PLAYWRIGHT_VERSION=1.64.1
 ARG CODEX_VERSION=0.169.0
 ARG CLAUDE_CODE_VERSION=2.1.326
@@ -51,9 +64,8 @@ RUN npm install -g \
     ${EXTRA_NPM_GLOBALS} \
   && npm cache clean --force
 
-# Chromium plus its system libraries and fonts, for the harness's pinned
-# Playwright. A candidate that picks another Playwright version fetches its
-# browser through the gateway's Playwright mirror instead.
+# Chromium plus its system libraries and fonts, for the one Playwright version
+# the offline mirror carries. There is no browser download at run time.
 RUN playwright install --with-deps chromium \
   && chmod -R a+rX /opt/ms-playwright \
   && rm -rf /var/lib/apt/lists/*
@@ -65,8 +77,11 @@ RUN usermod -l candidate -d /home/candidate -m node \
   && mkdir -p /workspace/candidate /workspace/inputs /srv/stagebench /gate \
   && chown -R candidate:candidate /workspace /home/candidate /gate
 
+# The offline npm mirror and the loopback registry that serves it.
+COPY --from=mirror /opt/stagebench/npm-mirror /opt/stagebench/npm-mirror
+COPY npm-mirror.mjs /opt/stagebench/npm-mirror.mjs
 COPY entrypoint.sh /opt/stagebench/entrypoint.sh
-RUN chmod 0755 /opt/stagebench/entrypoint.sh
+RUN chmod 0755 /opt/stagebench/entrypoint.sh && chmod -R a+rX /opt/stagebench
 
 USER candidate
 ENV HOME=/home/candidate \
