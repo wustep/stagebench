@@ -27,7 +27,8 @@ pnpm dev
 pnpm bench fetch                                # Nord manual PDF (+ photos if missing from the repo)
 pnpm bench new --model <id> --target <1|2|3>
 pnpm bench start <run-id>                       # per phase: isolated workspace for the implementation agent
-pnpm bench exec <run-id> --command "pnpm test"  # optional: run candidate commands inside Docker
+pnpm bench agent <run-id> --harness codex       # per phase: run the agent inside the lockdown (docs/LOCKDOWN.md)
+pnpm bench exec <run-id> --command "pnpm test"  # optional: run a command in the same box
 pnpm bench seal <run-id> [--cost-usd N --input-tokens N --output-tokens N]   # import, check, capture, verify, seal, archive transcripts
 pnpm bench score <run-id>                       # per phase: evaluator workspace first, then registers the filled assessment
 pnpm bench thumbs <run-id>                      # after seal/score, before commit: gallery hover thumbnail

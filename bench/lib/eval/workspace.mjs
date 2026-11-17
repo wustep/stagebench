@@ -35,6 +35,35 @@ function scrubRunIdentity(value, id, blindId) {
   return value
 }
 
+// What the grader is shown of the seal record. Everything about how the
+// artifact was produced is left out, because it identifies the producer: the
+// isolation record names the harness, its version, the model the gateway saw,
+// and the provider's endpoints; asset provenance names other runs. The grader
+// keeps what describes the artifact itself — gates, contract, evidence — and
+// only a count for provenance.
+export function blindVerification(record, id, blindId) {
+  const { isolation: _isolation, assetProvenance, ...artifactFacts } = record
+  const blind = scrubRunIdentity(artifactFacts, id, blindId)
+  if (Array.isArray(blind.evidence)) {
+    blind.evidence = blind.evidence
+      // Neither of these describes the artifact's quality, and the second
+      // would point the grader at the file that gives the producer away.
+      .filter((entry) => !['lockdown decoys', 'artifact does not name its run'].includes(entry.id))
+      .map((entry) => (entry.id === 'asset provenance' && assetProvenance
+        ? {
+          ...entry,
+          detail: assetProvenance.matched > 0
+            ? `${assetProvenance.matched} of ${assetProvenance.assets} bundled assets are byte-identical to assets that already exist outside this artifact`
+            : `${assetProvenance.assets} bundled assets; none is byte-identical to an asset known outside this artifact`,
+        }
+        : entry))
+  }
+  if (assetProvenance) blind.assetProvenance = { assets: assetProvenance.assets, matched: assetProvenance.matched }
+  // Gate results keep their outcome; where they ran is not the grader's concern.
+  if (Array.isArray(blind.checks)) blind.checks = blind.checks.map(({ isolation: _where, ...check }) => check)
+  return blind
+}
+
 function copyInput(root, relativePath, inputRoot) {
   const source = path.resolve(root, relativePath)
   if (!source.startsWith(`${path.resolve(root)}${path.sep}`)) throw new Error(`Input escapes repository: ${relativePath}`)
@@ -109,7 +138,7 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   writeJson(path.join(inputs, 'specs', 'nord-stage-4.variants.json'), projectVariants(variants, variantId))
   writeJson(path.join(inputs, 'rubric.json'), rubric)
   if (verificationPath && fs.existsSync(verificationPath)) {
-    writeJson(path.join(inputs, 'verification.json'), scrubRunIdentity(readJson(verificationPath), id, blindId))
+    writeJson(path.join(inputs, 'verification.json'), blindVerification(readJson(verificationPath), id, blindId))
   }
   // Blind template: identified by the handle, never the model id. The
   // run-level panel axis rides on the highest sealed phase only.

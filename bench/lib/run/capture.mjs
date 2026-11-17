@@ -24,9 +24,16 @@ export function serveDirectory(directory) {
   // the root document, which looks exactly like an app that renders nothing.
   const rootDirectory = path.resolve(directory)
   const server = http.createServer((request, response) => {
-    const urlPath = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
+    // The page being captured is candidate code, and so is every URL it asks for.
+    let urlPath
+    try {
+      urlPath = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
+    } catch {
+      response.writeHead(400).end()
+      return
+    }
     let filePath = path.join(rootDirectory, urlPath)
-    if (!filePath.startsWith(rootDirectory)) {
+    if (filePath !== rootDirectory && !filePath.startsWith(`${rootDirectory}${path.sep}`)) {
       response.writeHead(403).end()
       return
     }
@@ -48,15 +55,19 @@ export function serveDirectory(directory) {
   })
 }
 
-export async function captureEvidence(root, { id, phase, url }) {
+// `chromium` may be passed in by a caller that has already loaded Playwright
+// from its own dependencies (the copy shipped to candidates lives outside
+// their node_modules, so it cannot import it by name).
+export async function captureEvidence(root, { id, phase, url, chromium }) {
   if (!id) throw new Error('A run id is required')
   if (![1, 2, 3].includes(Number(phase))) throw new Error('phase must be 1, 2, or 3')
   if (!url) throw new Error('A URL is required')
-  let chromium
-  try {
-    ;({ chromium } = await import('playwright'))
-  } catch {
-    throw new Error('Playwright is required. Run pnpm install, then pnpm exec playwright install chromium.')
+  if (!chromium) {
+    try {
+      ;({ chromium } = await import('playwright'))
+    } catch {
+      throw new Error('Playwright is required. Run pnpm install, then pnpm exec playwright install chromium.')
+    }
   }
   const outputDir = path.join(root, 'runs', id, `stage${phase}`, 'evidence')
   fs.mkdirSync(outputDir, { recursive: true })

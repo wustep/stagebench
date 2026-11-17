@@ -16,6 +16,7 @@ import {
   createRun,
   ensureInstalled,
   loadRun,
+  saveRun,
   nextPhase,
   markSealed,
   pathsFor,
@@ -29,7 +30,7 @@ import {
   stageState,
   statusSummary,
 } from './lib/run/store.mjs'
-import { importWorkspace, removeWorkspace, runInContainer, startPhase, workspaceDir } from './lib/run/workspace.mjs'
+import { importWorkspace, removeWorkspace, startPhase, workspaceDir } from './lib/run/workspace.mjs'
 import { createEvalWorkspace, evalAssessmentPath, evalWorkspaceDir, removeEvalWorkspace } from './lib/eval/workspace.mjs'
 import { exportRun } from './lib/run/export.mjs'
 import { runChecks, verifyPhase } from './lib/run/verify.mjs'
@@ -48,18 +49,21 @@ import { parseSubagentTelemetryFiles, telemetryValuesFromParse } from './lib/tel
 import { appendOperatorEvent, parseTranscriptList, recordPhaseTranscripts } from './lib/run/transcripts.mjs'
 
 const COMMANDS = {
-  new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--harness ...] [--reasoning ...] [--notes ...]',
+  new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--harness ...] [--reasoning ...] [--notes ...] [--isolation lockdown|none] (lockdown is the default)',
   promote: 'promote <run-id> --to <clean-id> [--replace] — move a completed run to a canonical id',
   retarget: 'retarget <run-id> --to <2|3> — extend a run to a later target phase; sealed phases are untouched',
   rename: 'rename <run-id> --title "..." — update a run’s gallery title',
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
-  exec: 'exec <run-id> --command "..." — run a command in the workspace inside Docker [--network none|registry] [--image ...]',
-  seal: 'seal <run-id> — import, check, capture, verify, and seal the running phase, then archive its agent transcripts into runs/<id>/transcripts/ [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N] [--transcripts <file[,file...]> to add sessions auto-discovery misses]',
+  agent: 'agent <run-id> --harness <codex|claude|custom> — run the implementation agent inside the lockdown [--model ...] [--effort ...] [--prompt "..."|--prompt-file f] [--interactive] [--auth <mode>] [--pin-models a,b] [--timeout-minutes N]; rerun with --prompt to send a follow-up',
+  exec: 'exec <run-id> --command "..." — run a shell command in the phase\'s lockdown box (candidate/ is the working directory; registry mirror only)',
+  'lockdown-setup': 'Create the dedicated container VM if needed, build the lockdown images, and report what the boundary looks like [--rebuild]',
+  redteam: 'redteam — attack the lockdown from inside and record the results [--agent <codex|claude>] [--out <dir>]',
+  seal: 'seal <run-id> — import (a locked phase is exported from its container volume and its gates run in the box), check, capture, verify, and seal the running phase, then archive its agent transcripts into runs/<id>/transcripts/ [--unlocked to seal host-side work for a run that requires the lockdown; recorded as isolation none] [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N] [--transcripts <file[,file...]> to add sessions auto-discovery misses]',
   transcripts: 'transcripts <run-id> --phase N [--eval] [--transcripts <file[,file...]>] [--workspace <path>] — archive (scrubbed, zstd) agent transcripts for a sealed phase after the fact; discovers Codex/Claude Code/Cursor sessions by workspace cwd when no files are given',
   telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal, or --from-jsonl <a.jsonl[,b.jsonl...]> to recompute tokens/cost from Claude Code subagent transcripts; comma-separate multiple files)',
   score: 'score <run-id> [--phase N] — build the isolated evaluator workspace, or register its filled assessment',
   status: 'status <run-id> — show run state, telemetry, and the next command',
-  clean: 'clean [<run-id>] — remove transient work/eval/gates workspaces [--all] [--force to remove a running phase]',
+  clean: 'clean [<run-id>] — remove transient work/eval/gates workspaces and lockdown sessions [--all] [--force to remove a running phase]',
   export: 'export <run-id> [--out <path>] — bundle run.json, evaluations, report, and preview into a ZIP',
   showcase: 'Check, build, and publish showcase/ to public/previews/showcase',
   thumbs: 'Regenerate gallery hover thumbnails from the published previews [<run-id>]',
@@ -96,15 +100,43 @@ async function seal(root, id, options) {
   if (!stage || stage.status !== 'running') throw new Error(`${id} has no running phase to seal (next: ${statusSummary(run).next})`)
   const phase = stage.number
 
+  // A run created to require the lockdown cannot be sealed from a host
+  // workspace: the candidate tree has to come out of the box.
+  const lockdown = await import('./lockdown/seal.mjs')
+  const locked = lockdown.hasSession(root, id, phase)
+  const progress = (text) => process.stderr.write(text)
+  if (!locked && lockdown.requiredIsolation(run) === 'lockdown' && options.unlocked !== 'true') {
+    throw new Error(`${id} requires the lockdown, but Phase ${phase} has no lockdown session. Run the agent with: pnpm bench agent ${id} --harness <codex|claude|custom>. (To seal work done outside the box anyway — recorded as isolation "none" — pass --unlocked.)`)
+  }
+  let exported = null
+  if (locked) {
+    console.error('→ exporting the candidate tree from the lockdown volume')
+    exported = await lockdown.exportLockedCandidate(root, { id, phase, workspace: workspaceDir(root, id, phase), onOutput: progress })
+  } else {
+    console.error(`! sealing Phase ${phase} WITHOUT the lockdown: the candidate ran with whatever access its harness allowed, and the gates run on this host`)
+  }
+
   console.error(`→ importing workspace candidate into runs/${id}/stage${phase}`)
   importWorkspace(root, id, phase)
   const stageDir = stageDirFor(root, id, phase)
 
-  console.error('→ installing dependencies')
-  ensureInstalled(stageDir)
+  let checks
+  let gates = null
+  if (locked) {
+    // Candidate-authored code (install scripts, tests, the build) never
+    // executes on the host for a locked phase.
+    console.error('→ running install, test, typecheck, lint, build inside the lockdown')
+    gates = await lockdown.runLockedChecks(root, stageDir, { onOutput: progress })
+    checks = gates.checks
+    const blockers = lockdown.sealBlockers(root, id, phase, exported, gates, stageDir)
+    if (blockers.length > 0) throw new Error(`Phase ${phase} cannot be sealed from this lockdown session: ${blockers.join('; ')}`)
+  } else {
+    console.error('→ installing dependencies')
+    ensureInstalled(stageDir)
 
-  console.error('→ running test, typecheck, lint, build')
-  const checks = await runChecks(stageDir)
+    console.error('→ running test, typecheck, lint, build')
+    checks = await runChecks(stageDir)
+  }
   const failed = checks.filter((check) => !check.passed)
   if (failed.length > 0) {
     throw new Error(`Package checks failed (${failed.map((check) => check.id).join(', ')}). Fix in the workspace, then seal again.\n${failed.map((check) => `--- ${check.id} ---\n${check.detail}`).join('\n')}`)
@@ -126,6 +158,17 @@ async function seal(root, id, options) {
 
   console.error('→ verifying phase contract and evidence')
   const verification = verifyPhase(root, id, phase, { checks })
+  verification.isolation = locked ? lockdown.attestation(root, id, phase, exported, gates) : lockdown.unlockedAttestation()
+  if (locked) verification.evidence.push(...lockdown.lockdownEvidence(exported))
+  // Advisory: are any bundled assets byte-identical to ones that already exist
+  // in another run or a known local library?
+  const { assetProvenance, assetProvenanceCheck, blindArtifactCheck } = await import('./lockdown/provenance.mjs')
+  const provenance = assetProvenance(root, id, stageDir)
+  verification.assetProvenance = { ...provenance, files: undefined }
+  verification.evidence.push(assetProvenanceCheck(provenance))
+  // Advisory: does the artifact itself say which run (and so which model) it is?
+  const { findStrings } = await import('./lockdown/session.mjs')
+  verification.evidence.push(blindArtifactCheck(stageDir, id, [...new Set(findStrings(stageDir, [id], { minLength: 3 }).map((hit) => hit.path))].filter((file) => !file.startsWith('dist/') && !file.startsWith('node_modules/'))))
   writeJson(path.join(root, 'runs', id, 'verifications', `stage${phase}.json`), verification)
   if (!verification.passed) {
     const failures = [...verification.checks, ...verification.evidence].filter((check) => !check.passed)
@@ -135,19 +178,30 @@ async function seal(root, id, options) {
   markSealed(root, id, phase, verification)
   const usage = telemetryFromFlags(options)
   if (Object.keys(usage).length > 0) recordTelemetry(root, id, phase, usage)
+  // Record how the phase was contained next to its digest.
+  const sealedRun = loadRun(root, id)
+  const sealedStage = stageState(sealedRun, phase)
+  sealedStage.isolation = locked
+    ? { mode: 'lockdown', gatewayHead: verification.isolation.gateway.head, denied: verification.isolation.gateway.denied, record: `runs/${id}/lockdown/stage${phase}.json` }
+    : { mode: 'none' }
+  saveRun(root, sealedRun)
   // Archive the agent sessions that produced this phase (scrubbed + zstd) as
   // sidecar records in runs/<id>/transcripts/ — after the digest is recorded
   // and outside stage<N>/, so they are never part of the sealed artifact.
   // Missing transcripts warn and record a gap; they never fail the seal.
+  // A locked phase's sessions were written inside the box, not under the
+  // operator's home, so they are handed over explicitly from the export.
   console.error('→ archiving agent transcripts')
   const transcripts = recordPhaseTranscripts(root, id, {
     kind: 'candidate',
     phase,
     workspace: workspaceDir(root, id, phase),
-    explicit: parseTranscriptList(options.transcripts),
+    explicit: [...parseTranscriptList(options.transcripts), ...(locked ? lockdown.sessionTranscriptFiles(exported) : [])],
     since: Date.parse(stage.startedAt) || null,
     command: 'seal',
   })
+  // Keep the boundary's own record with the run, then close the box.
+  if (locked) lockdown.archiveAndClose(root, id, phase, verification.isolation, gates)
   removeWorkspace(root, id, phase)
   await reindexRegistry(root)
   const sealed = loadRun(root, id)
@@ -156,6 +210,9 @@ async function seal(root, id, options) {
     phase,
     artifactDigest: verification.artifactDigest,
     preview: sealed.previews?.[String(phase)],
+    isolation: verification.isolation.mode,
+    ...(locked ? { lockdown: { gatewayHead: verification.isolation.gateway.head, deniedEgress: verification.isolation.gateway.denied, honeytoken: verification.isolation.honeytoken, droppedOnExport: verification.isolation.export.dropped.length } } : {}),
+    assetProvenance: { assets: provenance.assets, matched: provenance.matched, matchedOrigins: provenance.matchedOrigins },
     telemetry: sealed.stages.find((entry) => entry.number === phase)?.telemetry ?? null,
     transcripts,
     next: statusSummary(sealed).next,
@@ -244,12 +301,19 @@ async function score(root, id, options) {
     if (currentDigest !== stage.artifactDigest) throw new Error(`Phase ${phase} changed after sealing; run seal again before scoring`)
   }
   // Gates run against a throwaway copy out of the repo, so the sealed stage
-  // directory is never mutated. --sandbox (or STAGEBENCH_SANDBOX=1) runs them
-  // in Docker.
+  // directory is never mutated. For a run that requires the lockdown — or with
+  // --sandbox / STAGEBENCH_SANDBOX=1 — they run inside the lockdown box, so
+  // candidate code never executes on this machine (--host-gates opts out).
   const technicalChecks = await runGates(root, stageDir, rubric, {
     skip: options['skip-checks'] === 'true',
-    sandbox: options.sandbox === 'true' || process.env.STAGEBENCH_SANDBOX === '1',
+    sandbox: options.sandbox === 'true' || process.env.STAGEBENCH_SANDBOX === '1' || (run.isolation === 'lockdown' && options['host-gates'] !== 'true'),
   })
+  // Boxed gates come back with the log of what they fetched; keep it with the run.
+  if (technicalChecks.gateway?.events) {
+    const lockdownDir = path.join(root, 'runs', id, 'lockdown')
+    fs.mkdirSync(lockdownDir, { recursive: true })
+    fs.writeFileSync(path.join(lockdownDir, `stage${phase}.score-gates.gateway.jsonl`), technicalChecks.gateway.events)
+  }
   const evaluation = scoreAssessment(rubric, assessment, technicalChecks, evaluatorOptions)
   const evaluationPath = path.join(root, 'runs', id, 'evaluations', `stage${phase}.json`)
   // Archive the filled assessment as part of the run record before the
@@ -357,15 +421,21 @@ function runWorkspaces(root, run) {
 // Remove a run's transient workspaces. Evaluator and gates workspaces are
 // always safe to drop (regenerable). An implementation workspace for a phase
 // that is still `running` holds unsealed work, so it is kept unless --force.
-function cleanWorkspaces(root, run, { force = false } = {}) {
+async function cleanWorkspaces(root, run, { force = false } = {}) {
   const runningPhases = new Set((run.stages ?? []).filter((stage) => stage.status === 'running').map((stage) => stage.number))
   const removed = []
   const kept = []
   const { work, eval: evaluations } = runWorkspaces(root, run)
+  const { loadSession, destroySession } = await import('./lockdown/session.mjs')
   for (const entry of work) {
     if (runningPhases.has(entry.phase) && !force) {
       kept.push({ ...entry, kind: 'work', reason: 'phase is running; pass --force to remove unsealed work' })
       continue
+    }
+    // A locked phase's source lives in container volumes, not in the workspace.
+    if (loadSession(root, run.id, entry.phase)) {
+      destroySession(root, run.id, entry.phase, { keepState: false })
+      removed.push({ ...entry, kind: 'lockdown-session' })
     }
     removeWorkspace(root, run.id, entry.phase)
     removed.push({ ...entry, kind: 'work' })
@@ -380,8 +450,8 @@ function cleanWorkspaces(root, run, { force = false } = {}) {
 function printHelp() {
   console.log('Stagebench bench CLI\n')
   console.log('Usage: pnpm bench <command> [args]\n')
-  for (const [command, description] of Object.entries(COMMANDS)) console.log(`  ${command.padEnd(8)} ${description}`)
-  console.log('\nA phase flows: start → implement in the workspace → seal → score (twice).')
+  for (const [command, description] of Object.entries(COMMANDS)) console.log(`  ${command.padEnd(14)} ${description}`)
+  console.log('\nA phase flows: start → agent (implements inside the lockdown) → seal → score (twice).')
 }
 
 try {
@@ -398,7 +468,7 @@ try {
       preflight(root, options.variant)
       result = createRun(root, options)
       await reindexRegistry(root)
-      result = { id: result.id, targetPhase: result.targetPhase, selectedPhases: result.selectedPhases, next: `pnpm bench start ${result.id}` }
+      result = { id: result.id, targetPhase: result.targetPhase, selectedPhases: result.selectedPhases, isolation: result.run.isolation, next: `pnpm bench start ${result.id}` }
     } else if (command === 'promote') {
       result = promoteRun(root, id, options.to, { replace: options.replace === 'true' })
       await reindexRegistry(root)
@@ -411,13 +481,71 @@ try {
       await reindexRegistry(root)
     } else if (command === 'start') {
       result = startPhase(root, id)
-      appendOperatorEvent(root, id, { command: 'start', phase: result.phase, workspace: result.workspace, reused: result.reused })
-      result.next = `Point the implementation agent at ${result.workspace}/WORKSPACE.md, then run pnpm bench seal ${id}`
+      result.isolation = loadRun(root, id).isolation ?? 'none'
+      appendOperatorEvent(root, id, { command: 'start', phase: result.phase, workspace: result.workspace, reused: result.reused, isolation: result.isolation })
+      result.next = result.isolation === 'lockdown'
+        ? `Run the implementation agent inside the lockdown: pnpm bench agent ${id} --harness <codex|claude|custom> [--model ...]. Then run pnpm bench seal ${id}`
+        : `Point the implementation agent at ${result.workspace}/WORKSPACE.md, then run pnpm bench seal ${id}`
+    } else if (command === 'agent') {
+      const run = loadRun(root, id)
+      const stage = nextPhase(run)
+      if (!stage || stage.status !== 'running') throw new Error(`${id} has no running phase; run pnpm bench start ${id} first`)
+      if (!options.harness) throw new Error('--harness is required (codex, claude, or custom)')
+      const { launchAgent } = await import('./lockdown/session.mjs')
+      const launched = await launchAgent(root, {
+        id, phase: stage.number, workspace: workspaceDir(root, id, stage.number), harness: options.harness, options,
+        onOutput: (text) => process.stderr.write(text),
+      })
+      result = {
+        id,
+        phase: stage.number,
+        session: launched.session,
+        harness: launched.launch.harnessLabel,
+        harnessVersion: launched.launch.harnessVersion ?? null,
+        exitCode: launched.launch.exitCode,
+        log: launched.logFile,
+        gateway: { chainOk: launched.gateway.chainOk, head: launched.gateway.head, modelRequests: launched.gateway.modelRequests, strippedTools: launched.gateway.strippedTools, deniedEgress: launched.gateway.denied, deniedTargets: launched.gateway.deniedTargets, usage: launched.gateway.usage },
+        next: launched.launch.exitCode === 0
+          ? `pnpm bench seal ${id}   (or send a follow-up: pnpm bench agent ${id} --harness ${options.harness} --prompt "...")`
+          : `The agent exited ${launched.launch.exitCode}. Read ${launched.logFile}, then relaunch or follow up with pnpm bench agent ${id} --harness ${options.harness} --prompt "..."`,
+      }
+      // Every launch — and so every message an operator sends a boxed
+      // candidate — lands in the run's operator log.
+      appendOperatorEvent(root, id, {
+        command: 'agent',
+        phase: stage.number,
+        isolation: 'lockdown',
+        session: launched.session,
+        harness: launched.launch.harnessLabel,
+        harnessVersion: launched.launch.harnessVersion ?? null,
+        kind: launched.launch.kind,
+        interactive: launched.launch.interactive,
+        promptSha256: launched.launch.promptSha256,
+        ...(launched.launch.kind === 'follow-up' ? { operatorMessage: launched.launch.prompt } : {}),
+        exitCode: launched.launch.exitCode,
+        gatewayHead: launched.gateway.head,
+        deniedEgress: launched.gateway.denied,
+      })
+      if (launched.launch.exitCode !== 0) process.exitCode = 1
     } else if (command === 'exec') {
       const run = loadRun(root, id)
       const stage = nextPhase(run)
       if (!stage || stage.status !== 'running') throw new Error(`${id} has no running phase; run pnpm bench start ${id} first`)
-      result = runInContainer(root, id, stage.number, options.command, { image: options.image, network: options.network })
+      if (!options.command?.length) throw new Error('A command is required after --command')
+      const { execInSession } = await import('./lockdown/session.mjs')
+      const executed = await execInSession(root, {
+        id, phase: stage.number, workspace: workspaceDir(root, id, stage.number), command: options.command,
+        onOutput: (text) => process.stderr.write(text),
+      })
+      if (executed.status !== 0) throw new Error(`Command exited ${executed.status} inside the lockdown`)
+      result = { ok: true, isolation: 'lockdown', command: options.command }
+    } else if (command === 'lockdown-setup') {
+      const { setupLockdown } = await import('./lockdown/setup.mjs')
+      result = await setupLockdown({ rebuild: options.rebuild === 'true', onOutput: (text) => process.stderr.write(text) })
+    } else if (command === 'redteam') {
+      const { runRedTeam } = await import('./lockdown/redteam/run.mjs')
+      result = await runRedTeam(root, { ...options, onOutput: (text) => process.stderr.write(text) })
+      if (!result.passed) process.exitCode = 1
     } else if (command === 'seal') {
       result = await seal(root, id, options)
     } else if (command === 'telemetry') {
@@ -469,11 +597,15 @@ try {
       if (options.all === 'true') {
         const base = path.dirname(workspaceRoot(root, 'work'))
         for (const kind of ['work', 'eval', 'gates']) fs.rmSync(workspaceRoot(root, kind), { recursive: true, force: true })
+        // Locked phases keep their source in container volumes; drop those too
+        // when an engine is reachable.
+        const lockdownRuntime = await import('./lockdown/runtime.mjs')
+        if (lockdownRuntime.detectRuntime()) (await import('./lockdown/session.mjs')).destroyAllSessions(root)
         result = { cleaned: 'all', base }
       } else {
         if (!id) throw new Error('clean requires a run id (or --all)')
         fs.rmSync(path.join(workspaceRoot(root, 'gates')), { recursive: true, force: true })
-        result = cleanWorkspaces(root, loadRun(root, id), { force: options.force === 'true' })
+        result = await cleanWorkspaces(root, loadRun(root, id), { force: options.force === 'true' })
       }
     } else if (command === 'export') {
       if (!id) throw new Error('export requires a run id')

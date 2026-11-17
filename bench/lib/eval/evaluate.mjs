@@ -198,73 +198,72 @@ function provisionNodeTypes(scratch, source) {
   fs.cpSync(source, destination, { recursive: true, dereference: true })
 }
 
-// Run the required gates inside Docker: the scratch copy mounted writable,
-// registry network for the install, no repository mounted. Coarse per-gate
-// results are parsed from GATE-marker lines so one failing gate does not hide
-// the others. Requires a working Docker daemon.
-async function runGatesInDocker(scratch, rubric, image, nodeTypes) {
-  const scripts = rubric.technicalGate.requiredChecks
-  const probe = spawnSync('docker', ['version'], { encoding: 'utf8' })
-  if (probe.status !== 0) throw new Error('--sandbox requires Docker, but `docker version` failed')
+// Run the required gates inside the lockdown box (bench/lockdown): a copy of
+// the scratch tree in a fresh volume, the registry mirror as the only network,
+// nothing of this machine mounted. Each gate is its own container, so pass or
+// fail is the process exit status rather than anything the candidate's scripts
+// print. The build is copied back into the scratch tree for the artifact check.
+async function runGatesInLockdown(root, scratch, rubric, nodeTypes) {
+  const { runGatesInBox } = await import('../../lockdown/session.mjs')
   const packageJson = fs.existsSync(path.join(scratch, 'package.json')) ? readJson(path.join(scratch, 'package.json')) : {}
   const lintProbeRelative = lintProbePathFor(scratch, packageJson)
-  const program = [
-    'pnpm install --prefer-offline || { echo "GATE::install::FAIL"; exit 3; }',
+  let lintCovered = null
+  const { checks: gates, gateway } = await runGatesInBox(root, scratch, {
+    scripts: rubric.technicalGate.requiredChecks,
+    onOutput: (text) => process.stderr.write(text),
     // Legacy fallback only: mirror the ambient platform types after install if
     // the artifact didn't install its own (see provisionNodeTypes — the
     // package.json check rejects a bare/partial directory).
-    ...(nodeTypes ? ['[ -f node_modules/@types/node/package.json ] || { rm -rf node_modules/@types/node && mkdir -p node_modules/@types && cp -RL /ambient/node node_modules/@types/node; }'] : []),
-    ...scripts.map((script) => `if pnpm run ${script}; then echo "GATE::${script}::PASS"; else echo "GATE::${script}::FAIL"; fi`),
+    afterInstall: async ({ run, runWritable, copyDirectory }) => {
+      if (!nodeTypes) return
+      const present = await run(['test', '-f', 'node_modules/@types/node/package.json'], 'types-probe', 60_000)
+      if (present.status === 0) return
+      await runWritable(['rm', '-rf', 'node_modules/@types/node'], 'types-clear', 60_000)
+      await copyDirectory(nodeTypes, 'node_modules/@types/node')
+    },
     // Advisory lint-coverage probe, after the required gates so they see the
-    // artifact as sealed. The path is resolved on the host against the same
-    // bind-mounted copy. Quoted heredoc: the probe is literal, not expanded.
-    ...(lintProbeRelative
-      ? [
-        `cat > ${JSON.stringify(lintProbeRelative)} <<'STAGEBENCH_PROBE_EOF'`,
-        LINT_PROBE_SOURCE.trimEnd(),
-        'STAGEBENCH_PROBE_EOF',
-        `if pnpm run lint 2>&1 | grep -q ${LINT_PROBE_STEM}; then echo "GATE::lint-coverage::PASS"; else echo "GATE::lint-coverage::FAIL"; fi`,
-        `rm -f ${JSON.stringify(lintProbeRelative)}`,
-      ]
-      : []),
-  ].join('\n')
-  const args = [
-    'run', '--rm', '--init', '--network=bridge', '--memory=16g', '--cpus=8',
-    '--mount', `type=bind,source=${scratch},target=/workspace`,
-    ...(nodeTypes ? ['--mount', `type=bind,source=${nodeTypes},target=/ambient/node,readonly`] : []),
-    '--workdir', '/workspace',
-    image, 'sh', '-lc', program,
-  ]
-  let output = ''
-  const result = await runCommand('docker', args, { timeout: 900_000, onOutput: (text) => { output += text } })
-  if (/GATE::install::FAIL/.test(output)) throw new Error(`Sandboxed install failed:\n${outputTail(output)}`)
-  const checks = scripts.map((script) => {
-    const passed = new RegExp(`GATE::${script}::PASS`).test(output)
-    return { id: script, label: script, passed, detail: passed ? 'Passed (sandboxed)' : outputTail(output) }
+    // artifact as sealed.
+    afterGates: async ({ run, writeFiles }) => {
+      if (!lintProbeRelative) return
+      // Advisory: a probe that cannot be placed is a probe that did not report,
+      // not a reason for the required gates to be lost.
+      try {
+        writeFiles([{ path: lintProbeRelative, content: LINT_PROBE_SOURCE }])
+      } catch {
+        lintCovered = false
+        return
+      }
+      // Grep inside the box: a lint that walks node_modules can print far more
+      // than is worth streaming back just to find one filename.
+      const linted = await run(['sh', '-c', `pnpm run lint 2>&1 | grep -q ${LINT_PROBE_STEM}`], 'lint-probe', 300_000)
+      lintCovered = linted.status === 0
+    },
   })
-  if (result.error && !checks.some((check) => !check.passed)) checks.push({ id: 'test', label: 'test', passed: false, detail: outputTail(result.error.message) })
+  const checks = gates.map((gate) => ({ id: gate.id, label: gate.id, passed: gate.passed, durationMs: gate.durationMs, detail: gate.passed ? 'Passed (lockdown)' : outputTail(gate.detail) }))
   const artifactPath = path.join(scratch, 'dist', 'index.html')
   checks.push({ id: 'artifact', label: 'Built phase artifact', passed: fs.existsSync(artifactPath), detail: fs.existsSync(artifactPath) ? 'dist/index.html present' : 'Missing dist/index.html' })
   if (lintProbeRelative) {
-    const covered = /GATE::lint-coverage::PASS/.test(output)
     checks.push({
       id: 'lint-coverage',
       label: 'Lint covers candidate sources',
       advisory: true,
-      passed: covered,
-      detail: covered
-        ? `Lint reported the probe at ${lintProbeRelative}, so the script covers the candidate's own sources (sandboxed)`
-        : `Lint did not report a deliberate violation at ${lintProbeRelative}, so the script exits without checking the candidate's own sources (sandboxed)`,
+      passed: lintCovered === true,
+      detail: lintCovered
+        ? `Lint reported the probe at ${lintProbeRelative}, so the script covers the candidate's own sources (lockdown)`
+        : `Lint did not report a deliberate violation at ${lintProbeRelative}, so the script exits without checking the candidate's own sources (lockdown)`,
     })
   }
+  // Not a check: the hash-chained log of what the gates fetched, for the caller to keep.
+  Object.defineProperty(checks, 'gateway', { value: gateway, enumerable: false })
   return checks
 }
 
 // Run the technical gates against a throwaway copy of the sealed artifact,
 // out of the repository tree, so the sealed runs/<id>/stage<N> directory is
 // never mutated (no node_modules written into it) and candidate code never
-// executes inside the working tree. Cleans up the copy afterward.
-export async function runGates(root, stageDir, rubric, { skip = false, sandbox = false, image = 'node:24-bookworm-slim' } = {}) {
+// executes inside the working tree. With `sandbox`, it never executes on this
+// machine at all. Cleans up the copy afterward.
+export async function runGates(root, stageDir, rubric, { skip = false, sandbox = false } = {}) {
   if (skip) return skippedTechnicalChecks(stageDir, rubric)
   const scratch = path.join(workspaceRoot(root, 'gates'), `${path.basename(path.dirname(stageDir))}-${path.basename(stageDir)}`)
   fs.rmSync(scratch, { recursive: true, force: true })
@@ -272,7 +271,7 @@ export async function runGates(root, stageDir, rubric, { skip = false, sandbox =
   try {
     fs.cpSync(stageDir, scratch, { recursive: true, dereference: false, filter: (entry) => !GATE_COPY_EXCLUDES.has(path.basename(entry)) })
     const nodeTypes = ambientNodeTypes(root)
-    if (sandbox) return await runGatesInDocker(scratch, rubric, image, nodeTypes)
+    if (sandbox) return await runGatesInLockdown(root, scratch, rubric, nodeTypes)
     installDependencies(scratch)
     provisionNodeTypes(scratch, nodeTypes)
     return await runTechnicalChecks(scratch, rubric)

@@ -1,0 +1,18 @@
+#!/bin/sh
+# Run a StageBench implementation agent inside the lockdown.
+#
+#   scripts/bench-lockdown-run <run-id> --harness <codex|claude|custom> [options]
+#
+# A thin name for `pnpm bench agent`; see docs/LOCKDOWN.md. The phase must be
+# started first (`pnpm bench start <run-id>`). Everything the agent does — its
+# shell, its MCP servers, its REPLs, its subprocesses, any nested agent — runs
+# in a container with none of this machine's filesystem and no network except
+# its own model API and a read-only package mirror.
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+if [ "$#" -lt 1 ]; then
+  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  exit 2
+fi
+exec node "$repo_root/bench/cli.mjs" agent "$@" --root "$repo_root"

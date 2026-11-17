@@ -45,19 +45,21 @@ Prefer the preview servers in `.claude/launch.json` (`dev`, `showcase`) over ad-
 `pnpm bench <command>` orchestrates the run lifecycle:
 
 - `fetch` — download the Nord manual PDF (and any missing product photos) into `reference/` (manual stays gitignored)
-- `new --model <id> --target <1|2|3> [--variant stage-4-73]` — create a run
+- `new --model <id> --target <1|2|3> [--variant stage-4-73] [--isolation lockdown|none]` — create a run (lockdown is the default)
 - `start <run-id>` — create the isolated phase workspace (clones `bench/starter/`)
-- `exec <run-id> --command "..."` — run a command inside the run's container
-- `seal <run-id> [--cost-usd N ...]` — import, validate gates, Playwright capture, verify contract, freeze the phase
-- `score <run-id>` — first call builds the isolated, blind-handled evaluator workspace (artifact copy + rubric + specs + template); second call (after the evaluator fills `assessment.json`) reruns gates against an out-of-repo copy and registers the evaluation. Panels: extra `assessment.<n>.json` files median-merge. `--sandbox` runs gates in Docker.
+- `agent <run-id> --harness <codex|claude|custom>` — run the implementation agent inside the lockdown: a container with none of this machine's filesystem and no network but its model API and package mirrors (`docs/LOCKDOWN.md`). Rerun with `--prompt "..."` to send a follow-up to the same session
+- `exec <run-id> --command "..."` — run a command in the phase's lockdown box
+- `lockdown-setup` / `redteam` — build the lockdown images and check the engine / attack the boundary from inside (`docs/LOCKDOWN-REDTEAM.md`)
+- `seal <run-id> [--cost-usd N ...]` — import (for a locked phase: export from its container volume), validate gates (in the box), Playwright capture, verify contract, freeze the phase
+- `score <run-id>` — first call builds the isolated, blind-handled evaluator workspace (artifact copy + rubric + specs + template); second call (after the evaluator fills `assessment.json`) reruns gates against an out-of-repo copy and registers the evaluation. Panels: extra `assessment.<n>.json` files median-merge. Gates run inside the lockdown box for runs that require it (or with `--sandbox`).
 - `status <run-id>` / `clean <run-id> [--all]` / `export <run-id>` / `reindex` / `showcase` (publishes showcase build to `public/previews/showcase/`)
 - `thumbs [<run-id>]` — regenerate the gallery's hover thumbnails (`public/previews/<id>/stage<N>/thumb.jpg`) by shooting each published preview and cropping to the instrument chassis. Run it after publishing a new preview; the gallery derives the URL from `previewPath`, so a run without one simply shows no hover card.
-- **Transient workspaces (work/eval/gates) live under `~/.stagebench/<repo-key>/`, not in the repo tree** — override with `STAGEBENCH_HOME`. Sealed `runs/<id>/stage<N>/` never contains `node_modules` (gates run on a copy).
+- **Transient workspaces (work/eval/gates, plus lockdown session state and its post-seal archive) live under `~/.stagebench/<repo-key>/`, not in the repo tree** — override with `STAGEBENCH_HOME`. A locked phase's candidate source lives in a container volume until seal exports it. Sealed `runs/<id>/stage<N>/` never contains `node_modules` (gates run on a copy).
 
 ## Layout & architecture
 
 - `src/` — gallery app (React 19 + Vite). `App.tsx` renders the run index, a live preview iframe (`?run=<id>&phase=<N>`), and a playable keyboard rail. Its data source is the generated `src/data/runs.json` — built from `runs/*/run.json` by `pnpm bench reindex` (run automatically on predev/prebuild). Never edit generated files under `src/data/`.
-- `bench/` — the harness: `lib/run/` (store, workspace, verify, capture, export), `lib/eval/` (technical checks, rubric scoring, reports), `rubric.json`, `schemas/`, and `starter/` (the template agents clone).
+- `bench/` — the harness: `lib/run/` (store, workspace, verify, capture, export), `lib/eval/` (technical checks, rubric scoring, reports), `lockdown/` (the candidate boundary: container images, egress gateway, sessions, harness adapters, red-team), `rubric.json`, `schemas/`, and `starter/` (the template agents clone).
 - `runs/<id>/` — one directory per benchmark run. `run.json` is the authoritative state (stages, verification, evaluation, telemetry). **Sealed stage directories (`stage1/`–`stage3/`) are immutable evidence — never modify them.** Legacy (pre-schema-v4) runs keep frozen scores and are read-only to the CLI.
 - `showcase/` — the flagship Nord Stage 4 implementation. It is *not* a benchmark run: it was seeded from the best-scoring artifact and iterated further (log in `showcase/SHOWCASE.md`). It must keep passing its own test/typecheck/lint/build gates. Internal structure: `src/audio/` (engines + effects graph, one AudioContext with per-layer buses), `src/model/` (typed hardware model), `src/components/`, `src/input/` (MIDI/keyboard/pointer with injectable boundaries for tests), `src/state/`.
 - `recording/` — countdown-video pipeline (its own package: `pnpm -C recording install`): records sealed previews playing a song on their own keybeds and cuts them into a feed video, one keyboard at a time counting down the StageBench ranking. Shows (`recording/shows/*.json`) set song, models and length; `recording/models.json` holds per-run capture fixtures; house style is fixed in `recording/scripts/compose.mjs`. Docs: `recording/README.md`; skill: `.claude/skills/countdown-video`.

@@ -85,6 +85,12 @@ function deriveHarness(provider, explicit) {
   if (explicit && String(explicit).trim()) return String(explicit).trim()
   return HARNESS_BY_PROVIDER[String(provider ?? '').toLowerCase()] ?? null
 }
+function resolveIsolation(requested) {
+  const mode = String(requested ?? (process.env.STAGEBENCH_ISOLATION === 'none' ? 'none' : 'lockdown')).trim()
+  if (!['lockdown', 'none'].includes(mode)) throw new Error(`--isolation must be "lockdown" or "none" (got "${mode}")`)
+  return mode
+}
+
 export function createRun(root, metadata = {}, now = new Date()) {
   if (!metadata.model?.trim()) throw new Error('--model is required')
   const { value: protocol, digest } = loadProtocol(root)
@@ -115,6 +121,9 @@ export function createRun(root, metadata = {}, now = new Date()) {
     startedAt: timestamp,
     updatedAt: timestamp,
     ...(metadata.notes ? { notes: String(metadata.notes) } : {}),
+    // How the candidate must be contained. New runs are locked down unless the
+    // operator opts out at creation, and the opt-out is part of the record.
+    isolation: resolveIsolation(metadata.isolation),
     agent: {
       provider: metadata.provider ?? 'unknown',
       harness: deriveHarness(metadata.provider, metadata.harness),
@@ -354,8 +363,11 @@ export function statusSummary(run) {
     const unscored = run.stages.find((entry) => !entry.evaluation)
     return { id: run.id, status: run.status, next: unscored ? `pnpm bench score ${run.id} --phase ${unscored.number}` : 'Done: all phases sealed and scored.' }
   }
-  const next = stage.status === 'queued' ? `pnpm bench start ${run.id}` : `implement in the workspace, then pnpm bench seal ${run.id}`
-  return { id: run.id, status: run.status, phase: stage.number, phaseStatus: stage.status, next }
+  const implement = run.isolation === 'lockdown'
+    ? `pnpm bench agent ${run.id} --harness <codex|claude|custom>, then pnpm bench seal ${run.id}`
+    : `implement in the workspace, then pnpm bench seal ${run.id}`
+  const next = stage.status === 'queued' ? `pnpm bench start ${run.id}` : implement
+  return { id: run.id, status: run.status, isolation: run.isolation ?? 'none', phase: stage.number, phaseStatus: stage.status, next }
 }
 
 const LEGACY_STAGE_STATUS = {

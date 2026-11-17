@@ -4,7 +4,6 @@
 // unassigned variants, or scoring materials.
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { hashTree, loadProtocol, readJson, workspaceRoot, writeJson } from '../shared.mjs'
 import { filterTaskToPhase, projectProtocol, projectVariants } from '../materials.mjs'
 import { loadRun, markRunning, nextPhase, stageDirFor } from './store.mjs'
@@ -32,6 +31,110 @@ function copyInput(root, relativePath, inputRoot) {
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   fs.copyFileSync(source, destination)
   return relativePath
+}
+
+// The phase prompts tell candidates to "use the parent capture harness". That
+// harness lives in bench/, which a candidate must never read — and inside the
+// lockdown cannot. So a self-contained copy travels with the inputs: the same
+// capture code, with its one harness import inlined.
+const CAPTURE_HARNESS_IMPORT = "import { writeJson } from '../shared.mjs'\n"
+const CAPTURE_HARNESS_INLINE = [
+  '// Self-contained copy of the benchmark capture harness, shipped in inputs/harness/.',
+  'function writeJson(filePath, value) {',
+  '  fs.mkdirSync(path.dirname(filePath), { recursive: true })',
+  "  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\\n`)",
+  '}',
+  '',
+].join('\n')
+
+export function captureHarnessSource() {
+  // The harness's own copy, beside this module — what seal itself runs.
+  const source = fs.readFileSync(path.join(import.meta.dirname, 'capture.mjs'), 'utf8')
+  if (!source.includes(CAPTURE_HARNESS_IMPORT)) throw new Error('bench/lib/run/capture.mjs no longer imports only writeJson from shared.mjs; update captureHarnessSource so the shipped copy stays self-contained')
+  const shipped = source.replace(CAPTURE_HARNESS_IMPORT, CAPTURE_HARNESS_INLINE)
+  if (/from '\.\.?\//.test(shipped)) throw new Error('The shipped capture harness still has a relative import')
+  return shipped
+}
+
+// One command for a candidate to run the canonical capture against its own
+// build. It loads Playwright from the candidate's dependencies (this file sits
+// outside the candidate's node_modules) and writes where the verifier looks.
+const CAPTURE_COMMAND = `#!/usr/bin/env node
+// Canonical evidence capture for a candidate build.
+//
+//   cd candidate && pnpm build && node ../inputs/harness/capture-evidence.mjs --phase <N>
+//
+// Serves ./dist and writes, into ./evidence/:
+//   stage<N>-desktop.png (1440x900), stage<N>-narrow.png (390x844), stage<N>-capture.json
+// Needs \`playwright\` in the candidate's devDependencies.
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { createRequire } from 'node:module'
+import { captureEvidence, serveDirectory } from './capture.mjs'
+
+const args = process.argv.slice(2)
+const option = (name, fallback) => (args.includes(\`--\${name}\`) ? args[args.indexOf(\`--\${name}\`) + 1] : fallback)
+const phase = Number(option('phase'))
+const dist = path.resolve(option('dist', 'dist'))
+const out = path.resolve(option('out', 'evidence'))
+if (![1, 2, 3].includes(phase)) {
+  console.error('usage: node ../inputs/harness/capture-evidence.mjs --phase <1|2|3> [--dist dist] [--out evidence]')
+  process.exit(2)
+}
+if (!fs.existsSync(path.join(dist, 'index.html'))) {
+  console.error(\`No build at \${dist}; run pnpm build first.\`)
+  process.exit(1)
+}
+let chromium
+try {
+  ;({ chromium } = createRequire(path.join(process.cwd(), 'package.json'))('playwright'))
+} catch {
+  console.error('Playwright is not installed here. Add it to the candidate: pnpm add -D playwright')
+  process.exit(1)
+}
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'capture-'))
+const server = await serveDirectory(dist)
+try {
+  await captureEvidence(scratch, { id: 'local', phase, url: server.url, chromium })
+} finally {
+  await server.close()
+}
+const produced = path.join(scratch, 'runs', 'local', \`stage\${phase}\`, 'evidence')
+fs.mkdirSync(out, { recursive: true })
+for (const name of fs.readdirSync(produced)) {
+  fs.copyFileSync(path.join(produced, name), path.join(out, name))
+  console.log(path.relative(process.cwd(), path.join(out, name)))
+}
+fs.rmSync(scratch, { recursive: true, force: true })
+`
+
+function writeCaptureHarness(inputRoot) {
+  const directory = path.join(inputRoot, 'harness')
+  fs.mkdirSync(directory, { recursive: true })
+  fs.writeFileSync(path.join(directory, 'capture.mjs'), captureHarnessSource())
+  fs.writeFileSync(path.join(directory, 'capture-evidence.mjs'), CAPTURE_COMMAND)
+  fs.writeFileSync(path.join(directory, 'README.md'), [
+    '# Capture harness',
+    '',
+    'This is the benchmark\'s canonical screenshot harness: the "parent capture harness" the phase prompt refers to.',
+    'It is the same code the operator runs at seal time, which re-captures the canonical evidence under its own control',
+    'whatever is produced here.',
+    '',
+    'From `candidate/`, after a build, with `playwright` in your dev dependencies:',
+    '',
+    '```sh',
+    'node ../inputs/harness/capture-evidence.mjs --phase <N>',
+    '```',
+    '',
+    'It serves `dist/` and writes `evidence/stage<N>-desktop.png`, `evidence/stage<N>-narrow.png`, and',
+    '`evidence/stage<N>-capture.json`. Phase evidence lives in `evidence/` at the top of `candidate/`; your',
+    '`stage<N>-visual-audit.md` goes there too.',
+    '',
+    '`capture.mjs` is the library behind the command (`captureEvidence`, `serveDirectory`) if you want to drive it yourself.',
+    '',
+  ].join('\n'))
+  return ['harness/README.md', 'harness/capture-evidence.mjs', 'harness/capture.mjs']
 }
 
 // Create (or reuse) the workspace for the run's next phase and mark it
@@ -72,6 +175,7 @@ export function startPhase(root, id) {
     if (fs.existsSync(path.join(root, reference))) files.push(reference)
   }
   const copied = [...new Set(files)].map((file) => copyInput(root, file, inputs))
+  copied.push(...writeCaptureHarness(inputs))
   // Generated projections: the task and phase manifest filtered to phases ≤
   // the current one, and only the assigned variant.
   fs.writeFileSync(path.join(inputs, 'TASK.md'), filterTaskToPhase(fs.readFileSync(path.join(root, 'TASK.md'), 'utf8'), phase))
@@ -87,16 +191,19 @@ export function startPhase(root, id) {
     createdAt: new Date().toISOString(),
   })
   fs.writeFileSync(path.join(workspace, 'WORKSPACE.md'), [
-    `# Stagebench Phase ${phase} workspace — ${id}`,
+    // The candidate is not told which run it is: a run id is a model slug, and
+    // anything the candidate writes into its artifact reaches the grader.
+    `# Stagebench Phase ${phase} workspace`,
     '',
     `Implement Phase ${phase} inside \`candidate/\` only. Everything you need is in \`inputs/\`:`,
     '',
     `1. Read \`inputs/${contract.prompt}\` — the phase instructions.`,
     `2. Read \`inputs/TASK.md\` and the assigned specs under \`inputs/specs/\`.`,
     `3. Variant: **${variant.label}** (\`inputs/${variant.referenceImage}\` if fetched).`,
+    '4. The capture harness the prompt refers to: from `candidate/`, run `node ../inputs/harness/capture-evidence.mjs --phase ' + phase + '` after a build. Evidence lives in `candidate/evidence/` (see `inputs/harness/README.md`).',
     '',
     'Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` inside `candidate/` before finishing.',
-    `When done, the operator runs \`pnpm bench seal ${id}\` from the repository.`,
+    'When done, the operator seals the phase.',
     '',
   ].join('\n'))
 
@@ -122,30 +229,4 @@ export function importWorkspace(root, id, phase) {
 
 export function removeWorkspace(root, id, phase) {
   fs.rmSync(workspaceDir(root, id, phase), { recursive: true, force: true })
-}
-
-// Run a command inside the phase workspace in a Docker sandbox: the candidate
-// directory is writable, the inputs are read-only, the host repository is not
-// mounted, and the network is off unless the registry track is requested.
-export function runInContainer(root, id, phase, command, options = {}) {
-  const workspace = workspaceDir(root, id, phase)
-  const candidate = path.join(workspace, 'candidate')
-  const inputs = path.join(workspace, 'inputs')
-  if (!fs.existsSync(candidate) || !fs.existsSync(inputs)) throw new Error(`Missing Phase ${phase} workspace; run pnpm bench start ${id} first`)
-  if (!command?.length) throw new Error('A command is required after --command')
-  const image = options.image ?? 'node:24-bookworm-slim'
-  const network = options.network === 'registry' ? 'bridge' : 'none'
-  const args = [
-    'run', '--rm', '--init', `--network=${network}`,
-    '--memory=16g', '--cpus=8',
-    '--mount', `type=bind,source=${candidate},target=/workspace/candidate`,
-    '--mount', `type=bind,source=${inputs},target=/workspace/inputs,readonly`,
-    '--workdir', '/workspace/candidate',
-    image,
-    'sh', '-lc', command,
-  ]
-  const result = spawnSync('docker', args, { cwd: root, encoding: 'utf8', stdio: 'inherit' })
-  if (result.error) throw new Error(`Docker execution failed: ${result.error.message}`)
-  if (result.status !== 0) throw new Error(`Sandboxed command failed with exit ${result.status}`)
-  return { ok: true, image, network, command }
 }
