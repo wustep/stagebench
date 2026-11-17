@@ -28,12 +28,12 @@ pnpm bench fetch                                # Nord manual PDF (+ photos if m
 pnpm bench new --model <id> --target <1|2|3>
 pnpm bench start <run-id>                       # per phase: isolated workspace for the implementation agent
 pnpm bench exec <run-id> --command "pnpm test"  # optional: run candidate commands inside Docker
-pnpm bench seal <run-id> [--cost-usd N --input-tokens N --output-tokens N]   # import, check, capture, verify, seal
+pnpm bench seal <run-id> [--cost-usd N --input-tokens N --output-tokens N]   # import, check, capture, verify, seal, archive transcripts
 pnpm bench score <run-id>                       # per phase: evaluator workspace first, then registers the filled assessment
 pnpm bench thumbs <run-id>                      # after seal/score, before commit: gallery hover thumbnail
 ```
 
-`pnpm bench thumbs` writes `public/previews/<run-id>/stage<N>/thumb.jpg` beside the published preview. The gallery hover card uses that file (it swaps `index.html` for `thumb.jpg` on `previewPath`); without it the row still plays and simply shows no hover image. `pnpm bench status <run-id>` prints the next command and telemetry. Wall time is recorded automatically per phase; pass cost/token usage at seal time (or later via `pnpm bench telemetry`). The gallery Tokens column is full-run usage (input plus output, or a recorded total). Partial phase coverage is labeled incomplete instead of shown as the run total. Runs recorded before the current schema appear in the gallery as Legacy with their frozen scores and reports.
+`pnpm bench thumbs` writes `public/previews/<run-id>/stage<N>/thumb.jpg` beside the published preview. The gallery hover card uses that file (it swaps `index.html` for `thumb.jpg` on `previewPath`); without it the row still plays and simply shows no hover image. `pnpm bench status <run-id>` prints the next command and telemetry. Wall time is recorded automatically per phase; pass cost/token usage at seal time (or later via `pnpm bench telemetry`). The gallery Tokens column is full-run usage (input plus output, or a recorded total). Partial phase coverage is labeled incomplete instead of shown as the run total. `seal` and `score` also archive the agent and evaluator transcripts (secret-scrubbed, zstd) into `runs/<run-id>/transcripts/`, warning rather than failing when none are found; see [`runs/TRANSCRIPTS.md`](runs/TRANSCRIPTS.md). Runs recorded before the current schema appear in the gallery as Legacy with their frozen scores and reports.
 
 ## Private deployment protection
 
