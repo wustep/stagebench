@@ -202,6 +202,8 @@ export function startPhase(root, id) {
     `3. Variant: **${variant.label}** (\`inputs/${variant.referenceImage}\` if fetched).`,
     '4. The capture harness the prompt refers to: from `candidate/`, run `node ../inputs/harness/capture-evidence.mjs --phase ' + phase + '` after a build. Evidence lives in `candidate/evidence/` (see `inputs/harness/README.md`).',
     '',
+    'Do not look outside this workspace. Do not read the parent repository, other runs, other projects, scoring materials, or the harness. Do not reuse sample banks or assets from other projects on this machine. Do not modify files outside `candidate/`. Do not change benchmark prompts, specs, or anything under `inputs/`.',
+    '',
     'Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` inside `candidate/` before finishing.',
     'When done, the operator seals the phase.',
     '',
