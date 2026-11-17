@@ -95,6 +95,8 @@ export function startPhase(root, id) {
     `2. Read \`inputs/TASK.md\` and the assigned specs under \`inputs/specs/\`.`,
     `3. Variant: **${variant.label}** (\`inputs/${variant.referenceImage}\` if fetched).`,
     '',
+    'Do not look outside this workspace. Do not read the parent repository, other runs, other projects, scoring materials, or the harness. Do not reuse sample banks or assets from other projects on this machine. Do not modify files outside `candidate/`. Do not change benchmark prompts, specs, or anything under `inputs/`.',
+    '',
     'Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` inside `candidate/` before finishing.',
     `When done, the operator runs \`pnpm bench seal ${id}\` from the repository.`,
     '',

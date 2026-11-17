@@ -200,6 +200,11 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     // or other solutions with a relative ../..
     assert.ok(!started.workspace.startsWith(`${root}${path.sep}`), 'the implementation workspace is outside the repo')
     assert.ok(started.workspace.startsWith(`${homeRoot}${path.sep}`), 'the workspace lives under STAGEBENCH_HOME')
+    const workspaceGuide = fs.readFileSync(path.join(started.workspace, 'WORKSPACE.md'), 'utf8')
+    assert.match(workspaceGuide, /Do not look outside this workspace/, 'the workspace guide forbids looking outside')
+    assert.match(workspaceGuide, /Do not read the parent repository, other runs, other projects, scoring materials, or the harness/, 'the workspace guide forbids reading the harness and other projects')
+    assert.match(workspaceGuide, /Do not reuse sample banks or assets from other projects/, 'the workspace guide forbids reusing outside sample banks')
+
     assert.equal(loadRun(root, created.id).stages[0].status, 'running')
     assert.match(statusSummary(loadRun(root, created.id)).next, /seal/)
 
@@ -769,4 +774,14 @@ test('export bundles run artifacts into a valid ZIP and never includes reference
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('the candidate Codex profile denies reads outside the workspace', () => {
+  const profile = fs.readFileSync(path.join(sourceRoot, 'bench/codex-candidate.config.toml'), 'utf8')
+  assert.match(profile, /default_permissions = "candidate-isolated"/)
+  assert.match(profile, /extends = ":workspace"/)
+  assert.match(profile, /":root" = "deny"/)
+  assert.match(profile, /":minimal" = "read"/)
+  assert.match(profile, /enabled = false/, 'network or MCP is disabled')
+  assert.doesNotMatch(profile, /disk-full-read-access/)
 })
