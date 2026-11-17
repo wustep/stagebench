@@ -43,6 +43,9 @@ import { fetchReference } from './lib/fetch-reference.mjs'
 import { tokenCoverageFromStages } from '../src/token-coverage.mjs'
 import { TELEMETRY_FLAGS } from '../src/telemetry-fields.mjs'
 import { parseSubagentTelemetryFiles, telemetryValuesFromParse } from './lib/telemetry-jsonl.mjs'
+// Transcript archiving (sidecar records under runs/<id>/transcripts/, never
+// part of the sealed artifact). Hooked into start/seal/score below.
+import { appendOperatorEvent, parseTranscriptList, recordPhaseTranscripts } from './lib/run/transcripts.mjs'
 
 const COMMANDS = {
   new: 'Create a run: --model <id> [--target 1|2|3] [--variant <id>] [--title ...] [--provider ...] [--harness ...] [--reasoning ...] [--notes ...]',
@@ -51,7 +54,8 @@ const COMMANDS = {
   rename: 'rename <run-id> --title "..." — update a run’s gallery title',
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
   exec: 'exec <run-id> --command "..." — run a command in the workspace inside Docker [--network none|registry] [--image ...]',
-  seal: 'seal <run-id> — import, check, capture, verify, and seal the running phase [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N]',
+  seal: 'seal <run-id> — import, check, capture, verify, and seal the running phase, then archive its agent transcripts into runs/<id>/transcripts/ [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N] [--transcripts <file[,file...]> to add sessions auto-discovery misses]',
+  transcripts: 'transcripts <run-id> --phase N [--eval] [--transcripts <file[,file...]>] [--workspace <path>] — archive (scrubbed, zstd) agent transcripts for a sealed phase after the fact; discovers Codex/Claude Code/Cursor sessions by workspace cwd when no files are given',
   telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal, or --from-jsonl <a.jsonl[,b.jsonl...]> to recompute tokens/cost from Claude Code subagent transcripts; comma-separate multiple files)',
   score: 'score <run-id> [--phase N] — build the isolated evaluator workspace, or register its filled assessment',
   status: 'status <run-id> — show run state, telemetry, and the next command',
@@ -131,6 +135,19 @@ async function seal(root, id, options) {
   markSealed(root, id, phase, verification)
   const usage = telemetryFromFlags(options)
   if (Object.keys(usage).length > 0) recordTelemetry(root, id, phase, usage)
+  // Archive the agent sessions that produced this phase (scrubbed + zstd) as
+  // sidecar records in runs/<id>/transcripts/ — after the digest is recorded
+  // and outside stage<N>/, so they are never part of the sealed artifact.
+  // Missing transcripts warn and record a gap; they never fail the seal.
+  console.error('→ archiving agent transcripts')
+  const transcripts = recordPhaseTranscripts(root, id, {
+    kind: 'candidate',
+    phase,
+    workspace: workspaceDir(root, id, phase),
+    explicit: parseTranscriptList(options.transcripts),
+    since: Date.parse(stage.startedAt) || null,
+    command: 'seal',
+  })
   removeWorkspace(root, id, phase)
   await reindexRegistry(root)
   const sealed = loadRun(root, id)
@@ -140,6 +157,7 @@ async function seal(root, id, options) {
     artifactDigest: verification.artifactDigest,
     preview: sealed.previews?.[String(phase)],
     telemetry: sealed.stages.find((entry) => entry.number === phase)?.telemetry ?? null,
+    transcripts,
     next: statusSummary(sealed).next,
   }
 }
@@ -266,8 +284,18 @@ async function score(root, id, options) {
   registerEvaluation(root, id, phase, stageSummary, aggregate)
   writeReports(root, loadRun(root, id))
   await reindexRegistry(root)
+  // Evaluator/reviewer sessions ran in the blind workspace; archive them under
+  // transcripts/eval/phase-N before that workspace is removed. Never fatal.
+  const transcripts = recordPhaseTranscripts(root, id, {
+    kind: 'eval',
+    phase,
+    workspace,
+    explicit: parseTranscriptList(options.transcripts),
+    since: Date.parse(stage.completedAt) || null,
+    command: 'score',
+  })
   removeEvalWorkspace(root, id, phase)
-  return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, evaluationPath, report: aggregate.reportPath }
+  return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, evaluationPath, report: aggregate.reportPath, transcripts }
 }
 
 // Sealed digests recorded under an older artifact definition can never
@@ -383,6 +411,7 @@ try {
       await reindexRegistry(root)
     } else if (command === 'start') {
       result = startPhase(root, id)
+      appendOperatorEvent(root, id, { command: 'start', phase: result.phase, workspace: result.workspace, reused: result.reused })
       result.next = `Point the implementation agent at ${result.workspace}/WORKSPACE.md, then run pnpm bench seal ${id}`
     } else if (command === 'exec') {
       const run = loadRun(root, id)
@@ -406,6 +435,24 @@ try {
       }
       result = recordTelemetry(root, id, options.phase, usage)
       await reindexRegistry(root)
+    } else if (command === 'transcripts') {
+      // After-the-fact archiving for a sealed phase (or its evaluation), e.g.
+      // a session discovery missed at seal time. Additive: never drops files
+      // already archived for the phase.
+      if (!options.phase) throw new Error('--phase is required')
+      const run = loadRun(root, id)
+      const stage = stageState(run, options.phase)
+      if (stage.status !== 'complete') throw new Error(`Phase ${stage.number} is not sealed; seal archives its transcripts`)
+      const kind = options.eval === 'true' ? 'eval' : 'candidate'
+      const workspace = options.workspace ?? (kind === 'eval' ? evalWorkspaceDir(root, id, stage.number) : workspaceDir(root, id, stage.number))
+      result = recordPhaseTranscripts(root, id, {
+        kind,
+        phase: stage.number,
+        workspace,
+        explicit: parseTranscriptList(options.transcripts),
+        since: Date.parse(kind === 'eval' ? stage.completedAt : stage.startedAt) || null,
+        command: 'transcripts',
+      })
     } else if (command === 'score') {
       result = await score(root, id, options)
     } else if (command === 'status') {
