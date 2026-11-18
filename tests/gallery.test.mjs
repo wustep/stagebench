@@ -341,10 +341,11 @@ test('rows label the protocol and flag isolation only where the protocol require
     assert.match(getIsolation(run({ protocolVersion: '2.0.0', isolation })).meaning, /^[A-Z].+\.$/, `${isolation}: one plain sentence`)
   }
 
-  // The list does not badge the pre-lockdown default; it still flags a
-  // lockdown, a mixed seal, and an off-protocol miss.
+  // The list does not badge the pre-lockdown default or an official
+  // lockdown (the protocol 3 default); it still flags a mixed seal and
+  // an off-protocol miss.
   assert.equal(showsIsolationBadge(open), false)
-  assert.equal(showsIsolationBadge(locked), true)
+  assert.equal(showsIsolationBadge(locked), false)
   assert.equal(showsIsolationBadge(getIsolation(run({ protocolVersion: '3.0.0', isolation: 'none' }))), true)
   assert.equal(showsIsolationBadge(getIsolation(run({ protocolVersion: '3.0.0', isolation: 'mixed' }))), true)
   assert.equal(showsIsolationBadge(getIsolation(run({ protocolVersion: '2.0.0', isolation: 'mixed' }))), true)
