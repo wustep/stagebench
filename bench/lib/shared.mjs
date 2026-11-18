@@ -21,15 +21,38 @@ export function repoKey(root) {
 }
 
 // Base directory for a class of transient workspace ('work', 'eval', 'gates').
+//
+// Evaluator workspaces get a path of their own with no checkout name in it:
+// `~/.stagebench/<checkout>-<hash>/eval/…` told a grader which worktree it was
+// in, and a worktree is routinely named after the model being run in it.
 export function workspaceRoot(root, kind) {
+  if (kind === 'eval') return path.join(stagebenchHome(), 'eval', sha256(path.resolve(root)).slice(0, 12))
   return path.join(stagebenchHome(), repoKey(root), kind)
 }
 
-// Stable, non-reversible handle for a run used as its evaluator directory
-// name, so the model identity (the run id) is not printed in the path the
-// evaluator works in. Deterministic so the two `score` calls agree.
+// A key that never leaves this machine's Stagebench home. Blind handles are
+// keyed with it, so a handle cannot be worked back to a run id by anyone who
+// knows the scheme and can guess model names (the scheme is public).
+function blindKey() {
+  const file = path.join(stagebenchHome(), 'blind.key')
+  if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8').trim()
+  const key = crypto.randomBytes(32).toString('hex')
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  try {
+    fs.writeFileSync(file, `${key}\n`, { mode: 0o600, flag: 'wx' })
+    return key
+  } catch {
+    // Another process created it first.
+    return fs.readFileSync(file, 'utf8').trim()
+  }
+}
+
+// Stable handle for a run, used as its evaluator directory name and in the
+// assessment template, so the model identity (the run id) is never in anything
+// a grader reads. Deterministic on one machine, so the two `score` calls agree;
+// not derivable from the run id without this machine's key.
 export function blindRunCode(id) {
-  return `run-${sha256(`stagebench-eval:${id}`).slice(0, 12)}`
+  return `run-${crypto.createHmac('sha256', blindKey()).update(`stagebench-eval:${id}`).digest('hex').slice(0, 12)}`
 }
 
 // Async replacement for spawnSync that streams the child's output as progress
@@ -219,6 +242,19 @@ export function loadProtocol(root) {
     throw new Error('The active protocol phases must be ordered 1, 2, 3')
   }
   return { manifest, value, digest: hashFile(manifest) }
+}
+
+// The protocol a run was created under decides which rules its seals are held
+// to. Protocol 3 added rules a run from before it never agreed to (offline
+// candidates, the sample pack, executed feature tests, template-only operator
+// messages), so those are enforced by version, never retroactively.
+export function protocolMajor(version) {
+  const major = Number.parseInt(String(version ?? '').split('.')[0], 10)
+  return Number.isFinite(major) ? major : 0
+}
+
+export function isStrictProtocol(run) {
+  return protocolMajor(run?.protocol?.version) >= 3
 }
 
 export function selectedPhases(protocol, targetPhase) {

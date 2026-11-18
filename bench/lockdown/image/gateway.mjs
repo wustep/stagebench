@@ -6,9 +6,13 @@
 // other thing on that network, and so the only way bytes get in or out. It
 // offers exactly three doors, and logs every use of each:
 //
-//   1. mirrors   (http :4873)  GET-only reverse proxies to fixed upstreams — the
-//                              npm registry and the Playwright browser CDN.
-//                              Every artifact fetched is hashed.
+//   1. mirrors   (http :4873)  GET-only reverse proxies to fixed upstreams.
+//                              Protocol 3 configures none: candidates install
+//                              from an offline mirror inside their own box, so
+//                              this door is shut for every candidate session
+//                              and exists only to re-run the gates of runs
+//                              sealed before protocol 3, whose lockfiles name
+//                              packages the offline mirror does not carry.
 //   2. inspect   (CONNECT)     TLS is terminated here for the model API hosts, so
 //                              the request can be checked: path allowlist, model
 //                              pinning, hosted tools (web search, remote MCP,

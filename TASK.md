@@ -1,4 +1,4 @@
-# Stagebench task — recreate the Nord Stage 4 (protocol 1.1)
+# Stagebench task — recreate the Nord Stage 4 (protocol 3.0)
 
 You are implementing one phase of Stagebench: recreating the Nord Stage 4 keyboard as an interactive browser instrument, working incrementally from a product photo, the user manual, and machine-readable specs. The task exercises dense reference-driven UI, accessibility, browser input, real-time audio, state architecture, and regression-safe extension of an existing artifact.
 
@@ -21,6 +21,10 @@ Each phase turns one set of features on and leaves everything else honestly deco
 - `specs/nord-stage-4.piano.json`, `…effects.json`, `…organ.json`, `…synth.json`, `…programs.json` — per-section behavior, summarized from the manual with page citations. Each has a `scope` block: `required` must work canonically, `optional` is extra credit that must actually work if claimed, and `excluded` is deliberately cut — those controls exist visually, move or press, and are listed as unsupported.
 - `prompts/stage<N>.md` — your phase instructions.
 - `reference/manual.pdf` and the assigned variant's product photo.
+- `hard-gates.md` — your phase's hard gates as a checklist to paste into `IMPLEMENTATION_PLAN.md` unchanged.
+- `harness/` — the canonical capture harness (`node ../inputs/harness/capture-evidence.mjs --phase <N>` from `candidate/`).
+- `samples/` — the sample pack: raw, permissively licensed piano recordings. It is the only source of recorded audio.
+- `OFFLINE.md` — what you can install and run. The workspace has no internet.
 
 Precedence: the variant photo is authoritative for visible layout and materials; the manual is authoritative for behavior where a spec is ambiguous; the specs bind both to phases.
 
@@ -30,13 +34,23 @@ Notable deliberate cuts from the real instrument: 32 programs instead of 512, no
 
 The core rule in every phase: a control either works canonically — updating real state with audible output where sonically meaningful — or it visibly exists, moves, and does nothing. It never fakes success, and evidence never claims unimplemented behavior.
 
+## What the seal enforces
+
+The operator seals each phase with a program, and it refuses an artifact that breaks any of these. A refusal comes back to you as the seal's own output.
+
+1. **Everything you use is in the workspace.** There is no internet, no registry beyond the packages listed in `OFFLINE.md`, and nothing outside the workspace to read.
+2. **Recordings come from `samples/` and are declared.** Every audio file you bundle is listed in `IMPLEMENTATION_DETAILS.json` under `audio.files`, as cut from a named pack recording (`origin: "pack"`) or produced by your own code (`origin: "generated"`). The seal compares each pack-derived file with the recording it names. `samples/README.md` has the format.
+3. **Feature tests run.** Every ID in `tests/feature-matrix.json` maps to at least one test file that `pnpm exec vitest run` executes, with no special environment variables, and in which at least one test passes. A suite behind `runIf`/`skipIf`, or a standalone script the runner never loads, does not count.
+4. **Hard gates are quoted, not paraphrased.** `IMPLEMENTATION_PLAN.md` contains each hard-gate sentence word for word; paste `hard-gates.md`.
+5. **The work is anonymous.** Nothing in `candidate/` names the model, vendor product, or run that produced it. Grading is blind.
+
 ## Implementation requirements
 
-Every phase uses TypeScript + React + Vite (`base: './'`) with pnpm (committed lockfile, declared `packageManager`), and exposes non-interactive `test`, `typecheck`, `lint`, and `build` scripts (`build` produces `dist/index.html`). Controls have stable IDs and accessible names/roles/values. Browser, audio, MIDI, timing, and storage boundaries are injectable so tests run deterministically without network, devices, or audio output. `IMPLEMENTATION_DETAILS.json` truthfully declares every audio source and license — generated buffers are never described as recordings.
+Every phase uses TypeScript + React + Vite (`base: './'`) with pnpm (committed lockfile, declared `packageManager`), and exposes non-interactive `test`, `typecheck`, `lint`, and `build` scripts (`build` produces `dist/index.html`). Controls have stable IDs and accessible names/roles/values. Browser, audio, MIDI, timing, and storage boundaries are injectable so tests run deterministically without network, devices, or audio output. `IMPLEMENTATION_DETAILS.json` truthfully declares every audio source and license, and every bundled audio file — generated buffers are never described as recordings, and recordings are never described as generated.
 
 ## Required feature IDs
 
-Each phase maintains `tests/feature-matrix.json`: every required ID below maps to one or more real, non-empty test files. Later phases keep inherited IDs and tests; never delete a regression test to pass a later phase.
+Each phase maintains `tests/feature-matrix.json`: every required ID below maps to one or more real, non-empty test files that the test runner executes (Vitest, the starter's runner). Later phases keep inherited IDs and tests; never delete a regression test to pass a later phase.
 
 <!-- stagebench:phase-1 -->
 **Phase 1 — surface and basic piano**

@@ -16,6 +16,7 @@ import {
   parseTranscriptList,
   recordPhaseTranscripts,
 } from '../bench/lib/run/transcripts.mjs'
+import { writeFixtureSamplePack } from './helpers/sample-pack.mjs'
 
 const sourceRoot = path.resolve(import.meta.dirname, '..')
 const homeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-home-'))
@@ -128,6 +129,8 @@ function fixtureRoot() {
     fs.copyFileSync(path.join(sourceRoot, relative), destination)
   }
   writeJson(path.join(root, 'src/data/runs.json'), [])
+  // Protocol 3 does not start a phase without the sample pack.
+  writeFixtureSamplePack(root)
   return root
 }
 

@@ -199,16 +199,20 @@ function provisionNodeTypes(scratch, source) {
 }
 
 // Run the required gates inside the lockdown box (bench/lockdown): a copy of
-// the scratch tree in a fresh volume, the registry mirror as the only network,
-// nothing of this machine mounted. Each gate is its own container, so pass or
+// the scratch tree in a fresh volume, no network, nothing of this machine
+// mounted. Each gate is its own container, so pass or
 // fail is the process exit status rather than anything the candidate's scripts
 // print. The build is copied back into the scratch tree for the artifact check.
-async function runGatesInLockdown(root, scratch, rubric, nodeTypes) {
+async function runGatesInLockdown(root, scratch, rubric, nodeTypes, network = 'none') {
   const { runGatesInBox } = await import('../../lockdown/session.mjs')
   const packageJson = fs.existsSync(path.join(scratch, 'package.json')) ? readJson(path.join(scratch, 'package.json')) : {}
   const lintProbeRelative = lintProbePathFor(scratch, packageJson)
   let lintCovered = null
   const { checks: gates, gateway } = await runGatesInBox(root, scratch, {
+    // 'none' for a protocol-3 artifact (it installs from the mirror in the
+    // image); 'legacy-mirror' for one sealed earlier, whose lockfile names
+    // packages that mirror does not carry.
+    network,
     scripts: rubric.technicalGate.requiredChecks,
     onOutput: (text) => process.stderr.write(text),
     // Legacy fallback only: mirror the ambient platform types after install if
@@ -263,7 +267,7 @@ async function runGatesInLockdown(root, scratch, rubric, nodeTypes) {
 // never mutated (no node_modules written into it) and candidate code never
 // executes inside the working tree. With `sandbox`, it never executes on this
 // machine at all. Cleans up the copy afterward.
-export async function runGates(root, stageDir, rubric, { skip = false, sandbox = false } = {}) {
+export async function runGates(root, stageDir, rubric, { skip = false, sandbox = false, network = 'none' } = {}) {
   if (skip) return skippedTechnicalChecks(stageDir, rubric)
   const scratch = path.join(workspaceRoot(root, 'gates'), `${path.basename(path.dirname(stageDir))}-${path.basename(stageDir)}`)
   fs.rmSync(scratch, { recursive: true, force: true })
@@ -271,7 +275,7 @@ export async function runGates(root, stageDir, rubric, { skip = false, sandbox =
   try {
     fs.cpSync(stageDir, scratch, { recursive: true, dereference: false, filter: (entry) => !GATE_COPY_EXCLUDES.has(path.basename(entry)) })
     const nodeTypes = ambientNodeTypes(root)
-    if (sandbox) return await runGatesInLockdown(root, scratch, rubric, nodeTypes)
+    if (sandbox) return await runGatesInLockdown(root, scratch, rubric, nodeTypes, network)
     installDependencies(scratch)
     provisionNodeTypes(scratch, nodeTypes)
     return await runTechnicalChecks(scratch, rubric)

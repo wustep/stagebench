@@ -2,16 +2,23 @@
 // inside the container engine.
 //
 //   <key>-net     internal network: no route out, no external DNS, no host
-//   <key>-gw      the egress gateway, the network's only other member
+//   <key>-gw      the egress gateway, the network's only other member; its one
+//                 door is the harness's own model API
 //   <key>-ws      WORKSPACE.md + inputs/            mounted read-only
 //   <key>-cand    candidate/                        the only durable writable tree
 //   <key>-home    the harness's HOME (config, login, transcripts, caches)
 //   <key>-honey   decoy scoring materials that record being read
+//   sb-samples-…  the sample pack, shared read-only by every session
 //
 // Nothing on the operator's disk is mounted into any of it. The workspace is
 // copied in when the session opens and copied out at seal; in between, the
 // candidate's source exists only in the volume, so there is no host directory
 // for an un-boxed agent to work in.
+//
+// And nothing comes in from the internet. Packages install from a mirror baked
+// into the image and served on loopback inside the box; the browser is in the
+// image; recorded samples are the pack. The gates, canonical capture, and the
+// sample check run with no network at all.
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -19,6 +26,8 @@ import path from 'node:path'
 import { repoKey, sha256, workspaceRoot, writeJson, readJson } from '../lib/shared.mjs'
 import { BOX_HOME, BOX_WORKSPACE, resolveAuth, resolveHarness } from './harnesses.mjs'
 import { verifyChain } from './image/gateway.mjs'
+import { REGISTRY_URL } from './image/npm-mirror.mjs'
+import { CANDIDATE_MESSAGES, EVALUATOR_MESSAGES, messageRecord, readSealFailure, resolveMessage } from './messages.mjs'
 import {
   EGRESS_NETWORK, copyIntoVolume, copyOutOfVolume, engine, engineStream, ensureImages, hostExposure, requireRuntime, sanitizeTree, writeIntoVolume,
 } from './runtime.mjs'
@@ -27,19 +36,32 @@ export const GATEWAY_ALIAS = 'gateway'
 export const LOCK_MARKER = 'STAGEBENCH-LOCKED.md'
 const HONEY_MOUNT = '/srv/stagebench'
 
-// What may enter the box besides the model's own output: packages and browser
-// builds, GET-only, from fixed upstreams, each one hashed in the gateway log.
-// The list is a committed file so that widening it is a reviewed change.
-export const DEFAULT_MIRRORS = Object.freeze(Object.fromEntries(
+// Protocol 3 has no mirrors: a candidate session's gateway is configured with
+// none, so its only door is the model API. The list below is what the gateway
+// may fetch when the gates of a run sealed BEFORE protocol 3 are re-run in a
+// box (`score --sandbox`): those lockfiles name package versions the offline
+// mirror does not carry. It is never given to a candidate session.
+export const LEGACY_ONLINE_MIRRORS = Object.freeze(Object.fromEntries(
   Object.entries(readJson(path.join(import.meta.dirname, 'mirrors.json'))).filter(([name]) => !name.startsWith('$')),
 ))
-
-export function sessionKey(root, id, phase) {
-  return `sb-${sha256(`${repoKey(root)}/${id}/stage${phase}`).slice(0, 10)}`
+export const SESSION_MIRRORS = Object.freeze({})
+// What the candidate image carries instead, recorded with every session.
+export function offlineToolchain() {
+  const lockPath = path.join(import.meta.dirname, 'image', 'npm-mirror.lock.json')
+  const text = fs.readFileSync(lockPath, 'utf8')
+  const lock = JSON.parse(text)
+  return { npmMirror: { lockSha256: sha256(text), ...lock.totals, resolvedAt: lock.resolvedAt }, pinned: Object.fromEntries(Object.entries(lock.pinned ?? {}).filter(([name]) => !name.startsWith('$'))), registry: REGISTRY_URL }
 }
 
-export function sessionStateDir(root, id, phase) {
-  return path.join(workspaceRoot(root, 'lockdown'), id, `stage${phase}`)
+// A session is a candidate's (the default) or an evaluator's. They never share
+// a volume: the evaluator's box holds the sealed artifact and the rubric, the
+// candidate's holds neither.
+export function sessionKey(root, id, phase, kind = 'candidate') {
+  return `sb-${sha256(`${repoKey(root)}/${id}/stage${phase}${kind === 'candidate' ? '' : `/${kind}`}`).slice(0, 10)}`
+}
+
+export function sessionStateDir(root, id, phase, kind = 'candidate') {
+  return path.join(workspaceRoot(root, 'lockdown'), id, kind === 'candidate' ? `stage${phase}` : `${kind}-stage${phase}`)
 }
 
 export function sessionNames(key) {
@@ -52,17 +74,26 @@ export function sessionNames(key) {
     home: `${key}-home`,
     honey: `${key}-honey`,
     agent: `${key}-agent`,
+    // Evaluator sessions only: the read-only halves of the evaluator workspace.
+    artifact: `${key}-art`,
+    build: `${key}-build`,
+    inputs: `${key}-in`,
   }
 }
 
-export function loadSession(root, id, phase) {
-  const file = path.join(sessionStateDir(root, id, phase), 'session.json')
+export function loadSession(root, id, phase, kind = 'candidate') {
+  const file = path.join(sessionStateDir(root, id, phase, kind), 'session.json')
   return fs.existsSync(file) ? readJson(file) : null
 }
 
 function saveSession(root, session) {
-  writeJson(path.join(sessionStateDir(root, session.runId, session.phase), 'session.json'), session)
+  writeJson(path.join(sessionStateDir(root, session.runId, session.phase, session.kindKey ?? 'candidate'), 'session.json'), session)
   return session
+}
+
+// One evaluator session per panel slot: independent graders never share a box.
+export function evaluatorKind(slot = 1) {
+  return Number(slot) > 1 ? `evaluator-${Number(slot)}` : 'evaluator'
 }
 
 function labels(session) {
@@ -74,35 +105,51 @@ function exists(runtime, kind, name) {
   return engine(runtime, [kind, 'inspect', name]).status === 0
 }
 
-// The environment every process in the box inherits. It only ever points at
-// the gateway; none of it is load-bearing for isolation — a process that
-// ignores all of it still has nowhere else to go.
-export function boxEnvironment(extra = {}) {
-  const proxy = `http://${GATEWAY_ALIAS}:3128`
-  const bundle = '/tmp/stagebench-ca-bundle.pem'
-  return {
+// The environment every process in the box inherits. None of it is
+// load-bearing for isolation — a process that ignores all of it still has
+// nowhere else to go.
+//
+//   gateway   the box is on a session network and may reach its model API
+//             through the gateway. Off for everything that is not an agent:
+//             those boxes have no network, so there is nothing to point at.
+//   registry  'offline' (the loopback mirror in the image), or a URL for the
+//             legacy online mirror used to re-run pre-protocol-3 gates.
+export function boxEnvironment(extra = {}, { gateway = true, registry = 'offline' } = {}) {
+  const offline = registry === 'offline'
+  const registryUrl = offline ? REGISTRY_URL : registry
+  const environment = {
     STAGEBENCH_LOCKDOWN: '1',
-    STAGEBENCH_GATEWAY: GATEWAY_ALIAS,
-    HTTPS_PROXY: proxy,
-    https_proxy: proxy,
+    STAGEBENCH_OFFLINE_REGISTRY: offline ? '1' : '0',
+    STAGEBENCH_REGISTRY: registryUrl,
+    npm_config_registry: registryUrl,
     NO_PROXY: `${GATEWAY_ALIAS},localhost,127.0.0.1,::1`,
     no_proxy: `${GATEWAY_ALIAS},localhost,127.0.0.1,::1`,
-    NODE_USE_ENV_PROXY: '1',
-    SSL_CERT_FILE: bundle,
-    NODE_EXTRA_CA_CERTS: bundle,
-    CODEX_CA_CERTIFICATE: bundle,
-    REQUESTS_CA_BUNDLE: bundle,
-    CURL_CA_BUNDLE: bundle,
-    GIT_SSL_CAINFO: bundle,
-    npm_config_registry: `http://${GATEWAY_ALIAS}:4873/npm/`,
-    COREPACK_NPM_REGISTRY: `http://${GATEWAY_ALIAS}:4873/npm`,
-    PLAYWRIGHT_DOWNLOAD_HOST: `http://${GATEWAY_ALIAS}:4873/playwright`,
-    ...extra,
+    // The image already holds the one browser the mirror's Playwright uses.
+    ...(offline ? { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' } : { PLAYWRIGHT_DOWNLOAD_HOST: `http://${GATEWAY_ALIAS}:4873/playwright` }),
   }
+  if (gateway) {
+    const proxy = `http://${GATEWAY_ALIAS}:3128`
+    const bundle = '/tmp/stagebench-ca-bundle.pem'
+    Object.assign(environment, {
+      STAGEBENCH_GATEWAY: GATEWAY_ALIAS,
+      HTTPS_PROXY: proxy,
+      https_proxy: proxy,
+      NODE_USE_ENV_PROXY: '1',
+      SSL_CERT_FILE: bundle,
+      NODE_EXTRA_CA_CERTS: bundle,
+      CODEX_CA_CERTIFICATE: bundle,
+      REQUESTS_CA_BUNDLE: bundle,
+      CURL_CA_BUNDLE: bundle,
+      GIT_SSL_CAINFO: bundle,
+    })
+  }
+  return { ...environment, ...extra }
 }
 
 // `engine run` arguments for one process in the box. No bind mounts, no
 // capabilities, no privilege escalation, a read-only root, bounded resources.
+// `network` is a session's internal network (an agent, which needs its model)
+// or 'none' (everything else).
 export function boxArguments(runtime, { name, image, network, volumes = [], env = {}, workdir = BOX_WORKSPACE, interactive = false, tty = false, extraLabels = [], memory = '16g', cpus = '8' }) {
   const args = ['run', '--rm', '--init', '--name', name, ...extraLabels,
     '--network', network,
@@ -118,10 +165,29 @@ export function boxArguments(runtime, { name, image, network, volumes = [], env 
   return args
 }
 
-function writeNpmrc(runtime, image, homeVolume) {
-  // pnpm 11 reads the registry from .npmrc (not from npm_config_* variables)
-  // when it fetches the pnpm version a package.json pins.
-  writeIntoVolume(runtime, { image, volume: homeVolume, files: [{ path: '.npmrc', content: `registry=http://${GATEWAY_ALIAS}:4873/npm/\n` }] })
+// The sample pack as a volume: built once per pack digest from the operator's
+// verified copy, checked again inside the engine, and from then on mounted
+// read-only into every session that was given the pack. Sharing it is what
+// keeps a 330 MB pack from being copied on every phase start.
+export async function ensureSamplePackVolume(runtime, image, packDir, digest, { onOutput } = {}) {
+  const volume = `sb-samples-${digest.slice(0, 16)}`
+  const marker = '.stagebench-pack-verified'
+  const probe = (args) => engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${volume}:/gate:ro`, '--entrypoint', 'sh', image, '-c', args])
+  if (exists(runtime, 'volume', volume) && probe(`test -f /gate/${marker}`).status === 0) return volume
+  onOutput?.(`→ loading the sample pack into the engine (${volume}; once per pack)\n`)
+  engine(runtime, ['volume', 'rm', '-f', volume])
+  engine(runtime, ['volume', 'create', '--label', 'stagebench.lockdown=1', '--label', 'stagebench.samplepack=1', volume], { check: true })
+  await copyIntoVolume(runtime, { image, volume, sourceDir: packDir })
+  // Trust nothing about the copy: re-hash every file where it now lives.
+  const manifest = readJson(path.join(packDir, 'MANIFEST.json'))
+  const sums = manifest.files.map((entry) => `${entry.sha256}  ./${entry.path}`).join('\n')
+  const checked = engine(runtime, ['run', '--rm', '-i', '--network', 'none', '-v', `${volume}:/gate`, '--workdir', '/gate', '--entrypoint', 'sh', image, '-c',
+    `sha256sum --quiet -c - && touch ${marker} && chmod -R a-w . && echo verified`], { input: `${sums}\n`, timeout: 600_000 })
+  if (checked.status !== 0 || !checked.stdout.includes('verified')) {
+    engine(runtime, ['volume', 'rm', '-f', volume])
+    throw new Error(`The sample pack did not verify inside the engine: ${String(checked.stderr || checked.stdout).trim().slice(-600)}`)
+  }
+  return volume
 }
 
 function plantHoneytokens(runtime, image, volume, token) {
@@ -143,6 +209,45 @@ function plantHoneytokens(runtime, image, volume, token) {
     'chown -R 0:0 /dst && chmod -R a-w /dst && find /dst -exec touch -a -m -d "2020-01-01 00:00:00" {} +'], { check: true })
 }
 
+// A candidate (or grader) never runs where the repository or sibling
+// workspaces could be read. Containers get no mounts; this checks the wall
+// behind that one, and refuses to go on if it is not there.
+function requireNoHostExposure(runtime, onOutput) {
+  const exposure = hostExposure(runtime)
+  if (exposure.state === 'shared' && process.env.STAGEBENCH_ALLOW_SHARED_VM !== '1') {
+    throw new Error(`Refusing to open a lockdown session: ${exposure.detail}. (STAGEBENCH_ALLOW_SHARED_VM=1 overrides; the run will record it.)`)
+  }
+  if (exposure.state !== 'none') onOutput?.(`! host directories visible to the engine VM: ${exposure.state} — ${exposure.detail}\n`)
+  return exposure
+}
+
+function newSession(root, runtime, images, exposure, { id, phase, kind, kindKey = kind }) {
+  return {
+    version: 2,
+    kind,
+    kindKey,
+    key: sessionKey(root, id, phase, kindKey),
+    repo: repoKey(root),
+    runId: id,
+    phase,
+    createdAt: new Date().toISOString(),
+    runtime: { kind: runtime.kind, version: runtime.version, hostDirectoriesVisibleToVm: exposure.state },
+    images,
+    toolchain: offlineToolchain(),
+    honeytoken: `SBH-${crypto.randomBytes(12).toString('hex')}`,
+    launches: [],
+  }
+}
+
+function createSessionResources(runtime, session, volumes) {
+  const names = sessionNames(session.key)
+  destroyResources(runtime, session.key)
+  engine(runtime, ['network', 'create', '--internal', ...labels(session), names.network], { check: true })
+  if (!exists(runtime, 'network', EGRESS_NETWORK)) engine(runtime, ['network', 'create', '--label', 'stagebench.lockdown=1', EGRESS_NETWORK], { check: true })
+  for (const volume of volumes) engine(runtime, ['volume', 'create', ...labels(session), volume], { check: true })
+  return names
+}
+
 // Create the session for a started phase, or return the existing one.
 export async function openSession(root, { id, phase, workspace, runtime = requireRuntime(), onOutput } = {}) {
   const existing = loadSession(root, id, phase)
@@ -158,42 +263,28 @@ export async function openSession(root, { id, phase, workspace, runtime = requir
   if (!fs.existsSync(path.join(workspace, 'WORKSPACE.md')) || !fs.existsSync(candidateDir)) {
     throw new Error(`Missing Phase ${phase} workspace at ${workspace}; run pnpm bench start ${id} first`)
   }
-  // A candidate never runs where the repository or sibling workspaces could be
-  // read. Containers get no mounts; this checks the wall behind that one.
-  const exposure = hostExposure(runtime)
-  if (exposure.state === 'shared' && process.env.STAGEBENCH_ALLOW_SHARED_VM !== '1') {
-    throw new Error(`Refusing to open a lockdown session: ${exposure.detail}. (STAGEBENCH_ALLOW_SHARED_VM=1 overrides; the run will record it.)`)
-  }
-  if (exposure.state !== 'none') onOutput?.(`! host directories visible to the engine VM: ${exposure.state} — ${exposure.detail}\n`)
-  const key = sessionKey(root, id, phase)
-  const names = sessionNames(key)
-  const session = {
-    version: 1,
-    key,
-    repo: repoKey(root),
-    runId: id,
-    phase,
-    createdAt: new Date().toISOString(),
-    runtime: { kind: runtime.kind, version: runtime.version, hostDirectoriesVisibleToVm: exposure.state },
-    images,
-    honeytoken: `SBH-${crypto.randomBytes(12).toString('hex')}`,
-    launches: [],
-  }
+  const exposure = requireNoHostExposure(runtime, onOutput)
+  const session = newSession(root, runtime, images, exposure, { id, phase, kind: 'candidate' })
+  const key = session.key
   onOutput?.(`→ opening lockdown session ${key} (${runtime.kind} ${runtime.version})\n`)
-  destroyResources(runtime, key)
-  engine(runtime, ['network', 'create', '--internal', ...labels(session), names.network], { check: true })
-  if (!exists(runtime, 'network', EGRESS_NETWORK)) engine(runtime, ['network', 'create', '--label', 'stagebench.lockdown=1', EGRESS_NETWORK], { check: true })
-  for (const volume of [names.workspace, names.candidate, names.home, names.honey, names.gatewayLog]) {
-    engine(runtime, ['volume', 'create', ...labels(session), volume], { check: true })
+  const names = sessionNames(key)
+  createSessionResources(runtime, session, [names.workspace, names.candidate, names.home, names.honey, names.gatewayLog])
+
+  // The sample pack goes in as its own shared, read-only volume rather than as
+  // part of the inputs copy.
+  const packDir = path.join(workspace, 'inputs', 'samples')
+  const hasPack = fs.existsSync(path.join(packDir, 'MANIFEST.json'))
+  if (hasPack) {
+    const digest = sha256(fs.readFileSync(path.join(packDir, 'MANIFEST.json'), 'utf8'))
+    session.samplePack = { volume: await ensureSamplePackVolume(runtime, images.candidate.tag, packDir, digest, { onOutput }), manifestSha256: digest }
   }
-  // The read-only half: instructions and inputs, plus the mount point for the
-  // writable candidate tree. workspace.json stays behind: it is the harness's
-  // bookkeeping and names the run, which the candidate has no need to know
-  // (inside the box even the working directory is just /workspace).
-  await copyIntoVolume(runtime, { image: images.candidate.tag, volume: names.workspace, sourceDir: workspace, entries: ['WORKSPACE.md', 'inputs'] })
-  engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.workspace}:/gate`, '--entrypoint', 'mkdir', images.candidate.tag, '-p', '/gate/candidate'], { check: true })
+  // The read-only half: instructions and inputs, plus the mount points for the
+  // writable candidate tree and the pack. workspace.json stays behind: it is
+  // the harness's bookkeeping and names the run, which the candidate has no
+  // need to know (inside the box even the working directory is just /workspace).
+  await copyIntoVolume(runtime, { image: images.candidate.tag, volume: names.workspace, sourceDir: workspace, entries: ['WORKSPACE.md', 'inputs'], excludes: hasPack ? ['inputs/samples'] : [] })
+  engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.workspace}:/gate`, '--entrypoint', 'mkdir', images.candidate.tag, '-p', '/gate/candidate', ...(hasPack ? ['/gate/inputs/samples'] : [])], { check: true })
   await copyIntoVolume(runtime, { image: images.candidate.tag, volume: names.candidate, sourceDir: candidateDir, excludes: ['node_modules', '.pnpm-store'] })
-  writeNpmrc(runtime, images.candidate.tag, names.home)
   plantHoneytokens(runtime, images.candidate.tag, names.honey, session.honeytoken)
 
   // From here the candidate's source lives only in the volume. The host copy is
@@ -243,12 +334,35 @@ export function stopGateway(runtime, session) {
   engine(runtime, ['rm', '-f', sessionNames(session.key).gateway])
 }
 
-function agentVolumes(names) {
-  return [`${names.workspace}:${BOX_WORKSPACE}:ro`, `${names.candidate}:${BOX_WORKSPACE}/candidate`, `${names.home}:${BOX_HOME}`, `${names.honey}:${HONEY_MOUNT}`]
+// What a session's box mounts. A candidate sees its instructions and inputs
+// read-only and its own tree read-write. An evaluator sees the sealed artifact,
+// the published build, and the scoring inputs read-only, and writes only its
+// assessment and scratch files.
+export function sessionVolumes(session) {
+  const names = sessionNames(session.key)
+  if (session.kind === 'evaluator') {
+    return [
+      `${names.workspace}:${BOX_WORKSPACE}`,
+      `${names.artifact}:${BOX_WORKSPACE}/artifact:ro`,
+      ...(session.hasBuild ? [`${names.build}:${BOX_WORKSPACE}/build:ro`] : []),
+      `${names.inputs}:${BOX_WORKSPACE}/inputs:ro`,
+      `${names.home}:${BOX_HOME}`,
+      `${names.honey}:${HONEY_MOUNT}`,
+    ]
+  }
+  return [
+    `${names.workspace}:${BOX_WORKSPACE}:ro`,
+    `${names.candidate}:${BOX_WORKSPACE}/candidate`,
+    ...(session.samplePack ? [`${session.samplePack.volume}:${BOX_WORKSPACE}/inputs/samples:ro`] : []),
+    `${names.home}:${BOX_HOME}`,
+    `${names.honey}:${HONEY_MOUNT}`,
+  ]
 }
 
-// Run one process in the session's box and stream its output.
-export async function runInBox(runtime, session, images, { argv, env = {}, name, interactive = false, onOutput, timeout, workdir }) {
+// Run one process in the session's box and stream its output. `online` puts
+// the box on the session network, where the gateway (and so the model API) is;
+// without it the box has no network at all.
+export async function runInBox(runtime, session, images, { argv, env = {}, name, interactive = false, onOutput, timeout, workdir, online = true }) {
   const names = sessionNames(session.key)
   const tty = interactive && process.stdin.isTTY && process.stdout.isTTY
   const boxName = name ?? `${session.key}-exec-${crypto.randomBytes(3).toString('hex')}`
@@ -256,9 +370,9 @@ export async function runInBox(runtime, session, images, { argv, env = {}, name,
     ...boxArguments(runtime, {
       name: boxName,
       image: images.candidate.tag,
-      network: names.network,
-      volumes: agentVolumes(names),
-      env: boxEnvironment({ ...env, ...(tty && process.env.TERM ? { TERM: process.env.TERM } : {}) }),
+      network: online ? names.network : 'none',
+      volumes: sessionVolumes(session),
+      env: boxEnvironment({ ...env, ...(tty && process.env.TERM ? { TERM: process.env.TERM } : {}) }, { gateway: online }),
       interactive,
       tty,
       workdir,
@@ -282,7 +396,7 @@ export async function runInBox(runtime, session, images, { argv, env = {}, name,
 // Pull the gateway's log volume to the host and verify its hash chain.
 export async function collectGatewayLog(root, runtime, session, images) {
   const names = sessionNames(session.key)
-  const destination = path.join(sessionStateDir(root, session.runId, session.phase), 'gateway')
+  const destination = path.join(sessionStateDir(root, session.runId, session.phase, session.kindKey ?? 'candidate'), 'gateway')
   fs.rmSync(destination, { recursive: true, force: true })
   await copyOutOfVolume(runtime, { image: images.candidate.tag, volume: names.gatewayLog, destinationDir: destination })
   sanitizeTree(destination)
@@ -347,26 +461,33 @@ export function withConsoleRelay(argv, logPath) {
   return ['sh', '-c', CONSOLE_RELAY, 'stagebench-console', logPath, ...argv]
 }
 
-// Launch the candidate agent inside the box.
-export async function launchAgent(root, { id, phase, workspace, harness, options = {}, env = process.env, onOutput }) {
+// Launch a harness in an open session's box and record what was said to it.
+async function launchInSession(root, opened, { harness, options = {}, env = process.env, onOutput, templates, messagePolicy = 'template' }) {
+  const { session, runtime, images, created } = opened
+  const { runId: id, phase } = session
+  const kindKey = session.kindKey ?? 'candidate'
   const adapter = resolveHarness(harness)
   const auth = resolveAuth(adapter, env, options)
-  const { session, runtime, images, created } = await openSession(root, { id, phase, workspace, onOutput })
   const names = sessionNames(session.key)
   if (engine(runtime, ['container', 'inspect', names.agent]).status === 0) {
     throw new Error(`An agent is already running in this session (container ${names.agent}). Wait for it, or stop it with: ${runtime.bin} ${[...runtime.prefix, 'stop', names.agent].join(' ')}`)
   }
+  const stateDir = sessionStateDir(root, id, phase, kindKey)
   // A relaunch continues the harness's own session when there is one worth
   // continuing: an earlier launch that got as far as running (it finished, was
   // cut off by the timeout, or crashed after the model had answered at least
   // once). A launch that died at startup left nothing.
   const resumable = session.launches.some((launch) => launch.exitCode === 0 || launch.timedOut || launch.modelTurns > 0)
-  const resume = options.fresh !== 'true' && (options.resume === 'true' || resumable)
+  const followUp = options.fresh !== 'true' && (options.resume === 'true' || resumable)
   const interactive = options.interactive === 'true'
   const model = options.model ?? null
-  const prompt = options.prompt ?? (options['prompt-file'] ? fs.readFileSync(options['prompt-file'], 'utf8') : null)
-    ?? (resume ? null : `Read WORKSPACE.md in ${BOX_WORKSPACE} and follow it exactly. Implement this phase according to the instructions in inputs/, working only inside candidate/. Before you finish, run all four package gates inside candidate/: pnpm test, pnpm typecheck, pnpm lint, and pnpm build, and fix any failures. When you are done, report a brief summary of what you implemented and the result of each gate.`)
-  if (!interactive && !prompt) throw new Error('A follow-up launch needs --prompt "<message>" (or --interactive)')
+  // What the operator says is a template, filled in from the harness's own
+  // records (the seal's output, never the operator's paraphrase of it).
+  const message = resolveMessage(templates, { options, followUp, interactive, policy: messagePolicy, context: { workspace: BOX_WORKSPACE, failure: readSealFailure(stateDir) } })
+  const prompt = message.text
+  // A template may ask for a fresh agent in the same box (an independent reviewer).
+  const resume = followUp && !templates[message.template]?.fresh
+  if (!interactive && !prompt) throw new Error('This launch has nothing to say; pass --message <template> (or --interactive)')
   // Extra harness flags, split on whitespace with simple quoting: --harness-args '-c web_search="live"'
   const extraArgs = (String(options['harness-args'] ?? '').match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [])
     .map((word) => word.replace(/^'(.*)'$/s, '$1'))
@@ -375,7 +496,8 @@ export async function launchAgent(root, { id, phase, workspace, harness, options
   await startGateway(runtime, session, images, {
     dns: env.STAGEBENCH_GATEWAY_DNS ? env.STAGEBENCH_GATEWAY_DNS.split(',') : undefined,
     egress: auth.egress,
-    mirrors: DEFAULT_MIRRORS,
+    // No mirrors: the gateway's only door is this harness's model API.
+    mirrors: SESSION_MIRRORS,
     // Pinning is opt-in: harnesses call auxiliary models (titles, compaction)
     // that differ by vendor, so the operator states the allowed set.
     models: options['pin-models'] ? String(options['pin-models']).split(',').map((value) => value.trim()).filter(Boolean) : null,
@@ -393,18 +515,20 @@ export async function launchAgent(root, { id, phase, workspace, harness, options
   const argv = interactive ? command : withConsoleRelay(command, `${BOX_HOME}/.stagebench/console-${session.launches.length}.log`)
   const launch = {
     index: session.launches.length,
-    kind: resume ? 'follow-up' : 'initial',
+    kind: followUp ? 'follow-up' : 'initial',
     harness,
     harnessLabel: adapter.label,
     auth: auth.id,
     credentialSource: auth.source,
+    // Does the box hold anything that could authenticate? (Never, for the built-in modes.)
+    credentialInBox: auth.gatewaySecrets.length === 0 && auth.leakCheck.length > 0,
     model,
     interactive,
     // MCP servers are never inherited from the operator's own config: the box
     // starts with none, and any that are added run inside it and are listed here.
     mcpServers: Object.keys(context.mcpServers),
-    // Every prompt an operator sends through the launcher is part of the
-    // record: this is where mid-run help becomes visible.
+    // Every word an operator sends through the launcher is part of the record.
+    message: messageRecord(message),
     prompt: prompt ?? null,
     promptSha256: prompt ? sha256(prompt) : null,
     startedAt: new Date().toISOString(),
@@ -413,11 +537,10 @@ export async function launchAgent(root, { id, phase, workspace, harness, options
     const version = engine(runtime, ['run', '--rm', '--network', 'none', '--entrypoint', adapter.binary, images.candidate.tag, '--version'])
     launch.harnessVersion = version.status === 0 ? version.stdout.trim().split('\n').at(-1) : null
   }
-  const stateDir = sessionStateDir(root, id, phase)
   const logFile = path.join(stateDir, `launch-${launch.index}.log`)
   fs.mkdirSync(stateDir, { recursive: true })
   const log = fs.createWriteStream(logFile)
-  onOutput?.(`→ ${created ? 'launching' : 'relaunching'} ${adapter.label} in ${session.key} (auth: ${auth.id}; egress: ${auth.egress.map((rule) => `${rule.host}/${rule.mode}`).join(', ') || 'none'})\n`)
+  onOutput?.(`→ ${created ? 'launching' : 'relaunching'} ${adapter.label} in ${session.key} (message: ${message.template}; auth: ${auth.id}; egress: ${auth.egress.map((rule) => `${rule.host}/${rule.mode}`).join(', ') || 'none'})\n`)
   let result
   try {
     result = await runInBox(runtime, session, images, {
@@ -460,20 +583,18 @@ export async function launchAgent(root, { id, phase, workspace, harness, options
   return { session: session.key, launch, gateway, logFile }
 }
 
-// Run a shell command in the session's box: same volumes, mirrors only.
+// Launch the candidate agent inside the box.
+export async function launchAgent(root, { id, phase, workspace, harness, options = {}, env = process.env, onOutput, messagePolicy = 'template' }) {
+  // Fail on a bad harness name or a missing credential before anything is created.
+  resolveAuth(resolveHarness(harness), env, options)
+  const opened = await openSession(root, { id, phase, workspace, onOutput })
+  return launchInSession(root, opened, { harness, options, env, onOutput, templates: CANDIDATE_MESSAGES, messagePolicy })
+}
+
+// Run a shell command in the session's box: same volumes, no network at all.
 export async function execInSession(root, { id, phase, workspace, command, onOutput, timeout }) {
   const { session, runtime, images } = await openSession(root, { id, phase, workspace, onOutput })
-  const names = sessionNames(session.key)
-  const gatewayRunning = engine(runtime, ['container', 'inspect', names.gateway]).status === 0
-  if (!gatewayRunning) await startGateway(runtime, session, images, { egress: [], mirrors: DEFAULT_MIRRORS })
-  try {
-    return await runInBox(runtime, session, images, { argv: ['sh', '-lc', command], workdir: `${BOX_WORKSPACE}/candidate`, onOutput, timeout })
-  } finally {
-    if (!gatewayRunning) {
-      await collectGatewayLog(root, runtime, session, images)
-      stopGateway(runtime, session)
-    }
-  }
+  return runInBox(runtime, session, images, { argv: ['sh', '-lc', command], workdir: `${BOX_WORKSPACE}/candidate`, onOutput, timeout, online: false })
 }
 
 // Enough of a credential to recognise a verbatim copy of it, without keeping
@@ -520,6 +641,39 @@ export function findStrings(directory, needles, { minLength = 8 } = {}) {
   return hits
 }
 
+// The harness's own record of a session, copied out of its home volume. It was
+// writable by the agent, so it is evidence to read, not to trust; the gateway
+// log and the launcher's console logs are the ones the agent could not touch.
+async function exportHarnessTranscripts(runtime, images, session, destination) {
+  const names = sessionNames(session.key)
+  fs.rmSync(destination, { recursive: true, force: true })
+  const harnessPaths = [...new Set(session.launches.flatMap((launch) => resolveHarness(launch.harness).transcripts))]
+  for (const relative of harnessPaths) {
+    const present = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.home}:/src:ro`, '--entrypoint', 'test', images.candidate.tag, '-e', `/src/${relative}`]).status === 0
+    if (!present) continue
+    const isDirectory = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.home}:/src:ro`, '--entrypoint', 'test', images.candidate.tag, '-d', `/src/${relative}`]).status === 0
+    if (isDirectory) {
+      await copyOutOfVolume(runtime, { image: images.candidate.tag, volume: names.home, subdirectory: relative, destinationDir: path.join(destination, relative) })
+    } else {
+      const content = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.home}:/src:ro`, '--entrypoint', 'cat', images.candidate.tag, `/src/${relative}`], { encoding: 'buffer' })
+      fs.mkdirSync(path.dirname(path.join(destination, relative)), { recursive: true })
+      fs.writeFileSync(path.join(destination, relative), content.stdout)
+    }
+  }
+  if (fs.existsSync(destination)) sanitizeTree(destination)
+  return fs.existsSync(destination) ? destination : null
+}
+
+function decoysRead(runtime, images, session) {
+  const names = sessionNames(session.key)
+  const stat = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.honey}:/src:ro`, '--entrypoint', 'sh', images.candidate.tag, '-c',
+    'find /src -type f -exec stat -c "%X %Y %n" {} +'])
+  return stat.stdout.split('\n').filter(Boolean).map((line) => {
+    const [accessed, modified, file] = line.split(' ')
+    return Number(accessed) > Number(modified) + 60 ? file.replace('/src/', '') : null
+  }).filter(Boolean)
+}
+
 // Copy the candidate tree (and the harness transcripts) out of the box, and
 // check what came out before anything on the host builds or publishes it.
 export async function exportSession(root, { id, phase, workspace, onOutput }) {
@@ -534,35 +688,13 @@ export async function exportSession(root, { id, phase, workspace, onOutput }) {
   await copyOutOfVolume(runtime, { image: images.candidate.tag, volume: names.candidate, destinationDir: candidateDir, excludes: ['node_modules', '.pnpm-store', 'dist'] })
   const dropped = sanitizeTree(candidateDir)
 
-  // The harness's own record of the session. It was writable by the candidate,
-  // so it is evidence to read, not to trust; the gateway log is the tamper-evident one.
   const stateDir = sessionStateDir(root, id, phase)
-  const transcripts = path.join(stateDir, 'transcripts')
-  fs.rmSync(transcripts, { recursive: true, force: true })
-  const harnessPaths = [...new Set(session.launches.flatMap((launch) => resolveHarness(launch.harness).transcripts))]
-  for (const relative of harnessPaths) {
-    const present = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.home}:/src:ro`, '--entrypoint', 'test', images.candidate.tag, '-e', `/src/${relative}`]).status === 0
-    if (!present) continue
-    const isDirectory = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.home}:/src:ro`, '--entrypoint', 'test', images.candidate.tag, '-d', `/src/${relative}`]).status === 0
-    if (isDirectory) {
-      await copyOutOfVolume(runtime, { image: images.candidate.tag, volume: names.home, subdirectory: relative, destinationDir: path.join(transcripts, relative) })
-    } else {
-      const content = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.home}:/src:ro`, '--entrypoint', 'cat', images.candidate.tag, `/src/${relative}`], { encoding: 'buffer' })
-      fs.mkdirSync(path.dirname(path.join(transcripts, relative)), { recursive: true })
-      fs.writeFileSync(path.join(transcripts, relative), content.stdout)
-    }
-  }
-  if (fs.existsSync(transcripts)) sanitizeTree(transcripts)
+  const transcripts = await exportHarnessTranscripts(runtime, images, session, path.join(stateDir, 'transcripts'))
 
   // Honeytoken: was a decoy read, and did its token travel anywhere?
-  const stat = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.honey}:/src:ro`, '--entrypoint', 'sh', images.candidate.tag, '-c',
-    'find /src -type f -exec stat -c "%X %Y %n" {} +'])
-  const decoysRead = stat.stdout.split('\n').filter(Boolean).map((line) => {
-    const [accessed, modified, file] = line.split(' ')
-    return Number(accessed) > Number(modified) + 60 ? file.replace('/src/', '') : null
-  }).filter(Boolean)
+  const read = decoysRead(runtime, images, session)
   const tokenInArtifact = findStrings(candidateDir, [session.honeytoken]).map((hit) => hit.path)
-  const tokenInTranscript = findStrings(transcripts, [session.honeytoken]).map((hit) => hit.path)
+  const tokenInTranscript = transcripts ? findStrings(transcripts, [session.honeytoken]).map((hit) => hit.path) : []
 
   // A credential that reached the artifact would be published with the preview.
   const secretHits = findStrings(candidateDir, session.leakNeedles ?? []).map((hit) => hit.path)
@@ -573,63 +705,92 @@ export async function exportSession(root, { id, phase, workspace, onOutput }) {
     images,
     candidateDir,
     dropped,
-    transcripts: fs.existsSync(transcripts) ? transcripts : null,
-    honeytoken: { decoysRead, tokenInArtifact, tokenInTranscript },
+    transcripts,
+    // The launcher's own copy of each launch's console: written on this side of
+    // the boundary, so a candidate could not edit it afterwards.
+    consoleLogs: session.launches.map((launch) => path.join(stateDir, launch.log)).filter((file) => fs.existsSync(file)),
+    honeytoken: { decoysRead: read, tokenInArtifact, tokenInTranscript },
     secretsInArtifact: [...new Set(secretHits)],
   }
 }
 
+// A gate never touches the tree another gate will run on. Each one starts by
+// copying the installed tree into a volume of its own, which the engine throws
+// away when the container exits; the copy is made by the image's own `cp`,
+// before any candidate code has run. Nothing here is engine-specific: Docker
+// and Podman do exactly the same thing. (Podman's overlay mounts would be
+// faster, and are not used, so that a gate is isolated the same way on both.)
+const PRIVATE_COPY = 'cp -a --reflink=auto /gate-src/. /gate/ && exec "$@"'
+
+// vitest's JSON report, reduced to what the seal asks of it: which test files
+// ran, and how many of each file's tests passed, failed, or were skipped.
+export function summarizeVitestReport(report, base = '/gate') {
+  if (!report || !Array.isArray(report.testResults)) return null
+  const prefix = `${base.replace(/\/+$/, '')}/`
+  return report.testResults.map((file) => {
+    const counts = { passed: 0, failed: 0, skipped: 0 }
+    for (const assertion of file.assertionResults ?? []) {
+      if (assertion.status === 'passed') counts.passed += 1
+      else if (assertion.status === 'failed') counts.failed += 1
+      else counts.skipped += 1
+    }
+    const name = String(file.name ?? '')
+    return { file: (name.startsWith(prefix) ? name.slice(prefix.length) : name).split(path.sep).join('/'), ...counts }
+  })
+}
+
 // The four package gates, run where candidate code can do no harm: a fresh
-// volume holding a copy of the artifact, the registry mirror as the only
-// network, no model API, no credentials, no session home.
+// volume holding a copy of the artifact, no network of any kind, no model API,
+// no credentials, no session home. Packages come from the mirror in the image.
 //
 // Each gate is its own container, so pass or fail is the process exit status —
 // nothing a script prints can forge it. And each gate sees the tree exactly as
-// `pnpm install` left it: the gate tree and the home directory are mounted as
-// overlays whose writes are thrown away when the gate exits, so a test cannot
-// rewrite package.json, plant a fake `pnpm` on PATH, or otherwise arrange the
-// result of the gate after it. The sealed sources are copied over the tree
-// again after install, so each gate runs the scripts as sealed. Only the build
-// gate has anywhere durable to write: a volume mounted at dist/, which is what
-// comes back for the host-side capture.
+// `pnpm install` left it (see PRIVATE_COPY): a test cannot rewrite
+// package.json, plant a fake `pnpm` on PATH, or otherwise arrange the result of
+// the gate after it. The sealed sources are copied over the tree again after
+// install, so each gate runs the scripts as sealed. Only the build gate has
+// anywhere durable to write: a volume mounted at dist/, which is what comes
+// back for capture.
 //
 // What stays the candidate's to decide is what install does: its dependencies
 // and their lifecycle scripts run first and persist, as they would anywhere.
-export async function runGatesInBox(root, stageDir, { scripts = ['test', 'typecheck', 'lint', 'build'], install = true, label = path.basename(stageDir), onOutput, afterInstall, afterGates } = {}) {
+//
+// `network: 'legacy-mirror'` is for re-running the gates of a run sealed before
+// protocol 3, whose lockfile names packages the offline mirror does not carry:
+// the box then gets a gateway whose only door is the read-only package mirror.
+export async function runGatesInBox(root, stageDir, { scripts = ['test', 'typecheck', 'lint', 'build'], install = true, label = path.basename(stageDir), onOutput, afterInstall, afterGates, network = 'none', featureTests = false } = {}) {
   const runtime = requireRuntime()
   const images = await ensureImages(runtime, { onOutput })
+  const legacy = network === 'legacy-mirror'
   const key = `sbg-${sha256(`${repoKey(root)}/${stageDir}/${Date.now()}/${crypto.randomBytes(4).toString('hex')}`).slice(0, 10)}`
-  const names = { network: `${key}-net`, gateway: `${key}-gw`, gatewayLog: `${key}-gwlog`, gate: `${key}-gate`, home: `${key}-home`, dist: `${key}-dist` }
+  const names = { network: `${key}-net`, gateway: `${key}-gw`, gatewayLog: `${key}-gwlog`, gate: `${key}-gate`, dist: `${key}-dist`, report: `${key}-report` }
   const session = { key, runId: label, repo: repoKey(root) }
-  // Overlay volume mounts are a Podman feature. Elsewhere the gates share one
-  // writable tree, as they always did on the host, and the record says so.
-  const overlay = runtime.kind === 'podman'
   const sourceExcludes = ['node_modules', '.git', '.vite', 'dist', '.pnpm-store']
-  const run = (argv, name, timeout, { writable = false, dist = false } = {}) => {
+  const environment = boxEnvironment(
+    // No directory the candidate can write to comes before the system's on PATH.
+    { CI: '1', PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' },
+    legacy ? { gateway: true, registry: `http://${GATEWAY_ALIAS}:4873/npm/` } : { gateway: false },
+  )
+  const run = (argv, name, timeout, { writable = false, dist = false, report = false } = {}) => {
     const box = `${key}-${name}`
-    const discard = overlay && !writable ? ':O' : ''
+    // A home of its own for every container: nothing a gate leaves there is seen by the next.
+    const volumes = writable
+      ? [`${names.gate}:/gate`, BOX_HOME]
+      : [`${names.gate}:/gate-src:ro`, '/gate', BOX_HOME, ...(dist ? [`${names.dist}:/gate/dist`] : []), ...(report ? [`${names.report}:/report`] : [])]
     return engineStream(runtime, [
-      ...boxArguments(runtime, {
-        name: box,
-        image: images.candidate.tag,
-        network: names.network,
-        volumes: [`${names.gate}:/gate${discard}`, `${names.home}:${BOX_HOME}${discard}`, ...(dist && overlay ? [`${names.dist}:/gate/dist`] : [])],
-        // No directory the candidate can write to comes before the system's on PATH.
-        env: boxEnvironment({ CI: '1', PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' }),
-        workdir: '/gate',
-        extraLabels: labels(session),
-      }),
-      ...argv,
-    ], { onOutput, timeout, onTimeout: () => engine(runtime, ['rm', '-f', box], { timeout: 60_000 }) })
+      ...boxArguments(runtime, { name: box, image: images.candidate.tag, network: legacy ? names.network : 'none', volumes, env: environment, workdir: '/gate', extraLabels: labels(session) }),
+      ...(writable ? argv : ['sh', '-c', PRIVATE_COPY, 'stagebench-gate', ...argv]),
+    ], { onOutput, timeout, onTimeout: () => engine(runtime, ['rm', '-f', '-v', box], { timeout: 60_000 }) })
   }
   const tail = (text, length = 2400) => String(text ?? '').trim().slice(-length)
   try {
-    engine(runtime, ['network', 'create', '--internal', ...labels(session), names.network], { check: true })
-    if (!exists(runtime, 'network', EGRESS_NETWORK)) engine(runtime, ['network', 'create', '--label', 'stagebench.lockdown=1', EGRESS_NETWORK], { check: true })
-    for (const volume of [names.gate, names.home, names.dist, names.gatewayLog]) engine(runtime, ['volume', 'create', ...labels(session), volume], { check: true })
+    if (legacy) {
+      engine(runtime, ['network', 'create', '--internal', ...labels(session), names.network], { check: true })
+      if (!exists(runtime, 'network', EGRESS_NETWORK)) engine(runtime, ['network', 'create', '--label', 'stagebench.lockdown=1', EGRESS_NETWORK], { check: true })
+    }
+    for (const volume of [names.gate, names.dist, names.report, ...(legacy ? [names.gatewayLog] : [])]) engine(runtime, ['volume', 'create', ...labels(session), volume], { check: true })
     const copySources = () => copyIntoVolume(runtime, { image: images.candidate.tag, volume: names.gate, sourceDir: stageDir, excludes: sourceExcludes })
     await copySources()
-    writeNpmrc(runtime, images.candidate.tag, names.home)
     // What the scoring-side hooks may do to the gate tree: run a command in the
     // box (discarding or keeping what it writes), copy a host directory in,
     // write a file.
@@ -639,13 +800,13 @@ export async function runGatesInBox(root, stageDir, { scripts = ['test', 'typech
       copyDirectory: (sourceDir, subdirectory) => copyIntoVolume(runtime, { image: images.candidate.tag, volume: names.gate, sourceDir, subdirectory }),
       writeFiles: (files) => writeIntoVolume(runtime, { image: images.candidate.tag, volume: names.gate, files }),
     }
-    await startGateway(runtime, session, images, { egress: [], mirrors: DEFAULT_MIRRORS, bodyLog: 'none' })
+    if (legacy) await startGateway(runtime, session, images, { egress: [], mirrors: LEGACY_ONLINE_MIRRORS, bodyLog: 'none' })
 
     if (install) {
       onOutput?.('  · install … ')
       const installed = await run(['pnpm', 'install', '--prefer-offline'], 'install', 600_000, { writable: true })
       onOutput?.(installed.status === 0 ? 'install done\n' : 'install failed\n')
-      if (installed.status !== 0) throw new Error(`pnpm install failed inside the lockdown:\n${tail(installed.output, 2000)}`)
+      if (installed.status !== 0) throw new Error(`pnpm install failed inside the lockdown${legacy ? '' : ' (offline: only packages in the image\'s mirror can be installed)'}:\n${tail(installed.output, 2000)}`)
       // Whatever install scripts did to the sources, the gates run the sealed ones.
       await copySources()
     }
@@ -662,46 +823,232 @@ export async function runGatesInBox(root, stageDir, { scripts = ['test', 'typech
         label: script,
         command: `pnpm run ${script}`,
         passed,
-        isolation: overlay ? 'lockdown' : 'lockdown (gates share a tree)',
+        isolation: 'lockdown',
         durationMs: Date.now() - startedAt,
         output: result.output,
         detail: passed ? 'Passed' : tail(result.timedOut ? `Timed out\n${result.output}` : result.output),
       })
+    }
+    // Which test files the runner actually executed, and whether their tests
+    // ran or were skipped. The `test` gate's exit status cannot say: a suite
+    // wrapped in `runIf(process.env.SOMETHING)` passes by not running.
+    let featureReport = null
+    if (featureTests) {
+      onOutput?.('  · feature tests (which files ran) … ')
+      const probed = await run(['pnpm', 'exec', 'vitest', 'run', '--reporter=json', '--outputFile=/report/vitest.json'], 'feature-tests', 300_000, { report: true })
+      const raw = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.report}:/src:ro`, '--entrypoint', 'sh', images.candidate.tag, '-c', 'head -c 67108864 /src/vitest.json 2>/dev/null'], { timeout: 120_000 })
+      let files = null
+      try { files = summarizeVitestReport(JSON.parse(raw.stdout)) } catch { files = null }
+      onOutput?.(files ? `${files.length} files\n` : 'no report\n')
+      featureReport = { runner: 'vitest', exitStatus: probed.status, timedOut: Boolean(probed.timedOut), files, ...(files ? {} : { error: tail(probed.output, 800) }) }
     }
     if (afterGates) await afterGates(tools, checks)
     // Bring the build back for capture. Excluded on the way in, so whatever is
     // here was produced by this build, inside the box.
     const distDir = path.join(stageDir, 'dist')
     fs.rmSync(distDir, { recursive: true, force: true })
-    const distSource = overlay ? { volume: names.dist, subdirectory: '.' } : { volume: names.gate, subdirectory: 'dist' }
-    const built = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${distSource.volume}:/src:ro`, '--entrypoint', 'test', images.candidate.tag, '-f', path.posix.join('/src', distSource.subdirectory, 'index.html')]).status === 0
+    const built = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.dist}:/src:ro`, '--entrypoint', 'test', images.candidate.tag, '-f', '/src/index.html']).status === 0
     if (built) {
-      await copyOutOfVolume(runtime, { image: images.candidate.tag, ...distSource, destinationDir: distDir })
+      await copyOutOfVolume(runtime, { image: images.candidate.tag, volume: names.dist, destinationDir: distDir })
       sanitizeTree(distDir)
     }
-    // What the gates fetched is part of the record too: a build can pull from
-    // the mirror, and the published dist/ is its output.
-    const logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-gates-log-'))
+    // With the legacy mirror, what the gates fetched is part of the record.
     let gateway = null
-    try {
-      stopGateway(runtime, session)
-      await copyOutOfVolume(runtime, { image: images.candidate.tag, volume: names.gatewayLog, destinationDir: logDir })
-      const events = path.join(logDir, 'events.jsonl')
-      gateway = { ...summarizeGatewayLog(events), events: fs.existsSync(events) ? fs.readFileSync(events, 'utf8') : '' }
-      delete gateway.file
-    } finally {
-      fs.rmSync(logDir, { recursive: true, force: true })
+    if (legacy) {
+      const logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-gates-log-'))
+      try {
+        stopGateway(runtime, session)
+        await copyOutOfVolume(runtime, { image: images.candidate.tag, volume: names.gatewayLog, destinationDir: logDir })
+        const events = path.join(logDir, 'events.jsonl')
+        gateway = { ...summarizeGatewayLog(events), events: fs.existsSync(events) ? fs.readFileSync(events, 'utf8') : '' }
+        delete gateway.file
+      } finally {
+        fs.rmSync(logDir, { recursive: true, force: true })
+      }
     }
-    return { checks, images, gateway, gateIsolation: overlay ? 'overlay' : 'shared', runtime: { kind: runtime.kind, version: runtime.version } }
+    return { checks, images, gateway, featureTests: featureReport, network: legacy ? 'legacy-mirror' : 'none', gateIsolation: 'private-copy', runtime: { kind: runtime.kind, version: runtime.version } }
   } finally {
     destroyResources(runtime, key)
+  }
+}
+
+// A throwaway box for harness-owned tools (capture, the sample check): no
+// network, its own volumes, gone when the tool returns. The tool's code is
+// written into the box from this side; it is never candidate code.
+async function withToolBox(root, { label, onOutput }, body) {
+  const runtime = requireRuntime()
+  const images = await ensureImages(runtime, { onOutput })
+  const key = `sbt-${sha256(`${repoKey(root)}/${label}/${Date.now()}/${crypto.randomBytes(4).toString('hex')}`).slice(0, 10)}`
+  const session = { key, runId: label, repo: repoKey(root) }
+  const image = images.candidate.tag
+  const volume = (name) => {
+    const full = `${key}-${name}`
+    engine(runtime, ['volume', 'create', ...labels(session), full], { check: true })
+    return full
+  }
+  const run = (argv, { volumes = [], timeout = 300_000, env = {} } = {}) => {
+    const box = `${key}-${crypto.randomBytes(3).toString('hex')}`
+    return engineStream(runtime, [
+      ...boxArguments(runtime, { name: box, image, network: 'none', volumes: [...volumes, BOX_HOME], env: boxEnvironment({ STAGEBENCH_OFFLINE_REGISTRY: '0', ...env }, { gateway: false }), workdir: '/tmp', extraLabels: labels(session) }),
+      ...argv,
+    ], { timeout, onTimeout: () => engine(runtime, ['rm', '-f', '-v', box], { timeout: 60_000 }) })
+  }
+  try {
+    return await body({ runtime, images, image, volume, run })
+  } finally {
+    destroyResources(runtime, key)
+  }
+}
+
+const CAPTURE_RUNNER = `import fs from 'node:fs'
+import { createRequire } from 'node:module'
+import { captureEvidence, serveDirectory } from '/tools/capture.mjs'
+// The image's own Playwright and Chromium: the same bits for every run.
+const { chromium } = createRequire('/usr/local/lib/node_modules/')('playwright')
+const phase = Number(process.argv[2])
+const server = await serveDirectory('/dist')
+try {
+  await captureEvidence('/tmp/capture', { id: 'local', phase, url: server.url, chromium })
+} finally {
+  await server.close()
+}
+const produced = '/tmp/capture/runs/local/stage' + phase + '/evidence'
+for (const name of fs.readdirSync(produced)) fs.copyFileSync(produced + '/' + name, '/out/' + name)
+`
+
+// Canonical capture, in the image: the built app is served and screenshotted
+// by the image's Chromium, with the image's fonts, in a box with no network.
+// Every run is measured by identical bits, and a candidate's page cannot reach
+// anything from the capture browser either.
+export async function runCaptureInBox(root, { distDir, phase, evidenceDir, harnessSource, onOutput }) {
+  return withToolBox(root, { label: 'capture', onOutput }, async ({ runtime, image, volume, run }) => {
+    const dist = volume('dist')
+    const out = volume('out')
+    const tools = volume('tools')
+    await copyIntoVolume(runtime, { image, volume: dist, sourceDir: distDir })
+    writeIntoVolume(runtime, { image, volume: tools, files: [{ path: 'capture.mjs', content: harnessSource }, { path: 'run.mjs', content: CAPTURE_RUNNER }] })
+    const result = await run(['node', '/tools/run.mjs', String(phase)], { volumes: [`${dist}:/dist:ro`, `${tools}:/tools:ro`, `${out}:/out`] })
+    if (result.status !== 0) throw new Error(`Canonical capture failed inside the lockdown:\n${String(result.output).trim().slice(-1500)}`)
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-capture-'))
+    try {
+      await copyOutOfVolume(runtime, { image, volume: out, destinationDir: scratch, limitBytes: 256 * 1024 * 1024 })
+      sanitizeTree(scratch)
+      fs.mkdirSync(evidenceDir, { recursive: true })
+      const written = []
+      for (const name of fs.readdirSync(scratch)) {
+        if (!new RegExp(`^stage${phase}-(desktop\\.png|narrow\\.png|capture\\.json)$`).test(name)) continue
+        fs.copyFileSync(path.join(scratch, name), path.join(evidenceDir, name))
+        written.push(name)
+      }
+      return { written: written.sort(), where: 'lockdown', image }
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+}
+
+// The acoustic half of the sample check, in a box with ffmpeg, the pack, and a
+// copy of the sealed tree. `script` is bench/lib/run/sample-match.mjs.
+export async function runSampleMatchInBox(root, { stageDir, packDir, packDigest, entries, script, onOutput }) {
+  return withToolBox(root, { label: 'samples', onOutput }, async ({ runtime, image, volume, run }) => {
+    const pack = await ensureSamplePackVolume(runtime, image, packDir, packDigest, { onOutput })
+    const stage = volume('stage')
+    const tools = volume('tools')
+    const out = volume('out')
+    await copyIntoVolume(runtime, { image, volume: stage, sourceDir: stageDir, excludes: ['node_modules', '.git', '.pnpm-store'] })
+    writeIntoVolume(runtime, { image, volume: tools, files: [{ path: 'sample-match.mjs', content: script }, { path: 'request.json', content: JSON.stringify({ stage: '/stage', pack: '/pack', entries }) }] })
+    const result = await run(['node', '/tools/sample-match.mjs', '--request', '/tools/request.json', '--out', '/out/result.json'], { volumes: [`${stage}:/stage:ro`, `${pack}:/pack:ro`, `${tools}:/tools:ro`, `${out}:/out`], timeout: 1_800_000 })
+    const raw = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${out}:/src:ro`, '--entrypoint', 'sh', image, '-c', 'head -c 33554432 /src/result.json 2>/dev/null'], { timeout: 120_000 })
+    try {
+      return JSON.parse(raw.stdout)
+    } catch {
+      throw new Error(`The sample check did not finish inside the lockdown:\n${String(result.output).trim().slice(-1500)}`)
+    }
+  })
+}
+
+// --- evaluator sessions --------------------------------------------------------
+
+// Open (or reuse) the box an evaluator works in. Its only volumes are the
+// evaluator workspace: the sealed artifact, the published build, and the
+// scoring inputs read-only; the assessment and a scratch directory writable.
+// Inside, the working directory is /workspace — no checkout name, no run id.
+export async function openEvalSession(root, { id, phase, workspace, slot = 1, runtime = requireRuntime(), onOutput } = {}) {
+  const kindKey = evaluatorKind(slot)
+  const existing = loadSession(root, id, phase, kindKey)
+  const images = await ensureImages(runtime, { onOutput })
+  if (existing) {
+    if (!exists(runtime, 'volume', sessionNames(existing.key).workspace)) throw new Error(`The evaluator session for ${id} Phase ${phase} is recorded, but its volumes are gone. Run pnpm bench clean ${id} and score again.`)
+    return { session: existing, runtime, images, created: false }
+  }
+  const template = path.join(workspace, '.assessment.template.json')
+  for (const required of ['EVAL.md', 'artifact', 'inputs']) {
+    if (!fs.existsSync(path.join(workspace, required))) throw new Error(`Missing evaluator workspace at ${workspace}; run pnpm bench score ${id} --phase ${phase} first`)
+  }
+  const exposure = requireNoHostExposure(runtime, onOutput)
+  const session = newSession(root, runtime, images, exposure, { id, phase, kind: 'evaluator', kindKey })
+  session.slot = Number(slot)
+  session.hasBuild = fs.existsSync(path.join(workspace, 'build', 'index.html'))
+  onOutput?.(`→ opening evaluator session ${session.key} (${runtime.kind} ${runtime.version})\n`)
+  const names = sessionNames(session.key)
+  createSessionResources(runtime, session, [names.workspace, names.artifact, names.inputs, names.home, names.honey, names.gatewayLog, ...(session.hasBuild ? [names.build] : [])])
+  const image = images.candidate.tag
+  // Every grader starts from the blank template, whatever earlier graders wrote.
+  const blank = fs.readFileSync(fs.existsSync(template) ? template : path.join(workspace, 'assessment.json'))
+  writeIntoVolume(runtime, { image, volume: names.workspace, files: [
+    { path: 'EVAL.md', content: fs.readFileSync(path.join(workspace, 'EVAL.md')) },
+    { path: 'assessment.json', content: blank },
+    { path: 'scratch/.keep', content: '' },
+  ] })
+  engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.workspace}:/gate`, '--entrypoint', 'mkdir', image, '-p', '/gate/artifact', '/gate/build', '/gate/inputs'], { check: true })
+  await copyIntoVolume(runtime, { image, volume: names.artifact, sourceDir: path.join(workspace, 'artifact') })
+  await copyIntoVolume(runtime, { image, volume: names.inputs, sourceDir: path.join(workspace, 'inputs') })
+  if (session.hasBuild) await copyIntoVolume(runtime, { image, volume: names.build, sourceDir: path.join(workspace, 'build') })
+  plantHoneytokens(runtime, image, names.honey, session.honeytoken)
+  saveSession(root, session)
+  return { session, runtime, images, created: true }
+}
+
+export async function launchEvaluator(root, { id, phase, workspace, slot = 1, harness, options = {}, env = process.env, onOutput, messagePolicy = 'template' }) {
+  resolveAuth(resolveHarness(harness), env, options)
+  const opened = await openEvalSession(root, { id, phase, workspace, slot, onOutput })
+  return launchInSession(root, opened, { harness, options, env, onOutput, templates: EVALUATOR_MESSAGES, messagePolicy })
+}
+
+// Bring the filled assessment (and nothing else) back to the host evaluator
+// workspace, with the grader's session files for the transcript archive.
+export async function exportEvalSession(root, { id, phase, workspace, slot = 1, onOutput }) {
+  const kindKey = evaluatorKind(slot)
+  const session = loadSession(root, id, phase, kindKey)
+  if (!session) throw new Error(`${id} Phase ${phase} has no evaluator session${Number(slot) > 1 ? ` for slot ${slot}` : ''}`)
+  const runtime = requireRuntime()
+  const images = await ensureImages(runtime, { onOutput })
+  const names = sessionNames(session.key)
+  if (engine(runtime, ['container', 'inspect', names.agent]).status === 0) throw new Error(`The evaluator container ${names.agent} is still running; wait for it to finish`)
+  const raw = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${names.workspace}:/src:ro`, '--entrypoint', 'sh', images.candidate.tag, '-c', 'head -c 16777216 /src/assessment.json'], { timeout: 120_000 })
+  let assessment
+  try {
+    assessment = JSON.parse(raw.stdout)
+  } catch {
+    throw new Error('The assessment in the evaluator box is not valid JSON; send the evaluator back to finish it (pnpm bench evaluator … --message continue)')
+  }
+  const target = path.join(workspace, Number(slot) > 1 ? `assessment.${Number(slot)}.json` : 'assessment.json')
+  writeJson(target, assessment)
+  const stateDir = sessionStateDir(root, id, phase, kindKey)
+  const transcripts = await exportHarnessTranscripts(runtime, images, session, path.join(stateDir, 'transcripts'))
+  return {
+    session,
+    assessment: target,
+    transcripts,
+    consoleLogs: session.launches.map((launch) => path.join(stateDir, launch.log)).filter((file) => fs.existsSync(file)),
+    decoysRead: decoysRead(runtime, images, session),
   }
 }
 
 function destroyResources(runtime, key, label = `stagebench.session=${key}`) {
   const filter = ['--filter', `label=${label}`]
   const containers = engine(runtime, ['ps', '-a', '-q', ...filter]).stdout.split('\n').filter(Boolean)
-  if (containers.length > 0) engine(runtime, ['rm', '-f', ...containers])
+  if (containers.length > 0) engine(runtime, ['rm', '-f', '-v', ...containers])
   const volumes = engine(runtime, ['volume', 'ls', '-q', ...filter]).stdout.split('\n').filter(Boolean)
   if (volumes.length > 0) engine(runtime, ['volume', 'rm', '-f', ...volumes])
   const networks = engine(runtime, ['network', 'ls', '-q', ...filter]).stdout.split('\n').filter(Boolean)
@@ -709,17 +1056,27 @@ function destroyResources(runtime, key, label = `stagebench.session=${key}`) {
 }
 
 // Remove a session's containers, volumes, and network. The host-side state
-// directory (gateway log, transcripts, launch logs) is kept unless asked.
-export function destroySession(root, id, phase, { keepState = true } = {}) {
-  const session = loadSession(root, id, phase)
+// directory (gateway log, transcripts, launch logs) is kept unless asked. The
+// shared sample-pack volume carries no session label and is left alone.
+export function destroySession(root, id, phase, { keepState = true, kind = 'candidate' } = {}) {
+  const session = loadSession(root, id, phase, kind)
   if (!session) return false
   const runtime = requireRuntime()
   destroyResources(runtime, session.key)
-  const stateDir = sessionStateDir(root, id, phase)
+  const stateDir = sessionStateDir(root, id, phase, kind)
   if (!keepState) fs.rmSync(stateDir, { recursive: true, force: true })
   // Keep the record, under a name loadSession no longer answers to.
   else fs.renameSync(path.join(stateDir, 'session.json'), path.join(stateDir, 'session.closed.json'))
   return true
+}
+
+// Every evaluator session a phase has (one per panel slot).
+export function evaluatorSessions(root, id, phase) {
+  const base = path.join(workspaceRoot(root, 'lockdown'), id)
+  if (!fs.existsSync(base)) return []
+  return fs.readdirSync(base)
+    .map((name) => new RegExp(`^(evaluator(?:-\\d+)?)-stage${phase}$`).exec(name)?.[1])
+    .filter((kind) => kind && loadSession(root, id, phase, kind))
 }
 
 // Remove every lockdown container, volume, and network this checkout created

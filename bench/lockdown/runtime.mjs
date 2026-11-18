@@ -56,15 +56,34 @@ export function requireRuntime(env = process.env) {
 // way to make that true of a container escape as well is for the VM underneath
 // to have nothing of the host in it.
 //   none     verified: the operator's home directory does not exist in the VM
-//   shared   verified: it does (Podman's default machine shares /Users)
-//   unknown  this engine cannot be asked (Docker Desktop, a remote host, …)
-export function hostExposure(runtime) {
+//   shared   verified: it does (Podman's default machine and Docker Desktop
+//            both share /Users)
+//   unknown  the engine could not be asked
+//
+// Asked the same way of every engine, so Docker and Podman are held to the
+// same standard: try to bind-mount the operator's home directory read-only
+// into a throwaway, network-less container. `--mount type=bind` fails when the
+// source does not exist on the engine's side (it never creates it), which is
+// the answer wanted. The dedicated Podman machine is also asked directly.
+export function hostExposure(runtime, { image = null } = {}) {
+  const home = os.homedir()
   if (runtime.kind === 'podman' && runtime.prefix.includes(PODMAN_MACHINE)) {
-    const probe = spawnSync(runtime.bin, ['machine', 'ssh', PODMAN_MACHINE, `test -e ${JSON.stringify(os.homedir())} && echo shared || echo absent`], { encoding: 'utf8', timeout: 30_000 })
+    const probe = spawnSync(runtime.bin, ['machine', 'ssh', PODMAN_MACHINE, `test -e ${JSON.stringify(home)} && echo shared || echo absent`], { encoding: 'utf8', timeout: 30_000 })
     if (probe.status === 0 && probe.stdout.includes('absent')) return { state: 'none', detail: 'the engine VM cannot see the operator\'s home directory' }
-    if (probe.status === 0 && probe.stdout.includes('shared')) return { state: 'shared', detail: `the engine VM mounts ${os.homedir()}; recreate it with \`podman machine rm ${PODMAN_MACHINE}\` and \`pnpm bench lockdown-setup\`` }
+    if (probe.status === 0 && probe.stdout.includes('shared')) return { state: 'shared', detail: `the engine VM mounts ${home}; recreate it with \`podman machine rm ${PODMAN_MACHINE}\` and \`pnpm bench lockdown-setup\`` }
   }
-  return { state: 'unknown', detail: 'this engine cannot be asked whether its VM shares host directories; containers still receive no mounts' }
+  const probeImage = image ?? imageTags().candidate
+  if (imageId(runtime, probeImage)) {
+    const probe = engine(runtime, ['run', '--rm', '--network', 'none', '--mount', `type=bind,source=${home},target=/probe,readonly`, '--entrypoint', 'sh', probeImage, '-c', 'ls -A /probe 2>/dev/null | head -1; echo probed'], { timeout: 60_000 })
+    if (probe.status === 0 && probe.stdout.includes('probed')) {
+      const listed = probe.stdout.replace('probed', '').trim()
+      // A Linux engine running directly on this machine sees the real home; a VM without the share cannot mount it at all.
+      if (listed) return { state: 'shared', detail: `the engine can bind-mount ${home}: its machine shares the operator's disk (Docker Desktop and Podman's default machine do). Use a machine with no shared directories (\`pnpm bench lockdown-setup\` creates one for Podman), or an engine on another host` }
+      return { state: 'unknown', detail: `the engine mounted ${home} and found it empty; it may be a different machine's directory of the same name` }
+    }
+    if (/no such file|not exist|does not exist|invalid mount|bind source path/i.test(`${probe.stderr}`)) return { state: 'none', detail: `the engine cannot mount ${home}: it does not exist on the engine's side` }
+  }
+  return { state: 'unknown', detail: 'this engine could not be asked whether its machine shares host directories; containers still receive no mounts' }
 }
 
 // Synchronous engine call. Returns { status, stdout, stderr }; throws only when
@@ -256,7 +275,10 @@ export async function copyIntoVolume(runtime, { image, volume, sourceDir, entrie
   const mount = helperMount(user)
   const target = path.posix.join(mount, subdirectory)
   const unpack = spawn(runtime.bin, [...runtime.prefix, 'run', '--rm', '-i', '--network', 'none', '--user', user,
-    '-v', `${volume}:${mount}`, '--entrypoint', 'sh', image, '-c', 'mkdir -p "$1" && exec tar -x -f - -C "$1" --no-same-owner', 'sh', target], { stdio: ['pipe', 'ignore', 'pipe'] })
+    // Directory modes are applied last: a read-only directory in the stream (an
+    // evaluator's artifact copy is chmod'd read-only) must not stop its own
+    // contents from being written.
+    '-v', `${volume}:${mount}`, '--entrypoint', 'sh', image, '-c', 'mkdir -p "$1" && exec tar -x -f - -C "$1" --no-same-owner --delay-directory-restore', 'sh', target], { stdio: ['pipe', 'ignore', 'pipe'] })
   pack.stdout.pipe(unpack.stdin)
   unpack.stdin.on('error', () => {})
   const [packed, unpacked] = await Promise.all([waitFor(pack), waitFor(unpack)])

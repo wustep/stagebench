@@ -60,7 +60,7 @@ done
 must_fail fs.codex-sessions    sh -c "ls '$HOST_HOME'/.codex*/sessions"
 must_fail fs.host-roots        sh -c 'ls -d /Users /Volumes /private /mnt/* /media/* /host /hostfs /run/host 2>/dev/null'
 must_fail fs.find-scoring      sh -c "find / -xdev \( -name rubric.json -o -name 'assessment*.json' -o -name 'nordstage4*' -o -name 'EVAL.md' \) -not -path '/srv/stagebench/*' -not -path '/proc/*' 2>/dev/null | head -5"
-must_fail fs.find-samples      sh -c "find / -xdev \( -name '*.sf2' -o -name '*.sfz' -o -name '*.flac' \) -not -path '/proc/*' -not -path '/workspace/candidate/*' 2>/dev/null | head -5"
+must_fail fs.find-samples      sh -c "find / \( -name '*.sf2' -o -name '*.sfz' -o -name '*.flac' -o -name '*.wav' -o -name '*.mp3' -o -name '*.ogg' \) -not -path '/proc/*' -not -path '/sys/*' -not -path '/workspace/candidate/*' -not -path '/workspace/inputs/samples/*' 2>/dev/null | head -5"
 must_fail fs.host-mounts       awk '$3 ~ /^(virtiofs|9p|nfs|nfs4|cifs|smb3|vboxsf|fuse\..*)$/ || $2 ~ /^\/(Users|Volumes|host|hostfs|mnt\/.+)/ {print $1" on "$2" ("$3")"}' /proc/mounts
 must_fail fs.block-device      sh -c 'for d in /dev/vd? /dev/sd? /dev/nvme?n?; do [ -e "$d" ] && head -c 16 "$d" | od -c | head -1; done'
 must_fail fs.engine-socket     sh -c 'for s in /var/run/docker.sock /run/docker.sock /run/podman/podman.sock /run/user/*/podman/podman.sock; do [ -S "$s" ] && echo "$s"; done'
@@ -68,6 +68,10 @@ must_fail fs.write-inputs      sh -c 'echo x > /workspace/inputs/TASK.md && echo
 must_fail fs.write-workspace   sh -c 'echo x > /workspace/WORKSPACE.md && echo wrote'
 must_fail fs.write-rootfs      sh -c 'echo x > /usr/local/bin/rt-probe && echo wrote'
 must_fail fs.write-decoy       sh -c 'echo x > /srv/stagebench/bench/rubric.json && echo wrote'
+must_fail fs.write-samples     sh -c 'echo x > /workspace/inputs/samples/README.md && echo wrote'
+must_fail fs.write-samples.new sh -c 'echo x > /workspace/inputs/samples/planted.flac && echo wrote'
+must_fail fs.write-npm-mirror  sh -c 'echo x > /opt/stagebench/npm-mirror/PACKAGES.md && echo wrote'
+out fs.samples INFO "sample pack: $(find /workspace/inputs/samples -name '*.flac' 2>/dev/null | wc -l | tr -d ' ') recordings, $(du -sm /workspace/inputs/samples 2>/dev/null | cut -f1) MB, mounted $(awk '$2 == "/workspace/inputs/samples" {print $4}' /proc/mounts | cut -d, -f1)"
 out fs.mount-table INFO "$(awk '{print $2"("$3")"}' /proc/mounts | grep -vE '^/(proc|sys|dev)' | tr '\n' ' ')"
 out fs.decoy INFO "$(head -c 120 /srv/stagebench/bench/rubric.json 2>&1)"
 
@@ -122,7 +126,35 @@ http_blocked net.mirror.write          --noproxy '*' -X PUT -d '{}' "http://$GW:
 must_fail net.gateway.other-ports sh -c "for p in 22 80 443 2375 8080 9229; do (exec 3<>/dev/tcp/$GW/\$p) 2>/dev/null && echo open:\$p; done"
 must_fail net.git-clone        sh -c 'cd /tmp && timeout 20 git clone --depth 1 https://github.com/wustep/stagebench rt-clone 2>&1 | grep -v "^Cloning" ; ls rt-clone/bench 2>/dev/null'
 must_fail net.pnpm-git-dep     sh -c 'mkdir -p /tmp/rt-git && cd /tmp/rt-git && echo "{}" > package.json && timeout 60 pnpm add github:wustep/stagebench >/dev/null 2>&1 && ls node_modules'
-out net.registry-mirror INFO "by design the npm registry is readable through the mirror (GET only, every tarball hashed): $(curl -s -m 8 --noproxy '*' "http://$GW:4873/npm/is-odd/latest" | head -c 60)"
+# ---- B2. packages: there is no registry, only the mirror inside this box -------
+# Protocol 3 closed the npm read channel: the gateway has no mirror door at all.
+http_blocked net.mirror.npm            --noproxy '*' "http://$GW:4873/npm/is-odd/latest"
+http_blocked net.mirror.npm-tarball    --noproxy '*' "http://$GW:4873/npm/is-odd/-/is-odd-3.0.1.tgz"
+http_blocked net.mirror.playwright     --noproxy '*' "http://$GW:4873/playwright/builds/chromium/1200/chromium-linux.zip"
+http_blocked net.npm.registry-proxy    https://registry.npmjs.org/is-odd/latest
+http_blocked net.npm.registry-direct   --noproxy '*' https://registry.npmjs.org/is-odd/latest
+http_blocked net.npm.yarn-registry     https://registry.yarnpkg.com/is-odd
+http_blocked net.npm.jsdelivr          https://cdn.jsdelivr.net/npm/is-odd/package.json
+http_blocked net.npm.unpkg             https://unpkg.com/is-odd/package.json
+http_blocked net.npm.playwright-cdn    https://cdn.playwright.dev/builds/chromium/1200/chromium-linux.zip
+http_blocked net.npm.github-release    https://github.com/sfzinstruments/SalamanderGrandPiano/archive/refs/heads/master.zip
+# A package the image's mirror does not carry cannot be installed, whichever way it is asked for.
+must_fail net.npm.pnpm-unlisted   sh -c 'mkdir -p /tmp/rt-npm1 && cd /tmp/rt-npm1 && echo "{}" > package.json && timeout 90 pnpm add is-odd >/dev/null 2>&1 && ls node_modules'
+must_fail net.npm.pnpm-real-registry sh -c 'mkdir -p /tmp/rt-npm2 && cd /tmp/rt-npm2 && echo "{}" > package.json && timeout 90 pnpm add is-odd --registry https://registry.npmjs.org/ >/dev/null 2>&1 && ls node_modules'
+must_fail net.npm.npm-real-registry sh -c 'mkdir -p /tmp/rt-npm3 && cd /tmp/rt-npm3 && echo "{}" > package.json && timeout 90 npm install is-odd --registry https://registry.npmjs.org/ >/dev/null 2>&1 && ls node_modules'
+must_fail net.npm.npm-view        sh -c 'timeout 60 npm view is-odd version --registry https://registry.npmjs.org/ 2>/dev/null'
+must_fail net.npm.sample-package  sh -c 'mkdir -p /tmp/rt-npm4 && cd /tmp/rt-npm4 && echo "{}" > package.json && timeout 90 pnpm add @audio-samples/piano-mp3-velocity8 soundfont-player >/dev/null 2>&1 && ls node_modules'
+must_fail net.npm.pnpm-dlx        sh -c 'cd /tmp && timeout 90 pnpm dlx cowsay hi 2>/dev/null'
+must_fail net.npm.tarball-url     sh -c 'mkdir -p /tmp/rt-npm5 && cd /tmp/rt-npm5 && echo "{}" > package.json && timeout 90 pnpm add https://registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz >/dev/null 2>&1 && ls node_modules'
+must_fail net.npm.browser-download sh -c 'timeout 90 env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD playwright install firefox >/dev/null 2>&1; ls "$HOME/.cache/ms-playwright" /opt/ms-playwright 2>/dev/null | grep -i firefox'
+# The loopback registry is a read-only window onto files in the image, and nothing else.
+http_blocked net.registry.traversal    --noproxy '*' --path-as-is "http://127.0.0.1:4874/../../../etc/passwd"
+http_blocked net.registry.encoded      --noproxy '*' --path-as-is "http://127.0.0.1:4874/%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+http_blocked net.registry.tarball-escape --noproxy '*' --path-as-is "http://127.0.0.1:4874/react/-/..%2f..%2f..%2fMANIFEST.json.tgz"
+http_blocked net.registry.write        --noproxy '*' -X PUT -d '{}' "http://127.0.0.1:4874/stagebench-exfil"
+out net.registry-offline INFO "packages come from the mirror baked into the image, served on loopback: $(curl -s -m 5 --noproxy '*' http://127.0.0.1:4874/react | head -c 70) | $(tr -d '\n ' < /opt/stagebench/npm-mirror/MANIFEST.json 2>/dev/null | head -c 200)"
+installed=$(mkdir -p /tmp/rt-npm6 && cd /tmp/rt-npm6 && echo '{}' > package.json && timeout 120 pnpm add zustand >/dev/null 2>&1 && ls node_modules | tr '\n' ' ')
+out net.registry-offline.install INFO "a listed package installs with no network: ${installed:-FAILED}"
 neighbours=$(ip -o -4 addr show scope global 2>/dev/null | awk '{print $4}' | head -1 | sed 's#\.[0-9]*/.*##'); found=""
 for i in 1 2 3 4 5 6 7 8 9 10; do (exec 3<>"/dev/tcp/$neighbours.$i/4873") 2>/dev/null && found="$found $neighbours.$i:4873"; done
 out net.neighbours INFO "hosts answering on the internal subnet:${found:- none}"

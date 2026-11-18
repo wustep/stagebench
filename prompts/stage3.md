@@ -36,7 +36,7 @@ The remaining sections come alive: **Organ**, **Synth**, and the **Program/perfo
 
 ## Order of work
 
-1. Update `IMPLEMENTATION_PLAN.md` citing every assigned spec filename with the Phase 3 `Hard gates` checklist, the canonical state schema, and a control-binding audit plan.
+1. Update `IMPLEMENTATION_PLAN.md` citing every assigned spec filename with the Phase 3 `Hard gates` checklist pasted from `inputs/hard-gates.md` word for word, the canonical state schema, and a control-binding audit plan.
 2. Canonical serializable program state, then Store/Store As/Live and the dirty lifecycle.
 3. Splits, zones, crossfades, scenes, morphs, clock, transpose, Panic.
 4. Organ engine, then Synth engine, each integrated as it lands.
@@ -44,4 +44,4 @@ The remaining sections come alive: **Organ**, **Synth**, and the **Program/perfo
 
 ## Evidence
 
-Preserve all Phase 1–2 tests and mappings; add every Phase 3 ID from `TASK.md`. Tests must prove program round-trips, split/scene/morph behavior, organ model and drawbar distinctions, synth source/filter/envelope/LFO/voice/arp behavior, one-context routing, and cleanup. Exercise programs, Live Mode, splits, scenes, morphs, representative organ and synth sounds, and Panic in the browser. Update `IMPLEMENTATION_DETAILS.json`, use the parent capture harness, and run all four pnpm gates.
+Preserve all Phase 1–2 tests and mappings; add every Phase 3 ID from `TASK.md`. Tests must prove program round-trips, split/scene/morph behavior, organ model and drawbar distinctions, synth source/filter/envelope/LFO/voice/arp behavior, one-context routing, and cleanup. Exercise programs, Live Mode, splits, scenes, morphs, representative organ and synth sounds, and Panic in the browser. Update `IMPLEMENTATION_DETAILS.json` (every bundled audio file declared; organ and synth sources are generated unless you cut them from `inputs/samples/`), use the capture harness in `inputs/harness/`, and run all four pnpm gates.

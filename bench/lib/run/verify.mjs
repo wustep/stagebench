@@ -92,6 +92,139 @@ export async function runChecks(stageDir) {
   return results
 }
 
+// Which of a feature's tests actually ran. A feature matrix only says a test
+// file exists; two audited artifacts mapped a required feature to nothing the
+// seal ever executed — a suite wrapped in `describe.runIf(env)` that skipped
+// itself without the environment variable, and a standalone browser script the
+// test runner never loads. `report` is the per-file summary of a real run of
+// the candidate's tests (summarizeVitestReport): a feature counts as covered
+// only if at least one of its test files ran and had a test pass.
+export function featureExecution(matrix, report) {
+  const normalize = (file) => path.posix.normalize(String(file).split(path.sep).join('/')).replace(/^\.\//, '')
+  if (!report || !Array.isArray(report.files)) {
+    return { collected: false, uncovered: [], detail: `The seal could not collect per-file test results (${report?.error ? String(report.error).slice(-300) : 'no report'}). Feature tests must run under Vitest with no special environment: \`pnpm exec vitest run\` has to work in candidate/` }
+  }
+  const ran = new Map(report.files.map((file) => [normalize(file.file), file]))
+  const uncovered = []
+  const idle = new Set()
+  for (const feature of matrix.features ?? []) {
+    const states = (feature.tests ?? []).map((testPath) => {
+      const result = ran.get(normalize(testPath))
+      if (!result) return { test: testPath, state: 'not-run' }
+      if (result.passed > 0) return { test: testPath, state: 'ran' }
+      return { test: testPath, state: result.failed > 0 ? 'failed' : 'skipped' }
+    })
+    for (const entry of states) if (entry.state !== 'ran') idle.add(`${entry.test} (${entry.state})`)
+    if (!states.some((entry) => entry.state === 'ran')) uncovered.push({ id: feature.id, tests: states })
+  }
+  const describe = (entry) => `${entry.id} → ${entry.tests.map((test) => `${test.test}: ${test.state === 'not-run' ? 'not executed by the test runner' : test.state === 'skipped' ? 'every test skipped' : 'no passing test'}`).join(', ')}`
+  return {
+    collected: true,
+    files: report.files.length,
+    uncovered,
+    idleTests: [...idle].sort(),
+    detail: uncovered.length === 0
+      ? `Every feature in tests/feature-matrix.json maps to at least one test file that the seal's own test run executed with a passing test (${report.files.length} files ran)`
+      : `${uncovered.length} feature(s) map only to tests the seal's test run did not execute or that skipped every test: ${uncovered.slice(0, 8).map(describe).join('; ')}${uncovered.length > 8 ? '; …' : ''}. Each feature needs a test that \`pnpm exec vitest run\` executes with no special environment variables — not a suite behind runIf/skipIf, and not a standalone script`,
+  }
+}
+
+export function featureExecutionEvidence(execution, { blocking = true } = {}) {
+  return { id: 'feature tests executed', ...(blocking ? {} : { advisory: true }), passed: execution.collected && execution.uncovered.length === 0, detail: execution.detail }
+}
+
+// The same question asked on this machine, for a phase sealed outside the box.
+export async function collectFeatureTestsOnHost(stageDir) {
+  const reportPath = path.join(stageDir, 'node_modules', '.stagebench-vitest.json')
+  fs.rmSync(reportPath, { force: true })
+  const result = await runCommand('pnpm', ['exec', 'vitest', 'run', '--reporter=json', `--outputFile=${reportPath}`], { cwd: stageDir, timeout: 300_000, env: { ...process.env, CI: '1' } })
+  let files = null
+  try {
+    files = readJson(reportPath).testResults.map((file) => {
+      const counts = { passed: 0, failed: 0, skipped: 0 }
+      for (const assertion of file.assertionResults ?? []) counts[assertion.status === 'passed' ? 'passed' : assertion.status === 'failed' ? 'failed' : 'skipped'] += 1
+      const name = fs.existsSync(file.name) ? fs.realpathSync(file.name) : file.name
+      return { file: path.relative(fs.realpathSync(stageDir), name).split(path.sep).join('/'), ...counts }
+    })
+  } catch {
+    files = null
+  }
+  fs.rmSync(reportPath, { force: true })
+  return { runner: 'vitest', exitStatus: result.status, files, ...(files ? {} : { error: String(result.stderr || result.stdout || result.error?.message || '').trim().slice(-800) }) }
+}
+
+export function readFeatureMatrix(stageDir) {
+  const matrixPath = path.join(stageDir, 'tests', 'feature-matrix.json')
+  return fs.existsSync(matrixPath) ? readJson(matrixPath) : { features: [] }
+}
+
+// Agent instruction files a harness loads on its own. In a sealed artifact
+// they are addressed to whoever opens it next, which is the grader.
+export const AGENT_INSTRUCTION_FILES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'AGENTS.override.md', 'GEMINI.md', '.cursorrules', '.windsurfrules', '.clinerules', '.mcp.json', 'opencode.json', 'copilot-instructions.md']
+export const AGENT_INSTRUCTION_DIRS = ['.claude', '.codex', '.cursor', '.agents', '.gemini', '.opencode', '.windsurf']
+
+export function findAgentInstructionFiles(directory) {
+  const found = []
+  const visit = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (['node_modules', '.git'].includes(entry.name)) continue
+      const absolute = path.join(current, entry.name)
+      const relative = path.relative(directory, absolute).split(path.sep).join('/')
+      if (entry.isDirectory()) {
+        if (AGENT_INSTRUCTION_DIRS.includes(entry.name)) found.push(`${relative}/`)
+        else visit(absolute)
+      } else if (AGENT_INSTRUCTION_FILES.includes(entry.name)) {
+        found.push(relative)
+      }
+    }
+  }
+  if (fs.existsSync(directory)) visit(directory)
+  return found.sort()
+}
+
+// Does the artifact say who made it? Compared with punctuation and case
+// removed, so "GPT 6.2 Sol", "gpt-6.2-sol", and the run id "gpt-6-2-sol" are
+// one name. Returns the files that carry it.
+export function findProducerNames(stageDir, names) {
+  const squash = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const needles = [...new Set(names.map(squash).filter((needle) => needle.length >= 5))]
+  if (needles.length === 0) return []
+  const hits = []
+  const visit = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (['node_modules', '.git', '.vite', '.pnpm-store'].includes(entry.name)) continue
+      const absolute = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        visit(absolute)
+        continue
+      }
+      if (!entry.isFile()) continue
+      const relative = path.relative(stageDir, absolute).split(path.sep).join('/')
+      const { size } = fs.statSync(absolute)
+      let found = needles.some((needle) => squash(relative).includes(needle))
+      if (!found && size <= 24 * 1024 * 1024) {
+        const buffer = fs.readFileSync(absolute)
+        // Binary files are searched as they are; text is searched squashed.
+        const text = buffer.subarray(0, 4096).includes(0) ? buffer.toString('latin1').toLowerCase() : squash(buffer.toString('utf8'))
+        found = needles.some((needle) => text.includes(needle))
+      }
+      if (found) hits.push(relative)
+    }
+  }
+  visit(stageDir)
+  return hits.sort()
+}
+
+export function blindArtifactEvidence(hits, { blocking = true } = {}) {
+  const check = { id: 'artifact does not name its producer', ...(blocking ? {} : { advisory: true }) }
+  if (hits.length === 0) return { ...check, passed: true, detail: 'Neither the run id nor the model name appears in the sealed artifact or its build' }
+  return {
+    ...check,
+    passed: false,
+    detail: `The artifact names the model or run that produced it in ${hits.length} file(s): ${hits.slice(0, 6).join(', ')}${hits.length > 6 ? ', …' : ''}. Grading is blind. Remove every mention of your own model, vendor product name, or run name from candidate/ (source, documents, evidence, and anything the build embeds), then seal again`,
+  }
+}
+
 function verifyFeatureMatrix(stageDir, phase) {
   const matrixPath = path.join(stageDir, 'tests', 'feature-matrix.json')
   assert.ok(fs.existsSync(matrixPath), 'Missing tests/feature-matrix.json')
@@ -134,7 +267,7 @@ function verifyPhaseContract(root, stageDir, phase) {
     assert.ok(plan.includes(path.basename(specPath).toLowerCase()), `IMPLEMENTATION_PLAN.md must cite ${path.basename(specPath)}`)
   }
   for (const gate of contract.hardGates ?? []) {
-    assert.ok(plan.includes(flatten(gate)), `IMPLEMENTATION_PLAN.md must include the hard gate: ${gate}`)
+    assert.ok(plan.includes(flatten(gate)), `IMPLEMENTATION_PLAN.md must include the hard gate, word for word: "${gate}" (the ready-made checklist is in inputs/hard-gates.md; paste it in unchanged)`)
   }
   return { specs: contract.specs, hardGates: contract.hardGates?.length ?? 0 }
 }
@@ -243,15 +376,16 @@ export function verifyPhase(root, id, phase, options = {}) {
   // verifyPhase itself stays synchronous over the sealed stage directory.
   assert.ok(options.checks, 'verifyPhase requires precomputed package checks (call runChecks first)')
   const checks = options.checks
-  const evidence = evidenceChecks(stageDir, phase)
+  const evidence = [...evidenceChecks(stageDir, phase), ...(options.evidence ?? [])]
   // Advisory evidence describes how measurable the artifact is rather than
   // whether it meets the contract, so it is recorded but never blocks a seal.
   const passed = checks.every((check) => check.passed) && evidence.every((check) => check.passed || check.advisory)
   const artifact = passed ? hashTree(stageDir) : null
   return {
-    version: 3,
+    version: 4,
     runId: id,
     stage: phase,
+    ...(options.protocolVersion ? { protocolVersion: options.protocolVersion } : {}),
     verifiedAt: new Date().toISOString(),
     passed,
     artifactDigest: artifact?.digest,

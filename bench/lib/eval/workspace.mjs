@@ -5,9 +5,11 @@
 // runs' scores, or any other solution. The CLI passes run facts in; this
 // module never reads or writes run.json.
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { NON_ARTIFACT_DIRS, blindRunCode, hashTree, loadProtocol, readJson, workspaceRoot, writeJson } from '../shared.mjs'
+import { NON_ARTIFACT_DIRS, blindRunCode, hashTree, loadProtocol, readJson, stagebenchHome, workspaceRoot, writeJson } from '../shared.mjs'
 import { filterTaskToPhase, projectProtocol, projectVariants } from '../materials.mjs'
+import { AGENT_INSTRUCTION_DIRS, AGENT_INSTRUCTION_FILES } from '../run/verify.mjs'
 import { createAssessmentTemplate, isTopPhase } from './scoring.mjs'
 
 // Must stay identical to what hashTree ignores, or the copy's digest can never
@@ -26,13 +28,77 @@ export function evalAssessmentPath(root, id, phase) {
 // record carries the real runId (and could embed it in check output or
 // workspace paths), so every string in it is rewritten to the blind handle
 // before it reaches the evaluator.
-function scrubRunIdentity(value, id, blindId) {
-  if (typeof value === 'string') return value.split(id).join(blindId)
-  if (Array.isArray(value)) return value.map((entry) => scrubRunIdentity(entry, id, blindId))
+function scrubRunIdentity(value, id, blindId, paths = []) {
+  if (typeof value === 'string') {
+    let text = value
+    // Host paths name the operator, the checkout, and often the run.
+    for (const [needle, replacement] of paths) if (needle) text = text.split(needle).join(replacement)
+    return text.split(id).join(blindId)
+  }
+  if (Array.isArray(value)) return value.map((entry) => scrubRunIdentity(entry, id, blindId, paths))
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key.split(id).join(blindId), scrubRunIdentity(entry, id, blindId)]))
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key.split(id).join(blindId), scrubRunIdentity(entry, id, blindId, paths)]))
   }
   return value
+}
+
+// A name as a pattern that survives re-punctuation: "gpt-6-2-sol" also finds
+// "GPT 6.2 Sol" and "gpt_6.2_sol".
+export function namePattern(name) {
+  const tokens = String(name ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+  if (tokens.join('').length < 5) return null
+  return new RegExp(tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^a-z0-9\\n]{0,3}'), 'gi')
+}
+
+// Make the grader's copy blind. Two things are removed from it, after its
+// digest has been checked against the seal:
+//
+//   - agent instruction files (CLAUDE.md, AGENTS.md, .claude/, .cursor/, …).
+//     A harness loads those on its own, so in an artifact they are a message
+//     from the candidate to whoever opens it next — the grader.
+//   - the producer's name, wherever the artifact wrote it. A run id is a model
+//     slug; plans and audits that open with "Run <id>" told four graders which
+//     model they were rating.
+//
+// The sealed tree in runs/ is not touched; this is the copy.
+export function blindArtifactCopy(directory, names = []) {
+  const stripped = []
+  const redacted = []
+  // Longest name first, so "Model X High" goes as a whole before "Model X" can take part of it.
+  const patterns = [...new Set(names.map(String))].sort((a, b) => b.length - a.length).map(namePattern).filter(Boolean)
+  const visit = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name)
+      const relative = path.relative(directory, absolute).split(path.sep).join('/')
+      if (entry.isDirectory()) {
+        if (AGENT_INSTRUCTION_DIRS.includes(entry.name)) {
+          fs.rmSync(absolute, { recursive: true, force: true })
+          stripped.push(`${relative}/`)
+        } else {
+          visit(absolute)
+        }
+        continue
+      }
+      if (!entry.isFile()) continue
+      if (AGENT_INSTRUCTION_FILES.includes(entry.name)) {
+        fs.rmSync(absolute, { force: true })
+        stripped.push(relative)
+        continue
+      }
+      if (patterns.length === 0 || fs.statSync(absolute).size > 8 * 1024 * 1024) continue
+      const buffer = fs.readFileSync(absolute)
+      if (buffer.subarray(0, 8192).includes(0)) continue
+      const text = buffer.toString('utf8')
+      let next = text
+      for (const pattern of patterns) next = next.replace(pattern, '[redacted]')
+      if (next !== text) {
+        fs.writeFileSync(absolute, next)
+        redacted.push(relative)
+      }
+    }
+  }
+  if (fs.existsSync(directory)) visit(directory)
+  return { stripped: stripped.sort(), redacted: redacted.sort() }
 }
 
 // What the grader is shown of the seal record. Everything about how the
@@ -41,14 +107,20 @@ function scrubRunIdentity(value, id, blindId) {
 // and the provider's endpoints; asset provenance names other runs. The grader
 // keeps what describes the artifact itself — gates, contract, evidence — and
 // only a count for provenance.
-export function blindVerification(record, id, blindId) {
-  const { isolation: _isolation, assetProvenance, ...artifactFacts } = record
-  const blind = scrubRunIdentity(artifactFacts, id, blindId)
+export function blindVerification(record, id, blindId, { root = null } = {}) {
+  const { isolation: _isolation, assetProvenance, sampleProvenance, operatorPatch: _patch, ...artifactFacts } = record
+  const paths = [
+    [root ? path.join(root, 'runs', id) : null, '<artifact>'],
+    [root, '<repository>'],
+    [stagebenchHome(), '<workspace-home>'],
+    [os.homedir(), '~'],
+  ]
+  const blind = scrubRunIdentity(artifactFacts, id, blindId, paths)
   if (Array.isArray(blind.evidence)) {
     blind.evidence = blind.evidence
-      // Neither of these describes the artifact's quality, and the second
-      // would point the grader at the file that gives the producer away.
-      .filter((entry) => !['lockdown decoys', 'artifact does not name its run'].includes(entry.id))
+      // None of these describes the artifact's quality, and two of them would
+      // point the grader at whatever gives the producer away.
+      .filter((entry) => !['lockdown decoys', 'artifact does not name its run', 'artifact does not name its producer', 'agent instruction files', 'transcripts'].includes(entry.id))
       .map((entry) => (entry.id === 'asset provenance' && assetProvenance
         ? {
           ...entry,
@@ -59,6 +131,12 @@ export function blindVerification(record, id, blindId) {
         : entry))
   }
   if (assetProvenance) blind.assetProvenance = { assets: assetProvenance.assets, matched: assetProvenance.matched }
+  // Where each sample came from is the grader's business: it is how "recorded,
+  // with truthful provenance" gets judged. Nothing in it names the producer.
+  if (sampleProvenance) {
+    const { toMatch: _toMatch, problems: _problems, ...facts } = sampleProvenance
+    blind.sampleProvenance = facts
+  }
   // Gate results keep their outcome; where they ran is not the grader's concern.
   if (Array.isArray(blind.checks)) blind.checks = blind.checks.map(({ isolation: _where, ...check }) => check)
   return blind
@@ -78,7 +156,7 @@ function copyInput(root, relativePath, inputRoot) {
 // inputs, a blind-coded assessment template, and EVAL.md instructions. The
 // template's runId is the blind handle, not the model identity; the CLI maps
 // it back to the real run at registration.
-export function createEvalWorkspace(root, { id, phase, variantId, stageDir, verificationPath, rubric, expectedDigest, sealedPhases = [phase] }) {
+export function createEvalWorkspace(root, { id, phase, variantId, stageDir, verificationPath, rubric, expectedDigest, sealedPhases = [phase], producerNames = [], boxed = false }) {
   const blindId = blindRunCode(id)
   const workspace = evalWorkspaceDir(root, id, phase)
   const artifact = path.join(workspace, 'artifact')
@@ -109,6 +187,9 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     }
   }
 
+  // Blind the copy (after the digest check, which is about the sealed bits).
+  const blinding = blindArtifactCopy(artifact, [id, ...producerNames])
+
   // The built app the operator captured and the gallery serves, copied in as
   // `build/`. Every evaluator then exercises identical bits instead of each
   // building its own at whatever versions resolve that day — which was an
@@ -118,7 +199,9 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   let build = null
   if (fs.existsSync(path.join(previewSource, 'index.html'))) {
     build = path.join(workspace, 'build')
-    fs.cpSync(previewSource, build, { recursive: true, dereference: false })
+    fs.cpSync(previewSource, build, { recursive: true, dereference: false, filter: (entry) => path.basename(entry) !== 'thumb.jpg' })
+    // Instruction files only: the build is what gets measured, so it is not rewritten.
+    blinding.strippedFromBuild = blindArtifactCopy(build, []).stripped
   }
 
   const { value: protocol } = loadProtocol(root)
@@ -138,12 +221,16 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   writeJson(path.join(inputs, 'specs', 'nord-stage-4.variants.json'), projectVariants(variants, variantId))
   writeJson(path.join(inputs, 'rubric.json'), rubric)
   if (verificationPath && fs.existsSync(verificationPath)) {
-    writeJson(path.join(inputs, 'verification.json'), blindVerification(readJson(verificationPath), id, blindId))
+    writeJson(path.join(inputs, 'verification.json'), blindVerification(readJson(verificationPath), id, blindId, { root }))
   }
   // Blind template: identified by the handle, never the model id. The
   // run-level panel axis rides on the highest sealed phase only.
   const carriesRunAxis = isTopPhase(rubric, phase, sealedPhases)
-  writeJson(path.join(workspace, 'assessment.json'), createAssessmentTemplate(rubric, blindId, phase, { includeRunAxis: carriesRunAxis }))
+  const template = createAssessmentTemplate(rubric, blindId, phase, { includeRunAxis: carriesRunAxis })
+  writeJson(path.join(workspace, 'assessment.json'), template)
+  // The blank template, kept aside: every boxed grader in a panel starts from
+  // it, whatever an earlier grader has already written into assessment.json.
+  writeJson(path.join(workspace, '.assessment.template.json'), template)
 
   const pinnedModel = rubric.evaluator?.model
   fs.writeFileSync(path.join(workspace, 'EVAL.md'), [
@@ -156,6 +243,13 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     'Work only inside this directory: never read the parent repository, other runs,',
     'other scores, or any other solution.',
     '',
+    ...(boxed ? [
+      '**Where you are.** A container with no internet and nothing of the operator\'s machine in it: this directory is',
+      'everything there is. Chromium is installed. For a browser pass, `pnpm add playwright` inside `scratch/` (it installs',
+      'from a mirror inside this machine; there is no download) and serve `build/` from `127.0.0.1` with any static server.',
+      '`node`, `pnpm`, `python3`, `ffmpeg`, `ffprobe`, `sox`, `jq`, and `rg` are available.',
+      '',
+    ] : []),
     ...(pinnedModel ? [
       `**Required model.** This evaluation must be produced by \`${pinnedModel}\`. Set`,
       `\`evaluatorModel\` in \`assessment.json\` to exactly \`${pinnedModel}\`; registration`,
@@ -245,7 +339,7 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   }
   fs.chmodSync(artifact, 0o555)
 
-  return { id, blindId, phase: Number(phase), workspace, artifact, inputs, build, assessment: path.join(workspace, 'assessment.json') }
+  return { id, blindId, phase: Number(phase), workspace, artifact, inputs, build, assessment: path.join(workspace, 'assessment.json'), blinding }
 }
 
 // artifact/ is chmod'd read-only while the evaluator works, and a read-only

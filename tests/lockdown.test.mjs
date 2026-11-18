@@ -16,14 +16,14 @@ import {
   CHAIN_GENESIS, applyModelPolicy, chainLine, egressDecision, extractUsage, hostMatches, isClientTool, isPrivateAddress, mirrorTarget,
   normalizeConfig, plainPath, redirectAllowed, rewriteNpmMetadata, splitHostPort, startGateway, substituteSecrets, verifyChain,
 } from '../bench/lockdown/image/gateway.mjs'
-import { CLAUDE_PATHS, CODEX_CHATGPT_PATHS, HARNESSES, HARNESS_PRESETS, OPENAI_API_PATHS, placeholderFor, resolveAuth, resolveHarness } from '../bench/lockdown/harnesses.mjs'
+import { CLAUDE_PATHS, CODEX_CHATGPT_PATHS, HARNESSES, HARNESS_PRESETS, OPENAI_API_PATHS, placeholderFor, placeholderJwt, resolveAuth, resolveHarness } from '../bench/lockdown/harnesses.mjs'
 import { assetProvenance, assetProvenanceCheck, blindArtifactCheck, buildAssetIndex } from '../bench/lockdown/provenance.mjs'
 import { blindVerification } from '../bench/lib/eval/workspace.mjs'
 import { serveDirectory } from '../bench/lib/run/capture.mjs'
 import { redact } from '../bench/lockdown/redteam/run.mjs'
 import { imageContextDigest, imageTags, sanitizeTree, tarBuffer } from '../bench/lockdown/runtime.mjs'
 import { attestation, lockdownEvidence, requiredIsolation, sealBlockers, sessionTranscriptFiles } from '../bench/lockdown/seal.mjs'
-import { boxArguments, boxEnvironment, findStrings, leakNeedle, sessionKey, sessionNames, sessionStateDir, summarizeGatewayLog, withConsoleRelay } from '../bench/lockdown/session.mjs'
+import { LEGACY_ONLINE_MIRRORS, SESSION_MIRRORS, boxArguments, boxEnvironment, evaluatorKind, findStrings, leakNeedle, sessionKey, sessionNames, sessionStateDir, sessionVolumes, summarizeGatewayLog, withConsoleRelay } from '../bench/lockdown/session.mjs'
 import { createRun, statusSummary } from '../bench/lib/run/store.mjs'
 import { captureHarnessSource, startPhase } from '../bench/lib/run/workspace.mjs'
 import { writeJson } from '../bench/lib/shared.mjs'
@@ -437,18 +437,54 @@ test('gateway-held credentials never enter the box: only a placeholder does', ()
   assert.notEqual(placeholderFor('sk-x'), placeholderFor('sk-x'), 'placeholders are random per launch')
 })
 
-test('a ChatGPT login is copied into the box without its refresh token', () => {
+// A token the way ChatGPT issues one: three base64url parts, claims that name the account and the person.
+function fakeJwt(claims) {
+  const part = (value) => Buffer.from(JSON.stringify(value)).toString('base64url')
+  return `${part({ alg: 'RS256', kid: 'k1', typ: 'JWT' })}.${part(claims)}.${'s'.repeat(342)}`
+}
+
+test('a ChatGPT login never enters the box: Codex gets token-shaped stand-ins, the gateway holds the token', () => {
   const home = path.join(scratch, 'codex-home')
-  writeJson(path.join(home, 'auth.json'), { auth_mode: 'chatgpt', OPENAI_API_KEY: null, last_refresh: '2026-01-01T00:00:00Z', tokens: { access_token: 'ACCESS-TOKEN-VALUE', refresh_token: 'REFRESH-TOKEN-VALUE', id_token: 'ID-TOKEN-VALUE', account_id: 'acct' } })
+  const claims = {
+    iss: 'https://auth.openai.com', aud: ['https://api.openai.com/v1'], exp: 2000000000, iat: 1900000000, sub: 'auth0|REAL-SUBJECT', jti: 'REAL-JTI', session_id: 'REAL-SESSION',
+    'https://api.openai.com/auth': { chatgpt_account_id: '11111111-2222-3333-4444-555555555555', chatgpt_plan_type: 'pro', chatgpt_user_id: 'user-REALUSER', user_id: 'user-REALUSER', organizations: [{ id: 'org-REAL', title: 'Real Org' }] },
+    'https://api.openai.com/profile': { email: 'operator@example.com', email_verified: true, name: 'Real Name' },
+  }
+  const access = fakeJwt(claims)
+  const identity = fakeJwt({ ...claims, email: 'operator@example.com', name: 'Real Name' })
+  writeJson(path.join(home, 'auth.json'), { auth_mode: 'chatgpt', OPENAI_API_KEY: null, last_refresh: '2026-01-01T00:00:00Z', tokens: { access_token: access, refresh_token: 'REFRESH-TOKEN-VALUE', id_token: identity, account_id: '11111111-2222-3333-4444-555555555555' } })
   const auth = resolveAuth(HARNESSES.codex, {}, { codexHome: home })
   assert.equal(auth.id, 'chatgpt')
-  const boxed = JSON.parse(auth.files.find((file) => file.path === '.codex/auth.json').content)
-  assert.equal(boxed.tokens.access_token, 'ACCESS-TOKEN-VALUE')
-  assert.equal(JSON.stringify(boxed).includes('REFRESH-TOKEN-VALUE'), false, 'the refresh token stays on the host')
+  const file = auth.files.find((entry) => entry.path === '.codex/auth.json').content
+  const boxed = JSON.parse(file)
+  // Nothing that authenticates, and nothing that names the person, is in the file.
+  for (const secret of [access, identity, 'REFRESH-TOKEN-VALUE', 'operator@example.com', 'Real Name', 'REALUSER', 'REAL-SUBJECT', 'REAL-SESSION', 'org-REAL']) {
+    assert.equal(file.includes(secret), false, `${secret.slice(0, 24)} stays out of the box`)
+    assert.equal(Buffer.from(boxed.tokens.access_token.split('.')[1], 'base64url').toString().includes(secret), false)
+    assert.equal(Buffer.from(boxed.tokens.id_token.split('.')[1], 'base64url').toString().includes(secret), false)
+  }
+  // What Codex is handed is still a JWT it can read: same header, expiry, plan, and account id.
+  const stand = JSON.parse(Buffer.from(boxed.tokens.access_token.split('.')[1], 'base64url').toString())
+  assert.equal(boxed.tokens.access_token.split('.')[0], access.split('.')[0])
+  assert.notEqual(boxed.tokens.access_token.split('.')[2], access.split('.')[2], 'the signature is not the real one')
+  assert.deepEqual([stand.exp, stand.iat, stand['https://api.openai.com/auth'].chatgpt_plan_type], [2000000000, 1900000000, 'pro'])
+  assert.equal(stand['https://api.openai.com/auth'].chatgpt_account_id, '11111111-2222-3333-4444-555555555555', 'the account id is an identifier Codex checks, not a credential')
+  assert.equal(stand['https://api.openai.com/profile'].email, 'candidate@stagebench.invalid')
+  // The gateway swaps the stand-in for the real token, for chatgpt.com only.
+  assert.deepEqual(auth.gatewaySecrets, [{ placeholder: boxed.tokens.access_token, value: access, hosts: ['chatgpt.com'] }])
+  const config = normalizeConfig({ secrets: auth.gatewaySecrets })
+  assert.equal(substituteSecrets(config, 'chatgpt.com', { authorization: `Bearer ${boxed.tokens.access_token}` }).headers.authorization, `Bearer ${access}`)
+  assert.equal(substituteSecrets(config, 'evil.example', { authorization: `Bearer ${boxed.tokens.access_token}` }).substituted, 0)
+  assert.equal(substituteSecrets(config, 'chatgpt.com', { 'x-echo': boxed.tokens.access_token }).substituted, 0, 'only in a credential header')
   assert.ok(Date.parse(boxed.last_refresh) > Date.parse('2026-06-01'), 'a fresh timestamp stops Codex trying to refresh from inside')
   assert.deepEqual(auth.egress.map((rule) => [rule.host, rule.mode]), [['chatgpt.com', 'inspect']], 'the auth host is not reachable from the box')
-  assert.ok(auth.leakCheck.includes('REFRESH-TOKEN-VALUE') && auth.leakCheck.includes('ACCESS-TOKEN-VALUE'))
-  // With an API key available, the gateway-held mode wins.
+  assert.ok(auth.leakCheck.includes('REFRESH-TOKEN-VALUE') && auth.leakCheck.includes(access), 'the real tokens are still searched for in whatever comes out')
+  assert.equal(placeholderJwt('not-a-jwt'), null)
+  // A login whose access token is not a JWT cannot be stood in for; say so rather than copy it in.
+  writeJson(path.join(home, 'auth.json'), { tokens: { access_token: 'opaque-token', refresh_token: 'r' } })
+  assert.throws(() => resolveAuth(HARNESSES.codex, {}, { codexHome: home }), /not a JWT/)
+  writeJson(path.join(home, 'auth.json'), { auth_mode: 'chatgpt', tokens: { access_token: access, refresh_token: 'REFRESH-TOKEN-VALUE', id_token: identity, account_id: 'acct' } })
+  // With an API key available, that gateway-held mode wins.
   assert.equal(resolveAuth(HARNESSES.codex, { OPENAI_API_KEY: `sk-proj-${'a'.repeat(60)}` }, { codexHome: home }).id, 'api-key')
 })
 
@@ -482,28 +518,70 @@ test('any other harness runs through the generic adapter, with its credential be
 // --- the box and what crosses its boundary -----------------------------------
 
 test('a box is never given a bind mount, a capability, or a way to gain privilege', () => {
-  const names = sessionNames(sessionKey('/repo', 'run', 1))
+  const session = { key: sessionKey('/repo', 'run', 1), kind: 'candidate', samplePack: { volume: 'sb-samples-0123456789abcdef' } }
+  const names = sessionNames(session.key)
   const args = boxArguments({ kind: 'podman' }, {
     name: names.agent, image: 'stagebench-lockdown-candidate:test', network: names.network,
-    volumes: [`${names.workspace}:/workspace:ro`, `${names.candidate}:/workspace/candidate`, `${names.home}:/home/candidate`],
+    volumes: sessionVolumes(session),
     env: boxEnvironment(),
   })
   const volumes = args.flatMap((value, index) => (args[index - 1] === '-v' ? [value] : []))
-  assert.equal(volumes.length, 3)
+  assert.equal(volumes.length, 5)
   for (const volume of volumes) assert.doesNotMatch(volume, /^[/.~]/, `named volume, not a host path: ${volume}`)
+  assert.ok(volumes.includes(`${names.workspace}:/workspace:ro`), 'instructions and inputs are read-only')
+  assert.ok(volumes.includes('sb-samples-0123456789abcdef:/workspace/inputs/samples:ro'), 'the sample pack is a shared read-only volume')
   assert.equal(args.includes('--mount'), false)
   for (const flag of ['--cap-drop=ALL', '--read-only', 'no-new-privileges']) assert.ok(args.includes(flag), flag)
   assert.equal(args.includes('--privileged'), false)
   assert.deepEqual(args.slice(args.indexOf('--network'), args.indexOf('--network') + 2), ['--network', names.network], 'the internal network, and only that one')
   assert.equal(args.filter((value) => value === '--network').length, 1)
   assert.deepEqual(args.slice(args.indexOf('--user'), args.indexOf('--user') + 2), ['--user', 'candidate'])
-  // Everything in the environment points at the gateway, and nowhere else.
-  const urls = Object.values(boxEnvironment()).filter((value) => /^https?:\/\//.test(value))
-  assert.ok(urls.length >= 3)
-  for (const url of urls) assert.equal(new URL(url).hostname, 'gateway', url)
-  assert.equal('HTTP_PROXY' in boxEnvironment(), false, 'plain HTTP is not proxied; the mirror is reached directly')
+  // An agent's environment points at the gateway for its model, and at loopback
+  // for packages: there is no registry anywhere else to point at.
+  const online = boxEnvironment()
+  assert.equal(online.npm_config_registry, 'http://127.0.0.1:4874/')
+  assert.equal(online.STAGEBENCH_REGISTRY, 'http://127.0.0.1:4874/')
+  assert.equal(online.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD, '1')
+  for (const [name, value] of Object.entries(online)) {
+    if (!/^https?:\/\//.test(value)) continue
+    assert.ok(['gateway', '127.0.0.1'].includes(new URL(value).hostname), `${name} points at ${value}`)
+  }
+  assert.equal(new URL(online.HTTPS_PROXY).hostname, 'gateway')
+  assert.equal('HTTP_PROXY' in online, false, 'plain HTTP is not proxied')
+  assert.equal('PLAYWRIGHT_DOWNLOAD_HOST' in online, false, 'there is no browser mirror')
+  // Everything that is not an agent (exec, gates, capture, the sample check) has no network to be told about.
+  const offline = boxEnvironment({}, { gateway: false })
+  for (const name of ['HTTPS_PROXY', 'https_proxy', 'STAGEBENCH_GATEWAY', 'SSL_CERT_FILE']) assert.equal(name in offline, false, name)
+  assert.equal(offline.npm_config_registry, 'http://127.0.0.1:4874/')
+  // The read-only package mirror exists only for re-running gates sealed before protocol 3.
+  const legacy = boxEnvironment({}, { gateway: true, registry: 'http://gateway:4873/npm/' })
+  assert.deepEqual([legacy.npm_config_registry, legacy.STAGEBENCH_OFFLINE_REGISTRY], ['http://gateway:4873/npm/', '0'])
+  assert.deepEqual(SESSION_MIRRORS, {}, 'a candidate session is given no mirror at all')
+  assert.ok(Object.keys(LEGACY_ONLINE_MIRRORS).includes('npm'))
   assert.match(sessionKey('/repo', 'run', 1), /^sb-[0-9a-f]{10}$/)
   assert.notEqual(sessionKey('/repo', 'run', 1), sessionKey('/repo', 'run', 2))
+  assert.notEqual(sessionKey('/repo', 'run', 1), sessionKey('/repo', 'run', 1, 'evaluator'), 'a grader never shares a session with a candidate')
+})
+
+test('an evaluator’s box holds the blind workspace and nothing else, with the artifact read-only', () => {
+  const session = { key: sessionKey('/repo', 'run', 2, evaluatorKind(1)), kind: 'evaluator', hasBuild: true }
+  const names = sessionNames(session.key)
+  const volumes = sessionVolumes(session)
+  assert.deepEqual(volumes, [
+    `${names.workspace}:/workspace`,
+    `${names.artifact}:/workspace/artifact:ro`,
+    `${names.build}:/workspace/build:ro`,
+    `${names.inputs}:/workspace/inputs:ro`,
+    `${names.home}:/home/candidate`,
+    `${names.honey}:/srv/stagebench`,
+  ])
+  assert.equal(sessionVolumes({ ...session, hasBuild: false }).some((volume) => volume.includes('/workspace/build')), false)
+  // Panel members never share a box, and none of the names says which run it is.
+  assert.notEqual(sessionKey('/repo', 'run', 2, evaluatorKind(1)), sessionKey('/repo', 'run', 2, evaluatorKind(2)))
+  assert.equal(evaluatorKind(1), 'evaluator')
+  assert.equal(evaluatorKind(3), 'evaluator-3')
+  for (const volume of volumes) assert.doesNotMatch(volume, /run-|gpt|claude/)
+  assert.match(sessionStateDir('/repo', 'some-run', 2, 'evaluator'), /evaluator-stage2$/)
 })
 
 test('no symlink or special file crosses the boundary, and each removal is reported', () => {
@@ -736,15 +814,17 @@ test('a broken lockdown record blocks the seal', () => {
     honeytoken: { decoysRead: [], tokenInArtifact: [], tokenInTranscript: [] },
     dropped: [],
   }
-  const gates = { gateIsolation: 'overlay', gateway: { chainOk: true, head: 'h', entries: 4, denied: 0, deniedTargets: {}, mirrorArtifacts: 120, mirrorBytes: 1 } }
+  // Protocol 3 gates have no network, and so no gateway of their own.
+  const gates = { gateIsolation: 'private-copy', network: 'none', gateway: null }
   assert.deepEqual(sealBlockers(root, id, 1, exported, gates, stageDir), [])
-  const record = attestation(root, id, 1, exported, gates)
-  assert.deepEqual({ mode: record.mode, chain: record.gateway.chainOk, denied: record.gateway.denied, tree: record.gates.tree, gateFetches: record.gates.gateway.mirrorArtifacts, vm: record.runtime.hostDirectoriesVisibleToVm },
-    { mode: 'lockdown', chain: true, denied: 1, tree: 'overlay', gateFetches: 120, vm: 'none' })
+  const record = attestation(root, id, 1, exported, gates, { capture: { where: 'lockdown' } })
+  assert.deepEqual({ mode: record.mode, chain: record.gateway.chainOk, denied: record.gateway.denied, tree: record.gates.tree, gateNetwork: record.gates.network, vm: record.runtime.hostDirectoriesVisibleToVm, network: record.network },
+    { mode: 'lockdown', chain: true, denied: 1, tree: 'private-copy', gateNetwork: 'none', vm: 'none', network: { candidate: 'model-api-only', packages: 'offline mirror in the image', gates: 'none', capture: 'none' } })
   assert.deepEqual(lockdownEvidence(exported).map((entry) => [entry.id, entry.advisory, entry.passed]), [['lockdown decoys', true, true]])
 
-  // The gates' own log does not verify.
-  assert.match(sealBlockers(root, id, 1, exported, { gateway: { chainOk: false, error: 'line 2 does not chain' } }, stageDir).join('; '), /gates' gateway log/)
+  // Re-running the gates of a run sealed before protocol 3 uses the legacy
+  // mirror, and then its log has to verify.
+  assert.match(sealBlockers(root, id, 1, exported, { network: 'legacy-mirror', gateway: { chainOk: false, error: 'line 2 does not chain' } }, stageDir).join('; '), /gates' gateway log/)
   // The build carries the credential, or a decoy's token, verbatim.
   fs.writeFileSync(path.join(stageDir, 'dist', 'assets', 'index.js'), `const k = "prefix${needle}suffix"`)
   assert.match(sealBlockers(root, id, 1, exported, gates, stageDir).join('; '), /built dist\/ contains the session credential/)
@@ -835,14 +915,22 @@ test('the capture server survives a hostile page and serves only its own directo
   }
 })
 
-test('session transcripts handed to the archive are the session files, not the prompt index', () => {
-  const transcripts = path.join(scratch, 'transcripts')
+test('session transcripts handed to the archive are the session files and the launcher’s console logs, not the prompt index', () => {
+  const state = path.join(scratch, 'state')
+  const transcripts = path.join(state, 'transcripts')
   fs.mkdirSync(path.join(transcripts, '.codex/sessions/2026/11/17'), { recursive: true })
   fs.writeFileSync(path.join(transcripts, '.codex/sessions/2026/11/17/rollout-a.jsonl'), '{}\n')
   fs.writeFileSync(path.join(transcripts, '.codex/history.jsonl'), '{}\n')
   fs.writeFileSync(path.join(transcripts, '.codex/sessions/notes.txt'), 'x')
-  assert.deepEqual(sessionTranscriptFiles({ transcripts }).map((file) => path.basename(file)), ['rollout-a.jsonl'])
-  assert.deepEqual(sessionTranscriptFiles({ transcripts: null }), [])
+  fs.writeFileSync(path.join(state, 'launch-0.log'), 'first launch\n')
+  fs.writeFileSync(path.join(state, 'launch-1.log'), 'second launch\n')
+  const files = sessionTranscriptFiles({ transcripts, consoleLogs: [path.join(state, 'launch-0.log'), path.join(state, 'launch-1.log')] })
+  assert.deepEqual(files.sessions.map((file) => path.basename(file)), ['rollout-a.jsonl'])
+  // Console logs were written on this side of the boundary; they are archived under names that say what they are.
+  assert.deepEqual(files.consoles.map((file) => path.basename(file)), ['lockdown-console-0.log', 'lockdown-console-1.log'])
+  assert.equal(fs.readFileSync(files.consoles[1], 'utf8'), 'second launch\n')
+  assert.equal(files.all.length, 3)
+  assert.deepEqual(sessionTranscriptFiles({ transcripts: null }).all, [])
 })
 
 test('the red-team probe and the image entrypoint are valid shell', () => {

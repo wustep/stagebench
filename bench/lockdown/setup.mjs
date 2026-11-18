@@ -3,6 +3,7 @@
 import os from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { EGRESS_NETWORK, PODMAN_MACHINE, detectRuntime, engine, ensureImages, hostExposure } from './runtime.mjs'
+import { offlineToolchain } from './session.mjs'
 
 function podman(args, options = {}) {
   return spawnSync('podman', args, { encoding: 'utf8', timeout: 900_000, ...options })
@@ -52,6 +53,28 @@ function egressSelfTest(runtime, image) {
   }
 }
 
+// The other property protocol 3 rests on: a box with no network at all can
+// still install the starter, run its tests, and find its browser. Checked for
+// real, in a container with `--network none`.
+function offlineSelfTest(runtime, image) {
+  const script = [
+    'set -e',
+    'cd /tmp && mkdir -p probe && cd probe',
+    'echo \'{"name":"probe","private":true}\' > package.json',
+    'pnpm add react vitest playwright >/dev/null 2>&1',
+    'node -e "require(\'react\'); require(\'playwright\').chromium.launch().then(async (b) => { console.log(\'chromium \' + b.version()); await b.close() })"',
+    'if pnpm add is-odd >/dev/null 2>&1; then echo UNLISTED-INSTALLED; fi',
+    'if curl -s -m 4 -o /dev/null https://registry.npmjs.org/; then echo NETWORK-OPEN; fi',
+    'echo offline-ok',
+  ].join('\n')
+  const result = engine(runtime, ['run', '--rm', '--init', '--network', 'none', '--cap-drop=ALL', '--security-opt', 'no-new-privileges', '--read-only', '--tmpfs', '/tmp:rw,exec,size=2g,mode=1777',
+    '--user', 'candidate', '-v', '/home/candidate', '-e', 'STAGEBENCH_REGISTRY=http://127.0.0.1:4874/', '-e', 'npm_config_registry=http://127.0.0.1:4874/', image, 'sh', '-c', script], { timeout: 300_000 })
+  const leaks = ['UNLISTED-INSTALLED', 'NETWORK-OPEN'].filter((marker) => result.stdout.includes(marker))
+  if (leaks.length > 0) return `BROKEN (${leaks.join(', ')}): a network-less box reached something it should not`
+  if (!result.stdout.includes('offline-ok')) return `BROKEN: a network-less box could not install and launch a browser: ${String(result.stderr || result.stdout).trim().slice(-300)}`
+  return `works: with no network, packages install from the image's mirror and ${(/chromium [\d.]+/.exec(result.stdout) ?? ['Chromium'])[0]} launches; an unlisted package does not install`
+}
+
 export async function setupLockdown({ rebuild = false, onOutput, env = process.env } = {}) {
   let runtime = detectRuntime(env)
   let machine = null
@@ -71,6 +94,7 @@ export async function setupLockdown({ rebuild = false, onOutput, env = process.e
     images,
     hostDirectoriesVisibleToVm: (({ state, detail }) => `${state}: ${detail}`)(hostExposure(runtime)),
     internalNetworkEgress: egressSelfTest(runtime, images.candidate.tag),
-    next: 'pnpm bench redteam   (attack the boundary), then pnpm bench new --model <id> --target <1|2|3>',
+    offlineToolchain: { ...offlineToolchain(), selfTest: offlineSelfTest(runtime, images.candidate.tag) },
+    next: 'pnpm bench fetch   (manual, photos, sample pack), pnpm bench redteam   (attack the boundary), then pnpm bench new --model <id> --target <1|2|3>',
   }
 }

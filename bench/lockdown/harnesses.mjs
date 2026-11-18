@@ -20,6 +20,45 @@ export function placeholderFor(secret) {
   return `${prefix}stagebench-placeholder-${crypto.randomBytes(16).toString('hex')}`
 }
 
+// A stand-in for a JWT the harness has to be able to read but must not be able
+// to use. The header is kept (it names an algorithm and a key id, nothing
+// personal); the claims are reduced to what a client inspects — expiry and
+// issue times, issuer, audience, scopes, the plan type, and the account id —
+// with every other identifier (user, organisation, session, e-mail, name)
+// replaced; and the signature is random. The provider would reject it, which
+// is the point: the gateway swaps the real token in on the way out, so the box
+// never holds one.
+//
+// The account id stays because Codex checks it against the provider's own
+// account list (`/backend-api/wham/accounts/check`) before it sends a turn; a
+// made-up id fails there with "selected workspace missing from routing
+// discovery". It is an identifier, not a credential: it authenticates nothing
+// without the token, which is not in the box.
+const KEPT_STRING_CLAIMS = new Set(['iss', 'aud', 'scp', 'client_id', 'acr', 'amr', 'auth_provider', 'chatgpt_account_id', 'chatgpt_plan_type', 'chatgpt_compute_residency', 'chatgpt_subscription_active_start', 'chatgpt_subscription_active_until', 'chatgpt_subscription_last_checked', 'required'])
+
+function scrubClaims(value, key, replacements) {
+  if (Array.isArray(value)) return KEPT_STRING_CLAIMS.has(key) ? value : []
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([name, entry]) => [name, scrubClaims(entry, name, replacements)]))
+  if (typeof value !== 'string') return value
+  if (replacements[key] !== undefined) return replacements[key]
+  if (KEPT_STRING_CLAIMS.has(key)) return value
+  if (key === 'email') return 'candidate@stagebench.invalid'
+  return 'stagebench-withheld'
+}
+
+export function placeholderJwt(token, replacements = {}) {
+  const [header, payload, signature = ''] = String(token).split('.')
+  let claims
+  try {
+    claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+  } catch {
+    return null
+  }
+  const scrubbed = Buffer.from(JSON.stringify(scrubClaims(claims, '', replacements))).toString('base64url')
+  const fake = crypto.randomBytes(Math.max(32, Math.ceil(signature.length * 3 / 4))).toString('base64url').slice(0, Math.max(43, signature.length))
+  return `${header}.${scrubbed}.${fake}`
+}
+
 function firstEnv(env, names) {
   for (const name of names) if (env[name]?.trim()) return { name, value: env[name].trim() }
   return null
@@ -73,7 +112,7 @@ const codex = {
     },
     {
       id: 'chatgpt',
-      describe: 'ChatGPT login: a copy of auth.json without its refresh token (the access token is readable inside the box)',
+      describe: 'ChatGPT login, held by the gateway: the box gets an auth.json whose tokens are unusable stand-ins with the same shape (the account id, which is not a credential, is real)',
       detect(env, options = {}) {
         const home = options.codexHome ?? env.STAGEBENCH_CODEX_HOME ?? env.CODEX_HOME ?? path.join(os.homedir(), '.codex')
         const file = path.join(home, 'auth.json')
@@ -87,21 +126,36 @@ const codex = {
       },
       build(source) {
         const auth = source.value
-        // The refresh token stays on the host. Inside the box it could not be
-        // used anyway (the auth host is not on the allowlist), and a refresh
-        // from in there would rotate the operator's own login out from under
-        // them. A fresh last_refresh stops Codex from trying.
+        // Codex reads these tokens itself (it decodes the claims and sends the
+        // access token as a bearer), so it has to be handed something
+        // token-shaped. What it is handed cannot authenticate anything: each
+        // JWT keeps its header and its non-identifying claims and gets a random
+        // signature. The gateway puts the real access token back, in the
+        // Authorization header, on the way to chatgpt.com and nowhere else.
+        //
+        // The refresh token never goes anywhere. Inside the box it could not
+        // be used (the auth host is not on the allowlist), and a refresh from
+        // in there would rotate the operator's own login out from under them.
+        // A fresh last_refresh stops Codex from trying.
+        const access = placeholderJwt(auth.tokens.access_token)
+        const identity = auth.tokens.id_token ? placeholderJwt(auth.tokens.id_token) : null
+        if (!access) throw new Error(`The access token in ${source.name} is not a JWT; log in to Codex again, or use STAGEBENCH_OPENAI_API_KEY`)
         const boxed = {
-          ...auth,
+          auth_mode: auth.auth_mode ?? 'chatgpt',
           OPENAI_API_KEY: null,
           last_refresh: new Date().toISOString(),
-          tokens: { ...auth.tokens, refresh_token: 'stagebench-lockdown-refresh-token-withheld' },
+          tokens: {
+            ...(identity ? { id_token: identity } : {}),
+            access_token: access,
+            refresh_token: 'stagebench-lockdown-refresh-token-withheld',
+            ...(auth.tokens.account_id ? { account_id: auth.tokens.account_id } : {}),
+          },
         }
         return {
           files: [{ path: '.codex/auth.json', mode: 0o600, content: `${JSON.stringify(boxed, null, 2)}\n` }],
           env: {},
           egress: [{ host: 'chatgpt.com', mode: 'inspect', api: 'openai-responses', paths: CODEX_CHATGPT_PATHS }],
-          gatewaySecrets: [],
+          gatewaySecrets: [{ placeholder: access, value: auth.tokens.access_token, hosts: ['chatgpt.com'] }],
           leakCheck: [auth.tokens.access_token, auth.tokens.refresh_token, auth.tokens.id_token].filter(Boolean),
           source: source.name,
         }

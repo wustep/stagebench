@@ -401,7 +401,10 @@ export function describeTranscript(file, records, { cursorHomes = [] } = {}) {
   }
 }
 
-const parseRecords = (text) => text.split('\n').filter(Boolean).map(parseJson).filter(Boolean)
+// Records are JSON objects. A console log archived beside the sessions is
+// mostly prose, and a line of it can happen to be valid JSON of another kind
+// (a quoted string, a number); those are not records.
+const parseRecords = (text) => text.split('\n').filter(Boolean).map(parseJson).filter((record) => record !== null && typeof record === 'object' && !Array.isArray(record))
 
 // --- archiving --------------------------------------------------------------
 

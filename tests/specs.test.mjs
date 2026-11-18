@@ -12,8 +12,10 @@ const manifest = readJson('specs/benchmark-phases.json')
 test('phase manifest defines a complete three-phase cumulative target contract', () => {
   // Pinned deliberately: the protocol version is comparison-critical, so a
   // change here has to be a change someone made on purpose. 2.0.0 introduced
-  // the run-level panel axis and computed criteria.
-  assert.equal(manifest.version, '2.0.0')
+  // the run-level panel axis and computed criteria. 3.0.0 changed the
+  // conditions a candidate works under (offline lockdown, one shared sample
+  // pack, executed feature tests, blind boxed grading); the rubric did not move.
+  assert.equal(manifest.version, '3.0.0')
   assert.equal(manifest.phaseCount, 3)
   assert.equal(manifest.selectionMode, 'cumulative-target')
   assert.deepEqual(manifest.selection, { '1': [1], '2': [1, 2], '3': [1, 2, 3] })
@@ -103,7 +105,11 @@ test('TASK.md declares every required feature ID inside its phase-filter markers
 
 test('active rubric and phase manifest stay aligned', () => {
   const rubric = readJson('bench/rubric.json')
-  assert.equal(rubric.version, manifest.version)
+  // The rubric has its own version: protocol 3 changed the conditions a
+  // candidate works under, not the scoring, so protocol 2 and 3 runs are
+  // scored by the same rubric (and still ranked in separate tiers).
+  assert.equal(rubric.version, '2.0.0')
+  assert.ok(Number(manifest.version.split('.')[0]) >= Number(rubric.version.split('.')[0]))
   assert.deepEqual(Object.keys(rubric.stages), manifest.phases.map(({ number }) => String(number)))
   assert.equal(Object.values(rubric.aggregateStageWeights).reduce((sum, weight) => sum + weight, 0), 100)
   for (const phase of manifest.phases) {
