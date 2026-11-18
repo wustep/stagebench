@@ -361,6 +361,9 @@ test('the leaderboard source is one list and never writes the No isolation badge
   assert.doesNotMatch(source, /No \{currentResultClass/)
   assert.doesNotMatch(source, /Rubric /)
   assert.doesNotMatch(source, /getResultClass/)
+  assert.doesNotMatch(source, /footnote-mark/)
+  assert.doesNotMatch(source, /†/, 'footnote marks stay off the leaderboard row')
+  assert.match(source, /plural\(footnoteCount, 'footnote'\)/, 'footnotes still render in the run drawer')
 })
 
 // Token counts an operator typed in are not comparable across harnesses, so the

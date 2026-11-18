@@ -184,18 +184,6 @@ export const RunList = memo(function RunList({
             <div className="driver">
               <span className="driver-title">
                 <strong>{getRunTitle(run)}</strong>
-                {footnoteCount > 0 && (
-                  <button
-                    aria-expanded={expanded}
-                    aria-label={`${plural(footnoteCount, 'footnote')} on ${getRunTitle(run)}`}
-                    className="footnote-mark"
-                    onClick={(event) => { event.stopPropagation(); onToggleExpand(run.id) }}
-                    title={run.footnotes.map((note) => note.text).join('\n\n')}
-                    type="button"
-                  >
-                    †{footnoteCount > 1 ? footnoteCount : ''}
-                  </button>
-                )}
               </span>
               <span className="driver-meta">
                 <span>{formatDate(run.startedAt)}</span>
