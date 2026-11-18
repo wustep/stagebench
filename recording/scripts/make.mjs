@@ -29,6 +29,12 @@ for (const s of P.segments) {
   const last = s === P.segments.at(-1);
   console.log(`  ${(s.from - P.t0).toFixed(2).padStart(6)}–${(s.to - P.t0).toFixed(2).padStart(6)}  ${(s.secs - (last ? xf : 0)).toFixed(2).padStart(5)} s  bars ${s.bars.join('–').padEnd(8)} ${rank.padEnd(4)} ${m.label}${s.cutShift ? `  (cut ${s.cutShift > 0 ? '+' : ''}${s.cutShift} frame, ${s.cutOffsetMs > 0 ? '+' : ''}${s.cutOffsetMs} ms off its downbeat)` : ''}${last && xf ? `  (+ ${xf.toFixed(2)} s dissolve into the end card)` : ''}${m.placeholder ? `  [placeholder: ${m.placeholder}]` : ''}`);
 }
+// A show that isn't a countdown plays in its listed order; say so when that order no longer runs
+// from the lowest live rank up to #1 (the ranks moved since the list was written).
+if (S.show.order !== 'countdown') {
+  const ranks = S.models.map((m) => m.rank ?? Infinity);
+  if (ranks.some((r, k) => k && r > ranks[k - 1])) console.warn(`  warning: the listed order doesn't count up by live rank (${S.models.map((m) => (m.rank ? `#${m.rank}` : 'NEW')).join(', ')})`);
+}
 if (S.show.endCard?.secs) console.log(`  end card ${S.show.endCard.secs.toFixed(2)} s${P.audioEnd > P.end ? `, ring-out ${(P.audioEnd - P.end).toFixed(2)} s under it` : ''}`);
 if (process.argv.includes('--plan')) process.exit(0);
 

@@ -20,7 +20,7 @@ Start from `recording/shows/etude6-countdown.json` and copy it to `recording/sho
 - **Song.** Pick a folder under `recording/songs/`. For a new song, see step 4.
 - **Models and order.**
   - Build the options from the repo, not from memory: `node -e 'for (const r of require("./src/data/runs.json")) if (typeof r.score === "number") console.log(r.id, r.title, r.score)'`.
-  - `"order": "countdown"` goes from lowest rank to #1; anything else keeps the listed order (the Alla Turca demo v2 show uses a fixed order). Ranks and labels come from `src/data/runs.json`, one combined leaderboard ranked exactly as the gallery ranks it, computed whenever the show loads. Never write rank numbers into a show, an overlay or a doc.
+  - `"order": "countdown"` goes from lowest rank to #1; anything else keeps the listed order (the Alla Turca demo v2 show lists its models by rank by hand, so a rank change can't move a model onto a phrase it wasn't recorded for; `--plan` warns when the list stops counting up). Ranks and labels come from `src/data/runs.json`, one combined leaderboard ranked exactly as the gallery ranks it, computed whenever the show loads. Never write rank numbers into a show, an overlay or a doc.
   - A model that has no run record or no preview yet becomes a placeholder slot instead of failing; see README "Placeholders".
 - **Length.** Set `startBar`, `barsPerModel` and `last`.
   - Cut on the song's grid (`song.json` → `grid`); one cycle per model is about 7 s for the Étude.

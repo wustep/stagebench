@@ -234,4 +234,7 @@ fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(meta, null, 1));
 console.log(`done ${key}: frames=${nFrames} hit=${result.hit} miss=${result.miss} ${result.missed.join(' ')} late p95=${meta.schedLateMs.p95}ms max=${meta.schedLateMs.max}ms`);
 if (failedRequests.length) { console.error(`Error: ${key}: request(s) failed during the take: ${failedRequests.slice(0, 4).join(', ')}`); process.exit(2); }
 if (meta.sampleError) { console.error(`Error: ${key}: the page reported "${meta.sampleError}" during the take`); process.exit(2); }
+// show.failOnMiss: a note the keybed didn't take (no key for it, or the page refused it) fails the
+// take, retried like a crash, rather than reaching compose with a hole in the music.
+if (S.show.failOnMiss && result.miss) { console.error(`Error: ${key}: ${result.miss} note event(s) missed: ${result.missed.join(' ')}`); process.exit(2); }
 if (result.p95Late > 50) process.exit(3);
