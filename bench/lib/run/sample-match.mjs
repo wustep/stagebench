@@ -14,13 +14,29 @@
 // A4 and the grand's). Band by band they do not: every partial above the
 // fundamental sits at a slightly different frequency in a different
 // instrument, and drifts out of phase within a fraction of a second. A sample
-// cut from the recording agrees with it in every band that carries energy;
-// another instrument does not, and a synthesized tone either disagrees or has
-// too few bands to compare.
+// cut from the recording agrees with it in the bands that carry its energy;
+// another instrument does not, and a synthesized tone disagrees.
 //
-// What it cannot do is tell two takes of the same note on the same instrument
-// apart when they are very alike (adjacent velocity layers of one key). That
-// is a mislabelled layer, not a recording from somewhere else.
+// How the bands are weighed is what makes it survive lossy encoding. An
+// encoder spends its bits on what is loud: it keeps the strong partials almost
+// exactly and rebuilds a quiet band (room noise, hammer noise 20-30 dB under
+// the fundamental) at the right level but not as the same waveform. Version 1
+// averaged the bands equally, so on a sparse spectrum the rebuilt quiet bands
+// outvoted the partials: a plain cut of the grand's C7 (v10) as 48 kHz stereo
+// Ogg Vorbis q5 scored 0.76 and failed a real seal, and on a corpus cut from
+// the pack 51 of 495 genuine cuts failed (high piano notes through Vorbis, AAC,
+// or stereo Opus; quiet organ pipes even as lossless WAV). Version 2 weighs
+// each band by its amplitude in the recording, so a band counts as much as it
+// is heard, and asks the quieter bands, on their own, for some agreement too,
+// so that one loud partial cannot carry a match by itself.
+//
+// What it cannot do is tell two takes of the same key on the same instrument
+// apart (velocity layers, round robins): the same string's partials agree, and
+// the noise that differs between takes is what an encoder discards. That is a
+// mislabelled take, not a recording from somewhere else. Nor can it tell a
+// recording that is close to a pure decaying tone (a quiet organ flue pipe, a
+// Pianet) from a sine tuned to that recording's own measured pitch and decay;
+// such a forgery is a derivation of the recording in all but name.
 //
 // Self-contained on purpose (node + an ffmpeg binary, no imports from the
 // repository): at seal it is written into a network-less box that holds the
@@ -30,19 +46,31 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
+// The version of this check, recorded with every result. 1: equal-weighted
+// band coherence, threshold 0.8. 2: amplitude-weighted, with a floor on the
+// quieter bands (above).
+export const SAMPLE_MATCH_VERSION = 2
 // 16 kHz keeps the fundamental of the highest piano note (C8, 4186 Hz).
 export const RATE = 16_000
 // How much of the bundled sample is compared, and how far into the recording
 // its start is searched for before the whole recording is tried.
 const WINDOW_SECONDS = 4
 const SEARCH_SECONDS = 12
-// Mean band coherence at or above this is the same recording. Measured on the
-// pack: processed copies score 0.97-1.00 (0.83 at the very worst, a 24 kbps
-// Opus encode); the same note from another instrument 0.32; an additive
-// synthesis of the same note 0.55; a neighbouring key's release noise 0.66.
-export const MATCH_THRESHOLD = 0.8
-// Bands, in Hz. A band counts when it holds energy within 40 dB of the
-// sample's strongest band; at least three must, or there is nothing to compare.
+// A cut matches when its amplitude-weighted band coherence is at least
+// MATCH_THRESHOLD and the bands other than the recording's loudest, weighted
+// the same way, agree at least SUPPORT_THRESHOLD. Measured on a corpus built
+// from the pack (docs/PROTOCOL-3.md, section 2): 495 cuts of 46 recordings
+// through WAV, MP3, AAC, Opus, and Vorbis (32-128 kbps, q-1 to q5) and 11 kHz
+// resampling score 0.84 at the lowest; the same note from another instrument
+// at most 0.65; another key, a release or resonance sample, a pitch-shifted
+// neighbour, or a synthesis at the note's nominal pitch at most 0.56. The
+// quieter bands of a genuine cut agree at 0.34 or more; those of a lone sine
+// tuned to a quiet organ pipe's own pitch and decay, 0.06 or less.
+export const MATCH_THRESHOLD = 0.75
+export const SUPPORT_THRESHOLD = 0.25
+// Bands, in Hz. A band counts when the recording holds energy in it within
+// 40 dB of its strongest band; at least three must, or the recording is too
+// close to a pure tone to compare.
 export const BAND_EDGES = [50, 100, 200, 400, 800, 1200, 1700, 2300, 3000, 3800, 4800, 6000, 7600]
 const SIGNIFICANT_DB = -40
 const MIN_BANDS = 3
@@ -141,6 +169,9 @@ export function bestCorrelation(needle, haystack) {
 // How alike two aligned signals are in each frequency band: the magnitude of
 // their complex correlation over the band's bins. Magnitude, so that a
 // fraction-of-a-sample misalignment (which only rotates phase) costs nothing.
+// The bands compared are the recording's (`source`): within 40 dB of its
+// strongest. `score` weighs each band's coherence by the band's amplitude in
+// the recording; `support` is the same over every band but the loudest.
 export function bandCoherence(candidate, source) {
   const n = Math.min(candidate.length, source.length)
   let size = 1
@@ -168,12 +199,27 @@ export function bandCoherence(candidate, source) {
       candidateEnergy += cr[k] * cr[k] + ci[k] * ci[k]
       sourceEnergy += sr[k] * sr[k] + si[k] * si[k]
     }
-    bands.push({ energy: candidateEnergy, coherence: candidateEnergy > 0 && sourceEnergy > 0 ? Math.hypot(real, imaginary) / Math.sqrt(candidateEnergy * sourceEnergy) : 0 })
-    if (candidateEnergy > strongest) strongest = candidateEnergy
+    bands.push({ energy: sourceEnergy, coherence: candidateEnergy > 0 && sourceEnergy > 0 ? Math.hypot(real, imaginary) / Math.sqrt(candidateEnergy * sourceEnergy) : 0 })
+    if (sourceEnergy > strongest) strongest = sourceEnergy
   }
-  const significant = bands.filter((band) => strongest > 0 && 10 * Math.log10(band.energy / strongest) > SIGNIFICANT_DB).map((band) => band.coherence)
-  if (significant.length < MIN_BANDS) return { bands: significant.length, score: 0, weakest: 0 }
-  return { bands: significant.length, score: significant.reduce((total, value) => total + value, 0) / significant.length, weakest: Math.min(...significant) }
+  const significant = bands
+    .filter((band) => strongest > 0 && 10 * Math.log10(band.energy / strongest) > SIGNIFICANT_DB)
+    .map((band) => ({ coherence: band.coherence, weight: Math.sqrt(band.energy / strongest) }))
+  if (significant.length < MIN_BANDS) return { bands: significant.length, score: 0, support: 0, weakest: 0 }
+  const weighted = (list) => list.reduce((total, band) => total + band.weight * band.coherence, 0) / list.reduce((total, band) => total + band.weight, 0)
+  const loudest = significant.reduce((top, band) => (band.weight > top.weight ? band : top))
+  return {
+    bands: significant.length,
+    score: weighted(significant),
+    support: weighted(significant.filter((band) => band !== loudest)),
+    weakest: Math.min(...significant.map((band) => band.coherence)),
+  }
+}
+
+// A cut of the recording: agreement where the recording is loud, and some
+// agreement where it is not.
+export function isMatch(compared) {
+  return compared.bands >= MIN_BANDS && compared.score >= MATCH_THRESHOLD && compared.support >= SUPPORT_THRESHOLD
 }
 
 // Decode with ffmpeg to 32-bit float PCM at RATE. Returns one Float32Array per
@@ -210,7 +256,9 @@ export function matchSample(ffmpeg, candidateFile, sourceFile, cache = new Map()
     if (!cache.has(key)) cache.set(key, sourceViews(ffmpeg, sourceFile, seconds))
     return cache.get(key)
   }
-  let best = { score: 0, weakest: 0, bands: 0, correlation: 0, lag: 0, channel: 'mid' }
+  let best = { score: 0, support: 0, weakest: 0, bands: 0, correlation: 0, lag: 0, channel: 'mid' }
+  // A view that matches beats one that does not; then the higher score wins.
+  const better = (next, current) => (isMatch(next) !== isMatch(current) ? isMatch(next) : next.score > current.score)
   // Near the start first (where a trimmed sample almost always begins), then anywhere.
   for (const seconds of [SEARCH_SECONDS, null]) {
     const source = views(seconds)
@@ -218,14 +266,15 @@ export function matchSample(ffmpeg, candidateFile, sourceFile, cache = new Map()
       const aligned = bestCorrelation(needle, source[channel])
       const length = Math.min(needle.length, source[channel].length - aligned.lag)
       const compared = bandCoherence(needle.subarray(0, length), source[channel].subarray(aligned.lag, aligned.lag + length))
-      if (compared.score > best.score || (best.bands === 0 && aligned.score > best.correlation)) best = { ...compared, correlation: aligned.score, lag: aligned.lag, channel }
-      if (best.score >= 0.97) break
+      if (better(compared, best) || (best.bands === 0 && aligned.score > best.correlation)) best = { ...compared, correlation: aligned.score, lag: aligned.lag, channel }
+      if (isMatch(best) && best.score >= 0.97) break
     }
-    if (best.score >= MATCH_THRESHOLD || (seconds && source.mid.length < seconds * RATE)) break
+    if (isMatch(best) || (seconds && source.mid.length < seconds * RATE)) break
   }
   return {
-    status: best.score >= MATCH_THRESHOLD ? 'match' : best.bands < MIN_BANDS ? 'too-narrow' : 'mismatch',
+    status: isMatch(best) ? 'match' : best.bands < MIN_BANDS ? 'too-narrow' : 'mismatch',
     score: Number(best.score.toFixed(4)),
+    support: Number(best.support.toFixed(4)),
     weakestBand: Number(best.weakest.toFixed(4)),
     bands: best.bands,
     correlation: Number(best.correlation.toFixed(4)),
@@ -255,7 +304,7 @@ export function matchEntries({ stage, pack, entries, ffmpeg = 'ffmpeg' }) {
     // One recording's decoded views are megabytes; keep only the most recent few.
     while (cache.size > 6) cache.delete(cache.keys().next().value)
   }
-  return { rate: RATE, threshold: MATCH_THRESHOLD, results }
+  return { version: SAMPLE_MATCH_VERSION, rate: RATE, threshold: MATCH_THRESHOLD, supportThreshold: SUPPORT_THRESHOLD, results }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

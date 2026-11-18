@@ -204,14 +204,17 @@ export function applyMatchResults(report, match) {
   const failures = (match?.results ?? []).filter((result) => result.status !== 'match')
   const scores = (match?.results ?? []).filter((result) => result.status === 'match').map((result) => result.score)
   report.acoustic = {
+    // Which version of the check judged it (bench/lib/run/sample-match.mjs).
+    version: match?.version ?? 1,
     checked: match?.results?.length ?? 0,
     matched: scores.length,
     threshold: match?.threshold ?? null,
+    ...(match?.supportThreshold != null ? { supportThreshold: match.supportThreshold } : {}),
     lowestMatch: scores.length ? Math.min(...scores) : null,
-    failed: failures.map(({ path: file, packFile, status, score }) => ({ path: file, packFile, status, score })),
+    failed: failures.map(({ path: file, packFile, status, score, support }) => ({ path: file, packFile, status, score, ...(support != null ? { support } : {}) })),
   }
   if (failures.length > 0) {
-    report.problems.push(`${failures.length} bundled sample(s) do not match the pack recording they are declared to come from: ${failures.slice(0, 6).map((result) => `${result.path} ⇐ ${result.packFile} (${result.status}${result.status === 'mismatch' ? `, similarity ${result.score}` : ''})`).join('; ')}${failures.length > 6 ? '; …' : ''}. A sample matches when it is a cut of the recording (trimmed, faded, levelled, channel-mixed, resampled, re-encoded). Name the recording each file really came from; if a file was pitch-shifted, time-stretched, or layered from recordings, add "verifiable": false and a "reason"; if your code synthesized it, declare it "origin": "generated"`)
+    report.problems.push(`${failures.length} bundled sample(s) do not match the pack recording they are declared to come from: ${failures.slice(0, 6).map((result) => `${result.path} ⇐ ${result.packFile} (${result.status}${result.status === 'mismatch' ? `, similarity ${result.score}${result.support != null && result.score >= (match?.threshold ?? 0) ? `, but the quieter bands agree only ${result.support}` : ''}` : ''})`).join('; ')}${failures.length > 6 ? '; …' : ''}. A sample matches when it is a cut of the recording (trimmed, faded, levelled, channel-mixed, resampled, re-encoded). Name the recording each file really came from; if a file was pitch-shifted, time-stretched, or layered from recordings, add "verifiable": false and a "reason"; if your code synthesized it, declare it "origin": "generated"`)
   }
   return report
 }

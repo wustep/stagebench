@@ -438,7 +438,11 @@ export function runFootnotes(run) {
       const extra = (stage.official?.reasons ?? []).filter((reason) => !/outside the lockdown|operator patch|outside the fixed templates|built under protocol/.test(reason))
       if (stage.official && !stage.official.official && extra.length > 0) notes.push({ kind: 'non-official', phases: [stage.number], text: `Phase ${stage.number} is not an official protocol ${protocolMajor(run.protocol?.version)} result: ${extra.join('; ')}.` })
       if (stage.operatorTelemetry) notes.push({ kind: 'operator-telemetry', phases: [stage.number], text: `Phase ${stage.number}: usage figures an operator entered by hand are kept in the record, labelled, and not shown; the figures shown come from the gateway log.` })
+      // A grader record is footnoted as it was registered: a version-1 record's
+      // drift (which counted token counts as drift to "unreported") stands as
+      // recorded. Only version-2 records carry an unverified count.
       if (stage.evaluation?.grader?.drift) notes.push({ kind: 'grader-drift', phases: [stage.number], text: `Phase ${stage.number}: the grader's requests for ${stage.evaluation.grader.pinned} were served as ${stage.evaluation.grader.drift.map((entry) => entry.servedAs).join(', ')}.` })
+      if (stage.evaluation?.grader?.unverified > 0) notes.push({ kind: 'grader-unverified', phases: [stage.number], text: `Phase ${stage.number}: ${stage.evaluation.grader.unverified} of the grader's responses for ${stage.evaluation.grader.pinned} did not say which model served them.` })
     }
   }
   for (const note of run.footnotes ?? []) notes.push({ kind: note.kind ?? 'note', ...(note.phase ? { phases: [note.phase] } : {}), text: note.text, ...(note.at ? { at: note.at } : {}) })

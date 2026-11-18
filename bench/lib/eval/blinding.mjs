@@ -149,7 +149,7 @@ const VERIFICATION_SHAPE = {
     sources: { '*': { name: KEEP, license: KEEP, files: KEEP } },
     unverifiable: [{ path: KEEP, packFile: KEEP, reason: KEEP }],
     inlineAudio: [KEEP],
-    acoustic: { checked: KEEP, matched: KEEP, threshold: KEEP, lowestMatch: KEEP, failed: [{ path: KEEP, packFile: KEEP, status: KEEP, score: KEEP }] },
+    acoustic: { version: KEEP, checked: KEEP, matched: KEEP, threshold: KEEP, supportThreshold: KEEP, lowestMatch: KEEP, failed: [{ path: KEEP, packFile: KEEP, status: KEEP, score: KEEP, support: KEEP }] },
   },
   // Only a count: the origins name other runs.
   assetProvenance: { assets: KEEP, matched: KEEP },

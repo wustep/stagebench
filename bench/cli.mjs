@@ -719,6 +719,7 @@ async function score(root, id, options) {
   // Which blinding the grader's inputs were built and checked under.
   evaluation.blinding = { version: blindingGuard.version, inputsChecked: blindingGuard.filesChecked }
   if (grader.drift) console.error(`! grader drift: requests for ${grader.requested} were served as ${grader.drift.map((entry) => `${entry.servedAs} (${entry.requests})`).join(', ')}, not the pinned ${grader.pinned}. Recorded in the evaluation and the ledger.`)
+  if (grader.unverified > 0) console.error(`! grader unverified: ${grader.unverified} response(s) to requests for ${grader.requested} did not say which model served them. Recorded in the evaluation and the ledger.`)
   // When the harness registered it, as opposed to when the grader says it
   // graded: two leaderboard rows carried hand-entered evaluation times.
   evaluation.registeredAt = new Date().toISOString()
@@ -739,7 +740,7 @@ async function score(root, id, options) {
     path: path.relative(root, evaluationPath).split(path.sep).join('/'),
     reportPath,
     categoryScores: Object.fromEntries(evaluation.categories.map((category) => [category.id, category.score])),
-    grader: { pinned: grader.pinned, boxed: grader.boxed, served: Object.keys(grader.served), requestIds: grader.requestIds.count, drift: grader.drift },
+    grader: { version: grader.version, pinned: grader.pinned, boxed: grader.boxed, served: Object.keys(grader.served), requestIds: grader.requestIds.count, drift: grader.drift, unverified: grader.unverified },
     ...(evaluation.runAxis ? { runAxis: { id: evaluation.runAxis.id, label: evaluation.runAxis.label, score: evaluation.runAxis.score, rawScore: evaluation.runAxis.rawScore, hardGate: evaluation.runAxis.hardGate } } : {}),
   }
   const updated = loadRun(root, id)
@@ -761,7 +762,7 @@ async function score(root, id, options) {
     // The grader as the provider reported it: the id it served the pinned
     // model's requests as, and its request ids (all of them, hashed; the list
     // is in runs/<id>/lockdown/stage<N>.evaluators.json).
-    grader: { pinned: grader.pinned, requested: grader.requested, boxed: grader.boxed, served: grader.served, drift: grader.drift, requestIds: grader.requestIds, harness: grader.sessions.flatMap((entry) => entry.harness) },
+    grader: { version: grader.version, pinned: grader.pinned, requested: grader.requested, boxed: grader.boxed, served: grader.served, notServed: grader.notServed, drift: grader.drift, unverified: grader.unverified, requestIds: grader.requestIds, harness: grader.sessions.flatMap((entry) => entry.harness) },
   })
   // Evaluator/reviewer sessions ran in the blind workspace (or, boxed, in a
   // container that held only that workspace); archive them under
@@ -784,7 +785,7 @@ async function score(root, id, options) {
   const evaluatorBoxes = lockdown.closeEvaluatorSessions(root, id, phase)
   if (evaluatorBoxes.length > 0) writeJson(path.join(root, 'runs', id, 'lockdown', `stage${phase}.evaluators.json`), { mode: 'lockdown', evaluators: evaluatorBoxes, grader: { ...graderSummary, requestIdList } })
   removeEvalWorkspace(root, id, phase)
-  return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, rubricVersion: rubric.version, evaluationPath, report: aggregate.reportPath, evaluation: evaluatorBoxes.length > 0 ? `boxed (${evaluatorBoxes.length} evaluator session(s))` : 'not boxed', grader: { pinned: grader.pinned, served: grader.served, requestIds: grader.requestIds.count, drift: grader.drift }, transcripts }
+  return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, rubricVersion: rubric.version, evaluationPath, report: aggregate.reportPath, evaluation: evaluatorBoxes.length > 0 ? `boxed (${evaluatorBoxes.length} evaluator session(s))` : 'not boxed', grader: { pinned: grader.pinned, served: grader.served, requestIds: grader.requestIds.count, drift: grader.drift, unverified: grader.unverified }, transcripts }
 }
 
 // Sealed digests recorded under an older artifact definition can never

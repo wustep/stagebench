@@ -267,38 +267,67 @@ export function archiveAndClose(root, id, phase, record, gates) {
   return { record: path.join(runDir, `stage${phase}.json`), archive }
 }
 
+// How the grader's model id is checked. Version 1 held every request that named
+// the pinned model to the pin, so a token count (which no model serves, and
+// whose response names none) was recorded as drift to "unreported": all six
+// protocol-3 evaluations were flagged that way. Version 2 holds only
+// generations to the pin, and keeps a missing id apart from a different one.
+export const GRADER_RECORD_VERSION = 2
+
+// Endpoints that take a model id but generate nothing: the response is a count,
+// not a turn, and names no model. Anthropic's /v1/messages/count_tokens (Claude
+// Code calls it), OpenAI's /v1/responses/input_tokens.
+const NON_GENERATING = /\/(count_tokens|input_tokens)$/
+
 // Which model actually graded, as the provider reported it. For every model
 // request an evaluator's box made, the gateway logged the model id the request
-// asked for, the id the response said served it, and the provider's request
-// id. The pin is checked against the served ids of the requests that asked for
-// the pinned model (a harness's own auxiliary calls on a smaller model are
-// recorded but are not the grader). Read before the boxes are closed.
+// asked for, its path, the id the response said served it, and the provider's
+// request id. Only generations are the grader's turns: a successful request to
+// a generating endpoint. Of those, the ones that asked for the pinned model are
+// held to it: served as another id is drift; a response that names no model is
+// unverified (counted, not drift). A harness's own auxiliary calls on a smaller
+// model are recorded but are not the grader; token counts and failed requests
+// are tallied apart. Read before the boxes are closed.
 export function graderRecord(root, id, phase, { requested, pinned }) {
   const sessions = []
   const served = {}
+  const notServed = {}
   const requestIds = []
   for (const kind of evaluatorSessions(root, id, phase)) {
     const stateDir = sessionStateDir(root, id, phase, kind)
     const session = loadSession(root, id, phase, kind)
     const events = readGatewayEvents(path.join(stateDir, 'gateway', 'events.jsonl'))
-    const asked = new Map(events.filter((entry) => entry.kind === 'inspect.request' && entry.method === 'POST' && entry.model).map((entry) => [entry.seq, entry.model]))
+    const asked = new Map(events.filter((entry) => entry.kind === 'inspect.request' && entry.method === 'POST' && entry.model).map((entry) => [entry.seq, entry]))
     for (const entry of events) {
       if (entry.kind !== 'inspect.response' || !asked.has(entry.request)) continue
-      const key = `${asked.get(entry.request)} -> ${entry.model ?? 'unreported'}`
-      served[key] = (served[key] ?? 0) + 1
+      const request = asked.get(entry.request)
       if (entry.requestId) requestIds.push(entry.requestId)
+      const counts = NON_GENERATING.test(String(request.path ?? ''))
+      const failed = typeof entry.status === 'number' && (entry.status < 200 || entry.status >= 300)
+      if (counts || failed) {
+        const key = `${request.model} ${counts ? String(request.path).split('/').at(-1) : `status ${entry.status}`}`
+        notServed[key] = (notServed[key] ?? 0) + 1
+        continue
+      }
+      const key = `${request.model} -> ${entry.model ?? 'unreported'}`
+      served[key] = (served[key] ?? 0) + 1
     }
     sessions.push({ slot: session?.slot ?? 1, harness: session?.launches.map((launch) => `${launch.harnessLabel}${launch.harnessVersion ? ` ${launch.harnessVersion}` : ''}`).filter((value, index, all) => all.indexOf(value) === index) ?? [] })
   }
   const pinnedTurns = Object.entries(served).filter(([key]) => key.startsWith(`${requested} -> `))
-  const drifted = pinnedTurns.filter(([key]) => key !== `${requested} -> ${pinned}`).map(([key, count]) => ({ servedAs: key.split(' -> ')[1], requests: count }))
+  const servedAs = (key) => key.slice(`${requested} -> `.length)
+  const drifted = pinnedTurns.filter(([key]) => servedAs(key) !== pinned && servedAs(key) !== 'unreported').map(([key, count]) => ({ servedAs: servedAs(key), requests: count }))
+  const unverified = pinnedTurns.filter(([key]) => servedAs(key) === 'unreported').reduce((total, [, count]) => total + count, 0)
   return {
+    version: GRADER_RECORD_VERSION,
     boxed: sessions.length > 0,
     requested,
     pinned,
     sessions,
     served,
+    notServed,
     pinnedRequests: pinnedTurns.reduce((total, [, count]) => total + count, 0),
+    unverified,
     requestIds: { count: requestIds.length, first: requestIds[0] ?? null, last: requestIds.at(-1) ?? null, sha256: requestIds.length ? sha256(requestIds.join('\n')) : null },
     requestIdList: requestIds,
     drift: drifted.length > 0 ? drifted : null,
