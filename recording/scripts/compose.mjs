@@ -25,6 +25,9 @@
  * [in at, in for, out at, out for]; the image fades from black, the type in alpha. An end card with
  * `crossfade` dissolves in from the last model over that many seconds (the last seconds of its
  * turn) instead of starting on black; show.ringOut lets the audio decay under it and fades it out.
+ * An intro with `crossfade` dissolves into the first model over its last seconds (the first model is
+ * fully up on its downbeat either way). Picture is composited in RGB and converted to tagged
+ * BT.709/sRGB 4:2:0 video once (TO_VIDEO below).
  * With an intro, the caption comes on with the first model. `--cards` renders just the cards.
  * Placeholder slots (models not filmable yet, see lib/show.mjs) keep their bars: black frame, the
  * same label (NEW / not yet ranked) and a centered "Take pending" line in the caption's subtitle
@@ -44,6 +47,18 @@ const MARGIN_X = (W - BOX_W) / 2;
 const LIMIT_DBFS = -1.7;
 const XF = 0.03; // switch length; ends exactly on the downbeat
 const SR = 48000;
+// Picture: everything is composited in RGB (gbrp) and converted to video once, at the very end:
+// BT.709 matrix, limited (tv) range, BT.709 primaries and the sRGB transfer, all tagged. Every source
+// (the previews' screen captures, the photo, the card art) is sRGB, and with that tag colour-managed
+// players show the frames as rendered: the end-card red plays as #c3202e in Chrome and #c2202e in
+// WebKit/Safari against the site's #c4202f (the nearest 8-bit video can carry), where a BT.709
+// transfer tag shows ~#ca2335 in both and round 3's full-range BT.601 file #d0312d in Chrome. The
+// 4:2:0 chroma is taken with an area filter, so a flat colour meeting black on an even pixel (the
+// end-card art) keeps a one-pixel edge instead of the smeared, ringing chroma fringe of converting
+// each layer to yuv420p on its own.
+const PIX = 'gbrp';
+const TO_VIDEO = 'scale=out_color_matrix=bt709:out_range=tv:flags=area+accurate_rnd+full_chroma_inp,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=iec61966-2-1:colorspace=bt709';
+const VIDEO_TAGS = ['-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'iec61966-2-1'];
 
 const S = loadShow(argv('show'));
 const P = S.plan;
@@ -54,6 +69,9 @@ const END = S.show.endCard || null;
 const END_SECS = END?.secs || 0;
 // The end card's crossfade, on whole frames (xfade offsets must land on a frame).
 const XF_END = END_SECS ? Math.round((END.crossfade || 0) * FPS) / FPS : 0;
+// The intro's crossfade into the first turn (intro.crossfade), on whole frames: the last frames of
+// the intro dissolve into the first model, whose picture is fully up on its downbeat as without it.
+const XF_IN = INTRO_SECS ? Math.round((INTRO.crossfade || 0) * FPS) / FPS : 0;
 // Timeline before the first turn's picture (idle + pickup), played under the intro (pickupInIntro).
 const LEAD = P.lead;
 const MUSIC_AT = TITLE_SECS - LEAD; // film time of the timeline's t0
@@ -137,11 +155,11 @@ const CARD_LAYER_CSS = `
     body.layer { background: transparent; }
     .card-image { position: absolute; display: block; }
     .card-block { position: absolute; left: 0; width: ${W}px; text-align: center; }
-    .card-title { font-family: "Crimson Pro", serif; font-size: 58px; font-weight: 500; line-height: 1; letter-spacing: 0; color: #f6eee2; }
-    .card-sub { font-size: 26px; font-weight: 400; line-height: 1.25; letter-spacing: 0.1px; color: rgba(255,255,255,0.66); }
-    .card-date { font-size: 18px; font-weight: 600; line-height: 1.2; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.45); }
-    .card-link { font-size: 22px; font-weight: 400; line-height: 1.2; letter-spacing: 0.4px; color: rgba(255,255,255,0.5); }
-    .card-block > * + * { margin-top: 18px; }
+    .card-title { font-family: "Crimson Pro", serif; font-size: 76px; font-weight: 500; line-height: 1; letter-spacing: -0.3px; color: #f6eee2; }
+    .card-sub { font-size: 32px; font-weight: 400; line-height: 1.25; letter-spacing: 0; color: rgba(255,255,255,0.7); }
+    .card-date { font-size: 21px; font-weight: 600; line-height: 1.2; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+    .card-link { font-size: 30px; font-weight: 400; line-height: 1.2; letter-spacing: 0.2px; color: rgba(255,255,255,0.64); }
+    .card-block > * + * { margin-top: 20px; }
     .hide { visibility: hidden; }`;
 const CARD_PARTS = ['image', 'title', 'subtitle', 'date', 'footer'];
 const CARD_CLASS = { title: 'card-title', subtitle: 'card-sub', date: 'card-date', footer: 'card-link' };
@@ -253,7 +271,7 @@ const FORBIDDEN = /inter|instrument serif|fraunces|bricolage|space grotesk|sora|
 async function renderCard(page, C, name) {
   const layers = [];
   const ready = async () => {
-    await page.evaluate(async () => { await document.fonts.load('500 58px "Crimson Pro"'); await document.fonts.ready; });
+    await page.evaluate(async () => { await document.fonts.load('500 76px "Crimson Pro"'); await document.fonts.ready; });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0));
   };
   const parts = CARD_PARTS.filter((p) => C[p]);
@@ -318,10 +336,10 @@ function cardGraph(card, out, vin, graph, idx) {
       const alpha = l.part === 'image' ? '' : ':alpha=1';
       graph.push(`[${idx++}:v]format=rgba${d > 0 ? `,fade=t=in:st=${st}:d=${d}${alpha}` : ''}${od > 0 ? `,fade=t=out:st=${ost}:d=${od}${alpha}` : ''}[${lab}]`);
     }
-    if (base) { graph.push(`[${base}][${lab}]overlay=0:0[${out}o${i}]`); lab = `${out}o${i}`; }
+    if (base) { graph.push(`[${base}][${lab}]overlay=0:0:format=${PIX}[${out}o${i}]`); lab = `${out}o${i}`; }
     base = lab;
   });
-  graph.push(`[${base}]format=yuv420p,setsar=1,trim=end_frame=${Math.round(card.secs * FPS)}[${out}]`);
+  graph.push(`[${base}]format=${PIX},setsar=1,trim=end_frame=${Math.round(card.secs * FPS)}[${out}]`);
   return idx;
 }
 
@@ -336,8 +354,9 @@ if (process.argv.includes('--cards')) {
     const card = await renderCard(page, C, name);
     const vin = [], graph = [];
     cardGraph(card, 'vc', vin, graph, 0);
+    graph.push(`[vc]${TO_VIDEO}[vcv]`);
     const clip = path.join(WORK, `${name}-preview.mp4`);
-    ff([...vin, '-filter_complex', graph.join(';'), '-map', '[vc]', '-t', String(card.secs), '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-r', String(FPS), '-pix_fmt', 'yuv420p', clip]);
+    ff([...vin, '-filter_complex', graph.join(';'), '-map', '[vcv]', '-t', String(card.secs), '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-r', String(FPS), '-pix_fmt', 'yuv420p', ...VIDEO_TAGS, clip]);
     console.log(`${name}:`, S.output.replace(/\.mp4$/, `.${name}.png`), clip);
   }
   await browser.close();
@@ -437,18 +456,36 @@ const tailFrom = P.end - XF_END - P.t0;
 const tailFade = tlDur - tailFrom > 0.05 && (XF_END > 0 || P.audioEnd > P.end) ? `,afade=t=out:st=${tailFrom.toFixed(5)}:d=${(tlDur - tailFrom).toFixed(5)}:curve=qsin` : '';
 ff(['-i', mixed, '-af', `volume=${makeup.toFixed(2)}dB,alimiter=limit=${Math.pow(10, LIMIT_DBFS / 20).toFixed(4)}:attack=1:release=80:level=disabled:asc=1${tailFade}`,
   '-t', tlDur.toFixed(5), '-c:a', 'pcm_f32le', master]);
-const raw = spawnSync(FF, ['-v', 'error', '-i', mixed, '-ac', '1', '-f', 'f32le', '-'], { maxBuffer: 1 << 30 }).stdout;
-const pcm = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
-const lin = Math.pow(10, makeup / 20), ceil = Math.pow(10, LIMIT_DBFS / 20), win = Math.round(0.05 * SR);
+// What the limiter actually did, per turn: the gain reduction it applied, measured as the stereo
+// peak (either channel, as the limiter sees it) of the master against the premaster with make-up,
+// in 10 ms blocks, aligned for the limiter's lookahead. (A mono fold-down overstates it for
+// correlated pianos and misses it on wide ones.) pctLimited: share of the turn's sounding blocks
+// reduced by more than 0.25 dB; maxDb: the deepest reduction.
+const stereo = (file) => { const b = spawnSync(FF, ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '2', '-ar', String(SR), '-'], { maxBuffer: 1 << 30 }).stdout; return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
+const preS = stereo(mixed), masS = stereo(master);
+const lin = Math.pow(10, makeup / 20), blk = Math.round(0.01 * SR);
+const lag = (() => { // lookahead latency in samples: best match over the loudest second
+  let at = 0, pk = 0;
+  for (let i = 0; i < preS.length / 2; i += SR / 10) { let m = 0; for (let j = i; j < Math.min(i + SR / 10, preS.length / 2); j++) m = Math.max(m, Math.abs(preS[2 * j])); if (m > pk) { pk = m; at = i; } }
+  const a = Math.max(0, at - SR / 2), b = Math.min(preS.length / 2 - SR, a + SR);
+  let best = -Infinity, bl = 0;
+  for (let l = 0; l < Math.round(0.02 * SR); l++) { let s = 0; for (let j = a; j < b; j++) s += preS[2 * j] * masS[2 * (j + l)]; if (s > best) { best = s; bl = l; } }
+  return bl;
+})();
 const limiter = segs.map((s) => {
   let n = 0, over3 = 0, max = 0, tot = 0;
-  for (let i = Math.round((s.from - P.t0) * SR); i < Math.round((s.to - P.t0) * SR) - win; i += win) {
-    let pk = 0; for (let j = i; j < i + win; j++) pk = Math.max(pk, Math.abs(pcm[j] || 0));
-    const db = 20 * Math.log10((pk * lin) / ceil + 1e-12); tot++;
-    if (db > 0) { n++; if (db > 3) over3++; max = Math.max(max, db); }
+  const stop = Math.round((Math.min(s.to, P.end - XF_END) - P.t0) * SR); // not into the ring-out fade
+  for (let i = Math.round((s.from - P.t0) * SR); i + blk < stop && 2 * (i + blk + lag) < masS.length; i += blk) {
+    let pp = 0, pm = 0;
+    for (let j = i; j < i + blk; j++) { pp = Math.max(pp, Math.abs(preS[2 * j]), Math.abs(preS[2 * j + 1])); pm = Math.max(pm, Math.abs(masS[2 * (j + lag)]), Math.abs(masS[2 * (j + lag) + 1])); }
+    if (pp * lin < 0.03) continue; // below -30 dBFS: nothing for the limiter to do
+    const gr = 20 * Math.log10((pp * lin) / (pm + 1e-12)); tot++;
+    if (gr > 0.25) { n++; if (gr > 3) over3++; }
+    max = Math.max(max, gr);
   }
-  return { model: s.model, ...(s.placeholder ? { placeholder: true } : {}), pctLimited: +((100 * n) / tot).toFixed(1), windowsOver3dB: over3, maxDb: +max.toFixed(1) };
+  return { model: s.model, ...(s.placeholder ? { placeholder: true } : {}), pctLimited: tot ? +((100 * n) / tot).toFixed(1) : 0, windowsOver3dB: over3, maxDb: +Math.max(0, max).toFixed(1) };
 });
+console.log(`limiter lookahead ${lag} samples`);
 console.log('timeline', tlDur.toFixed(3) + 's premaster', JSON.stringify(pre), `makeup ${makeup.toFixed(2)} dB`);
 
 const browser = await chromium.launch({ headless: true });
@@ -505,32 +542,40 @@ const introCard = INTRO_SECS > 0 ? await renderCard(page, INTRO, 'intro') : null
 const endCard = END_SECS > 0 ? await renderCard(page, END, 'end-card') : null;
 await browser.close();
 
-// --- 3. Picture: each model's bars full width; hard cuts. ---
+// --- 3. Picture: each model's bars full width; hard cuts (the intro may dissolve into the first). ---
 const vin = [], graph = [];
 let idx = 0;
 if (introCard) idx = cardGraph(introCard, 'v0', vin, graph, idx);
 else if (title) {
   vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(TITLE_SECS), '-i', title);
-  graph.push(`[${idx++}:v]format=yuv420p,setsar=1[v0]`);
+  graph.push(`[${idx++}:v]format=${PIX},setsar=1[v0]`);
 }
+const xfIn = introCard && XF_IN > 0 && !segs[0].placeholder ? XF_IN : 0;
 segs.forEach((s, i) => {
-  const D = s.to - s.from;
+  // With an intro crossfade the first turn's picture starts xfIn early, under the dissolve.
+  const pre = i === 0 ? xfIn : 0;
+  const D = s.to - s.from + pre;
   const oi = idx++;
   vin.push('-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(5), '-i', overlays[i]);
-  graph.push(`color=c=black:s=${W}x${H}:r=${FPS}:d=${D.toFixed(5)}[bg${i}]`);
+  graph.push(`color=c=black:s=${W}x${H}:r=${FPS}:d=${D.toFixed(5)},format=${PIX}[bg${i}]`);
   if (s.placeholder) {
     const si = idx++;
     vin.push('-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(5), '-i', slotPng);
-    graph.push(`[bg${i}][${si}:v]overlay=0:0[c${i}]`);
+    graph.push(`[bg${i}][${si}:v]overlay=0:0:format=${PIX}[c${i}]`);
   } else {
     const vi = idx++;
     vin.push('-i', path.join(s.dir, 'take-video.mp4'));
-    graph.push(`[${vi}:v]trim=start=${(s.from - s.meta.videoStartMidi).toFixed(5)}:duration=${D.toFixed(5)},setpts=PTS-STARTPTS,scale=${s.rw}:${s.rh}:flags=lanczos[p${i}]`);
-    graph.push(`[bg${i}][p${i}]overlay=${s.x}:${s.y}[c${i}]`);
+    graph.push(`[${vi}:v]trim=start=${(s.from - pre - s.meta.videoStartMidi).toFixed(5)}:duration=${D.toFixed(5)},setpts=PTS-STARTPTS,scale=${s.rw}:${s.rh}:flags=lanczos[p${i}]`);
+    graph.push(`[bg${i}][p${i}]overlay=${s.x}:${s.y}:format=${PIX}[c${i}]`);
   }
-  graph.push(`[c${i}][${oi}:v]overlay=0:0,format=yuv420p,setsar=1,trim=end_frame=${Math.round(D * FPS)}[v${i + 1}]`);
+  graph.push(`[c${i}][${oi}:v]overlay=0:0:format=${PIX},format=${PIX},setsar=1,trim=end_frame=${Math.round(D * FPS)}[v${i + 1}]`);
 });
 const parts = Array.from({ length: segs.length + 1 }, (_, i) => `v${i}`).filter((v) => v !== 'v0' || title || introCard);
+if (xfIn) { // the intro's last xfIn seconds dissolve into the first turn
+  graph.push(`[v0]fps=${FPS},settb=AVTB[v0t]`, `[v1]fps=${FPS},settb=AVTB[v1t]`);
+  graph.push(`[v0t][v1t]xfade=transition=fade:duration=${xfIn.toFixed(5)}:offset=${(INTRO_SECS - xfIn).toFixed(5)}[vin]`);
+  parts.splice(0, 2, 'vin');
+}
 // Film time: the intro (or title card) runs TITLE_SECS, then the turns' pictures from the first
 // turn's `from`; the end card follows, dissolving in over the last XF_END seconds of the last turn.
 const picEnd = TITLE_SECS + (P.end - P.segments[0].from); // film time the last turn's picture ends
@@ -545,18 +590,19 @@ if (endCard && XF_END > 0) {
   if (endCard) { idx = cardGraph(endCard, 'vend', vin, graph, idx); parts.push('vend'); }
   graph.push(`${parts.map((v) => `[${v}]`).join('')}concat=n=${parts.length}:v=1:a=0[vcat]`);
 }
-// Caption: on with the first model (after any intro), fully visible, then fades out and is gone by
-// fadeOut[1] seconds into the music.
+// Caption: on with the first model (after any intro, dissolving in with it), fully visible, then
+// fades out and is gone by fadeOut[1] seconds into the music.
 const [capFadeStart, capGone] = cap.fadeOut || [3.5, 5];
-graph.push(`[${idx}:v]format=rgba,fade=t=out:st=${capFadeStart}:d=${(capGone - capFadeStart).toFixed(3)}:alpha=1${TITLE_SECS ? `,setpts=PTS+${TITLE_SECS}/TB` : ''}[cap]`);
-graph.push(`[vcat][cap]overlay=0:0:eof_action=pass,format=yuv420p[v]`);
-vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(capGone + 0.5), '-i', captionPng);
+const capAt = TITLE_SECS - xfIn;
+graph.push(`[${idx}:v]format=rgba${xfIn ? `,fade=t=in:st=0:d=${xfIn.toFixed(5)}:alpha=1` : ''},fade=t=out:st=${(capFadeStart + xfIn).toFixed(5)}:d=${(capGone - capFadeStart).toFixed(3)}:alpha=1${capAt ? `,setpts=PTS+${capAt.toFixed(5)}/TB` : ''}[cap]`);
+graph.push(`[vcat][cap]overlay=0:0:eof_action=pass:format=${PIX},${TO_VIDEO}[v]`);
+vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(capGone + xfIn + 0.5), '-i', captionPng);
 idx++;
 // The timeline audio starts at MUSIC_AT: the intro's length, less any idle + pickup it carries.
 graph.push(`[${idx}:a]${MUSIC_AT > 0 ? `adelay=${Math.round(MUSIC_AT * SR)}S:all=1,` : ''}apad=whole_dur=${total.toFixed(5)}[a]`);
 vin.push('-i', master);
 ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-t', total.toFixed(5),
-  '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-r', String(FPS), '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart',
+  '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-r', String(FPS), '-pix_fmt', 'yuv420p', '-profile:v', 'high', ...VIDEO_TAGS, '-movflags', '+faststart',
   '-c:a', 'aac', '-b:a', '256k', '-ar', String(SR), S.output]);
 
 const film = (t) => +(TITLE_SECS + t - P.segments[0].from).toFixed(3); // MIDI time -> film time
@@ -571,15 +617,20 @@ const report = {
     pictureAfterStrike: +(endAt - film(P.finalHold.from)).toFixed(3), pictureAfterRelease: +(endAt - film(P.finalRelease)).toFixed(3) } : null,
   intro: introCard ? { from: 0, secs: INTRO_SECS, artwork: INTRO.image ?? null, title: INTRO.title ?? null, subtitle: INTRO.subtitle ?? null, date: INTRO.date ?? null, footer: INTRO.footer ?? null,
     underIntro: LEAD > 0 ? { from: +MUSIC_AT.toFixed(3), firstNote: film(P.segments[0].playStart), note: 'the first model\'s idle and pickup play under the intro' } : null,
+    dissolve: xfIn ? { from: +(INTRO_SECS - xfIn).toFixed(3), secs: +xfIn.toFixed(3), note: 'the intro dissolves into the first turn, which is fully up on its downbeat' } : null,
     fades: introCard.fades, fonts: introCard.fonts, layout: introCard.layout, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.intro.png')) } : null,
   endCard: endCard ? { from: +endAt.toFixed(3), secs: END_SECS, crossfade: +XF_END.toFixed(3), artwork: END.image ?? null, title: END.title, subtitle: END.subtitle ?? null, footer: END.footer,
     fades: endCard.fades, fonts: endCard.fonts, layout: endCard.layout, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
-  fonts: fontsUsed, makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, ...(b.placeholder ? { placeholder: true } : { lufs: b.I }), nudgeDb: +b.nudgeDb.toFixed(2) })) },
+  video: { pixFmt: 'yuv420p', profile: 'high', colorRange: 'tv', matrix: 'bt709', primaries: 'bt709', transfer: 'iec61966-2-1 (sRGB)', chroma: 'area (composited in RGB, converted once)' },
+  fonts: fontsUsed, makeupDb: +makeup.toFixed(2), limiterLookaheadSamples: lag, limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, ...(b.placeholder ? { placeholder: true } : { lufs: b.I }), nudgeDb: +b.nudgeDb.toFixed(2) })) },
   timeline: segs.map((s) => {
     const m = S.model(s.model);
-    // visibleSecs: on screen alone (the last turn's dissolve into the end card is not counted).
+    // visibleSecs: on screen alone (the last turn's dissolve into the end card is not counted, nor
+    // the first turn's dissolve in from the intro). cutOffsetMs: the cut into the turn against its
+    // downbeat (negative: the picture leads the audio; plan cutSlack).
     const at = { model: s.model, label: m.label, rank: m.rank, score: m.score, bars: s.bars,
-      filmFrom: film(s.from), filmTo: film(s.to), secs: s.secs, visibleSecs: +(s.to - s.from - (s.model === lastSeg.model && endCard ? XF_END : 0)).toFixed(3) };
+      filmFrom: film(s.from), filmTo: film(s.to), secs: s.secs, visibleSecs: +(s.to - s.from - (s.model === lastSeg.model && endCard ? XF_END : 0)).toFixed(3),
+      ...(s.cutOffsetMs != null ? { cutOffsetMs: s.cutOffsetMs } : {}), ...(s.cutShift ? { cutShiftFrames: s.cutShift } : {}) };
     if (s.placeholder) return { ...at, placeholder: s.placeholder };
     return { ...at,
       prep: JSON.parse(fs.readFileSync(path.join(s.dir, 'prep.json'), 'utf8')),
@@ -588,7 +639,7 @@ const report = {
 };
 fs.writeFileSync(S.output.replace(/\.mp4$/, '.report.json'), JSON.stringify(report, null, 1));
 console.log('wrote', S.output, report.duration.toFixed(3) + 's', JSON.stringify(report.loudness));
-for (const t of report.timeline) console.log(`  ${t.filmFrom.toFixed(2).padStart(6)}–${t.filmTo.toFixed(2).padStart(6)}  ${t.visibleSecs.toFixed(2)} s  bars ${t.bars.join('–').padEnd(8)} ${t.rank ? `#${t.rank}` : 'NEW'}  ${t.label}${t.placeholder ? '  (placeholder)' : ''}`);
+for (const t of report.timeline) console.log(`  ${t.filmFrom.toFixed(2).padStart(6)}–${t.filmTo.toFixed(2).padStart(6)}  ${t.visibleSecs.toFixed(2)} s  bars ${t.bars.join('–').padEnd(8)} ${t.rank ? `#${t.rank}` : 'NEW'}  ${t.label}${t.cutShiftFrames ? `  (cut moved ${t.cutShiftFrames > 0 ? '+' : ''}${t.cutShiftFrames} frame: ${t.cutOffsetMs > 0 ? '+' : ''}${t.cutOffsetMs} ms off its downbeat)` : ''}${t.placeholder ? '  (placeholder)' : ''}`);
 if (report.finalChord) console.log('final chord', JSON.stringify(report.finalChord));
 if (report.endCard) console.log(`end card from ${report.endCard.from} s, crossfade ${report.endCard.crossfade} s, fades ${JSON.stringify(report.endCard.fades)}`);
 console.log('limiter', JSON.stringify(limiter));

@@ -21,12 +21,13 @@ const P = S.plan;
 
 console.log(`${S.name}: ${S.song.title}, ${S.models.length} models, ${P.duration.toFixed(1)} s`);
 const xf = S.show.endCard?.secs ? Math.round((S.show.endCard.crossfade || 0) * 30) / 30 : 0;
-if (S.show.intro?.secs) console.log(`  intro ${S.show.intro.secs.toFixed(2)} s${P.lead ? `, the first model's idle + pickup (${P.lead.toFixed(2)} s) under its end` : ''}`);
+if (S.show.intro?.secs) console.log(`  intro ${S.show.intro.secs.toFixed(2)} s${P.lead ? `, the first model's idle + pickup (${P.lead.toFixed(2)} s) under its end` : ''}${S.show.intro.crossfade ? `, dissolving into it over the last ${(Math.round(S.show.intro.crossfade * 30) / 30).toFixed(2)} s` : ''}`);
+if (!S.show.last || S.show.cutSlack) { const v = P.segments.map((s) => s.visibleSecs); console.log(`  turns on screen ${Math.min(...v).toFixed(2)}–${Math.max(...v).toFixed(2)} s (spread ${(Math.max(...v) - Math.min(...v)).toFixed(2)} s${S.show.cutSlack ? `, cutSlack ${S.show.cutSlack}` : ''})`); }
 for (const s of P.segments) {
   const m = S.model(s.model);
   const rank = m.rank ? `#${m.rank}` : 'NEW';
   const last = s === P.segments.at(-1);
-  console.log(`  ${(s.from - P.t0).toFixed(2).padStart(6)}–${(s.to - P.t0).toFixed(2).padStart(6)}  ${(s.secs - (last ? xf : 0)).toFixed(2).padStart(5)} s  bars ${s.bars.join('–').padEnd(8)} ${rank.padEnd(4)} ${m.label}${last && xf ? `  (+ ${xf.toFixed(2)} s dissolve into the end card)` : ''}${m.placeholder ? `  [placeholder: ${m.placeholder}]` : ''}`);
+  console.log(`  ${(s.from - P.t0).toFixed(2).padStart(6)}–${(s.to - P.t0).toFixed(2).padStart(6)}  ${(s.secs - (last ? xf : 0)).toFixed(2).padStart(5)} s  bars ${s.bars.join('–').padEnd(8)} ${rank.padEnd(4)} ${m.label}${s.cutShift ? `  (cut ${s.cutShift > 0 ? '+' : ''}${s.cutShift} frame, ${s.cutOffsetMs > 0 ? '+' : ''}${s.cutOffsetMs} ms off its downbeat)` : ''}${last && xf ? `  (+ ${xf.toFixed(2)} s dissolve into the end card)` : ''}${m.placeholder ? `  [placeholder: ${m.placeholder}]` : ''}`);
 }
 if (S.show.endCard?.secs) console.log(`  end card ${S.show.endCard.secs.toFixed(2)} s${P.audioEnd > P.end ? `, ring-out ${(P.audioEnd - P.end).toFixed(2)} s under it` : ''}`);
 if (process.argv.includes('--plan')) process.exit(0);

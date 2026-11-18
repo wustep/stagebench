@@ -26,9 +26,9 @@ Start from `recording/shows/etude6-countdown.json` and copy it to `recording/sho
   - Cut on the song's grid (`song.json` → `grid`); one cycle per model is about 7 s for the Étude.
   - Start on strong material (`song.json` → `sections`).
   - End with #1 on strong material or on the song's real ending (`"last": "to-end"`). Give every model one phrase; to stop on a cadence whose bar also carries the next section's pickup, use `lastBarBeats` (and `finalHold` to let the chord ring).
-  - Keep every turn about equally long on screen. With an intro, `pickupInIntro` plays the first model's idle and pickup under the intro instead of padding its turn. Keep the last turn's chord short: a `finalHold` of about 0.6 s, a `breathe` that ends its picture under 1 s after the strike, then `endCard.crossfade` and `ringOut` (README "Levers").
+  - Keep every turn about equally long on screen. With an intro, `pickupInIntro` plays the first model's idle and pickup under the intro instead of padding its turn. Keep the last turn's chord short: a `finalHold` of about 0.6 s, a `breathe` that ends its picture under 1 s after the strike, then `endCard.crossfade` and `ringOut` (README "Levers"). When the phrases' own tempo leaves turns more than about 0.3 s apart, `cutSlack: 1` lets the plan move a cut a frame off its downbeat to even them out.
   - For Twitter, 45–90 s is the target.
-- **Caption and date.** Set `caption.title`, `caption.subtitle` and `caption.date`. Use today's date unless told otherwise.
+- **Caption and date.** Set `caption.title`, `caption.subtitle` and `caption.date`. Use today's date unless told otherwise. If an intro card already carries the project line and date, keep the caption to the music credit (demo v2: "Rondo alla Turca" / "Wolfgang Amadeus Mozart").
 
 Keep the house style exactly as it is: fonts, sizes, positions, colors, 1920x1080, −14 LUFS, and no ring or "Now playing" tag. Change it only if the user explicitly asks for a style change.
 
@@ -73,7 +73,7 @@ Diagnose the cause (see README "Hard-won details"). Don't paper over it in the c
 - the tail has decayed below about −50 dB;
 - the misses and lateness in the report make sense. Notes below a keybed's range are skipped by design; name them.
 
-Also run `node scripts/latency.mjs --show …`. Each model's latency spread should stay under about 20 ms, so first-note alignment holds for the whole turn. Report the leveling nudges (in `output/<show>.report.json`) and the limiter load per model. If the user says a part is too quiet or too loud, adjust the show's `leveling` gently; don't flatten the song. Velocity-sensitive pianos (Opus 5.5) take the most limiting at −14 LUFS.
+Also run `node scripts/latency.mjs --show …`. Each model's latency spread should stay under about 20 ms, so first-note alignment holds for the whole turn. Report the leveling nudges (in `output/<show>.report.json`) and the limiter load per model. If the user says a part is too quiet or too loud, adjust the show's `leveling` gently; don't flatten the song. The report's limiter load is the gain reduction actually applied, at the stereo peak. Wide, decorrelated pianos (GPT-6 Sol) take the most, not the loud velocity-sensitive ones.
 
 You can't listen to the result. Tell the user to watch it with sound before posting.
 

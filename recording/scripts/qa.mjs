@@ -70,6 +70,10 @@ if (grabsDir) {
     shots.push([`${name}-last-frame`, f1]);
   };
   card(report.intro, 'intro');
+  if (report.intro?.dissolve) { // the dissolve into the first turn: its first and middle frames
+    const x = report.intro.dissolve, f0 = fr(x.from);
+    shots.push(['intro-dissolve-first', f0], ['intro-dissolve-mid', f0 + Math.floor(fr(x.secs) / 2)]);
+  }
   if (report.intro) shots.push(['intro-cut-to-first-model', fr(report.intro.secs)], ['first-model-caption', fr(report.intro.secs + 1.5)]);
   card(report.endCard, 'end-card');
   if (report.endCard) shots.push(['before-end-card-last-model-frame', fr(report.endCard.from) - 1]);
@@ -79,10 +83,12 @@ if (grabsDir) {
   const tmp = path.join(work, 'grabs');
   fs.rmSync(tmp, { recursive: true, force: true });
   fs.mkdirSync(tmp, { recursive: true });
-  ff(['-i', S.output, '-vf', `select='${shots.map(([, n]) => `eq(n\\,${n})`).join('+')}'`, '-fps_mode', 'passthrough', path.join(tmp, 'g%02d.png')]);
-  shots.forEach(([name, n], i) => {
+  // One decoded frame per distinct frame number (two grabs may name the same frame).
+  const frames = [...new Set(shots.map(([, n]) => n))];
+  ff(['-i', S.output, '-vf', `select='${frames.map((n) => `eq(n\\,${n})`).join('+')}'`, '-fps_mode', 'passthrough', path.join(tmp, 'g%02d.png')]);
+  shots.forEach(([name, n]) => {
     const f = path.join(grabsDir, `${name}.png`);
-    fs.renameSync(path.join(tmp, `g${String(i + 1).padStart(2, '0')}.png`), f);
+    fs.copyFileSync(path.join(tmp, `g${String(frames.indexOf(n) + 1).padStart(2, '0')}.png`), f);
     console.log(`grab ${name.padEnd(34)} frame ${String(n).padStart(4)} (t=${(n / 30).toFixed(3)} s)  ${f}`);
   });
 }
@@ -90,7 +96,7 @@ if (grabsDir) {
 console.log(`duration ${report.duration.toFixed(2)} s, ${JSON.stringify(report.loudness)}, makeup ${report.makeupDb} dB`);
 console.log(`first note at ${(onset / SR).toFixed(3)} s (planned ${firstPlanned.toFixed(3)} s)`);
 for (const t of report.timeline.slice(1)) {
-  const c = t.filmFrom;
+  const c = t.filmFrom - (t.cutOffsetMs || 0) / 1000; // the downbeat (the audio switch), not the picture cut
   console.log(`cut @${c.toFixed(2).padStart(6)} to ${t.label.padEnd(24)} before ${db(c - 0.25, c - 0.05).toFixed(1)} dB | downbeat ${db(c + 0.01, c + 0.15).toFixed(1)} dB${t.placeholder ? '  (placeholder: silent)' : ''}`);
 }
 // The audio's end: after a ring-out under the end card (audioEnd), else the last picture (musicEnd).
@@ -106,10 +112,12 @@ if (report.endCard) {
 }
 if (report.finalChord) console.log(`final chord: struck ${report.finalChord.struckAt} s, released ${report.finalChord.releasedAt} s (held ${report.finalChord.hold} s); picture holds ${report.finalChord.pictureAfterStrike} s after the strike, ${report.finalChord.pictureAfterRelease} s after the release`);
 console.log('visible per turn: ' + report.timeline.map((t) => `${t.label} ${(t.visibleSecs ?? t.secs).toFixed(2)}`).join(' | '));
+{ const v = report.timeline.map((t) => t.visibleSecs ?? t.secs); console.log(`  spread ${(Math.max(...v) - Math.min(...v)).toFixed(3)} s; cuts moved off their downbeat's frame: ${report.timeline.filter((t) => t.cutShiftFrames).map((t) => `into ${t.label} ${t.cutShiftFrames > 0 ? '+' : ''}${t.cutShiftFrames} (${t.cutOffsetMs} ms)`).join(', ') || 'none'}`); }
+if (report.video) console.log(`video: ${JSON.stringify(report.video)}`);
 for (const t of report.timeline) {
   if (t.placeholder) { console.log(`  NEW  ${t.label.padEnd(24)} placeholder: ${t.placeholder}`); continue; }
   const lim = report.limiter.find((l) => l.model === t.model);
-  console.log(`  ${(t.rank ? `#${t.rank}` : 'NEW').padEnd(4)} ${t.label.padEnd(24)} miss ${t.take.miss} late p95 ${t.take.schedLateMs.p95} ms, gain ${t.prep.gainDb} dB, limited ${lim.pctLimited}% (max ${lim.maxDb} dB)${t.take.quantizeVelocity ? `, velocity quantized to ${t.take.quantizeVelocity}` : ''}`);
+  console.log(`  ${(t.rank ? `#${t.rank}` : 'NEW').padEnd(4)} ${t.label.padEnd(24)} miss ${t.take.miss} late p95 ${t.take.schedLateMs.p95} ms, gain ${t.prep.gainDb} dB, limiter ${report.limiterLookaheadSamples != null ? 'reduced' : 'limited'} ${lim.pctLimited}% of blocks (max ${lim.maxDb} dB)${t.take.quantizeVelocity ? `, velocity quantized to ${t.take.quantizeVelocity}` : ''}`);
 }
 
 // Note accounting: every MIDI note whose onset falls in a model's audible window must have been

@@ -138,6 +138,7 @@ export function loadShow(showArg) {
 // audioFrom = t0). Without it the first turn's picture starts at t0 and carries both.
 // show.ringOut: seconds the audio runs on past the last picture (audioEnd = end + ringOut), so the
 // final chord's reverb tail decays under the end card instead of being cut; compose fades it out.
+// show.cutSlack: see below (evening out turn lengths on screen by moving cuts a frame).
 function makePlan(show, song, files, order) {
   const midi = loadMidi(files.audio);
   const ppq = midi.header.ppq, bpb = song.beatsPerBar || 4, pick = (song.pickupBeats || 0) * ppq;
@@ -180,7 +181,35 @@ function makePlan(show, song, files, order) {
       ...(last && finalHold ? { hold: finalHold } : {}),
     };
   });
-  for (const s of segments) s.secs = +(s.to - s.from).toFixed(3);
+  // show.cutSlack (frames): a cut between turns may move this many frames off its downbeat's frame
+  // (`cut`, the frame at or before it) to even out how long each turn is on screen; the audio still
+  // switches on the downbeat, so the picture leads or trails it by under ~2 frames. Off by default.
+  const xfEnd = show.endCard?.secs ? Math.round((show.endCard.crossfade || 0) * FPS) / FPS : 0;
+  const slack = show.cutSlack || 0;
+  if (slack) {
+    const base = segments.map((s) => s.from);
+    const visible = (d) => segments.map((s, k) => {
+      const from = base[k] + (k ? d[k - 1] : 0) / FPS, to = k === n - 1 ? s.to : base[k + 1] + d[k] / FPS;
+      return to - from - (k === n - 1 ? xfEnd : 0);
+    });
+    // Smallest spread first; a moved cut has to buy at least a frame of it (0.6 frame per move),
+    // then the least picture-to-downbeat offset overall.
+    const score = (d) => { const v = visible(d); return (Math.max(...v) - Math.min(...v)) * FPS + 0.6 * d.filter(Boolean).length + 0.01 * d.reduce((a, x) => a + Math.abs(x), 0); };
+    let best = Array(n - 1).fill(0), bestScore = score(best);
+    const d = Array(n - 1).fill(-slack);
+    for (;;) {
+      const sc = score(d);
+      if (sc < bestScore - 1e-9) { best = [...d]; bestScore = sc; }
+      let i = 0;
+      while (i < d.length && d[i] === slack) d[i++] = -slack;
+      if (i === d.length) break;
+      d[i]++;
+    }
+    best.forEach((x, i) => { if (x) { segments[i + 1].from += x / FPS; segments[i].to += x / FPS; segments[i + 1].cutShift = x; } });
+  }
+  // cutOffsetMs: where the cut into a turn lands against its downbeat (negative: the picture leads).
+  for (const s of segments) { s.secs = +(s.to - s.from).toFixed(3); s.visibleSecs = +(s.secs - (s === segments[n - 1] ? xfEnd : 0)).toFixed(3); }
+  segments.forEach((s, k) => { if (k > 0) s.cutOffsetMs = +((s.from - s.audioFrom) * 1000).toFixed(1); });
   // 8-bar (barsPerModel) blocks inside each segment, used to measure and gently level loudness.
   const blocks = segments.flatMap((s, k) => {
     const out = [];
