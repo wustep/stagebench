@@ -6,6 +6,7 @@ import {
   buildGenerationLabels,
   classifyResult,
   getIsolation,
+  showsIsolationBadge,
   getProtocolLabel,
   getProtocolNote,
   getResultClass,
@@ -160,7 +161,7 @@ test('a run scored under the current rubric is tiered by the protocol generation
   const previous = tierOf({ protocolVersion: '2.0.0' })
   assert.equal(previous.id, 'before-protocol-3')
   assert.equal(previous.label, 'Protocol 2.0 and earlier')
-  assert.notEqual(previous.id, current.id, 'same rubric, different conditions: not one leaderboard')
+  assert.notEqual(previous.id, current.id, 'classifyResult still distinguishes conditions, even though the gallery ranks everyone together')
   assert.equal(previous.description, "Built before Protocol 3.0 and scored with the same rubric. Ranked separately because the conditions differ; each run's details say what its protocol guaranteed.")
 
   // Everything built before the current generation stays ONE board: protocol
@@ -225,46 +226,29 @@ test('tier names are derived from the versions on record, not hardcoded', () => 
   assert.deepEqual(tierOf({ protocolVersion: '2.0.0' }, protocol4, labels), third)
 })
 
-// The same rule, checked against whatever the generator produced: these hold
-// for any registry, so adding, removing or rescoring a run cannot break them.
-test('the registry leaderboard keeps every tier contiguous and ranks each tier on its own', () => {
-  const currentGeneration = protocolGeneration(protocol.version)
-  assert.equal(typeof protocol.rubricVersion, 'string', 'protocol.json names the current rubric')
-  assert.ok(protocol.protocolNotes[String(currentGeneration)], 'protocol.json describes the current generation')
+// The gallery ranks every run in one list, whatever protocol or rubric
+// produced the score. classifyResult still describes the conditions (tests
+// above); it does not split the board. These hold for any registry, so
+// adding, removing or rescoring a run cannot break them.
+test('the registry leaderboard is one ranked list of every run', () => {
+  assert.equal(visibleRuns.length, runs.length, 'every run is listed exactly once')
+  assert.equal(new Set(visibleRuns.map((run) => run.id)).size, visibleRuns.length, 'ids are unique')
 
-  const tierIds = []
-  const scoresByTier = new Map()
-  let previousRank = -1
+  let previousScore = Infinity
+  let expectedRank = 0
+  let seenUnscored = false
   for (const run of visibleRuns) {
-    const tier = getResultClass(run)
-    if (tierIds.at(-1) !== tier.id) {
-      assert.equal(tierIds.includes(tier.id), false, `${run.id}: tier ${tier.id} is split in two`)
-      tierIds.push(tier.id)
-    }
-    assert.ok(tier.rank >= previousRank, `${run.id}: tier ${tier.id} is listed above a higher-ranked tier`)
-    previousRank = tier.rank
-
-    // Built under the current generation and scored under the current rubric
-    // (or not yet scored) is the only way into the top tier.
-    const currentRubric = !run.rubricVersion || run.rubricVersion === protocol.rubricVersion
-    const expectCurrent = !run.legacy && currentRubric && protocolGeneration(run.protocolVersion) === currentGeneration
-    assert.equal(tier.id === 'current', expectCurrent, `${run.id}: ${run.protocolVersion} scored under ${run.rubricVersion} is in ${tier.id}`)
-    if (!run.legacy && currentRubric && !expectCurrent && protocolGeneration(run.protocolVersion) !== null) {
-      // Every earlier generation scored under the current rubric shares one board.
-      assert.equal(tier.id, `before-protocol-${currentGeneration}`, `${run.id}: built before the current generation`)
-    }
-
-    // "#1" names the top score of its own tier; unscored runs get no rank.
     if (run.score === null) {
+      seenUnscored = true
       assert.equal(rankByRun.has(run.id), false, `${run.id}: unscored runs are unranked`)
       continue
     }
-    const scores = scoresByTier.get(tier.id) ?? []
-    assert.equal(rankByRun.get(run.id), scores.length + 1, `${run.id}: rank within ${tier.id}`)
-    if (scores.length > 0) assert.ok(run.score <= scores.at(-1), `${run.id}: ${tier.id} is ordered by score`)
-    scoresByTier.set(tier.id, [...scores, run.score])
+    assert.equal(seenUnscored, false, `${run.id}: scored runs sit above every unscored run`)
+    assert.ok(run.score <= previousScore, `${run.id}: the list is ordered by score`)
+    previousScore = run.score
+    expectedRank += 1
+    assert.equal(rankByRun.get(run.id), expectedRank, `${run.id}: rank ${expectedRank} in the single list`)
   }
-  assert.equal(visibleRuns.length, runs.length, 'every run is listed exactly once')
 })
 
 test('normalization gives the conditions fields honest defaults', () => {
@@ -356,6 +340,26 @@ test('rows label the protocol and flag isolation only where the protocol require
   for (const isolation of ['lockdown', 'none', 'mixed']) {
     assert.match(getIsolation(run({ protocolVersion: '2.0.0', isolation })).meaning, /^[A-Z].+\.$/, `${isolation}: one plain sentence`)
   }
+
+  // The list does not badge the pre-lockdown default; it still flags a
+  // lockdown, a mixed seal, and an off-protocol miss.
+  assert.equal(showsIsolationBadge(open), false)
+  assert.equal(showsIsolationBadge(locked), true)
+  assert.equal(showsIsolationBadge(getIsolation(run({ protocolVersion: '3.0.0', isolation: 'none' }))), true)
+  assert.equal(showsIsolationBadge(getIsolation(run({ protocolVersion: '3.0.0', isolation: 'mixed' }))), true)
+  assert.equal(showsIsolationBadge(getIsolation(run({ protocolVersion: '2.0.0', isolation: 'mixed' }))), true)
+})
+
+test('the leaderboard source is one list and never writes the No isolation badge', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../src/components/RunList.tsx', import.meta.url), 'utf8')
+  assert.match(source, /one ranked list/)
+  assert.match(source, /showsIsolationBadge/)
+  assert.doesNotMatch(source, /No isolation/)
+  assert.doesNotMatch(source, /resultClass\.id !== previousClass/)
+  assert.doesNotMatch(source, /No \{currentResultClass/)
+  assert.doesNotMatch(source, /Rubric /)
+  assert.doesNotMatch(source, /getResultClass/)
 })
 
 // Token counts an operator typed in are not comparable across harnesses, so the
