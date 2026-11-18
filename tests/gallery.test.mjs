@@ -180,9 +180,9 @@ test('an older rubric, a missing version, and legacy records each keep a tier be
   // The rubric decides before the generation does, whatever protocol built the run.
   const olderRubric = tierOf({ protocolVersion: '1.1.0', rubricVersion: '1.1.0' })
   assert.equal(olderRubric.id, 'protocol-1.1.0')
-  assert.equal(olderRubric.label, 'Protocol 1.1.0')
+  assert.equal(olderRubric.label, 'Rubric 1.1.0', 'an older-rubric board is named for its rubric, not a protocol')
   assert.equal(tierOf({ protocolVersion: '3.0.0', rubricVersion: '1.1.0' }).id, 'protocol-1.1.0')
-  assert.match(olderRubric.description, /before rubric 2\.0 changed the weights/)
+  assert.match(olderRubric.description, /Scored under rubric 1\.1\.0, before rubric 2\.0 changed the weights/)
 
   // The comparison is with the RUBRIC version. Against the protocol version
   // (3.0.0) every run scored under rubric 2.0.0 would read as outdated.
@@ -358,18 +358,21 @@ test('rows label the protocol and flag isolation only where the protocol require
   }
 })
 
-// Token telemetry is not comparable across harnesses yet, so the leaderboard
-// and run drawer hide it while the data contract (runs.json) keeps it.
-test('the gallery leaderboard and run drawer do not render token counts', async () => {
+// Token counts an operator typed in are not comparable across harnesses, so the
+// leaderboard never shows them. A boxed run's tokens and cost come from the
+// lockdown gateway's own log (the provider's counts, priced with one dated
+// table), and only those reach the drawer, labelled as such.
+test('the gallery shows tokens only from the gateway, and labels cost by where it came from', async () => {
   const { readFile } = await import('node:fs/promises')
   const source = await readFile(new URL('../src/components/RunList.tsx', import.meta.url), 'utf8')
-  assert.doesNotMatch(source, />\s*Tokens\s*</, 'no Tokens column heading')
-  for (const label of ['Total tokens', 'Tokens in', 'Tokens out', 'Reasoning']) {
-    assert.equal(source.includes(label), false, `run drawer does not render "${label}"`)
+  assert.doesNotMatch(source, /<span[^>]*>\s*Tokens\s*<\/span>/, 'no Tokens column in the leaderboard row')
+  for (const field of ['telemetry.inputTokens', 'telemetry.outputTokens', 'telemetry.totalTokens', 'telemetry.reasoningTokens', 'telemetry?.inputTokens', 'telemetry?.totalTokens']) {
+    assert.equal(source.includes(field), false, `operator-typed ${field} is never rendered`)
   }
-  assert.equal(source.includes('formatTokens'), false, 'no token cell in the row')
+  assert.match(source, /run\.usage \?/, 'tokens render only from gateway-derived usage')
+  assert.match(source, /operator-entered/, 'a typed cost is labelled as operator-entered')
+  assert.match(source, /prices \{run\.usage\.pricesAsOf\}/, 'a gateway cost says which dated price table it used')
   assert.ok(source.includes('>Time<'), 'Time column is kept')
   assert.ok(source.includes('Wall time'), 'Wall time stays in the drawer')
-  assert.ok(source.includes('Cost'), 'Cost stays in the drawer')
   assert.ok(runs.some((run) => run.telemetry?.totalTokens != null), 'raw token data is still in runs.json')
 })

@@ -292,6 +292,10 @@ export function startPhase(root, id) {
       '',
       'Your work is graded blind. Do not write your own model name, vendor, or any run name anywhere in `candidate/` (source, documents, evidence, commit metadata); the seal refuses an artifact that names its producer.',
     ] : []),
+    ...(offline && run.protocol?.rules?.budget ? [
+      '',
+      `This phase has a fixed budget: ${run.protocol.rules.budget.agentMinutes} minutes of agent time and ${Number(run.protocol.rules.budget.outputTokens).toLocaleString('en-US')} generated tokens, at ${run.protocol.rules.budget.effort} reasoning effort. When either is used up the session is stopped and the phase is sealed as it stands. If a seal fails, its output is relayed to you, at most ${run.protocol.rules.sealFailureRounds} times; after that a failing seal is final.`,
+    ] : []),
     '',
     'Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` inside `candidate/` before finishing.',
     'When done, the operator seals the phase.',

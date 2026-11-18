@@ -270,7 +270,7 @@ const claude = {
     const servers = context.mcpServers && Object.keys(context.mcpServers).length > 0
       ? ['--mcp-config', JSON.stringify({ mcpServers: context.mcpServers })]
       : []
-    const common = ['--dangerously-skip-permissions', '--disallowedTools', 'WebSearch', 'WebFetch', ...(context.model ? ['--model', context.model] : []), ...servers, ...(context.extraArgs ?? [])]
+    const common = ['--dangerously-skip-permissions', '--disallowedTools', 'WebSearch', 'WebFetch', ...(context.model ? ['--model', context.model] : []), ...(context.effort ? ['--effort', context.effort] : []), ...servers, ...(context.extraArgs ?? [])]
     if (context.interactive) return ['claude', ...common, ...(context.resume ? ['--continue'] : []), ...(context.prompt ? [context.prompt] : [])]
     return ['claude', ...common, ...(context.resume ? ['--continue'] : []), '--output-format', 'stream-json', '--verbose', '-p', context.prompt]
   },

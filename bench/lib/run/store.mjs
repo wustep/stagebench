@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { ARTIFACT_DIGEST_VERSION, blindRunCode, hashTree, isStrictProtocol, loadProtocol, protocolMajor, readJson, selectedPhases, workspaceRoot, writeJson } from '../shared.mjs'
 import { tokenCoverageFromStages } from '../../../src/token-coverage.mjs'
 import { TELEMETRY_FIELDS, roundTelemetryValue } from '../../../src/telemetry-fields.mjs'
+import { rulesFromManifest } from './rules.mjs'
 
 export function pathsFor(root) {
   return {
@@ -35,7 +36,7 @@ const V2_PHASE_NAMES = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
 export const PROTOCOL_NOTES = {
   1: 'Protocol 1.x: the workspace sat inside the repository in 1.0 (candidates could reach other runs and were handed the benchmark\'s own scoring notes); 1.1 moved it out. No enforced isolation; candidates sourced samples from the internet.',
   2: 'Protocol 2.0: workspace outside the repository, but no enforced isolation — a candidate could read whatever its harness\'s own sandbox allowed, including this machine\'s disk and the internet. Candidates sourced their own samples.',
-  3: 'Protocol 3.0: candidates run in a lockdown with none of the operator\'s filesystem and no internet (only their own model API); packages come from a fixed offline mirror and recorded samples from one shared raw pack; grading is blind and boxed.',
+  3: 'Protocol 3.0: candidates run in a lockdown with none of the operator\'s filesystem and no internet (only their own model API), are not told which model or run they are, and work under a fixed budget with at most two seal-failure rounds per phase; packages come from a fixed offline mirror and recorded samples from one shared raw pack; tokens and cost come from the gateway\'s log; grading is blind and boxed, and sound is measured by the harness.',
 }
 
 function rubricVersionOf(root) {
@@ -155,9 +156,12 @@ export function createRun(root, metadata = {}, now = new Date()) {
     protocol: {
       version: protocol.version,
       digest,
-      // The rubric is versioned on its own: protocol 3 changed how a run is
-      // contained and what it is given, not how it is scored.
+      // The rubric is versioned on its own, and a run is scored by the rubric
+      // that was current when it was created (see loadRubric).
       rubricVersion: rubricVersionOf(root) ?? protocol.version,
+      // The fixed rules an official run is held to (seal-failure rounds, the
+      // budget), copied so that a later edit to the manifest never reaches it.
+      ...(protocolMajor(protocol.version) >= 3 && protocol.officialRules ? { rules: rulesFromManifest(protocol) } : {}),
     },
     stages: selected.map((number) => ({ number, status: 'queued', startedAt: null, completedAt: null })),
   }
@@ -301,6 +305,11 @@ export function markRunning(root, id, phase, now = new Date()) {
 // stage reports that field — never silently zero. That sum is only full-run
 // usage when every phase recorded the field; the gallery checks coverage
 // (tokenCoverageFromStages) before presenting it as the Tokens column.
+export function recomputeRunTelemetry(run) {
+  recomputeTelemetry(run)
+  return run
+}
+
 function recomputeTelemetry(run) {
   const totals = {}
   for (const field of TELEMETRY_FIELDS) {
@@ -310,10 +319,15 @@ function recomputeTelemetry(run) {
   run.telemetry = totals
 }
 
-// Record measured usage for a phase (cost, tokens, tool calls). Wall time is
-// recorded automatically at seal; everything else comes from the operator or
-// orchestrating agent, and stays null when unavailable.
-export function recordTelemetry(root, id, phase, values) {
+// Record usage for a phase (cost, tokens, tool calls) that an operator or an
+// orchestrating agent supplies. Wall time is recorded automatically at seal.
+//
+// A boxed phase's tokens and cost come from the gateway's own log at seal and
+// are the official figures. Anything typed in afterwards for such a phase is
+// kept beside them, as `operatorTelemetry`, labelled operator-entered and
+// non-official, and never replaces them. For a phase with no gateway record,
+// typed figures are all there is: they become its telemetry, marked as typed.
+export function recordTelemetry(root, id, phase, values, { source = 'operator' } = {}) {
   const run = loadRun(root, id)
   if (isLegacyRun(run)) throw new Error(`${id} is a legacy run; telemetry is frozen`)
   const current = stageState(run, phase)
@@ -324,19 +338,29 @@ export function recordTelemetry(root, id, phase, values) {
     if (!Number.isFinite(value) || value < 0) throw new Error(`${field} must be a non-negative number`)
     cleaned[field] = value
   }
+  if (current.telemetrySource === 'gateway' && source !== 'gateway') {
+    current.operatorTelemetry = { ...current.operatorTelemetry, ...cleaned, source: 'operator', official: false, at: new Date().toISOString() }
+    saveRun(root, run)
+    return { phase: Number(phase), telemetry: current.telemetry, operatorTelemetry: current.operatorTelemetry, note: 'This phase has gateway-derived figures; what you entered is kept as operator-entered and does not replace them.' }
+  }
   current.telemetry = { ...current.telemetry, ...cleaned }
+  if (Object.keys(cleaned).some((field) => field !== 'wallTimeSeconds')) current.telemetrySource = source
   recomputeTelemetry(run)
   saveRun(root, run)
-  return { phase: Number(phase), telemetry: current.telemetry, totals: run.telemetry }
+  return { phase: Number(phase), telemetry: current.telemetry, totals: run.telemetry, source }
 }
 
 // Seal a phase: requires the passing verification produced for the current
 // artifact tree. Records the digest, wall time, and publishes the preview.
-export function markSealed(root, id, phase, verification, now = new Date()) {
+//
+// `outcome: 'failed'` is the one exception: an official phase whose last
+// allowed seal failed is frozen as it stands, with its failing verification,
+// so it is never left unsealed. Its preview is published only if it built.
+export function markSealed(root, id, phase, verification, { outcome = 'passed' } = {}, now = new Date()) {
   const run = loadRun(root, id)
   const current = stageState(run, phase)
   if (current.status !== 'running') throw new Error(`Phase ${phase} must be running before it can be sealed`)
-  if (!verification?.passed || !verification.artifactDigest) throw new Error(`Phase ${phase} requires a passing verification before sealing`)
+  if (!verification?.artifactDigest || (outcome === 'passed' && !verification.passed)) throw new Error(`Phase ${phase} requires a passing verification before sealing`)
   const currentDigest = hashTree(stageDirFor(root, id, phase)).digest
   if (currentDigest !== verification.artifactDigest) throw new Error(`Phase ${phase} changed after verification; run seal again`)
   current.status = 'complete'
@@ -348,8 +372,9 @@ export function markSealed(root, id, phase, verification, now = new Date()) {
     const wallTimeSeconds = Math.max(0, Math.round((now.getTime() - Date.parse(current.startedAt)) / 1000))
     current.telemetry = { wallTimeSeconds, ...current.telemetry }
   }
+  current.sealOutcome = outcome
   recomputeTelemetry(run)
-  publishPreview(root, run, Number(phase))
+  if (outcome === 'passed' || fs.existsSync(path.join(stageDirFor(root, id, phase), 'dist', 'index.html'))) publishPreview(root, run, Number(phase))
   if (run.stages.every((entry) => entry.status === 'complete')) run.status = 'complete'
   saveRun(root, run)
   return run
@@ -401,6 +426,20 @@ export function runFootnotes(run) {
     if (offProtocol.length > 0) notes.push({ kind: 'off-protocol', phases: offProtocol, text: `Phase ${offProtocol.join(', ')}: the operator sent the candidate a message outside the fixed templates (recorded in the run).` })
     const relayed = sealed.filter((stage) => (stage.operator?.followUps ?? 0) > 0).map((stage) => `${stage.number} (${stage.operator.followUps})`)
     if (relayed.length > 0) notes.push({ kind: 'operator', text: `Template follow-ups sent by the operator, by phase: ${relayed.join(', ')}.` })
+    for (const stage of sealed) {
+      const rounds = stage.seal?.sealFailureRelays ?? 0
+      if (stage.sealOutcome === 'failed') {
+        const why = { 'seal-failure-rounds': `after all ${stage.seal?.sealFailureLimit ?? ''} seal-failure rounds`.replace('  ', ' '), budget: 'when its budget left no room for another launch', operator: 'by the operator' }[stage.seal?.finalizedBy] ?? ''
+        notes.push({ kind: 'sealed-failed', phases: [stage.number], text: `Phase ${stage.number} was sealed as it stood, marked failed, ${why}: ${(stage.seal?.failures ?? []).map((failure) => String(failure).split('\n')[0]).slice(0, 3).join(' ') || 'its last seal did not pass'}` })
+      } else if (rounds > 0) {
+        notes.push({ kind: 'seal-failure-rounds', phases: [stage.number], text: `Phase ${stage.number} passed its seal after ${rounds} seal-failure round${rounds === 1 ? '' : 's'}${stage.seal?.sealFailureLimit ? ` (of ${stage.seal.sealFailureLimit} allowed)` : ''}.` })
+      }
+      if (stage.budget?.status === 'stopped') notes.push({ kind: 'budget', phases: [stage.number], text: `Phase ${stage.number} was stopped by its ${stage.budget.stoppedBy === 'tokens' ? 'generated-token' : 'agent-time'} budget and sealed as it stood.` })
+      const extra = (stage.official?.reasons ?? []).filter((reason) => !/outside the lockdown|operator patch|outside the fixed templates|built under protocol/.test(reason))
+      if (stage.official && !stage.official.official && extra.length > 0) notes.push({ kind: 'non-official', phases: [stage.number], text: `Phase ${stage.number} is not an official protocol ${protocolMajor(run.protocol?.version)} result: ${extra.join('; ')}.` })
+      if (stage.operatorTelemetry) notes.push({ kind: 'operator-telemetry', phases: [stage.number], text: `Phase ${stage.number}: usage figures an operator entered by hand are kept in the record, labelled, and not shown; the figures shown come from the gateway log.` })
+      if (stage.evaluation?.grader?.drift) notes.push({ kind: 'grader-drift', phases: [stage.number], text: `Phase ${stage.number}: the grader's requests for ${stage.evaluation.grader.pinned} were served as ${stage.evaluation.grader.drift.map((entry) => entry.servedAs).join(', ')}.` })
+    }
   }
   for (const note of run.footnotes ?? []) notes.push({ kind: note.kind ?? 'note', ...(note.phase ? { phases: [note.phase] } : {}), text: note.text, ...(note.at ? { at: note.at } : {}) })
   return notes
@@ -583,14 +622,52 @@ export function registryEntry(run) {
     previewPath: run.previewPath ?? null,
     previewStage: run.previewStage ?? null,
     previews: run.previews ?? null,
+    // Gateway-derived usage, summed over the phases that have it (protocol 3,
+    // boxed). Null where any phase's figures are only what an operator typed.
+    usage: legacy ? null : usageSummary(run),
+    // An official protocol-3 result: every sealed phase boxed, inside its
+    // budget, no message outside the templates.
+    official: legacy ? false : officialSummary(run),
     stages: (run.stages ?? []).map((stage) => ({
       number: stage.number,
       status: legacy ? (LEGACY_STAGE_STATUS[stage.status] ?? 'queued') : stage.status,
       score: stage.evaluation?.score ?? null,
       reportPath: stage.evaluation?.reportPath ?? null,
-      ...(!legacy && stage.status === 'complete' ? { isolation: stage.isolation?.mode ?? 'none' } : {}),
+      ...(!legacy && stage.status === 'complete' ? {
+        isolation: stage.isolation?.mode ?? 'none',
+        sealOutcome: stage.sealOutcome ?? 'passed',
+        ...(stage.seal ? { sealFailureRelays: stage.seal.sealFailureRelays ?? 0, sealFailureLimit: stage.seal.sealFailureLimit ?? null } : {}),
+        ...(stage.budget ? { budget: { status: stage.budget.status, stoppedBy: stage.budget.stoppedBy ?? null, agentMinutes: stage.budget.agentMinutes ?? null, outputTokens: stage.budget.used?.outputTokens ?? null, limits: stage.budget.rules ?? null } } : {}),
+        ...(stage.usage ? { usage: { source: stage.usage.source, inputTokens: stage.usage.inputTokens, cachedInputTokens: stage.usage.cachedInputTokens, outputTokens: stage.usage.outputTokens, reasoningTokens: stage.usage.reasoningTokens, costUsd: stage.usage.costUsd, pricesAsOf: stage.usage.prices?.asOf ?? null } } : {}),
+        ...(stage.audio ? { audio: { status: stage.audio.status, failure: stage.audio.failure?.kind ?? null, scores: stage.audio.scores ?? null } } : {}),
+        ...(stage.evaluation?.grader ? { grader: { pinned: stage.evaluation.grader.pinned ?? null, served: stage.evaluation.grader.served ?? [], drift: Boolean(stage.evaluation.grader.drift) } } : {}),
+        official: stage.official?.official ?? false,
+      } : {}),
     })),
   }
+}
+
+function usageSummary(run) {
+  const sealed = (run.stages ?? []).filter((stage) => stage.status === 'complete')
+  const metered = sealed.filter((stage) => stage.usage?.source === 'gateway')
+  if (metered.length === 0) return null
+  const sum = (field) => metered.reduce((total, stage) => (typeof stage.usage[field] === 'number' && total !== null ? total + stage.usage[field] : total), 0)
+  return {
+    source: 'gateway',
+    phases: metered.map((stage) => stage.number),
+    complete: metered.length === sealed.length,
+    inputTokens: sum('inputTokens'),
+    cachedInputTokens: sum('cachedInputTokens'),
+    outputTokens: sum('outputTokens'),
+    reasoningTokens: metered.some((stage) => typeof stage.usage.reasoningTokens === 'number') ? sum('reasoningTokens') : null,
+    costUsd: metered.every((stage) => typeof stage.usage.costUsd === 'number') ? Math.round(sum('costUsd') * 100) / 100 : null,
+    pricesAsOf: [...new Set(metered.map((stage) => stage.usage.prices?.asOf).filter(Boolean))].join(', ') || null,
+  }
+}
+
+function officialSummary(run) {
+  const sealed = (run.stages ?? []).filter((stage) => stage.status === 'complete')
+  return isStrictProtocol(run) && sealed.length > 0 && sealed.every((stage) => stage.official?.official === true)
 }
 
 // Cache the projected entry for each run.json keyed by mtime, so an unchanged
@@ -605,7 +682,7 @@ function reindexCachePath(root) {
 // but not changes to the projection itself — a new field silently kept its old
 // shape until something touched the run. Bump this whenever registryEntry's
 // output shape changes.
-const REGISTRY_PROJECTION_VERSION = 5
+const REGISTRY_PROJECTION_VERSION = 6
 
 function readReindexCache(root) {
   try {

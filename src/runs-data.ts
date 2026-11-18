@@ -55,12 +55,22 @@ export function normalizeRunEntry(raw: RawRunEntry): RunEntry {
     previewPath: raw.previewPath ?? null,
     previewStage: raw.previewStage ?? null,
     previews: raw.previews ?? {},
+    usage: raw.usage ?? null,
+    official: raw.official === true,
     stages: (raw.stages ?? []).map((stage) => ({
       number: stage.number,
       status: stage.status ?? 'queued',
       score: stage.score ?? null,
       reportPath: stage.reportPath ?? null,
       isolation: stage.isolation ?? null,
+      sealOutcome: stage.sealOutcome ?? null,
+      sealFailureRelays: stage.sealFailureRelays ?? null,
+      sealFailureLimit: stage.sealFailureLimit ?? null,
+      budget: stage.budget ?? null,
+      usage: stage.usage ?? null,
+      audio: stage.audio ?? null,
+      grader: stage.grader ?? null,
+      official: stage.official === true,
     })),
   }
 }
@@ -222,11 +232,13 @@ export function classifyResult(
   if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: RANK_LEGACY, description: 'Runs recorded before the current run schema, under earlier prompts, specs, or scoring. Kept for reference with their frozen scores and reports.' }
   const scoredUnder = run.rubricVersion
   if (scoredUnder && scoredUnder !== info.rubricVersion) {
+    // Named for the RUBRIC: one board can hold runs built under several
+    // protocols (each row says which), all scored the same way.
     return {
       id: `protocol-${scoredUnder}`,
-      label: `Protocol ${scoredUnder}`,
+      label: `Rubric ${scoredUnder}`,
       rank: RANK_OLDER_RUBRIC,
-      description: `Scored under protocol ${scoredUnder}, before rubric ${shortVersion(info.rubricVersion) ?? info.rubricVersion} changed the weights, the criteria, and the evaluator. Ranked separately rather than merged into one leaderboard.`,
+      description: `Scored under rubric ${scoredUnder}, before rubric ${shortVersion(info.rubricVersion) ?? info.rubricVersion} changed the weights, the criteria, and how they are scored. Ranked separately rather than merged into one leaderboard; each row says which protocol it was built under.`,
     }
   }
   const labelOf = (generation: number) => generationLabels.get(generation) ?? `${generation}.x`

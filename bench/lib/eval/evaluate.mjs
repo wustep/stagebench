@@ -11,9 +11,30 @@ import { validateRubric } from './scoring.mjs'
 
 const GATE_COPY_EXCLUDES = new Set(['node_modules', '.git', '.vite'])
 
-export function loadRubric() {
-  const rubricPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'rubric.json')
-  return validateRubric(readJson(rubricPath))
+const BENCH_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+
+// The current rubric is bench/rubric.json; every earlier one a run can still
+// be scored by is frozen in bench/rubrics/<version>.json. A run is scored by
+// the rubric that was current when it was created (rubricVersionForRun), so a
+// rubric bump never re-scores an older run under rules it was not built for.
+export function loadRubric(version = null) {
+  const current = readJson(path.join(BENCH_DIR, 'rubric.json'))
+  if (!version || version === current.version) return validateRubric(current)
+  const archived = path.join(BENCH_DIR, 'rubrics', `${version}.json`)
+  if (!fs.existsSync(archived)) throw new Error(`Rubric ${version} is not in this checkout (bench/rubrics/${version}.json)`)
+  const rubric = readJson(archived)
+  if (rubric.version !== version) throw new Error(`bench/rubrics/${version}.json says it is rubric ${rubric.version}`)
+  return validateRubric(rubric)
+}
+
+// The rubric a run is scored by. Runs record the rubric current at creation;
+// runs created under rubric 1.x were all re-scored under 2.0.0, which is the
+// oldest rubric kept.
+export function rubricVersionForRun(run) {
+  const recorded = String(run?.protocol?.rubricVersion ?? '')
+  const major = Number.parseInt(recorded.split('.')[0], 10)
+  if (!Number.isFinite(major) || major < 2) return '2.0.0'
+  return recorded
 }
 
 function outputTail(value, length = 1600) {

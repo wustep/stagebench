@@ -1,0 +1,516 @@
+{
+  "version": "2.0.0",
+  "title": "Stagebench Nord Stage 4 evaluation rubric",
+  "evaluator": {
+    "model": "claude-opus-5",
+    "label": "Claude Opus 5",
+    "policy": "Every assessment is produced by a fresh agent running this model, working only inside its isolated evaluator workspace. An assessment's evaluatorModel must equal this value; bench score refuses to register anything else unless run with --allow-evaluator-model."
+  },
+  "ratingScale": {
+    "minimum": 0,
+    "maximum": 4,
+    "anchors": {
+      "0": "Missing, broken, disconnected, or contradicted by direct evidence.",
+      "1": "Present but generic: not recognizably the assigned instrument, or presentation-only where behavior is required.",
+      "2": "Correct structure, but measurements fall outside the specified tolerance, required landmarks are absent, or the behavior is materially incomplete.",
+      "3": "Every specified measurement inside tolerance and every required element present, with detail simplified in ways a knowledgeable player would notice.",
+      "4": "Matches the reference: measurements inside tolerance, nothing missing and nothing forbidden present, and detail a knowledgeable player would not distinguish from the hardware."
+    },
+    "note": "Rate against the measurement where one is specified, not against impression. Criteria marked scoring:\"computed\" are not rated at all \u2014 report their measurements and the score is derived, so no judgment enters where the spec already gives ground truth."
+  },
+  "runAxis": {
+    "weight": 40,
+    "scoredAgainst": "highest-sealed-phase",
+    "note": "Panel fidelity is scored once, against the final sealed artifact, because the phases are cumulative and it was previously measured three times at three different resolutions. A regression introduced in a later phase is caught here because the final artifact is the regressed one.",
+    "hardGate": {
+      "measurements": [
+        {
+          "criterion": "keybedFidelity",
+          "measurement": "keysInsideKeybed",
+          "kind": "ratioBelow",
+          "threshold": 0.9,
+          "note": "A keybed whose keys do not lay out inside it is not a keybed, however correct the key count is."
+        },
+        {
+          "criterion": "chassisGeometry",
+          "measurement": "deckFraction",
+          "kind": "scoreBelow",
+          "threshold": 25,
+          "note": "A deck allocation this far out of tolerance pushes controls off the chassis."
+        }
+      ],
+      "scoreCap": 40,
+      "note": "Gates key on individual measurements rather than the criterion score: averaging five measurements dilutes one catastrophic failure into a passing number. Tripping any gate caps panel fidelity at scoreCap."
+    },
+    "category": {
+      "id": "panelFidelity",
+      "label": "Panel fidelity",
+      "weight": 100,
+      "criteria": [
+        {
+          "id": "chassisGeometry",
+          "label": "Chassis, silhouette & geometry",
+          "weight": 20,
+          "guidance": "Measure against specs/nord-stage-4.visual.json at 1440x900: deck/keybed vertical allocation (0.54/0.46 +/-0.025), instrument width fraction (0.88-0.97), and the six horizontal section fractions in order. Report the measured numbers. This criterion is COMPUTED from your measurements, not rated: report the numbers and the score follows.",
+          "scoring": "computed",
+          "measurements": [
+            {
+              "id": "deckFraction",
+              "label": "Deck vertical allocation",
+              "kind": "band",
+              "target": 0.54,
+              "tolerance": 0.025,
+              "decay": 3,
+              "weight": 26
+            },
+            {
+              "id": "keybedFraction",
+              "label": "Keybed vertical allocation",
+              "kind": "band",
+              "target": 0.46,
+              "tolerance": 0.025,
+              "decay": 3,
+              "weight": 16
+            },
+            {
+              "id": "widthFraction",
+              "label": "Instrument width fraction of viewport",
+              "kind": "range",
+              "minimum": 0.88,
+              "maximum": 0.97,
+              "decay": 3,
+              "weight": 20
+            },
+            {
+              "id": "aspectRatio",
+              "label": "Instrument aspect ratio",
+              "kind": "band",
+              "target": 3.0951,
+              "tolerance": 0.06,
+              "decay": 3,
+              "weight": 18
+            },
+            {
+              "id": "sectionFractionMaxDeviation",
+              "label": "Worst of the six section-fraction deviations",
+              "kind": "band",
+              "target": 0.0,
+              "tolerance": 0.012,
+              "decay": 3,
+              "weight": 20
+            }
+          ]
+        },
+        {
+          "id": "hardwareInventory",
+          "label": "Hardware inventory & placement",
+          "weight": 24,
+          "guidance": "Two separate failures, measured separately \u2014 do not charge one defect twice. requiredLandmarksPresent counts the sectionLandmarks entries that are RENDERED in their own section, whatever their z-order and whether a pointer can reach them; that is inventory and placement. controlsReachable counts the controls a pointer can actually operate. A rendered but buried control is present AND unreachable. Where sectionLandmarks and the variant reference photograph disagree, score against the photograph and report the disagreement. Reachability is measured, not inferred. For every control, hit-test a 5x5 grid of points across its bounding box with document.elementFromPoint at 1440x900 with the page unscrolled; the control counts as reachable only if at least one grid point resolves to that control or a descendant of it. Do NOT use a framework click helper: Playwright's click() programmatically scrolls an overflow:hidden container and reports success for a control the user can never reach. forbiddenPresent is counted with the detection rules in specs/nord-stage-4.visual.json under forbiddenDetection: apply each rule literally against the rendered DOM, and count a descriptor once per section that satisfies it, never by eye and never once per element. Leave forbiddenPresent null if a rule cannot be evaluated — it was the one number in this axis still resting on judgment, and counts of 0-3 across the field were not reproducible. This criterion is COMPUTED from your measurements, not rated.",
+          "scoring": "computed",
+          "measurements": [
+            {
+              "id": "requiredLandmarksPresent",
+              "label": "Required section landmarks rendered in their own section",
+              "kind": "ratio",
+              "denominator": "requiredLandmarksTotal",
+              "weight": 30
+            },
+            {
+              "id": "controlsReachable",
+              "label": "Controls a pointer can actually operate",
+              "kind": "ratio",
+              "denominator": "controlsTotal",
+              "weight": 60,
+              "curve": 2.0
+            },
+            {
+              "id": "forbiddenPresent",
+              "label": "Forbidden elements present",
+              "kind": "penaltyCount",
+              "penaltyEach": 25,
+              "weight": 10
+            }
+          ]
+        },
+        {
+          "id": "keybedFidelity",
+          "label": "Keybed fidelity",
+          "weight": 18,
+          "guidance": "Key count and split for the assigned variant, black/white width and height ratios, keys laid out inside the keybed bounds, pressed state. Count the keys whose box falls inside the keybed. This criterion is COMPUTED from your measurements, not rated: report the numbers and the score follows.",
+          "scoring": "computed",
+          "measurements": [
+            {
+              "id": "keysInsideKeybed",
+              "label": "Keys whose box falls inside the keybed",
+              "kind": "ratio",
+              "denominator": "keyCount",
+              "weight": 46,
+              "curve": 2.0
+            },
+            {
+              "id": "keyCount",
+              "label": "Total keys",
+              "kind": "band",
+              "target": 73,
+              "tolerance": 0,
+              "decay": 3,
+              "weight": 18
+            },
+            {
+              "id": "whiteKeys",
+              "label": "White keys",
+              "kind": "band",
+              "target": 43,
+              "tolerance": 0,
+              "decay": 3,
+              "weight": 8
+            },
+            {
+              "id": "blackKeys",
+              "label": "Black keys",
+              "kind": "band",
+              "target": 30,
+              "tolerance": 0,
+              "decay": 3,
+              "weight": 8
+            },
+            {
+              "id": "blackKeyHeightFraction",
+              "label": "Black-key height fraction",
+              "kind": "band",
+              "target": 0.61,
+              "tolerance": 0.03,
+              "decay": 3,
+              "weight": 20
+            }
+          ]
+        },
+        {
+          "id": "colorFidelity",
+          "label": "Chassis & plate colour fidelity",
+          "weight": 8,
+          "scoring": "computed",
+          "guidance": "Sample the rendered page and compare against specs referenceColors. Report, for each of the five reference colours, whether the nearest rendered surface is within a CIE76 deltaE of 12 \u2014 count how many of the five match.",
+          "measurements": [
+            {
+              "id": "referenceColorsMatched",
+              "label": "Reference colours matched within deltaE 12",
+              "kind": "ratio",
+              "denominator": "referenceColorsTotal",
+              "weight": 100
+            }
+          ]
+        },
+        {
+          "id": "typographyDetail",
+          "label": "Materials, legends & displays",
+          "weight": 8,
+          "scoring": "judged",
+          "guidance": "Knob/fader/drawbar caps, LED ladders, silkscreen legends legible at rendered size, OLED treatment, and surface materials. Judged \u2014 these are not reducible to a measurement."
+        },
+        {
+          "id": "panelState",
+          "label": "Panel state & displays",
+          "weight": 14,
+          "guidance": "Does the panel show what the instrument is doing: control positions track their parameters, LEDs follow the active layer/section, displays read live values. Drive controls and observe.",
+          "scoring": "judged"
+        },
+        {
+          "id": "narrowRetention",
+          "label": "Narrow-viewport retention",
+          "weight": 8,
+          "guidance": "At 390x844 the instrument stays recognizable and usable rather than collapsing or clipping.",
+          "scoring": "judged"
+        }
+      ]
+    }
+  },
+  "aggregateStageWeights": {
+    "1": 25,
+    "2": 30,
+    "3": 45
+  },
+  "technicalGate": {
+    "requiredChecks": [
+      "test",
+      "typecheck",
+      "lint",
+      "build"
+    ],
+    "failureScoreCap": 59,
+    "missingArtifactScoreCap": 49
+  },
+  "stages": {
+    "1": {
+      "name": "Complete surface and basic piano",
+      "categories": [
+        {
+          "id": "sound",
+          "label": "Sound",
+          "weight": 25,
+          "criteria": [
+            {
+              "id": "pianoVoice",
+              "label": "Piano voice",
+              "weight": 60,
+              "guidance": "One dependable, musical basic piano voice across the keybed; level, decay and release behave.",
+              "scoring": "judged"
+            },
+            {
+              "id": "sourceHonesty",
+              "label": "Declared source honesty",
+              "weight": 40,
+              "guidance": "IMPLEMENTATION_DETAILS.json declares what actually produces sound. Verify by exercising the build, not by reading the declaration.",
+              "scoring": "judged"
+            }
+          ]
+        },
+        {
+          "id": "playability",
+          "label": "Playability & control",
+          "weight": 55,
+          "criteria": [
+            {
+              "id": "inputCoverage",
+              "label": "Input coverage",
+              "weight": 40,
+              "guidance": "Pointer, computer keyboard and Web MIDI all reach one note lifecycle. Exercise each.",
+              "scoring": "judged"
+            },
+            {
+              "id": "voiceLifecycle",
+              "label": "Voice lifecycle",
+              "weight": 35,
+              "guidance": "Velocity mapping, sustain, deterministic voice stealing, all-notes-off on blur/disconnect/unmount.",
+              "scoring": "judged"
+            },
+            {
+              "id": "controlBoundary",
+              "label": "Control feel & decorative boundary",
+              "weight": 25,
+              "guidance": "Controls move and report state; controls that do nothing are visibly inert. Never fake success.",
+              "scoring": "judged"
+            }
+          ]
+        },
+        {
+          "id": "features",
+          "label": "Feature completeness",
+          "weight": 20,
+          "criteria": [
+            {
+              "id": "panelControlCoverage",
+              "label": "Required Phase 1 controls present",
+              "weight": 40,
+              "scoring": "judged",
+              "guidance": "Every control the Phase 1 contract requires exists on the panel and is identifiable."
+            },
+            {
+              "id": "pianoFeatureCoverage",
+              "label": "Required piano feature IDs",
+              "weight": 35,
+              "scoring": "judged",
+              "guidance": "The Phase 1 piano feature IDs are implemented and exercised in the running build."
+            },
+            {
+              "id": "declaredGapAccuracy",
+              "label": "Declared gaps are accurate",
+              "weight": 25,
+              "scoring": "judged",
+              "guidance": "Anything declared unimplemented really is, and nothing undeclared is missing. Check IMPLEMENTATION_DETAILS.json against behaviour."
+            }
+          ]
+        }
+      ]
+    },
+    "2": {
+      "name": "Piano library and working effects",
+      "categories": [
+        {
+          "id": "sound",
+          "label": "Sound",
+          "weight": 55,
+          "criteria": [
+            {
+              "id": "instrumentBreadth",
+              "label": "Instrument breadth & character",
+              "weight": 35,
+              "guidance": "Grand, upright, electric, clavinet and digital are audibly distinct, not one voice relabelled.",
+              "scoring": "judged"
+            },
+            {
+              "id": "effectAudibility",
+              "label": "Effect audibility & correctness",
+              "weight": 35,
+              "guidance": "Each effect is individually audible and behaves like its namesake. A/B each one.",
+              "scoring": "judged"
+            },
+            {
+              "id": "signalGraph",
+              "label": "Signal graph & gain staging",
+              "weight": 30,
+              "guidance": "One shared context, per-layer buses, sane gain staging, no clipping under load.",
+              "scoring": "judged"
+            }
+          ]
+        },
+        {
+          "id": "playability",
+          "label": "Playability & control",
+          "weight": 20,
+          "criteria": [
+            {
+              "id": "layerBehavior",
+              "label": "Two-layer piano behaviour",
+              "weight": 40,
+              "scoring": "judged",
+              "guidance": "Layer A/B split, level, octave and focus reach the audio graph and the panel reflects them."
+            },
+            {
+              "id": "pianoControlDepth",
+              "label": "Detailed piano controls",
+              "weight": 30,
+              "scoring": "judged",
+              "guidance": "String resonance, pedal noise, dynamics, timbre and soft release measurably change rendered signal."
+            },
+            {
+              "id": "inputReliability",
+              "label": "Input reliability & failure behaviour",
+              "weight": 30,
+              "scoring": "judged",
+              "guidance": "Inputs stay reliable under stress; failures degrade visibly rather than silently."
+            }
+          ]
+        },
+        {
+          "id": "features",
+          "label": "Feature completeness",
+          "weight": 25,
+          "criteria": [
+            {
+              "id": "instrumentLibraryCoverage",
+              "label": "Required piano instruments",
+              "weight": 40,
+              "scoring": "judged",
+              "guidance": "Every instrument the Phase 2 contract requires is present and selectable, and actually loads."
+            },
+            {
+              "id": "effectUnitCoverage",
+              "label": "Required effect units and types",
+              "weight": 40,
+              "scoring": "judged",
+              "guidance": "Every effect unit and every listed type within it is present and reachable from the panel."
+            },
+            {
+              "id": "declaredGapAccuracy",
+              "label": "Declared gaps are accurate",
+              "weight": 20,
+              "scoring": "judged",
+              "guidance": "Anything declared unimplemented really is, and nothing undeclared is missing."
+            }
+          ]
+        }
+      ]
+    },
+    "3": {
+      "name": "Complete Stage 4 system",
+      "categories": [
+        {
+          "id": "sound",
+          "label": "Sound",
+          "weight": 45,
+          "criteria": [
+            {
+              "id": "distinctEngines",
+              "label": "Distinct engine character",
+              "weight": 40,
+              "guidance": "Organ, Piano and Synth are genuinely different engines, not one engine with presets.",
+              "scoring": "judged"
+            },
+            {
+              "id": "routingIntegration",
+              "label": "Effects & routing integration",
+              "weight": 35,
+              "guidance": "Every engine inherits the shared effects graph and routes correctly across layers.",
+              "scoring": "judged"
+            },
+            {
+              "id": "qualityUnderLoad",
+              "label": "Musical quality under load",
+              "weight": 25,
+              "guidance": "Latency, polyphony and stability while actually playing.",
+              "scoring": "judged"
+            }
+          ]
+        },
+        {
+          "id": "playability",
+          "label": "Playability & control",
+          "weight": 20,
+          "criteria": [
+            {
+              "id": "stateRoundTrip",
+              "label": "Program & state round-trip",
+              "weight": 35,
+              "scoring": "judged",
+              "guidance": "Canonical state saves, loads and round-trips without loss; the dirty flag is truthful."
+            },
+            {
+              "id": "bindings",
+              "label": "Performance controls & bindings",
+              "weight": 35,
+              "scoring": "judged",
+              "guidance": "Required hardware bindings, wheels, pedals and Live Mode behave."
+            },
+            {
+              "id": "crossSystemWorkflow",
+              "label": "Cross-system workflows",
+              "weight": 30,
+              "scoring": "judged",
+              "guidance": "Split points, scenes, transpose and panic behave correctly across all three engines at once."
+            }
+          ]
+        },
+        {
+          "id": "features",
+          "label": "Feature completeness",
+          "weight": 35,
+          "criteria": [
+            {
+              "id": "organSystem",
+              "label": "Organ system",
+              "weight": 30,
+              "guidance": "Drawbars, models, percussion, rotary, vibrato.",
+              "scoring": "judged"
+            },
+            {
+              "id": "synthSystem",
+              "label": "Synth system",
+              "weight": 30,
+              "guidance": "Oscillators, filter, envelopes, LFO, unison, arpeggiator.",
+              "scoring": "judged"
+            },
+            {
+              "id": "performanceSystems",
+              "label": "Layers, splits, scenes & morphs",
+              "weight": 25,
+              "guidance": "Layer and split handling, scenes, and morph sources reaching their destinations.",
+              "scoring": "judged"
+            },
+            {
+              "id": "programWorkflows",
+              "label": "Programs & Live Mode",
+              "weight": 15,
+              "guidance": "Program storage, recall, page navigation and Live Mode.",
+              "scoring": "judged"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "scoringKinds": {
+    "judged": "0-4 rating against ratingScale.anchors, with evidence.",
+    "computed": "Derived from reported measurements. band: full credit within tolerance of target, decaying linearly to zero at decay x tolerance. range: full credit inside [minimum,maximum], decaying by the same rule using the half-width. ratio: (value/denominator)^curve as a percentage (curve defaults to 1). penaltyCount: 100 minus penaltyEach per occurrence, floored at 0."
+  }
+}

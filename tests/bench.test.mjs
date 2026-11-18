@@ -8,7 +8,7 @@ import { createRun, loadRun, markSealed, promoteRun, recordTelemetry, registerEv
 import { exportRun, __internals as exportInternals } from '../bench/lib/run/export.mjs'
 import { importWorkspace, startPhase } from '../bench/lib/run/workspace.mjs'
 import { REQUIRED_FEATURES, runChecks, verifyPhase } from '../bench/lib/run/verify.mjs'
-import { loadRubric } from '../bench/lib/eval/evaluate.mjs'
+import { loadRubric, rubricVersionForRun } from '../bench/lib/eval/evaluate.mjs'
 import { createEvalWorkspace, removeEvalWorkspace } from '../bench/lib/eval/workspace.mjs'
 import { aggregateStageEvaluations, createAssessmentTemplate, mergeAssessments, scoreAssessment } from '../bench/lib/eval/scoring.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from '../bench/lib/eval/report.mjs'
@@ -21,6 +21,18 @@ const sourceRoot = path.resolve(import.meta.dirname, '..')
 const homeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-home-'))
 process.env.STAGEBENCH_HOME = homeRoot
 after(() => fs.rmSync(homeRoot, { recursive: true, force: true }))
+
+// A harness audio record whose every measurement is inside its threshold.
+export function perfectAudioRecord() {
+  return {
+    version: 1, plan: 'stagebench-audio-1', phase: 1, status: 'measured', failure: null,
+    scores: {
+      notesSounding: 19, notesTotal: 19, tuningErrorCents: 2, velocityRisingSteps: 7, velocityStepsTotal: 7, velocityRangeDb: 24,
+      releasesClean: 3, releasesTotal: 3, clicks: 0, sustainChecksPassed: 2, sustainChecksTotal: 2, latencyMs: 6,
+      chordTonesHeard: 10, chordTones: 10, clippedMs: 0, extraAudioContexts: 0,
+    },
+  }
+}
 
 function fixtureRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-bench-'))
@@ -254,7 +266,10 @@ test('a run flows new → start → seal → score with sealed digests and a sco
 
     // score: isolated evaluator workspace → filled assessment → deterministic
     // score, no grades
-    const rubric = loadRubric()
+    // The rubric the run was created under: 3.0.0, whose sound criteria are
+    // scored from the harness's audio record rather than rated.
+    const rubric = loadRubric(rubricVersionForRun(loadRun(root, created.id)))
+    assert.equal(rubric.version, '3.0.0')
     const evalWorkspace = createEvalWorkspace(root, {
       id: created.id,
       phase: 1,
@@ -319,20 +334,30 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     assert.ok(assessment.panelFidelity, 'the highest sealed phase carries the run-level panel axis')
     fillRunAxis(rubric, assessment)
 
-    const evaluation = scoreAssessment(rubric, assessment, [{ id: 'build', passed: true }])
-    assert.equal(evaluation.score, 75)
+    // The evaluator never rates a harness criterion: the template leaves it out.
+    assert.equal(assessment.categories.find((category) => category.id === 'sound').criteria.some((criterion) => criterion.id === 'pianoVoice'), false)
+    assert.throws(() => scoreAssessment(rubric, assessment, [{ id: 'build', passed: true }]), /pianoVoice is scored from the harness audio measurement/, 'no audio record, no score')
+    // Every judged criterion at 3 (75), every harness measurement perfect (100):
+    // sound 0.6·100 + 0.4·75 = 90; playability (40+20+25)·75 + 15·100 = 78.75;
+    // features 75; weighted 25/55/20 → 80.8.
+    const harness = { audio: perfectAudioRecord() }
+    const evaluation = scoreAssessment(rubric, assessment, [{ id: 'build', passed: true }], { harness })
+    assert.equal(evaluation.score, 80.8)
     assert.equal('grade' in evaluation, false, 'grades are no longer part of evaluations')
     assert.equal(evaluation.runAxis.id, 'panelFidelity')
+    const voice = evaluation.categories.find((category) => category.id === 'sound').criteria.find((criterion) => criterion.id === 'pianoVoice')
+    assert.equal(voice.scoring, 'harness')
+    assert.equal(voice.score, 100)
 
-    const capped = scoreAssessment(rubric, assessment, [{ id: 'build', passed: false }])
+    const capped = scoreAssessment(rubric, assessment, [{ id: 'build', passed: false }], { harness })
     assert.equal(capped.score, 59)
-    assert.equal(capped.rawScore, 75)
+    assert.equal(capped.rawScore, 80.8)
 
     // The aggregate is the panel axis plus the phase-weighted remainder.
     const aggregate = { ...aggregateStageEvaluations(rubric, [evaluation], evaluation.runAxis), reportPath: `/reports/${created.id}/index.html` }
-    const expected = Math.round(((rubric.runAxis.weight / 100) * evaluation.runAxis.score + ((100 - rubric.runAxis.weight) / 100) * 75) * 10) / 10
+    const expected = Math.round(((rubric.runAxis.weight / 100) * evaluation.runAxis.score + ((100 - rubric.runAxis.weight) / 100) * 80.8) * 10) / 10
     assert.equal(aggregate.score, expected)
-    assert.equal(aggregate.phaseWeightedScore, 75)
+    assert.equal(aggregate.phaseWeightedScore, 80.8)
     registerEvaluation(root, created.id, 1, {
       status: 'complete', score: evaluation.score, rawScore: evaluation.rawScore,
       evaluatedAt: evaluation.evaluatedAt, rubricVersion: evaluation.rubricVersion,
@@ -348,7 +373,7 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     const markdown = renderRunReportMarkdown(scoredRun, [evaluation], null)
     assert.match(html, /\/100/)
     assert.doesNotMatch(html, /competent|exceptional|developing/i)
-    assert.match(markdown, /\*\*75\/100\*\*/)
+    assert.ok(markdown.includes(`**${Math.floor(aggregate.score)}/100**`), 'the report leads with the aggregate')
 
     // reindex: uniform projection for the gallery
     const indexed = await reindexRegistry(root)
@@ -360,7 +385,7 @@ test('a run flows new → start → seal → score with sealed digests and a sco
     // so it is not the phase score.
     assert.equal(entry.score, expected)
     assert.equal(entry.panelVisuals, evaluation.runAxis.score)
-    assert.equal(entry.stages[0].score, 75)
+    assert.equal(entry.stages[0].score, 80.8)
     assert.equal(entry.telemetry.costUsd, 12.5)
     assert.equal(entry.telemetry.totalTokens, 1_500_000)
     assert.equal(entry.telemetry.outputTokens, 300000)
@@ -505,7 +530,7 @@ test('the evaluator workspace rejects a sealed artifact whose digest drifted', (
 })
 
 test('a panel merges to the per-criterion median rating with unioned evidence', () => {
-  const rubric = loadRubric()
+  const rubric = loadRubric('2.0.0') // mechanics every rubric shares; rubric 3's harness criteria are tested in protocol3.test.mjs
   const make = (evaluator, rating) => {
     const template = createAssessmentTemplate(rubric, 'run-blind', 1)
     template.evaluator = evaluator
@@ -541,7 +566,7 @@ test('a panel merges to the per-criterion median rating with unioned evidence', 
 })
 
 test('the pinned evaluator model is required, recorded, and uniform across a panel', () => {
-  const rubric = loadRubric()
+  const rubric = loadRubric('2.0.0') // mechanics every rubric shares; rubric 3's harness criteria are tested in protocol3.test.mjs
   const pinned = rubric.evaluator.model
   const fill = (template) => {
     template.evaluator = 'blind evaluator'
@@ -584,7 +609,7 @@ test('the pinned evaluator model is required, recorded, and uniform across a pan
 })
 
 test('computed criteria score from measurements, and the hard gate keys on the measurement', () => {
-  const rubric = loadRubric()
+  const rubric = loadRubric('2.0.0') // mechanics every rubric shares; rubric 3's harness criteria are tested in protocol3.test.mjs
   const build = (overrides) => {
     const a = createAssessmentTemplate(rubric, 'run-blind', 3, { includeRunAxis: true })
     a.evaluator = 'blind evaluator'
@@ -621,7 +646,7 @@ test('computed criteria score from measurements, and the hard gate keys on the m
 })
 
 test('a computed criterion re-normalises over the measurements actually reported', () => {
-  const rubric = loadRubric()
+  const rubric = loadRubric('2.0.0') // mechanics every rubric shares; rubric 3's harness criteria are tested in protocol3.test.mjs
   const a = createAssessmentTemplate(rubric, 'run-blind', 3, { includeRunAxis: true })
   a.evaluator = 'e'; a.evaluatorModel = rubric.evaluator.model
   a.evaluatedAt = '2026-01-02T00:00:00.000Z'; a.summary = 'S'
@@ -639,7 +664,7 @@ test('a computed criterion re-normalises over the measurements actually reported
 })
 
 test('assessment issues are constrained to one shape', () => {
-  const rubric = loadRubric()
+  const rubric = loadRubric('2.0.0') // mechanics every rubric shares; rubric 3's harness criteria are tested in protocol3.test.mjs
   const build = (issues) => {
     const template = createAssessmentTemplate(rubric, 'run-blind', 1)
     template.evaluator = 'blind evaluator'

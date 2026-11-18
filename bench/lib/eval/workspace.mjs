@@ -300,6 +300,7 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     'could not take it: nulls are dropped and the rest re-normalised, so a guess is',
     'worse than a null. Every number you report must be one you actually measured.',
     '',
+    ...harnessSection(rubric, phase),
     ...(carriesRunAxis ? [
       `## ${rubric.runAxis.category.label} — scored once, here`,
       '',
@@ -340,6 +341,28 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   fs.chmodSync(artifact, 0o555)
 
   return { id, blindId, phase: Number(phase), workspace, artifact, inputs, build, assessment: path.join(workspace, 'assessment.json'), blinding }
+}
+
+// Rubric 3 scores some criteria from the harness's own measurements. The
+// evaluator is told which, so it neither rates them nor re-derives them, and
+// where the record is, so it can cite it for the criteria it does rate.
+function harnessSection(rubric, phase) {
+  const measured = (rubric.stages[String(phase)]?.categories ?? []).flatMap((category) => category.criteria.filter((criterion) => criterion.scoring === 'harness').map((criterion) => ({ category: category.id, criterion })))
+  const lines = []
+  if (measured.length > 0) {
+    lines.push(
+      '## Measured by the harness — not yours to rate',
+      '',
+      `These criteria are not in \`assessment.json\`. At seal the harness played a fixed list of test notes into the build over Web MIDI, recorded what it rendered, and measured it; the record is \`artifact/evidence/stage${phase}-audio.json\`, and the score is derived from it:`,
+      '',
+      ...measured.map(({ category, criterion }) => `- **${criterion.label}** (\`${category}.${criterion.id}\`, weight ${criterion.weight})`),
+      '',
+      'You may cite that record as evidence for the criteria you do rate.',
+      '',
+    )
+  }
+  if (rubric.ratingScale?.listening) lines.push('## Sound evidence', '', rubric.ratingScale.listening, '', ...(rubric.ratingScale.soundReachability ? [rubric.ratingScale.soundReachability, ''] : []))
+  return lines
 }
 
 // artifact/ is chmod'd read-only while the evaluator works, and a read-only

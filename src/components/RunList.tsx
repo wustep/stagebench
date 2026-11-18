@@ -9,7 +9,7 @@ import { Fragment, memo, useCallback, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { PhaseNumber } from '../run-utils'
 import { floorScore, getRunTitle, getThumbPath } from '../run-utils'
-import type { RunEntry } from '../types'
+import type { RunEntry, StageEntry } from '../types'
 import {
   bestByTierPanel,
   bestByTierPhase,
@@ -17,6 +17,7 @@ import {
   formatDate,
   formatDuration,
   formatDurationCompact,
+  formatTokens,
   getIsolation,
   getPhaseList,
   getProtocolLabel,
@@ -36,6 +37,27 @@ const THUMB_MAX_HEIGHT = 300
 
 function plural(count: number, noun: string) {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
+}
+
+// One line per sealed phase of an official run: how its seal went, its budget,
+// and the harness's audio measurement.
+function stagePhaseLine(stage: StageEntry) {
+  const parts: string[] = []
+  parts.push(stage.sealOutcome === 'failed' ? 'sealed as failed' : 'sealed')
+  if (stage.sealFailureLimit != null) parts.push(`${stage.sealFailureRelays ?? 0} of ${stage.sealFailureLimit} seal-failure rounds`)
+  if (stage.budget && stage.budget.status !== 'unbudgeted') {
+    const limits = stage.budget.limits
+    parts.push(`${stage.budget.agentMinutes ?? '?'}${limits?.agentMinutes ? `/${limits.agentMinutes}` : ''} agent min, ${stage.budget.outputTokens != null ? formatTokens(stage.budget.outputTokens) : '?'}${limits?.outputTokens ? `/${formatTokens(limits.outputTokens)}` : ''} generated tokens${stage.budget.status === 'within' ? '' : ` (${stage.budget.status}${stage.budget.stoppedBy ? `: ${stage.budget.stoppedBy}` : ''})`}`)
+  }
+  if (stage.audio) {
+    const scores = stage.audio.scores
+    parts.push(stage.audio.status === 'measured' && scores
+      ? `audio: tuning ${scores.tuningErrorCents ?? '—'}¢, velocity ${scores.velocityRangeDb ?? '—'} dB, ${scores.clicks ?? '—'} clicks, ${scores.latencyMs ?? '—'} ms`
+      : `audio not measurable (${stage.audio.failure ?? 'failed'})`)
+  }
+  if (stage.grader?.drift) parts.push('grader drift')
+  if (!stage.official) parts.push('not official')
+  return `0${stage.number}: ${parts.join(' · ')}`
 }
 
 // " Sealed phases: 01 lockdown, 02 no isolation." — which sealed phase had
@@ -275,8 +297,28 @@ export const RunList = memo(function RunList({
                 <div><dt>Started</dt><dd>{formatDate(run.startedAt)}</dd></div>
                 <div><dt>Updated</dt><dd>{formatDate(run.updatedAt)}</dd></div>
                 {run.telemetry?.wallTimeSeconds != null && <div><dt>Wall time</dt><dd>{formatDuration(run.telemetry.wallTimeSeconds)}</dd></div>}
-                {run.telemetry?.costUsd != null && <div><dt>Cost</dt><dd>${run.telemetry.costUsd.toFixed(2)}</dd></div>}
+                {run.usage ? (
+                  <>
+                    <div>
+                      <dt>Tokens</dt>
+                      <dd title="From the lockdown gateway's log of every model response, not typed by an operator">
+                        {formatTokens(run.usage.inputTokens)} in ({formatTokens(run.usage.cachedInputTokens)} cached) · {formatTokens(run.usage.outputTokens)} out{run.usage.reasoningTokens != null ? ` (${formatTokens(run.usage.reasoningTokens)} reasoning)` : ''}{run.usage.complete ? '' : ` · phases ${run.usage.phases.join(', ')}`}
+                      </dd>
+                    </div>
+                    {run.usage.costUsd != null && <div><dt>Cost</dt><dd title={`API list price as of ${run.usage.pricesAsOf ?? 'unknown'} (bench/prices.json)`}>${run.usage.costUsd.toFixed(2)} <small>gateway, prices {run.usage.pricesAsOf}</small></dd></div>}
+                  </>
+                ) : (
+                  run.telemetry?.costUsd != null && <div><dt>Cost</dt><dd>${run.telemetry.costUsd.toFixed(2)} <small>operator-entered</small></dd></div>
+                )}
                 {run.telemetry?.toolCalls != null && <div><dt>Tool calls</dt><dd>{run.telemetry.toolCalls}</dd></div>}
+                {run.stages.some((stage) => stage.budget || stage.sealOutcome === 'failed' || (stage.sealFailureRelays ?? 0) > 0 || stage.audio) && (
+                  <div>
+                    <dt>Phases</dt>
+                    {run.stages.filter((stage) => stage.status === 'complete').map((stage) => (
+                      <dd key={stage.number}>{stagePhaseLine(stage)}</dd>
+                    ))}
+                  </div>
+                )}
               </dl>
               {run.reportPath && (
                 <button type="button" className="open-report" onClick={() => onOpenReport(run)}>

@@ -11,6 +11,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { sha256, stagebenchHome } from '../lib/shared.mjs'
+import { namePattern } from '../lib/eval/workspace.mjs'
 
 const GATES = 'pnpm test, pnpm typecheck, pnpm lint, and pnpm build'
 
@@ -54,9 +55,12 @@ export const EVALUATOR_MESSAGES = {
   },
 }
 
-// Host paths and the run's name have no business inside the box: a seal error
-// can quote either. Both are replaced before the text is stored or sent.
-export function neutralizeFailure(text, { root, id, stageDir } = {}) {
+// Host paths, the run's name, and the model's have no business inside the box:
+// a seal error can quote any of them (a file the candidate named after itself,
+// a path under the run's directory). All are replaced before the text is
+// stored or sent, the names in any punctuation ("gpt-6-2-sol", "GPT 6.2 Sol").
+// The candidate is never told which model or run it is.
+export function neutralizeFailure(text, { root, id, stageDir, names = [] } = {}) {
   let result = String(text ?? '')
   const replace = (needle, replacement) => { if (needle && needle.length > 2) result = result.split(needle).join(replacement) }
   replace(stageDir, 'candidate')
@@ -65,6 +69,9 @@ export function neutralizeFailure(text, { root, id, stageDir } = {}) {
   replace(stagebenchHome(), '<stagebench-home>')
   replace(os.homedir(), '~')
   replace(id, '<run>')
+  for (const pattern of [...new Set([id, ...names].filter(Boolean).map(String))].sort((a, b) => b.length - a.length).map(namePattern).filter(Boolean)) {
+    result = result.replace(pattern, '<model>')
+  }
   // Long enough to carry a failing test's output, short enough to be a message.
   return result.length > 12_000 ? `${result.slice(0, 2_000)}\n…\n${result.slice(-10_000)}` : result
 }

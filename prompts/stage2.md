@@ -12,7 +12,7 @@ Two sections come alive this phase: **Piano** and **Layer Effects**, exactly as 
 
 **Piano section (piano spec):**
 
-- Six selectable types with at least one model each. Grand, Upright, and Electric are bundled, recorded, redistributable sample sets with enough root notes and velocity layers to avoid obvious pitch-shifting; Clav, Digital, and Misc may be honest synthesis. The recordings come from the sample pack in `inputs/samples/` and nowhere else: they are raw, so choosing roots and dynamics, trimming, levelling, and encoding them for the browser is your work (read `inputs/samples/README.md` first).
+- Six selectable types with at least one model each. Grand, Upright, and Electric are bundled, recorded, redistributable sample sets with enough root notes to avoid obvious pitch-shifting, and velocity layers where the pack has them (a source recorded at one dynamic, such as the Rhodes, takes its velocity response from gain and filtering); Clav, Digital, and Misc may be honest synthesis. The recordings come from the sample pack in `inputs/samples/` and nowhere else: they are raw, so choosing roots and dynamics, trimming, levelling, and encoding them for the browser is your work (read `inputs/samples/README.md` first).
 - Two layers with enable, focus, level, octave shift, SUSTPED/PSTICK toggles, and correct per-layer voice ownership.
 - KB Touch (3 curves), Dyn Comp (Off/1/2/3), Timbre (per type family), Unison (Off/1/2/3), Soft Release, String Res.
 - Sustain from UI, keyboard, and MIDI CC64; asset failure enters a labeled playable fallback.

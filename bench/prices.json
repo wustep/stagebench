@@ -1,0 +1,40 @@
+{
+  "$comment": "Pinned API list prices used to turn gateway-logged token counts into a cost. One dated table for every run sealed while it is current; each seal records asOf and the table's sha256, so a later price change never rewrites an earlier run's cost. To update: change the numbers, set asOf to the day you read them, add the source, and commit. Never edit a sealed run's recorded cost.",
+  "asOf": "2026-11-17",
+  "currency": "USD",
+  "unit": "per 1,000,000 tokens",
+  "sources": {
+    "openai": "https://developers.openai.com/api/docs/pricing — Standard tier, flagship table (short and long context), read 2026-11-17",
+    "anthropic": "Anthropic's model and pricing reference (claude-api reference, models table cached 2026-11-03; cache write is 1.25x input for the 5-minute TTL and 2x for the 1-hour TTL), read 2026-11-17"
+  },
+  "rules": {
+    "openai": "input_tokens includes cached tokens. Cached tokens are billed at cachedInput, the rest of input at input (cache-write tokens OpenAI reports are part of input and billed at input). A request whose input exceeds longContext.aboveInputTokens is billed at the longContext rates for the whole request.",
+    "anthropic": "input_tokens is the uncached input. cache_read_input_tokens are billed at cacheRead, cache_creation_input_tokens at cacheWrite5m unless the response splits them by TTL (cache_creation.ephemeral_1h_input_tokens at cacheWrite1h). Claude Haiku 5.5 bills a prompt over 100K tokens at its longContext rates.",
+    "subscriptions": "A run made on a subscription login (ChatGPT for Codex, a Claude subscription token) is not billed per token. Its cost is the API list-price equivalent of the tokens the gateway saw, which is what makes runs comparable."
+  },
+  "models": {
+    "gpt-6.2-astra": { "provider": "openai", "input": 8.0, "cachedInput": 0.4, "output": 40.0, "longContext": { "aboveInputTokens": 272000, "input": 16.0, "cachedInput": 0.8, "output": 60.0 } },
+    "gpt-6.2-sol": { "provider": "openai", "input": 2.0, "cachedInput": 0.1, "output": 10.0, "longContext": { "aboveInputTokens": 272000, "input": 4.0, "cachedInput": 0.2, "output": 15.0 } },
+    "gpt-6-astra": { "provider": "openai", "input": 10.0, "cachedInput": 1.0, "output": 50.0, "longContext": { "aboveInputTokens": 272000, "input": 20.0, "cachedInput": 2.0, "output": 75.0 } },
+    "gpt-6.1-sol": { "provider": "openai", "input": 2.0, "cachedInput": 0.1, "output": 10.0, "longContext": { "aboveInputTokens": 272000, "input": 4.0, "cachedInput": 0.2, "output": 15.0 } },
+    "gpt-6.1-terra": { "provider": "openai", "input": 1.0, "cachedInput": 0.05, "output": 5.0, "longContext": { "aboveInputTokens": 272000, "input": 2.0, "cachedInput": 0.1, "output": 7.5 } },
+    "gpt-6-luna": { "provider": "openai", "input": 0.1, "cachedInput": 0.01, "output": 0.5, "longContext": { "aboveInputTokens": 272000, "input": 0.2, "cachedInput": 0.02, "output": 0.75 } },
+    "gpt-6-sol": { "provider": "openai", "input": 2.0, "cachedInput": 0.2, "output": 10.0, "longContext": { "aboveInputTokens": 272000, "input": 4.0, "cachedInput": 0.4, "output": 15.0 } },
+    "gpt-5.6-sol": { "provider": "openai", "input": 4.0, "cachedInput": 0.4, "output": 20.0, "longContext": { "aboveInputTokens": 272000, "input": 8.0, "cachedInput": 0.8, "output": 30.0 } },
+    "gpt-5.6-terra": { "provider": "openai", "input": 2.0, "cachedInput": 0.2, "output": 12.0, "longContext": { "aboveInputTokens": 272000, "input": 4.0, "cachedInput": 0.4, "output": 18.0 } },
+    "gpt-5.6-luna": { "provider": "openai", "input": 0.2, "cachedInput": 0.02, "output": 1.2, "longContext": { "aboveInputTokens": 272000, "input": 0.4, "cachedInput": 0.04, "output": 1.8 } },
+    "claude-fable-5-2": { "provider": "anthropic", "input": 8.0, "cacheRead": 0.2, "cacheWrite5m": 10.0, "cacheWrite1h": 16.0, "output": 40.0 },
+    "claude-fable-5-1": { "provider": "anthropic", "input": 10.0, "cacheRead": 0.25, "cacheWrite5m": 12.5, "cacheWrite1h": 20.0, "output": 50.0 },
+    "claude-fable-5": { "provider": "anthropic", "input": 10.0, "cacheRead": 1.0, "cacheWrite5m": 12.5, "cacheWrite1h": 20.0, "output": 50.0 },
+    "claude-opus-5-5": { "provider": "anthropic", "input": 4.0, "cacheRead": 0.2, "cacheWrite5m": 5.0, "cacheWrite1h": 8.0, "output": 20.0 },
+    "claude-opus-5": { "provider": "anthropic", "input": 5.0, "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10.0, "output": 25.0 },
+    "claude-opus-4-8": { "provider": "anthropic", "input": 5.0, "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10.0, "output": 25.0 },
+    "claude-sonnet-5-5": { "provider": "anthropic", "input": 2.0, "cacheRead": 0.1, "cacheWrite5m": 2.5, "cacheWrite1h": 4.0, "output": 10.0 },
+    "claude-sonnet-5": { "provider": "anthropic", "input": 2.0, "cacheRead": 0.2, "cacheWrite5m": 2.5, "cacheWrite1h": 4.0, "output": 10.0 },
+    "claude-haiku-5-5": { "provider": "anthropic", "input": 0.1, "cacheRead": 0.01, "cacheWrite5m": 0.125, "cacheWrite1h": 0.2, "output": 0.5, "longContext": { "aboveInputTokens": 100000, "input": 0.5, "cacheRead": 0.05, "cacheWrite5m": 0.625, "cacheWrite1h": 1.0, "output": 2.5 } },
+    "claude-haiku-4-5": { "provider": "anthropic", "input": 1.0, "cacheRead": 0.1, "cacheWrite5m": 1.25, "cacheWrite1h": 2.0, "output": 5.0 }
+  },
+  "aliases": {
+    "claude-haiku-4-5-20251001": "claude-haiku-4-5"
+  }
+}

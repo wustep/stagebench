@@ -105,10 +105,10 @@ test('TASK.md declares every required feature ID inside its phase-filter markers
 
 test('active rubric and phase manifest stay aligned', () => {
   const rubric = readJson('bench/rubric.json')
-  // The rubric has its own version: protocol 3 changed the conditions a
-  // candidate works under, not the scoring, so protocol 2 and 3 runs are
-  // scored by the same rubric (and still ranked in separate tiers).
-  assert.equal(rubric.version, '2.0.0')
+  // The rubric has its own version. 3.0.0 scores sound from the harness's
+  // measurements; runs created under 2.0.0 keep it (bench/rubrics/2.0.0.json).
+  assert.equal(rubric.version, '3.0.0')
+  assert.equal(readJson('bench/rubrics/2.0.0.json').version, '2.0.0', 'the previous rubric is kept for the runs created under it')
   assert.ok(Number(manifest.version.split('.')[0]) >= Number(rubric.version.split('.')[0]))
   assert.deepEqual(Object.keys(rubric.stages), manifest.phases.map(({ number }) => String(number)))
   assert.equal(Object.values(rubric.aggregateStageWeights).reduce((sum, weight) => sum + weight, 0), 100)

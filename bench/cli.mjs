@@ -11,7 +11,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { ARTIFACT_DIGEST_VERSION, findRepoRoot, hashFile, hashTree, isStrictProtocol, loadProtocol, parseArgs, readJson, workspaceRoot, writeJson } from './lib/shared.mjs'
+import { ARTIFACT_DIGEST_VERSION, findRepoRoot, hashFile, hashTree, isStrictProtocol, loadProtocol, parseArgs, readJson, sha256, workspaceRoot, writeJson } from './lib/shared.mjs'
+import { BudgetSpent, budgetRecord, nextLaunchAllowance, runRules, sealFailureRelays } from './lib/run/rules.mjs'
+import { loadPrices, readGatewayEvents, summarizeUsage } from './lib/usage.mjs'
 import {
   addFootnote,
   createRun,
@@ -25,6 +27,7 @@ import {
   markSealed,
   pathsFor,
   recordTelemetry,
+  recomputeRunTelemetry,
   registerEvaluation,
   reindexRegistry,
   promoteRun,
@@ -38,7 +41,7 @@ import { importWorkspace, removeWorkspace, startPhase, workspaceDir } from './li
 import { createEvalWorkspace, evalAssessmentPath, evalWorkspaceDir, removeEvalWorkspace } from './lib/eval/workspace.mjs'
 import { exportRun } from './lib/run/export.mjs'
 import {
-  blindArtifactEvidence, collectFeatureTestsOnHost, featureExecution, featureExecutionEvidence, findAgentInstructionFiles, findProducerNames, readFeatureMatrix, runChecks, verifyPhase,
+  blindArtifactEvidence, collectFeatureTestsOnHost, featureExecution, featureExecutionEvidence, findAgentInstructionFiles, findProducerNames, materialDigests, readFeatureMatrix, runChecks, verifyPhase,
 } from './lib/run/verify.mjs'
 import { appendLedger, readLedger, sealedEntry, treeDifference, verifySealedRun } from './lib/run/ledger.mjs'
 import { applyMatchResults, checkSampleProvenance, sampleProvenanceEvidence } from './lib/run/sample-provenance.mjs'
@@ -46,7 +49,7 @@ import { checkSamplePack, fetchSamplePack, loadSamplePack } from './lib/sample-p
 import { captureEvidence, serveDirectory } from './lib/run/capture.mjs'
 import { generateThumbnails } from './lib/run/thumbnail.mjs'
 import { collectImplementationDetails } from './lib/implementation-details.mjs'
-import { loadRubric, runGates } from './lib/eval/evaluate.mjs'
+import { loadRubric, rubricVersionForRun, runGates } from './lib/eval/evaluate.mjs'
 import { aggregateStageEvaluations, mergeAssessments, scoreAssessment } from './lib/eval/scoring.mjs'
 import { renderRunReportHtml, renderRunReportMarkdown } from './lib/eval/report.mjs'
 import { fetchReference } from './lib/fetch-reference.mjs'
@@ -68,12 +71,12 @@ const COMMANDS = {
   evaluator: 'evaluator <run-id> [--phase N] --harness <claude|codex|custom> [--model ...] [--slot N] — run the evaluator inside a lockdown box whose only contents are the blind evaluator workspace, then bring its assessment back [--message <continue|review>]',
   'lockdown-setup': 'Create the dedicated container VM if needed, build the lockdown images (offline npm mirror and Chromium included), and report what the boundary looks like [--rebuild]',
   redteam: 'redteam — attack the lockdown from inside and record the results [--agent <codex|claude>] [--out <dir>]',
-  seal: 'seal <run-id> — export the phase from its container volume, run its gates, canonical capture, and sample check in a box with no network, verify, and seal it, with its agent transcripts [--unlocked to seal host-side work for a run that requires the lockdown; recorded as isolation none] [--cost-usd N --input-tokens N --output-tokens N --reasoning-tokens N --tool-calls N] [--transcripts <file[,file...]> to add sessions auto-discovery misses]',
+  seal: 'seal <run-id> — export the phase from its container volume, run its gates, canonical capture, audio measurement, and sample check in a box with no network, verify, and seal it, with its agent transcripts and its gateway-derived token usage and cost [--unlocked to seal host-side work for a run that requires the lockdown; recorded as isolation none] [--as-failed to seal the phase as it stands, marked failed (an operator decision, recorded; a failing seal does this by itself once an official phase has used its seal-failure rounds or its budget)] [--cost-usd N --input-tokens N ... are recorded as operator-entered and non-official; a boxed phase\'s figures come from its gateway log] [--transcripts <file[,file...]> to add sessions auto-discovery misses]',
   fork: 'fork <run-id> --to <new-id> --reason "..." [--from-phase N] — start an operator-patched copy of a sealed run as a NEW, labelled run; sealed evidence is never edited or re-sealed in place',
   footnote: 'footnote <run-id> [--add "text" [--phase N] [--kind audit|note]] [--remove <index>] — list, attach, or remove a note shown beside the run in the gallery',
   'verify-sealed': 'verify-sealed [<run-id>] — re-hash every sealed stage against run.json and the seal ledger; exits 1 if a sealed tree or its record was changed',
   transcripts: 'transcripts <run-id> --phase N [--eval] [--transcripts <file[,file...]>] [--workspace <path>] — archive (scrubbed, zstd) agent transcripts for a sealed phase after the fact; discovers Codex/Claude Code/Cursor sessions by workspace cwd when no files are given',
-  telemetry: 'telemetry <run-id> --phase N — record or correct usage after the fact (same flags as seal, or --from-jsonl <a.jsonl[,b.jsonl...]> to recompute tokens/cost from Claude Code subagent transcripts; comma-separate multiple files)',
+  telemetry: 'telemetry <run-id> --phase N — record usage after the fact, as operator-entered (it never replaces a boxed phase\'s gateway-derived figures) (same flags as seal, or --from-jsonl <a.jsonl[,b.jsonl...]> to recompute tokens/cost from Claude Code subagent transcripts; comma-separate multiple files)',
   score: 'score <run-id> [--phase N] — build the blind evaluator workspace, or register its filled assessment',
   status: 'status <run-id> — show run state, telemetry, and the next command',
   clean: 'clean [<run-id>] — remove transient work/eval/gates workspaces and lockdown sessions [--all] [--force to remove a running phase]',
@@ -118,9 +121,24 @@ async function requireSamplePack(root) {
   return pack
 }
 
+// A seal error that is the operator's to fix (the checkout, the box, the
+// price table, the transcript archive), not the candidate's. It is never
+// relayed to the candidate and never counts against the seal-failure rounds.
+function operatorError(message) {
+  const error = new Error(message)
+  error.operatorSide = true
+  return error
+}
+
 // Seal the running phase. A failure is recorded in the harness's own words, so
 // that what the operator relays to the candidate afterwards is the seal's
 // output and not a paraphrase of it.
+//
+// An official run (protocol 3, in the lockdown, with the protocol's rules) gets
+// a fixed number of seal-failure relays per phase. Once they are used, or once
+// the phase's budget leaves no room for another launch, a seal that fails seals
+// the phase anyway: the artifact as it stands is frozen, marked failed, with
+// what failed. A phase is never left unsealed for want of another round.
 async function seal(root, id, options) {
   const run = loadRun(root, id)
   const stage = nextPhase(run)
@@ -132,7 +150,7 @@ async function seal(root, id, options) {
     throw new Error(`Phase ${phase} of ${id} was already sealed at ${prior.at} (digest ${String(prior.artifactDigest).slice(0, 12)}). A sealed phase is never sealed again. To change a sealed artifact, fork it into a new, labelled run: pnpm bench fork ${id} --to <new-id> --reason "<what you are changing and why>"`)
   }
   const lockdown = await import('./lockdown/seal.mjs')
-  const { sessionStateDir } = await import('./lockdown/session.mjs')
+  const { sessionStateDir, loadSession } = await import('./lockdown/session.mjs')
   const { recordSealFailure, neutralizeFailure } = await import('./lockdown/messages.mjs')
   const locked = lockdown.hasSession(root, id, phase)
   // A run created to require the lockdown cannot be sealed from a host
@@ -142,26 +160,60 @@ async function seal(root, id, options) {
   if (!locked && !stage.patchOf && lockdown.requiredIsolation(run) === 'lockdown' && options.unlocked !== 'true') {
     throw new Error(`${id} requires the lockdown, but Phase ${phase} has no lockdown session. Run the agent with: pnpm bench agent ${id} --harness <codex|claude|custom>. (To seal work done outside the box anyway — recorded as isolation "none" and footnoted in the gallery — pass --unlocked.)`)
   }
+  const rules = locked ? runRules(run) : null
+  const launches = locked ? (loadSession(root, id, phase)?.launches ?? []) : []
+  const attempts = readLedger(root, id).entries.filter((entry) => entry.kind === 'seal-attempt' && entry.phase === phase).length + 1
+  const relays = sealFailureRelays(launches)
+  // Would a failure now be the last word? Then this seal finalizes the phase.
+  let finalize = null
+  if (options['as-failed'] === 'true') finalize = { by: 'operator', detail: 'the operator chose to seal the phase as it stands' }
+  else if (rules) {
+    if (relays >= rules.sealFailureRounds) finalize = { by: 'seal-failure-rounds', detail: `all ${rules.sealFailureRounds} seal-failure rounds have been used` }
+    else {
+      try {
+        const spent = summarizeUsage(readGatewayEvents(path.join(sessionStateDir(root, id, phase), 'gateway', 'events.jsonl'))).outputTokens
+        nextLaunchAllowance(rules, { launches, outputTokensSpent: spent })
+      } catch (error) {
+        if (error instanceof BudgetSpent) finalize = { by: 'budget', detail: error.message }
+        else throw error
+      }
+    }
+  }
+  const counts = { attempts, relays, limit: rules?.sealFailureRounds ?? null }
   try {
-    return await sealPhase(root, run, stage, { options, lockdown, locked })
+    return await sealPhase(root, run, stage, { options, lockdown, locked, rules, launches, finalize, counts })
   } catch (error) {
-    const context = { root, id, stageDir: stageDirFor(root, id, phase) }
+    const context = { root, id, stageDir: stageDirFor(root, id, phase), names: [run.model, run.title, run.agent?.model].filter(Boolean) }
+    if (error.operatorSide) {
+      try { appendOperatorEvent(root, id, { command: 'seal', phase, outcome: 'operator-error', failure: neutralizeFailure(error.message, context).slice(0, 4000) }) } catch { /* the failure below is the one that matters */ }
+      error.message = `${error.message}\n\nThis is not the candidate's to fix: it is not recorded for relay and does not count as a seal-failure round.`
+      throw error
+    }
     const failure = locked ? recordSealFailure(sessionStateDir(root, id, phase), error.message, context) : neutralizeFailure(error.message, context)
     try {
       appendOperatorEvent(root, id, { command: 'seal', phase, outcome: 'failed', failure: failure.slice(0, 4000) })
+      // Every failed attempt is in the ledger too: how many rounds a phase took is part of its record.
+      if (locked) appendLedger(root, id, { kind: 'seal-attempt', phase, attempt: attempts, outcome: 'failed', failureSha256: sha256(failure), sealFailureRelays: relays, sealFailureLimit: rules?.sealFailureRounds ?? null })
     } catch { /* the failure below is the one that matters */ }
-    if (locked) error.message = `${error.message}\n\nThis output is saved. To relay it to the candidate exactly as printed (and nothing else): pnpm bench agent ${id} --harness <same harness> --message seal-failure`
+    if (locked) {
+      const left = rules ? rules.sealFailureRounds - relays : null
+      error.message = `${error.message}\n\nThis output is saved. To relay it to the candidate exactly as printed (and nothing else): pnpm bench agent ${id} --harness <same harness> --message seal-failure${left !== null ? `   (seal-failure round ${relays + 1} of ${rules.sealFailureRounds}; after the last one, a failing seal seals the phase as failed)` : ''}`
+    }
     throw error
   }
 }
 
-async function sealPhase(root, run, stage, { options, lockdown, locked }) {
+async function sealPhase(root, run, stage, { options, lockdown, locked, rules = null, launches = [], finalize = null, counts = {} }) {
   const id = run.id
   const phase = stage.number
   const strict = isStrictProtocol(run)
   const patch = stage.patchOf ?? null
   const workspace = workspaceDir(root, id, phase)
   const progress = (text) => process.stderr.write(text)
+  // What the candidate can fix, collected rather than thrown one at a time, so
+  // one relayed message carries everything that is wrong. Thrown together at
+  // the end unless this seal finalizes the phase.
+  const failures = []
   let exported = null
   if (locked) {
     console.error('→ exporting the candidate tree from the lockdown volume')
@@ -171,24 +223,32 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
   } else {
     console.error(`! sealing Phase ${phase} WITHOUT the lockdown: the candidate ran with whatever access its harness allowed, and the gates run on this host`)
   }
+  if (finalize) console.error(`! this seal finalizes Phase ${phase} (${finalize.detail}): if it fails, the phase is sealed as it stands and marked failed`)
   const workspaceRecord = fs.existsSync(path.join(workspace, 'workspace.json')) ? readJson(path.join(workspace, 'workspace.json')) : {}
 
   console.error(`→ importing workspace candidate into runs/${id}/stage${phase}`)
   importWorkspace(root, id, phase)
   const stageDir = stageDirFor(root, id, phase)
 
-  let checks
+  let checks = []
   let gates = null
   let featureReport = null
   if (locked) {
     // Candidate-authored code (install scripts, tests, the build) never
     // executes on the host for a locked phase, and never with a network.
     console.error('→ running install, test, typecheck, lint, build inside the lockdown (no network)')
-    gates = await lockdown.runLockedChecks(root, stageDir, { onOutput: progress, featureTests: strict })
-    checks = gates.checks
-    featureReport = gates.featureTests
-    const blockers = lockdown.sealBlockers(root, id, phase, exported, gates, stageDir)
-    if (blockers.length > 0) throw new Error(`Phase ${phase} cannot be sealed from this lockdown session: ${blockers.join('; ')}`)
+    try {
+      gates = await lockdown.runLockedChecks(root, stageDir, { onOutput: progress, featureTests: strict })
+      checks = gates.checks
+      featureReport = gates.featureTests
+    } catch (error) {
+      // An install that fails offline is the candidate's lockfile, not the box.
+      if (!/pnpm install failed/.test(error.message)) throw error
+      failures.push(error.message)
+    }
+    // A broken record of the boundary is never sealed, failed or not.
+    const blockers = lockdown.sealBlockers(root, id, phase, exported, gates ?? { network: 'none' }, stageDir)
+    if (blockers.length > 0) throw operatorError(`Phase ${phase} cannot be sealed from this lockdown session: ${blockers.join('; ')}`)
   } else {
     console.error('→ installing dependencies')
     ensureInstalled(stageDir)
@@ -202,23 +262,45 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
   }
   const failed = checks.filter((check) => !check.passed)
   if (failed.length > 0) {
-    throw new Error(`Package checks failed (${failed.map((check) => check.id).join(', ')}). Fix in the workspace, then seal again.\n${failed.map((check) => `--- ${check.id} ---\n${check.detail}`).join('\n')}`)
+    failures.push(`Package checks failed (${failed.map((check) => check.id).join(', ')}). Fix in the workspace, then seal again.\n${failed.map((check) => `--- ${check.id} ---\n${check.detail}`).join('\n')}`)
   }
+  const built = fs.existsSync(path.join(stageDir, 'dist', 'index.html'))
 
   // Canonical capture. For a locked phase it happens in the image — its
   // Chromium, its fonts, no network — so every run is measured by the same bits.
-  console.error(`→ capturing canonical screenshots${locked ? ' inside the lockdown' : ''}`)
-  let capture
-  if (locked) {
-    capture = await lockdown.captureLocked(root, { id, phase, stageDir, onOutput: progress })
-  } else {
-    const server = await serveDirectory(path.join(stageDir, 'dist'))
+  let capture = null
+  if (built) {
+    console.error(`→ capturing canonical screenshots${locked ? ' inside the lockdown' : ''}`)
     try {
-      await captureEvidence(root, { id, phase, url: server.url })
-    } finally {
-      await server.close()
+      if (locked) {
+        capture = await lockdown.captureLocked(root, { id, phase, stageDir, onOutput: progress })
+      } else {
+        const server = await serveDirectory(path.join(stageDir, 'dist'))
+        try {
+          await captureEvidence(root, { id, phase, url: server.url })
+        } finally {
+          await server.close()
+        }
+        capture = { where: 'host' }
+      }
+    } catch (error) {
+      failures.push(error.message)
     }
-    capture = { where: 'host' }
+  } else {
+    capture = { skipped: 'no build' }
+  }
+
+  // Harness-measured audio (rubric 3): fixed test notes played through the
+  // build over Web MIDI, rendered and measured. Evidence, not a gate: an app
+  // that makes no sound is measured as making no sound. A measurement the
+  // harness itself could not take is the operator's problem.
+  let audio = null
+  if (strict && built) {
+    console.error(`→ measuring the build's audio with the fixed test notes${locked ? ' inside the lockdown' : ''}`)
+    audio = await measureAudioEvidence(root, { phase, stageDir, locked, lockdown, onOutput: progress })
+    if (audio.status === 'failed' && audio.failure?.kind === 'harness-error') {
+      throw operatorError(`The audio measurement could not run (${audio.failure.detail}). Nothing about the candidate is known from it; fix the box or the browser and seal again.`)
+    }
   }
 
   // Keep the sealed tree pristine: it carries source + dist + evidence, never
@@ -239,7 +321,7 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
     const pack = loadSamplePack(root)
     const given = workspaceRecord.samplePack ?? null
     if (pack && given && given.manifestSha256 !== pack.digest) {
-      throw new Error(`The sample pack in this checkout (${pack.digest.slice(0, 12)}) is not the one this phase was started with (${String(given.manifestSha256).slice(0, 12)}). Restore the pack the phase was given before sealing.`)
+      throw operatorError(`The sample pack in this checkout (${pack.digest.slice(0, 12)}) is not the one this phase was started with (${String(given.manifestSha256).slice(0, 12)}). Restore the pack the phase was given before sealing.`)
     }
     const detailsPath = path.join(stageDir, 'IMPLEMENTATION_DETAILS.json')
     let details = null
@@ -249,12 +331,9 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
       const match = await lockdown.matchSamples(root, {
         stageDir, packDir: path.join(workspace, 'inputs', 'samples'), packDigest: pack.digest, entries: sampleReport.toMatch, onOutput: progress,
       })
-      if (match) {
-        applyMatchResults(sampleReport, match)
-        sampleReport.acoustic.where = match.where
-      } else {
-        sampleReport.problems.push('The acoustic sample check could not run on this machine (no container engine and no ffmpeg)')
-      }
+      if (!match) throw operatorError('The acoustic sample check could not run on this machine (no container engine and no ffmpeg)')
+      applyMatchResults(sampleReport, match)
+      sampleReport.acoustic.where = match.where
     }
     evidence.push(...sampleProvenanceEvidence(sampleReport))
     evidence.push(blindArtifactEvidence(findProducerNames(stageDir, [id, run.model, run.title, run.agent?.model].filter(Boolean))))
@@ -270,15 +349,24 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
   })
 
   console.error('→ verifying phase contract and evidence')
-  const verification = verifyPhase(root, id, phase, { checks, evidence, protocolVersion: run.protocol?.version ?? null })
+  let verification
+  try {
+    verification = verifyPhase(root, id, phase, { checks, evidence, protocolVersion: run.protocol?.version ?? null })
+  } catch (error) {
+    // The contract itself is broken (no feature matrix, no implementation
+    // details, …): the candidate's to fix, and a finalizing seal records it.
+    failures.push(`Phase ${phase} contract: ${error.message}`)
+    verification = { version: 4, runId: id, stage: phase, ...(run.protocol?.version ? { protocolVersion: run.protocol.version } : {}), verifiedAt: new Date().toISOString(), passed: false, contractError: error.message, materials: materialDigests(root), checks, evidence }
+  }
   verification.isolation = locked
-    ? lockdown.attestation(root, id, phase, exported, gates, { capture })
+    ? lockdown.attestation(root, id, phase, exported, gates ?? { network: 'none' }, { capture })
     : lockdown.unlockedAttestation(patch ? { operatorPatch: true } : {})
   if (locked) verification.evidence.push(...lockdown.lockdownEvidence(exported))
   if (sampleReport) {
     const { toMatch: _toMatch, ...record } = sampleReport
     verification.sampleProvenance = record
   }
+  if (audio) verification.audio = { file: `evidence/stage${phase}-audio.json`, plan: audio.plan, status: audio.status, failure: audio.failure ?? null, scores: audio.scores ?? null }
   // Advisory: are any bundled assets byte-identical to ones that already exist
   // in another run or a known local library?
   const { assetProvenance, assetProvenanceCheck, blindArtifactCheck } = await import('./lockdown/provenance.mjs')
@@ -298,11 +386,31 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
     verification.operatorPatch = { of: patch, reason: run.derivedFrom?.reason ?? null, changes }
     writeJson(path.join(root, 'runs', id, 'patches', `stage${phase}.json`), verification.operatorPatch)
   }
-  writeJson(path.join(root, 'runs', id, 'verifications', `stage${phase}.json`), verification)
-  if (!verification.passed) {
-    const failures = [...verification.checks, ...verification.evidence].filter((check) => !check.passed && !check.advisory)
-    throw new Error(`Phase ${phase} verification failed:\n${failures.map((check) => `- ${check.detail ?? check.id}`).join('\n')}`)
+  if (!verification.passed && !verification.contractError) {
+    const unmet = [...verification.checks, ...verification.evidence].filter((check) => !check.passed && !check.advisory && !failed.includes(check))
+    if (unmet.length > 0) failures.push(`Phase ${phase} verification failed:\n${unmet.map((check) => `- ${check.detail ?? check.id}`).join('\n')}`)
   }
+  // The usage record: from the gateway's log for a boxed phase, priced with
+  // the pinned table. Figures an operator types are kept apart and labelled.
+  let usage = null
+  if (locked) {
+    const { sessionStateDir } = await import('./lockdown/session.mjs')
+    usage = summarizeUsage(readGatewayEvents(path.join(sessionStateDir(root, id, phase), 'gateway', 'events.jsonl')), loadPrices(root))
+  }
+  const budget = rules ? budgetRecord(rules, { launches, usage }) : null
+  const outcome = failures.length > 0 ? 'failed' : 'passed'
+  verification.seal = { outcome, attempts: counts.attempts ?? 1, sealFailureRelays: counts.relays ?? 0, sealFailureLimit: counts.limit ?? null, ...(finalize && outcome === 'failed' ? { finalizedBy: finalize.by, finalizedBecause: finalize.detail, failures } : {}) }
+  if (usage) verification.usage = usage
+  if (budget) verification.budget = budget
+  // A phase sealed as failed is still frozen and hashed, like any other.
+  if (failures.length > 0 && finalize && !verification.artifactDigest) {
+    const tree = hashTree(stageDir)
+    verification.artifactDigest = tree.digest
+    verification.artifactFiles = tree.files
+  }
+  writeJson(path.join(root, 'runs', id, 'verifications', `stage${phase}.json`), verification)
+  if (failures.length > 0 && !finalize) throw new Error(failures.join('\n\n'))
+  if (failures.length > 0) console.error(`! Phase ${phase} is sealed as FAILED (${finalize.detail}):\n${failures.map((text) => `  - ${text.split('\n')[0]}`).join('\n')}`)
 
   // Archive the agent sessions that produced this phase (scrubbed + zstd) as
   // sidecar records in runs/<id>/transcripts/, outside stage<N>/ and so never
@@ -325,13 +433,14 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
       command: 'seal',
     })
     if (strict && !['archived', 'kept'].includes(transcripts.status)) {
-      throw new Error(`Phase ${phase} cannot be sealed without its agent transcript (${transcripts.error ?? 'none was found'}). Protocol 3 requires the session that produced a phase to be archived with it: pass --transcripts <file[,file...]> for sessions stored where discovery does not look.`)
+      throw operatorError(`Phase ${phase} cannot be sealed without its agent transcript (${transcripts.error ?? 'none was found'}). Protocol 3 requires the session that produced a phase to be archived with it: pass --transcripts <file[,file...]> for sessions stored where discovery does not look.`)
     }
   }
 
-  markSealed(root, id, phase, verification)
-  const usage = telemetryFromFlags(options)
-  if (Object.keys(usage).length > 0) recordTelemetry(root, id, phase, usage)
+  markSealed(root, id, phase, verification, { outcome })
+  const operatorUsage = telemetryFromFlags(options)
+  // Without a gateway, typed figures are all there is; they are recorded as typed.
+  if (!locked && Object.keys(operatorUsage).length > 0) recordTelemetry(root, id, phase, operatorUsage, { source: 'operator' })
   // Record how the phase was contained, and what the operator said, next to its digest.
   const sealedRun = loadRun(root, id)
   const sealedStage = stageState(sealedRun, phase)
@@ -342,18 +451,52 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
     const operator = verification.isolation.operator
     sealedStage.operator = { followUps: operator.followUps, offProtocol: operator.offProtocol, templates: operator.messages.map((message) => message.template) }
   }
+  sealedStage.seal = verification.seal
+  if (usage) {
+    // The official figures for a boxed phase are the gateway's, and replace
+    // anything typed. What an operator typed is kept, labelled, and never shown
+    // as the run's cost.
+    sealedStage.usage = {
+      source: 'gateway', requests: usage.requests, responsesWithUsage: usage.responsesWithUsage, incompleteResponses: usage.incompleteResponses,
+      inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens, cacheWriteTokens: usage.cacheWriteTokens, outputTokens: usage.outputTokens, reasoningTokens: usage.reasoningTokens,
+      totalTokens: usage.totalTokens, costUsd: usage.costUsd, byModel: usage.byModel, efforts: usage.efforts, prices: usage.prices, unpriced: usage.unpriced,
+    }
+    sealedStage.telemetry = {
+      ...sealedStage.telemetry,
+      inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
+      ...(usage.reasoningTokens !== null ? { reasoningTokens: usage.reasoningTokens } : {}),
+      ...(usage.costUsd !== null ? { costUsd: usage.costUsd } : {}),
+    }
+    sealedStage.telemetrySource = 'gateway'
+    if (Object.keys(operatorUsage).length > 0) sealedStage.operatorTelemetry = { ...operatorUsage, source: 'operator', official: false, at: new Date().toISOString() }
+  } else if (Object.keys(operatorUsage).length > 0) {
+    sealedStage.telemetrySource = 'operator'
+  }
+  if (budget) sealedStage.budget = { ...budget, agentMinutes: Math.round(budget.used.agentSeconds / 60) }
+  if (audio) sealedStage.audio = { status: audio.status, failure: audio.failure ?? null, plan: audio.plan, scores: audio.scores ?? null }
+  sealedStage.official = officialStatus(sealedRun, sealedStage, { locked, rules, budget, usage, finalize: outcome === 'failed' ? finalize : null })
   sealedStage.transcripts = { status: transcripts.status, sessions: transcripts.sessions ?? 0 }
   if (workspaceRecord.samplePack) sealedStage.samplePack = { id: workspaceRecord.samplePack.id, version: workspaceRecord.samplePack.version, manifestSha256: workspaceRecord.samplePack.manifestSha256 }
+  recomputeRunTelemetry(sealedRun)
   saveRun(root, sealedRun)
   // The seal goes in the ledger: from here this phase cannot be sealed again.
   appendLedger(root, id, {
     kind: 'seal',
     phase,
+    outcome,
     artifactDigest: verification.artifactDigest,
     artifactDigestVersion: ARTIFACT_DIGEST_VERSION,
     verificationSha256: hashFile(path.join(root, 'runs', id, 'verifications', `stage${phase}.json`)),
     isolation: verification.isolation.mode,
     protocolVersion: run.protocol?.version ?? null,
+    sealAttempts: verification.seal.attempts,
+    sealFailureRelays: verification.seal.sealFailureRelays,
+    sealFailureLimit: verification.seal.sealFailureLimit,
+    ...(verification.seal.finalizedBy ? { finalizedBy: verification.seal.finalizedBy } : {}),
+    ...(usage ? { usage: { source: 'gateway', inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens, outputTokens: usage.outputTokens, reasoningTokens: usage.reasoningTokens, costUsd: usage.costUsd, pricesAsOf: usage.prices?.asOf ?? null, pricesSha256: usage.prices?.sha256 ?? null } } : {}),
+    ...(budget ? { budget: { status: budget.status, stoppedBy: budget.stoppedBy, agentSeconds: budget.used.agentSeconds, outputTokens: budget.used.outputTokens } } : {}),
+    ...(audio ? { audio: { status: audio.status, sha256: hashFile(path.join(stageDir, 'evidence', `stage${phase}-audio.json`)) } } : {}),
+    official: sealedStage.official.official,
     ...(patch ? { operatorPatchOf: patch } : {}),
   })
   // Keep the boundary's own record with the run, then close the box.
@@ -364,18 +507,67 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
   return {
     id,
     phase,
+    outcome,
+    ...(outcome === 'failed' ? { failures: failures.map((text) => text.split('\n')[0]), finalizedBy: finalize.by } : {}),
     artifactDigest: verification.artifactDigest,
-    preview: sealed.previews?.[String(phase)],
+    preview: sealed.previews?.[String(phase)] ?? null,
     isolation: verification.isolation.mode,
+    official: sealedStage.official,
+    seal: verification.seal,
     ...(locked ? { lockdown: { network: verification.isolation.network, gatewayHead: verification.isolation.gateway.head, deniedEgress: verification.isolation.gateway.denied, honeytoken: verification.isolation.honeytoken, droppedOnExport: verification.isolation.export.dropped.length, operator: sealedStage.operator } } : {}),
     ...(patch ? { operatorPatch: { of: patch, changedFiles: verification.operatorPatch.changes.length } } : {}),
     ...(sampleReport ? { samples: { bundled: sampleReport.bundled, fromPack: sampleReport.fromPack, generated: sampleReport.generated, sources: sampleReport.sources, acoustic: sampleReport.acoustic } } : {}),
+    ...(audio ? { audio: sealedStage.audio } : {}),
+    ...(usage ? { usage: { inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens, outputTokens: usage.outputTokens, reasoningTokens: usage.reasoningTokens, costUsd: usage.costUsd, pricesAsOf: usage.prices?.asOf, unpriced: usage.unpriced, incompleteResponses: usage.incompleteResponses } } : {}),
+    ...(budget ? { budget: sealedStage.budget } : {}),
     assetProvenance: { assets: provenance.assets, matched: provenance.matched, matchedOrigins: provenance.matchedOrigins },
     telemetry: sealed.stages.find((entry) => entry.number === phase)?.telemetry ?? null,
     transcripts,
     footnotes: runFootnotes(sealed).map((note) => note.text),
     next: statusSummary(sealed).next,
   }
+}
+
+// Run the fixed audio test plan against the sealed build, in the box when the
+// phase was boxed, and write the record into the phase's evidence.
+async function measureAudioEvidence(root, { phase, stageDir, locked, lockdown, onOutput }) {
+  const evidenceDir = path.join(stageDir, 'evidence')
+  const file = path.join(evidenceDir, `stage${phase}-audio.json`)
+  let record
+  try {
+    if (locked) {
+      record = await lockdown.measureAudioLocked(root, { phase, stageDir, onOutput })
+    } else {
+      const { measureAudio } = await import('./lib/run/audio-measure.mjs')
+      const { chromium } = await import('playwright')
+      const server = await serveDirectory(path.join(stageDir, 'dist'))
+      try {
+        record = await measureAudio({ url: server.url, chromium, phase })
+      } finally {
+        await server.close()
+      }
+      record.where = 'host'
+    }
+  } catch (error) {
+    record = { version: 1, phase, status: 'failed', failure: { kind: 'harness-error', detail: String(error.message ?? error).slice(0, 1500) } }
+  }
+  fs.mkdirSync(evidenceDir, { recursive: true })
+  writeJson(file, record)
+  return record
+}
+
+// Is this phase an official protocol-3 result, and if not, why not.
+function officialStatus(run, stage, { locked, rules, budget, usage, finalize }) {
+  const reasons = []
+  if (!isStrictProtocol(run)) reasons.push(`built under protocol ${run.protocol?.version ?? 'unknown'}`)
+  if (!locked) reasons.push(stage.patchOf ? 'an operator patch' : 'sealed outside the lockdown')
+  if (locked && !rules) reasons.push('the run carries no official rules (created before they were recorded)')
+  if ((stage.operator?.offProtocol ?? 0) > 0) reasons.push('the operator sent a message outside the fixed templates')
+  if (budget?.status === 'exceeded') reasons.push(`the budget was exceeded or overridden${budget.offProtocol?.length ? ` (${budget.offProtocol.join('; ')})` : ''}`)
+  if (budget && budget.effort && !budget.effort.ok) reasons.push(`a launch ran at another effort than the pinned ${budget.rules?.effort}`)
+  if (finalize?.by === 'operator') reasons.push('the operator sealed it as failed before the protocol required it')
+  if (locked && usage && usage.requests > 0 && usage.responsesWithUsage === 0) reasons.push('the gateway recorded no token usage for any model turn')
+  return { official: reasons.length === 0, reasons }
 }
 
 function archivedAssessmentPathFor(root, id, phase) {
@@ -399,7 +591,8 @@ function writeReports(root, run) {
 
 async function score(root, id, options) {
   const run = loadRun(root, id)
-  const rubric = loadRubric()
+  // The rubric the run was created under, never simply the newest one.
+  const rubric = loadRubric(rubricVersionForRun(run))
   const phase = options.phase
     ? Number(options.phase)
     : run.stages.filter((entry) => entry.status === 'complete' && !entry.evaluation).map((entry) => entry.number)[0]
@@ -489,7 +682,19 @@ async function score(root, id, options) {
     fs.mkdirSync(lockdownDir, { recursive: true })
     fs.writeFileSync(path.join(lockdownDir, `stage${phase}.score-gates.gateway.jsonl`), technicalChecks.gateway.events)
   }
-  const evaluation = scoreAssessment(rubric, assessment, technicalChecks, evaluatorOptions)
+  // Harness-measured criteria (rubric 3) are scored from the record the seal
+  // wrote into the sealed evidence; nothing the evaluator said enters them.
+  const audioRecordPath = path.join(stageDir, 'evidence', `stage${phase}-audio.json`)
+  const harness = { audio: fs.existsSync(audioRecordPath) ? readJson(audioRecordPath) : null }
+  const evaluation = scoreAssessment(rubric, assessment, technicalChecks, { ...evaluatorOptions, harness })
+  // Which model graded, as the provider reported it, read from the evaluator
+  // boxes' gateway logs before they are closed.
+  const lockdown = await import('./lockdown/seal.mjs')
+  const pinnedGrader = rubric.evaluator?.pinnedId ?? rubric.evaluator?.model ?? null
+  const grader = lockdown.graderRecord(root, id, phase, { requested: rubric.evaluator?.model ?? null, pinned: pinnedGrader })
+  const { requestIdList, ...graderSummary } = grader
+  evaluation.grader = graderSummary
+  if (grader.drift) console.error(`! grader drift: requests for ${grader.requested} were served as ${grader.drift.map((entry) => `${entry.servedAs} (${entry.requests})`).join(', ')}, not the pinned ${grader.pinned}. Recorded in the evaluation and the ledger.`)
   // When the harness registered it, as opposed to when the grader says it
   // graded: two leaderboard rows carried hand-entered evaluation times.
   evaluation.registeredAt = new Date().toISOString()
@@ -510,6 +715,7 @@ async function score(root, id, options) {
     path: path.relative(root, evaluationPath).split(path.sep).join('/'),
     reportPath,
     categoryScores: Object.fromEntries(evaluation.categories.map((category) => [category.id, category.score])),
+    grader: { pinned: grader.pinned, boxed: grader.boxed, served: Object.keys(grader.served), requestIds: grader.requestIds.count, drift: grader.drift },
     ...(evaluation.runAxis ? { runAxis: { id: evaluation.runAxis.id, label: evaluation.runAxis.label, score: evaluation.runAxis.score, rawScore: evaluation.runAxis.rawScore, hardGate: evaluation.runAxis.hardGate } } : {}),
   }
   const updated = loadRun(root, id)
@@ -526,11 +732,16 @@ async function score(root, id, options) {
   registerEvaluation(root, id, phase, stageSummary, aggregate)
   writeReports(root, loadRun(root, id))
   await reindexRegistry(root)
-  appendLedger(root, id, { kind: 'score', phase, score: evaluation.score, evaluationSha256: hashFile(evaluationPath), evaluatorModel: evaluation.evaluatorModel ?? null, rubricVersion: evaluation.rubricVersion ?? null, panel: panel.length })
+  appendLedger(root, id, {
+    kind: 'score', phase, score: evaluation.score, evaluationSha256: hashFile(evaluationPath), evaluatorModel: evaluation.evaluatorModel ?? null, rubricVersion: evaluation.rubricVersion ?? null, panel: panel.length,
+    // The grader as the provider reported it: the id it served the pinned
+    // model's requests as, and its request ids (all of them, hashed; the list
+    // is in runs/<id>/lockdown/stage<N>.evaluators.json).
+    grader: { pinned: grader.pinned, requested: grader.requested, boxed: grader.boxed, served: grader.served, drift: grader.drift, requestIds: grader.requestIds, harness: grader.sessions.flatMap((entry) => entry.harness) },
+  })
   // Evaluator/reviewer sessions ran in the blind workspace (or, boxed, in a
   // container that held only that workspace); archive them under
   // transcripts/eval/phase-N before the workspace is removed. Never fatal.
-  const lockdown = await import('./lockdown/seal.mjs')
   const { evaluatorSessions, sessionStateDir } = await import('./lockdown/session.mjs')
   const boxedFiles = evaluatorSessions(root, id, phase).flatMap((kind) => {
     const stateDir = sessionStateDir(root, id, phase, kind)
@@ -547,9 +758,9 @@ async function score(root, id, options) {
   })
   // What the grader's own boundary observed, kept with the run; then close its boxes.
   const evaluatorBoxes = lockdown.closeEvaluatorSessions(root, id, phase)
-  if (evaluatorBoxes.length > 0) writeJson(path.join(root, 'runs', id, 'lockdown', `stage${phase}.evaluators.json`), { mode: 'lockdown', evaluators: evaluatorBoxes })
+  if (evaluatorBoxes.length > 0) writeJson(path.join(root, 'runs', id, 'lockdown', `stage${phase}.evaluators.json`), { mode: 'lockdown', evaluators: evaluatorBoxes, grader: { ...graderSummary, requestIdList } })
   removeEvalWorkspace(root, id, phase)
-  return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, evaluationPath, report: aggregate.reportPath, evaluation: evaluatorBoxes.length > 0 ? `boxed (${evaluatorBoxes.length} evaluator session(s))` : 'not boxed', transcripts }
+  return { action: 'scored', phase, score: evaluation.score, aggregate: aggregate.score, rubricVersion: rubric.version, evaluationPath, report: aggregate.reportPath, evaluation: evaluatorBoxes.length > 0 ? `boxed (${evaluatorBoxes.length} evaluator session(s))` : 'not boxed', grader: { pinned: grader.pinned, served: grader.served, requestIds: grader.requestIds.count, drift: grader.drift }, transcripts }
 }
 
 // Sealed digests recorded under an older artifact definition can never
@@ -739,6 +950,8 @@ try {
         id, phase: stage.number, workspace: workspaceDir(root, id, stage.number), harness: options.harness, options,
         // Protocol 3: an operator picks a template; they do not write the message.
         messagePolicy: isStrictProtocol(run) ? 'template' : 'free',
+        // An official run's fixed rules: the seal-failure rounds and the budget.
+        rules: runRules(run),
         onOutput: (text) => process.stderr.write(text),
       })
       result = {
@@ -749,10 +962,12 @@ try {
         harnessVersion: launched.launch.harnessVersion ?? null,
         exitCode: launched.launch.exitCode,
         message: { template: launched.launch.message.template, offProtocol: launched.launch.message.offProtocol },
+        effort: launched.launch.effort ?? null,
+        ...(launched.launch.budget ? { budget: { ...launched.launch.budget, stoppedBy: launched.launch.stoppedBy ?? null, outputTokensThisLaunch: launched.launch.outputTokens ?? null, offProtocol: launched.launch.budgetOffProtocol ?? [] } } : {}),
         log: launched.logFile,
-        gateway: { chainOk: launched.gateway.chainOk, head: launched.gateway.head, modelRequests: launched.gateway.modelRequests, strippedTools: launched.gateway.strippedTools, deniedEgress: launched.gateway.denied, deniedTargets: launched.gateway.deniedTargets, mirrorFetches: launched.gateway.mirrorArtifacts, usage: launched.gateway.usage },
-        next: launched.launch.exitCode === 0
-          ? `pnpm bench seal ${id}`
+        gateway: { chainOk: launched.gateway.chainOk, head: launched.gateway.head, modelRequests: launched.gateway.modelRequests, strippedTools: launched.gateway.strippedTools, deniedEgress: launched.gateway.denied, deniedTargets: launched.gateway.deniedTargets, mirrorFetches: launched.gateway.mirrorArtifacts, usage: { requests: launched.gateway.usage.requests, inputTokens: launched.gateway.usage.inputTokens, cachedInputTokens: launched.gateway.usage.cachedInputTokens, outputTokens: launched.gateway.usage.outputTokens, reasoningTokens: launched.gateway.usage.reasoningTokens, efforts: launched.gateway.usage.efforts } },
+        next: launched.launch.exitCode === 0 || launched.launch.stoppedBy
+          ? `pnpm bench seal ${id}${launched.launch.stoppedBy ? `   (the phase budget stopped the agent: ${launched.launch.stoppedBy}; seal it as it stands)` : ''}`
           : `The agent exited ${launched.launch.exitCode}. Read ${launched.logFile}; to have it pick up where it stopped: pnpm bench agent ${id} --harness ${options.harness} --message continue`,
       }
       // Every launch — and so every message an operator sends a boxed
@@ -771,15 +986,18 @@ try {
         offProtocol: launched.launch.message.offProtocol,
         ...(launched.launch.kind === 'follow-up' || launched.launch.message.offProtocol ? { operatorMessage: launched.launch.prompt } : {}),
         exitCode: launched.launch.exitCode,
+        effort: launched.launch.effort ?? null,
+        ...(launched.launch.stoppedBy ? { stoppedBy: launched.launch.stoppedBy } : {}),
+        ...(launched.launch.budgetOffProtocol?.length ? { budgetOffProtocol: launched.launch.budgetOffProtocol } : {}),
         gatewayHead: launched.gateway.head,
         deniedEgress: launched.gateway.denied,
       })
-      if (launched.launch.exitCode !== 0) process.exitCode = 1
+      if (launched.launch.exitCode !== 0 && !launched.launch.stoppedBy) process.exitCode = 1
     } else if (command === 'evaluator') {
       // The grader in a box: its only volumes are the blind evaluator workspace
       // (artifact, build, and inputs read-only), its only network its own model.
       const run = loadRun(root, id)
-      const rubric = loadRubric()
+      const rubric = loadRubric(rubricVersionForRun(run))
       const phase = options.phase
         ? Number(options.phase)
         : run.stages.filter((entry) => entry.status === 'complete' && fs.existsSync(evalWorkspaceDir(root, id, entry.number))).map((entry) => entry.number)[0]

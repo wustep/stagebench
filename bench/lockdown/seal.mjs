@@ -5,11 +5,12 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { materializeSamplePack } from '../lib/sample-pack.mjs'
-import { workspaceRoot, writeJson } from '../lib/shared.mjs'
+import { sha256, workspaceRoot, writeJson } from '../lib/shared.mjs'
+import { readGatewayEvents } from '../lib/usage.mjs'
 import { captureHarnessSource } from '../lib/run/workspace.mjs'
 import { detectRuntime } from './runtime.mjs'
 import {
-  destroySession, evaluatorSessions, exportSession, findStrings, loadSession, runCaptureInBox, runGatesInBox, runSampleMatchInBox, sessionStateDir, summarizeGatewayLog,
+  destroySession, evaluatorSessions, exportSession, findStrings, loadSession, runAudioMeasureInBox, runCaptureInBox, runGatesInBox, runSampleMatchInBox, sessionStateDir, summarizeGatewayLog,
 } from './session.mjs'
 
 export const ISOLATION_MODES = ['lockdown', 'none']
@@ -56,6 +57,18 @@ export async function runLockedChecks(root, stageDir, { onOutput, featureTests =
 // Canonical capture by the image's own Chromium, in a box with no network.
 export function captureLocked(root, { id, phase, stageDir, onOutput }) {
   return runCaptureInBox(root, { distDir: path.join(stageDir, 'dist'), phase, evidenceDir: path.join(root, 'runs', id, `stage${phase}`, 'evidence'), harnessSource: captureHarnessSource(), onOutput })
+}
+
+// Harness-measured audio by the image's own Chromium, in a box with no
+// network: the measurement modules are the harness's, copied in from here.
+export function measureAudioLocked(root, { phase, stageDir, onOutput }) {
+  const read = (name) => fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'run', name), 'utf8')
+  return runAudioMeasureInBox(root, {
+    distDir: path.join(stageDir, 'dist'),
+    phase,
+    files: { 'audio-analysis.mjs': read('audio-analysis.mjs'), 'audio-measure.mjs': read('audio-measure.mjs'), 'capture.mjs': captureHarnessSource() },
+    onOutput,
+  })
 }
 
 // The acoustic half of the sample check, wherever it can run: in a box when an
@@ -252,6 +265,45 @@ export function archiveAndClose(root, id, phase, record, gates) {
     fs.renameSync(stateDir, archive)
   }
   return { record: path.join(runDir, `stage${phase}.json`), archive }
+}
+
+// Which model actually graded, as the provider reported it. For every model
+// request an evaluator's box made, the gateway logged the model id the request
+// asked for, the id the response said served it, and the provider's request
+// id. The pin is checked against the served ids of the requests that asked for
+// the pinned model (a harness's own auxiliary calls on a smaller model are
+// recorded but are not the grader). Read before the boxes are closed.
+export function graderRecord(root, id, phase, { requested, pinned }) {
+  const sessions = []
+  const served = {}
+  const requestIds = []
+  for (const kind of evaluatorSessions(root, id, phase)) {
+    const stateDir = sessionStateDir(root, id, phase, kind)
+    const session = loadSession(root, id, phase, kind)
+    const events = readGatewayEvents(path.join(stateDir, 'gateway', 'events.jsonl'))
+    const asked = new Map(events.filter((entry) => entry.kind === 'inspect.request' && entry.method === 'POST' && entry.model).map((entry) => [entry.seq, entry.model]))
+    for (const entry of events) {
+      if (entry.kind !== 'inspect.response' || !asked.has(entry.request)) continue
+      const key = `${asked.get(entry.request)} -> ${entry.model ?? 'unreported'}`
+      served[key] = (served[key] ?? 0) + 1
+      if (entry.requestId) requestIds.push(entry.requestId)
+    }
+    sessions.push({ slot: session?.slot ?? 1, harness: session?.launches.map((launch) => `${launch.harnessLabel}${launch.harnessVersion ? ` ${launch.harnessVersion}` : ''}`).filter((value, index, all) => all.indexOf(value) === index) ?? [] })
+  }
+  const pinnedTurns = Object.entries(served).filter(([key]) => key.startsWith(`${requested} -> `))
+  const drifted = pinnedTurns.filter(([key]) => key !== `${requested} -> ${pinned}`).map(([key, count]) => ({ servedAs: key.split(' -> ')[1], requests: count }))
+  return {
+    boxed: sessions.length > 0,
+    requested,
+    pinned,
+    sessions,
+    served,
+    pinnedRequests: pinnedTurns.reduce((total, [, count]) => total + count, 0),
+    requestIds: { count: requestIds.length, first: requestIds[0] ?? null, last: requestIds.at(-1) ?? null, sha256: requestIds.length ? sha256(requestIds.join('\n')) : null },
+    requestIdList: requestIds,
+    drift: drifted.length > 0 ? drifted : null,
+    ...(sessions.length === 0 ? { note: 'The evaluator was not boxed, so no gateway saw its requests: the model that graded is what the assessment says, unverified.' } : {}),
+  }
 }
 
 // The same for an evaluation's boxes, once its assessment is registered.

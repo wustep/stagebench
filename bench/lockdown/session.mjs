@@ -28,6 +28,8 @@ import { BOX_HOME, BOX_WORKSPACE, resolveAuth, resolveHarness } from './harnesse
 import { verifyChain } from './image/gateway.mjs'
 import { REGISTRY_URL } from './image/npm-mirror.mjs'
 import { CANDIDATE_MESSAGES, EVALUATOR_MESSAGES, messageRecord, readSealFailure, resolveMessage } from './messages.mjs'
+import { readGatewayEvents, summarizeUsage } from '../lib/usage.mjs'
+import { nextLaunchAllowance, sealFailureRoundRefusal } from '../lib/run/rules.mjs'
 import {
   EGRESS_NETWORK, copyIntoVolume, copyOutOfVolume, engine, engineStream, ensureImages, hostExposure, requireRuntime, sanitizeTree, writeIntoVolume,
 } from './runtime.mjs'
@@ -410,12 +412,13 @@ export function summarizeGatewayLog(file) {
   const summary = {
     file, entries: chain.entries, head: chain.head ?? null, chainOk: chain.ok, ...(chain.ok ? {} : { error: chain.error }),
     denied: 0, deniedTargets: {}, modelRequests: 0, models: {}, strippedTools: {}, mirrorArtifacts: 0, mirrorBytes: 0, tunnels: {},
-    usage: { requestsWithUsage: 0, inputTokens: 0, outputTokens: 0 },
   }
+  const events = []
   for (const line of text.split('\n')) {
     if (!line.trim()) continue
     let entry
     try { entry = JSON.parse(line) } catch { continue }
+    events.push(entry)
     if (/\.deny$/.test(entry.kind)) {
       summary.denied += 1
       const target = entry.target ?? (entry.host ? `${entry.host}${entry.path ?? ''}` : entry.path) ?? entry.kind
@@ -424,10 +427,6 @@ export function summarizeGatewayLog(file) {
       summary.modelRequests += 1
       if (entry.model) summary.models[entry.model] = (summary.models[entry.model] ?? 0) + 1
       for (const tool of entry.strippedTools ?? []) summary.strippedTools[tool] = (summary.strippedTools[tool] ?? 0) + 1
-    } else if (entry.kind === 'inspect.response' && entry.usage) {
-      summary.usage.requestsWithUsage += 1
-      summary.usage.inputTokens += Number(entry.usage.input_tokens ?? entry.usage.prompt_tokens ?? 0)
-      summary.usage.outputTokens += Number(entry.usage.output_tokens ?? entry.usage.completion_tokens ?? 0)
     } else if (entry.kind === 'mirror.fetch' && entry.object === 'artifact' && entry.status === 200) {
       summary.mirrorArtifacts += 1
       summary.mirrorBytes += entry.bytes ?? 0
@@ -435,6 +434,9 @@ export function summarizeGatewayLog(file) {
       summary.tunnels[entry.host] = (summary.tunnels[entry.host] ?? 0) + 1
     }
   }
+  // Tokens, efforts, the model ids that came back and the provider's request
+  // ids, read from the same log (priced later, by whoever holds the table).
+  summary.usage = summarizeUsage(events)
   return summary
 }
 
@@ -462,7 +464,7 @@ export function withConsoleRelay(argv, logPath) {
 }
 
 // Launch a harness in an open session's box and record what was said to it.
-async function launchInSession(root, opened, { harness, options = {}, env = process.env, onOutput, templates, messagePolicy = 'template' }) {
+async function launchInSession(root, opened, { harness, options = {}, env = process.env, onOutput, templates, messagePolicy = 'template', rules = null }) {
   const { session, runtime, images, created } = opened
   const { runId: id, phase } = session
   const kindKey = session.kindKey ?? 'candidate'
@@ -484,6 +486,21 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
   // What the operator says is a template, filled in from the harness's own
   // records (the seal's output, never the operator's paraphrase of it).
   const message = resolveMessage(templates, { options, followUp, interactive, policy: messagePolicy, context: { workspace: BOX_WORKSPACE, failure: readSealFailure(stateDir) } })
+  // An official phase gets a fixed number of seal-failure relays. Past them,
+  // the next failing seal seals the phase as it stands, marked failed.
+  if (message.template === 'seal-failure') {
+    const refusal = sealFailureRoundRefusal(rules, session.launches, id)
+    if (refusal) throw new Error(refusal)
+  }
+  // The budget: what is left of the phase's agent time and generated tokens,
+  // and the pinned effort. Throws when nothing is left.
+  const spentBefore = summarizeUsage(readGatewayEvents(path.join(stateDir, 'gateway', 'events.jsonl')))
+  const allowance = nextLaunchAllowance(rules, {
+    launches: session.launches,
+    outputTokensSpent: spentBefore.outputTokens,
+    requestedMinutes: options['timeout-minutes'] ? Number(options['timeout-minutes']) : null,
+    requestedEffort: options.effort ?? null,
+  })
   const prompt = message.text
   // A template may ask for a fresh agent in the same box (an independent reviewer).
   const resume = followUp && !templates[message.template]?.fresh
@@ -491,7 +508,7 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
   // Extra harness flags, split on whitespace with simple quoting: --harness-args '-c web_search="live"'
   const extraArgs = (String(options['harness-args'] ?? '').match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [])
     .map((word) => word.replace(/^'(.*)'$/s, '$1'))
-  const context = { prompt, interactive, resume, model, effort: options.effort ?? null, command: options.command ?? null, extraArgs, mcpServers: options.mcpServers ?? {} }
+  const context = { prompt, interactive, resume, model, effort: allowance.effort ?? null, command: options.command ?? null, extraArgs, mcpServers: options.mcpServers ?? {} }
 
   await startGateway(runtime, session, images, {
     dns: env.STAGEBENCH_GATEWAY_DNS ? env.STAGEBENCH_GATEWAY_DNS.split(',') : undefined,
@@ -503,6 +520,8 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
     models: options['pin-models'] ? String(options['pin-models']).split(',').map((value) => value.trim()).filter(Boolean) : null,
     secrets: auth.gatewaySecrets,
     bodyLog: options['body-log'] ?? 'full',
+    // The gateway refuses model turns once this many more tokens are generated.
+    ...(allowance.outputTokensLeft !== null && allowance.outputTokensLeft !== undefined ? { budget: { outputTokens: allowance.outputTokensLeft } } : {}),
   })
   const files = [...adapter.files(context), ...auth.files]
   writeIntoVolume(runtime, { image: images.candidate.tag, volume: names.home, files: files.filter((file) => !file.keepExisting) })
@@ -523,6 +542,11 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
     // Does the box hold anything that could authenticate? (Never, for the built-in modes.)
     credentialInBox: auth.gatewaySecrets.length === 0 && auth.leakCheck.length > 0,
     model,
+    effort: allowance.effort ?? null,
+    // What this launch was allowed, and anything about it that departs from
+    // the pinned budget (which makes the phase unofficial).
+    ...(allowance.budgeted ? { budget: { timeoutMs: allowance.timeoutMs ?? null, timeoutIsBudget: Boolean(allowance.timeoutIsBudget), outputTokensLeft: allowance.outputTokensLeft } } : {}),
+    ...(allowance.offProtocol?.length ? { budgetOffProtocol: allowance.offProtocol } : {}),
     interactive,
     // MCP servers are never inherited from the operator's own config: the box
     // starts with none, and any that are added run inside it and are listed here.
@@ -548,7 +572,7 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
       env: { ...adapter.env, ...auth.env },
       name: names.agent,
       interactive,
-      timeout: options['timeout-minutes'] ? Number(options['timeout-minutes']) * 60_000 : undefined,
+      timeout: allowance.timeoutMs,
       onOutput: (text) => {
         log.write(text)
         onOutput?.(text)
@@ -563,6 +587,7 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
   launch.endedAt = new Date().toISOString()
   launch.exitCode = result.status
   launch.timedOut = Boolean(result.timedOut)
+  if (launch.timedOut && allowance.timeoutIsBudget) launch.stoppedBy = 'wall-clock'
   launch.log = path.basename(logFile)
   session.launches.push(launch)
   session.leakNeedles = [...new Set([...(session.leakNeedles ?? []), ...auth.leakCheck.map(leakNeedle).filter(Boolean)])]
@@ -579,16 +604,19 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
   const turns = Object.values(gateway.models).reduce((total, count) => total + count, 0)
   launch.modelTurns = turns - (session.modelTurns ?? 0)
   session.modelTurns = turns
+  // The gateway refused a turn for tokens during this launch.
+  if ((gateway.usage?.budget?.denied ?? 0) > (spentBefore.budget?.denied ?? 0)) launch.stoppedBy = 'tokens'
+  launch.outputTokens = gateway.usage.outputTokens - spentBefore.outputTokens
   saveSession(root, session)
   return { session: session.key, launch, gateway, logFile }
 }
 
 // Launch the candidate agent inside the box.
-export async function launchAgent(root, { id, phase, workspace, harness, options = {}, env = process.env, onOutput, messagePolicy = 'template' }) {
+export async function launchAgent(root, { id, phase, workspace, harness, options = {}, env = process.env, onOutput, messagePolicy = 'template', rules = null }) {
   // Fail on a bad harness name or a missing credential before anything is created.
   resolveAuth(resolveHarness(harness), env, options)
   const opened = await openSession(root, { id, phase, workspace, onOutput })
-  return launchInSession(root, opened, { harness, options, env, onOutput, templates: CANDIDATE_MESSAGES, messagePolicy })
+  return launchInSession(root, opened, { harness, options, env, onOutput, templates: CANDIDATE_MESSAGES, messagePolicy, rules })
 }
 
 // Run a shell command in the session's box: same volumes, no network at all.
@@ -943,6 +971,47 @@ export async function runCaptureInBox(root, { distDir, phase, evidenceDir, harne
       return { written: written.sort(), where: 'lockdown', image }
     } finally {
       fs.rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+}
+
+const AUDIO_RUNNER = `import fs from 'node:fs'
+import { createRequire } from 'node:module'
+import { serveDirectory } from '/tools/capture.mjs'
+import { measureAudio } from '/tools/audio-measure.mjs'
+// The image's own Playwright and Chromium, as for canonical capture.
+const { chromium } = createRequire('/usr/local/lib/node_modules/')('playwright')
+const phase = Number(process.argv[2])
+const server = await serveDirectory('/dist')
+let record
+try {
+  record = await measureAudio({ url: server.url, chromium, phase })
+} catch (error) {
+  record = { version: 1, phase, status: 'failed', failure: { kind: 'harness-error', detail: String((error && error.stack) || error).slice(0, 1500) } }
+} finally {
+  await server.close()
+}
+record.where = 'lockdown'
+fs.writeFileSync('/out/audio.json', JSON.stringify(record, null, 2) + '\\n')
+`
+
+// Harness-measured audio, in the image: the built app is served to the
+// image's Chromium in a box with no network, the fixed test notes are played
+// into it over a stand-in Web MIDI port, and what it renders is measured.
+// `files` are the harness's own modules (never candidate code).
+export async function runAudioMeasureInBox(root, { distDir, phase, files, onOutput }) {
+  return withToolBox(root, { label: 'audio', onOutput }, async ({ runtime, image, volume, run }) => {
+    const dist = volume('dist')
+    const out = volume('out')
+    const tools = volume('tools')
+    await copyIntoVolume(runtime, { image, volume: dist, sourceDir: distDir })
+    writeIntoVolume(runtime, { image, volume: tools, files: [...Object.entries(files).map(([name, content]) => ({ path: name, content })), { path: 'run.mjs', content: AUDIO_RUNNER }] })
+    const result = await run(['node', '/tools/run.mjs', String(phase)], { volumes: [`${dist}:/dist:ro`, `${tools}:/tools:ro`, `${out}:/out`], timeout: 900_000 })
+    const raw = engine(runtime, ['run', '--rm', '--network', 'none', '-v', `${out}:/src:ro`, '--entrypoint', 'sh', image, '-c', 'head -c 33554432 /src/audio.json 2>/dev/null'], { timeout: 120_000 })
+    try {
+      return JSON.parse(raw.stdout)
+    } catch {
+      return { version: 1, phase, status: 'failed', where: 'lockdown', failure: { kind: 'harness-error', detail: `the measurement box produced no record:\n${String(result.output).trim().slice(-1200)}` } }
     }
   })
 }

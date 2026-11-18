@@ -84,6 +84,10 @@ export function normalizeConfig(raw = {}) {
     })),
     bodyLog: ['full', 'responses', 'none'].includes(raw.bodyLog) ? raw.bodyLog : 'responses',
     logDir: raw.logDir ?? null,
+    // What is left of the phase's generated-token budget when this launch
+    // starts. Once responses have reported that many output tokens, model
+    // requests are refused. Null: no budget.
+    budget: Number.isFinite(Number(raw.budget?.outputTokens)) && raw.budget?.outputTokens !== null ? { outputTokens: Math.max(0, Number(raw.budget.outputTokens)) } : null,
   }
 }
 
@@ -332,8 +336,14 @@ export function verifyChain(text) {
   return { ok: true, entries: lines.length, head: prev }
 }
 
-// Best-effort token accounting from a response body (JSON or SSE). The last
-// `usage` object wins — streaming APIs report cumulative totals at the end.
+// Token accounting from a response body (JSON or SSE). Streaming APIs report
+// usage in pieces: Anthropic sends input and cache counts in message_start and
+// the final output count in message_delta; OpenAI sends everything once, in
+// response.completed. So every `usage` object in the body is merged in order,
+// later fields winning, which gives the final totals for both. Only numbers
+// (and objects of numbers, such as input_tokens_details) are kept: OpenAI's
+// per-item `attribution` breakdown would otherwise put tens of kilobytes into
+// every line of the hash-chained log.
 export function extractUsage(text) {
   let usage = null
   const pattern = /"usage"\s*:\s*\{/g
@@ -347,13 +357,46 @@ export function extractUsage(text) {
       else if (char === '}') {
         depth -= 1
         if (depth === 0) {
-          try { usage = JSON.parse(text.slice(start, index + 1)) } catch { /* partial object; keep the previous one */ }
+          try { usage = { ...(usage ?? {}), ...reduceUsage(JSON.parse(text.slice(start, index + 1))) } } catch { /* partial object; keep what was merged */ }
           break
         }
       }
     }
   }
-  return usage
+  return usage && Object.keys(usage).length > 0 ? usage : null
+}
+
+// The numeric part of a usage object, two levels deep.
+export function reduceUsage(value, depth = 0) {
+  const kept = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return kept
+  for (const [key, entry] of Object.entries(value).slice(0, 40)) {
+    if (key === 'attribution') continue
+    if (typeof entry === 'number' && Number.isFinite(entry)) kept[key] = entry
+    else if (depth < 2 && entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      const nested = reduceUsage(entry, depth + 1)
+      if (Object.keys(nested).length > 0) kept[key] = nested
+    }
+  }
+  return kept
+}
+
+// The model id the provider says served a response: the first `"model"` key in
+// the body. Both providers put it in the opening event (OpenAI's
+// response.created, Anthropic's message_start), ahead of any generated text,
+// and generated text is JSON-escaped, so a quoted "model" inside it cannot
+// match. This is what the grader pin is checked against.
+export function extractResponseModel(text) {
+  const match = /"model"\s*:\s*"([^"\\]{1,120})"/.exec(text)
+  return match ? match[1] : null
+}
+
+// The reasoning effort a request asked for: OpenAI's reasoning.effort or
+// Anthropic's output_config.effort. Recorded, so a pinned effort can be checked
+// against what the harness actually sent.
+export function requestedEffort(body) {
+  const effort = body?.reasoning?.effort ?? body?.output_config?.effort ?? null
+  return typeof effort === 'string' ? clip(effort, 24) : null
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +603,10 @@ export function startGateway(rawConfig, { proxyPort = PROXY_PORT, mirrorPort = M
     )
   }
   const authority = createCertificateAuthority(config, logger)
+  // Generated tokens reported so far by responses this gateway relayed. The
+  // budget it is checked against is what the launcher says is left for the phase.
+  let outputTokensSpent = 0
+  let budgetLogged = false
   const saveBody = (seq, suffix, buffer) => {
     if (!logger.bodiesDir) return
     fs.writeFileSync(path.join(logger.bodiesDir, `${String(seq).padStart(6, '0')}.${suffix}.gz`), zlib.gzipSync(buffer))
@@ -597,6 +644,17 @@ export function startGateway(rawConfig, { proxyPort = PROXY_PORT, mirrorPort = M
       }
     }
     const verdict = applyModelPolicy(config, rule, { method: request.method, urlPath: request.url, body: parsed, hasBody: raw.length > 0 })
+    // The phase's token budget: once it is spent, no further model turn goes
+    // out. The response that crossed it was already paid for and was relayed.
+    if (verdict.allow && config.budget && raw.length > 0 && request.method === 'POST' && outputTokensSpent >= config.budget.outputTokens) {
+      if (!budgetLogged) {
+        budgetLogged = true
+        logger.write('budget.exhausted', { outputTokens: outputTokensSpent, budget: config.budget.outputTokens })
+      }
+      logger.write('inspect.deny', { host, method: request.method, path: logPath, model: verdict.model ?? null, reason: 'the phase token budget is spent', budget: true })
+      refuse(response, 403, `the token budget for this phase is spent (${outputTokensSpent} of ${config.budget.outputTokens} generated tokens)`)
+      return
+    }
     if (!verdict.allow) {
       logger.write('inspect.deny', { host, method: request.method, path: logPath, model: verdict.model ?? null, reason: verdict.reason })
       refuse(response, 403, verdict.reason)
@@ -614,7 +672,7 @@ export function startGateway(rawConfig, { proxyPort = PROXY_PORT, mirrorPort = M
     if (outbound.length > 0) headers['content-type'] = 'application/json'
     const seq = logger.write('inspect.request', {
       host, method: request.method, path: logPath,
-      model: verdict.model, bytes: outbound.length, bodySha256: outbound.length ? sha256(outbound) : null,
+      model: verdict.model, effort: requestedEffort(verdict.body), bytes: outbound.length, bodySha256: outbound.length ? sha256(outbound) : null,
       strippedTools: verdict.stripped, secretsSubstituted: secretsUsed,
     })
     if (config.bodyLog === 'full' && outbound.length > 0) saveBody(seq, 'request', outbound)
@@ -639,8 +697,17 @@ export function startGateway(rawConfig, { proxyPort = PROXY_PORT, mirrorPort = M
         finalized = true
         const body = Buffer.concat(chunks)
         let usage = null
-        try { usage = extractUsage(decodeBody(body, reply.headers['content-encoding']).toString('utf8')) } catch { usage = null }
-        logger.write('inspect.response', { request: seq, host, status: reply.statusCode, bytes, bodySha256: hash.digest('hex'), complete, usage })
+        let served = null
+        try {
+          const text = decodeBody(body, reply.headers['content-encoding']).toString('utf8')
+          usage = extractUsage(text)
+          served = extractResponseModel(text)
+        } catch { usage = null }
+        if (typeof usage?.output_tokens === 'number') outputTokensSpent += usage.output_tokens
+        // The provider's own request id and the model id it says served the
+        // request: what a pinned grader is checked against afterwards.
+        const requestId = clip(String(reply.headers['request-id'] ?? reply.headers['x-request-id'] ?? ''), 120) || null
+        logger.write('inspect.response', { request: seq, host, status: reply.statusCode, bytes, bodySha256: hash.digest('hex'), complete, usage, model: served, requestId })
         if (config.bodyLog !== 'none' && body.length > 0) saveBody(seq, 'response', body)
       }
       reply.on('data', (chunk) => {
@@ -856,6 +923,7 @@ export function startGateway(rawConfig, { proxyPort = PROXY_PORT, mirrorPort = M
       egress: config.egress.map((rule) => ({ host: rule.host, port: rule.port, mode: rule.mode, api: rule.api, paths: rule.paths.map((pattern) => pattern.source) })),
       mirrors: Object.fromEntries(Object.entries(config.mirrors).map(([name, entry]) => [name, entry.upstream])),
       models: config.models,
+      budget: config.budget,
       // Never the values: only how many placeholders are armed, and for where.
       secrets: config.secrets.map((secret) => ({ hosts: secret.hosts })),
       bodyLog: config.bodyLog,
