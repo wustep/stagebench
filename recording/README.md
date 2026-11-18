@@ -64,7 +64,7 @@ Record serially and leave the machine alone while the audio passes run. They pla
 `shows/demo-v2-alla-turca.json` renders `output/demo-v2-alla-turca.mp4` and its report. It's a draft and isn't used on the site. Eight models play the last third of Mozart's Rondo Alla Turca in the show's listed order, which runs by live rank from the lowest up to #1:
 
 - one 8-bar phrase each, from the start of the A-minor theme's return (bar 129) through the C-major episode, the theme's return and the janissary march;
-- it opens on a 3.5 s intro: the real Nord Stage 4 photo on black, framed exactly like the first model's keyboard, with "StageBench", "Eight AI models rebuild the Nord Stage 4" and "November 2026". The type fades out as the theme's one-beat pickup starts under the photo (`pickupInIntro`), then the photo dissolves into the first model over 0.2 s (`intro.crossfade`), which is fully up on bar 129's downbeat;
+- it opens on a 3.5 s intro: the real Nord Stage 4 photo on black, framed exactly like the first model's keyboard, with "StageBench", "AI coding models rebuild the Nord Stage 4 in the browser" and "November 2026". The type fades out as the theme's one-beat pickup starts under the photo (`pickupInIntro`), then the photo dissolves into the first model over 0.2 s (`intro.crossfade`), which is fully up on bar 129's downbeat;
 - the last model stops on the march's A-major cadence (bar 192, beat 1, `lastBarBeats`), holds that chord 0.6 s (`finalHold`), and 0.2 s after the release dissolves into the end card over 0.37 s;
 - it closes on a 4 s end card: the StageBench keyboard illustration from wustep.me at 8×, with "StageBench" and the link at full opacity 0.5 s in. The chord's reverb rings out under the card (`ringOut`).
 
