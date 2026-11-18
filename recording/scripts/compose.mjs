@@ -248,6 +248,7 @@ if (END_SECS > 0) {
   await page.evaluate(() => document.fonts.ready);
   endPng = path.join(WORK, 'end-card.png');
   await page.screenshot({ path: endPng });
+  fs.copyFileSync(endPng, S.output.replace(/\.mp4$/, '.end-card.png')); // the card as shown, next to the film
 }
 await browser.close();
 
@@ -297,7 +298,7 @@ ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-
 
 const report = {
   show: S.name, file: path.relative(process.cwd(), S.output), duration: duration(S.output), loudness: loudness(S.output),
-  musicEnd: +(TITLE_SECS + tlDur).toFixed(3), endCard: END_SECS ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, title: END.title, subtitle: END.subtitle, footer: END.footer } : null,
+  musicEnd: +(TITLE_SECS + tlDur).toFixed(3), endCard: END_SECS ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, title: END.title, subtitle: END.subtitle, footer: END.footer, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
   fonts: fontsUsed, makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, ...(b.placeholder ? { placeholder: true } : { lufs: b.I }), nudgeDb: +b.nudgeDb.toFixed(2) })) },
   timeline: segs.map((s) => {
     const m = S.model(s.model);
