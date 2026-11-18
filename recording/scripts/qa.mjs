@@ -73,6 +73,8 @@ if (grabsDir) {
   if (report.intro) shots.push(['intro-cut-to-first-model', fr(report.intro.secs)], ['first-model-caption', fr(report.intro.secs + 1.5)]);
   card(report.endCard, 'end-card');
   if (report.endCard) shots.push(['before-end-card-last-model-frame', fr(report.endCard.from) - 1]);
+  // Every turn's first frame (the cut into it, with its name and #N / NEW label).
+  report.timeline.forEach((t, k) => { if (k > 0 || !report.intro) shots.push([`turn-${k + 1}-${t.model}`, fr(t.filmFrom)]); });
   shots.sort((x, y) => x[1] - y[1]);
   const tmp = path.join(work, 'grabs');
   fs.rmSync(tmp, { recursive: true, force: true });
