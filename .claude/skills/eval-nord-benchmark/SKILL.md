@@ -45,10 +45,36 @@ Never assume the scope. One `AskUserQuestion` call:
 you spawn the evaluator; the second call registers what it wrote.
 
 ```sh
-pnpm bench score <run-id> --phase <N>     # 1. builds ~/.stagebench/<key>/eval/<blind>/stage<N>/
-#    ... spawn the evaluator agent (below) ...
+pnpm bench score <run-id> --phase <N>     # 1. builds ~/.stagebench/eval/<hash>/<blind>/stage<N>/
+#    ... run the evaluator (below) ...
 pnpm bench score <run-id> --phase <N>     # 2. validates, reruns gates, registers, writes reports
 ```
+
+**Protocol-3 runs (`isolation: lockdown`) are graded in a box.** Do not spawn
+an agent in the workspace yourself. Run
+
+```sh
+pnpm bench evaluator <run-id> --phase <N> --harness claude            # the pinned model, in a container that holds only the blind workspace
+pnpm bench evaluator <run-id> --phase <N> --harness claude --slot 2   # each further panel member, in its own box, from the blank template
+pnpm bench evaluator <run-id> --phase <N> --harness claude --message review   # an independent reviewer over the filled assessment
+```
+
+The evaluator's message is a fixed template; the box has no internet (only its
+own model API), Chromium is installed, and `pnpm add playwright` inside
+`scratch/` installs from a mirror in the image. It needs a credential the
+gateway can hold: `STAGEBENCH_CLAUDE_OAUTH_TOKEN` (from `claude setup-token`)
+or `STAGEBENCH_ANTHROPIC_API_KEY`. Everything below about ports, scratch files,
+and concurrent agents applies to the un-boxed path only, which is for runs
+sealed before protocol 3 (and for a protocol-3 run the user explicitly asked to
+grade un-boxed: `pnpm bench score <run-id> --unboxed`). The measurement traps
+and "verify the graph" sections apply to both: they are in what the boxed
+evaluator reads only if they are in `EVAL.md` and the rubric, so do not add
+them to its message.
+
+The grader's copy of the artifact is not byte-identical to the sealed tree:
+agent instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/`, …) are removed
+and the producer's name is redacted. That is deliberate. Re-evaluating an older
+run therefore no longer shows the grader a "Run `<id>`" line.
 
 Work **oldest phase first**. The highest sealed phase carries the run-level
 panel-fidelity axis (40% of the run), so its workspace is the largest job.
