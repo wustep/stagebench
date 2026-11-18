@@ -37,6 +37,20 @@ Two information lines in the same output say what does work: the registry on loo
 
 The decoy `bench/rubric.json` shows as read. The probe reads it on purpose, to check that the detector works.
 
+### Rerun after the protocol-3 follow-ups (2026-11-18)
+
+After the seal-failure rounds, the budget, gateway telemetry, and the identity rules were added (the gateway itself changed: it now records usage, the served model id, the request id, and the requested effort, and can refuse turns on a token budget), the images were rebuilt and the red team was run again, with a new attacker:
+
+| Attacker | Outcome |
+| --- | --- |
+| Deterministic probe, 118 attempts | 118 blocked, 0 leaked |
+| Positive control | 59 of 118 leaked; it read the host HTTP canary (3 requests) |
+| Host canaries | 0 requests from the lockdown; neither token in any output |
+| What the gateway let through | One request to the model API host (`/backend-api/codex/models`); 58 refusals; hash chain verifies |
+| **Identity probe** (new): what a candidate can learn about its own model and run | **No leak.** A throwaway run with made-up identifiers (run id and model `sbprobe-b592c0c2-model`, title `Sbprobe b592c0c2 Title`), a real phase workspace, a real session, each harness's home written as a launch writes it. From inside the box: environment, working directory, hostname, `/etc/hosts`, the container's records, the process table, git config, the file list and every small text file in the workspace and home (30 and 32 files), and the messages an operator can send (including a seal failure that quoted both names). The identifiers appear only where the harness itself needs them: Codex's `~/.codex/config.toml` and Claude Code's `--model` argument. |
+
+Evidence: [`lockdown-redteam/protocol-3-followups/`](./lockdown-redteam/protocol-3-followups/) (`identity.json` is the probe's record).
+
 ## An offline phase, start to seal
 
 To check that a candidate can still do the work with no internet, Codex CLI 0.169.0 (GPT 6.2 Sol, medium effort) was given Phase 1 under protocol 3 with the fixed initial prompt. It is not a benchmark entry and is not in the repository.

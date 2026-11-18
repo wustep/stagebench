@@ -1,0 +1,53 @@
+{
+  "identifiers": {
+    "runId": "sbprobe-b592c0c2-model",
+    "model": "sbprobe-b592c0c2-model",
+    "title": "Sbprobe b592c0c2 Title"
+  },
+  "home": "/home/candidate",
+  "harnesses": [
+    {
+      "harness": "codex",
+      "sections": 43,
+      "files": 30,
+      "leaks": [],
+      "known": [
+        {
+          "section": "file:/home/candidate/.codex/config.toml",
+          "identifier": "sbprobe-b592c0c2-model",
+          "line": "model = \"sbprobe-b592c0c2-model\""
+        }
+      ]
+    },
+    {
+      "harness": "claude",
+      "sections": 45,
+      "files": 32,
+      "leaks": [],
+      "known": [
+        {
+          "section": "file:/home/candidate/.codex/config.toml",
+          "identifier": "sbprobe-b592c0c2-model",
+          "line": "model = \"sbprobe-b592c0c2-model\""
+        },
+        {
+          "section": "harness-command",
+          "identifier": "sbprobe-b592c0c2-model",
+          "line": "claude --dangerously-skip-permissions --disallowedTools WebSearch WebFetch --model sbprobe-b592c0c2-model --effort high --output-format stream-json --verbose -p Read WORKSPACE.md in /workspace and fol"
+        }
+      ]
+    }
+  ],
+  "leaks": [],
+  "knownHarnessSurfaces": [
+    "codex: file:/home/candidate/.codex/config.toml",
+    "claude: file:/home/candidate/.codex/config.toml",
+    "claude: harness-command"
+  ],
+  "unhideable": [
+    "The model knows its own identity from its training and from the system prompt its harness sends: Codex opens with \"You are Codex, an agent based on GPT-6\" and lists the current model among its subagent model overrides; Claude Code tells the model its name and model id in its system prompt. Changing that means changing the harness, which is the unit under test.",
+    "The harness has to send the model id with every request, so it is in the harness's configuration (Codex: model in ~/.codex/config.toml) or on its command line (Claude Code: --model), both readable from inside the box.",
+    "The harness's own session files (~/.codex/sessions, ~/.claude/projects) record the model for every turn, and the provider names the model in every response."
+  ],
+  "passed": true
+}

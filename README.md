@@ -30,7 +30,7 @@ pnpm bench new --model <id> --target <1|2|3>    # protocol 3: lockdown, offline
 pnpm bench start <run-id>                       # per phase: workspace for the implementation agent
 pnpm bench agent <run-id> --harness codex       # per phase: run the agent inside the lockdown (docs/LOCKDOWN.md)
 pnpm bench exec <run-id> --command "pnpm test"  # optional: run a command in the same box (no network)
-pnpm bench seal <run-id> [--cost-usd N --input-tokens N --output-tokens N]   # export, gates, capture, sample check, verify, transcripts, seal
+pnpm bench seal <run-id>             # export, gates, capture, audio measurement, sample check, verify, transcripts, gateway tokens and cost, seal
 pnpm bench score <run-id>                       # per phase: builds the blind evaluator workspace
 pnpm bench evaluator <run-id> --harness claude  # per phase: the grader, in a lockdown box of its own
 pnpm bench score <run-id>                       # per phase: registers the filled assessment

@@ -118,7 +118,7 @@ pnpm bench new --model <id> --target <1|2|3>          # lockdown is the default;
 pnpm bench start <run-id>
 pnpm bench agent <run-id> --harness codex --model <model> --effort high
 #   or: scripts/bench-lockdown-run <run-id> --harness codex …
-pnpm bench seal <run-id> --cost-usd … --input-tokens …
+pnpm bench seal <run-id>             # tokens and cost come from the gateway log
 pnpm bench score <run-id>                              # builds the blind evaluator workspace
 pnpm bench evaluator <run-id> --harness claude         # the grader, in a box of its own
 pnpm bench score <run-id>                              # gates rerun in a box; registers the assessment
@@ -149,6 +149,10 @@ The grader works from a blind handle, but a handle is only as blind as everythin
 - **The artifact can still tell.** Seal now records an advisory finding when the run id appears in the sealed tree. It cannot be removed without changing the artifact, and a model that signs its work by name rather than by run id is not caught.
 
 Protocol 3 finished this: the evaluator workspace path no longer contains the checkout's name, the blind handle is keyed so it cannot be worked back to a run id, agent instruction files and the producer's name are removed from the grader's copy of the artifact, a seal refuses an artifact that names its producer, and the evaluator runs in a box whose only contents are that workspace (`pnpm bench evaluator`). See [PROTOCOL-3.md](./PROTOCOL-3.md#6-blind-boxed-grading).
+
+## The candidate's identity
+
+The candidate is not told which model or run it is: nothing the launcher writes into the box (prompts, templates, environment, paths, hostname, container names, git config, the workspace) names either, and a relayed seal failure has both names removed. Only the harness's own configuration and command line carry the model id, because the CLI must send it; the model's own system prompt and training are outside the launcher's reach. `pnpm bench redteam` checks this from inside a real session. Details and what cannot be hidden: [PROTOCOL-3.md, section 13](./PROTOCOL-3.md#13-the-candidate-is-not-told-which-model-or-run-it-is).
 
 ## A real phase, start to seal
 

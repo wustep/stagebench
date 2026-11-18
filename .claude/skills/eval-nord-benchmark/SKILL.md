@@ -26,6 +26,16 @@ evaluate with a different model and do not offer to — the whole point of the
 pin is that scores from different judges are not comparable, and the harness
 will reject the assessment at registration anyway.
 
+**A run is scored by the rubric it was created under** (`protocol.rubricVersion`
+in its `run.json`): `bench/rubric.json` for rubric 3.0.0, `bench/rubrics/2.0.0.json`
+for every run created before it. `bench score` picks the right one and puts it in
+the evaluator workspace. Under rubric 3.0.0 the sound criteria marked
+`"scoring": "harness"` are scored from the audio record the seal wrote
+(`artifact/evidence/stage<N>-audio.json`); they are not in `assessment.json` and
+the evaluator does not rate them. For a boxed evaluation, registration also
+records the model id the API served and its request ids, and flags drift from
+the pin.
+
 ## Ask first
 
 Never assume the scope. One `AskUserQuestion` call:

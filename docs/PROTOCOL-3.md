@@ -1,6 +1,6 @@
 # Protocol 3.0
 
-Protocol 3 changes the conditions a candidate works under and the rules a run is held to. It does not change what is asked (the task and its three phases) or how it is scored (the rubric stays at 2.0.0).
+Protocol 3 changes the conditions a candidate works under and the rules a run is held to. It does not change what is asked (the task and its three phases). It comes with rubric 3.0.0, which scores sound from measurements the harness takes rather than from what a grader says it heard (section 9); runs created before rubric 3.0.0 keep rubric 2.0.0.
 
 It exists because of three audits of the runs made under protocols 1 and 2. Candidates read the rubric and the harness, copied finished sample banks from a neighbouring project and from another model's published run, and derived code from the showcase. Graders were shown run ids. Two leaderboard scores rested on artifacts an operator had edited after sealing. Seal gates passed test suites that had skipped themselves. Most runs can no longer be audited because nobody kept the transcript. None of that needed bad faith; the protocol allowed all of it.
 
@@ -24,9 +24,15 @@ Protocol 3 is built on the [lockdown](./LOCKDOWN.md) (a container with none of t
 | Transcripts | Archived if found. | Required: no transcript, no seal. |
 | Sealed evidence | Edited and re-digested twice. | Append-only seal ledger; a sealed phase cannot be sealed again; a patch is a new, labelled run. |
 | Grader | On the host, in a path containing the checkout name, with a handle derivable from the run id, reading whatever the candidate left for it. | In a box that holds only the blind workspace. Neutral path, keyed handle, agent instruction files and producer names removed from its copy. |
-| Gallery | Score and harness. | Also protocol version, isolation mode, and footnotes. |
+| Seal-failure relays | As many as the operator liked. | At most two per phase; then a failing seal seals the phase as it stands, marked failed (section 11). |
+| Budget | None. Effort and time were whatever the operator chose. | Pinned effort (`high`), 180 minutes of agent time and 4,000,000 generated tokens per phase, enforced by the launcher and the gateway (section 12). |
+| Tokens and cost | Typed in by the operator, when at all. | Read from the gateway's log and priced with a pinned, dated table; typed figures are kept apart as operator-entered (section 12). |
+| Model identity | Run ids in prompts and paths. | No model or run id anywhere the candidate can see but the harness's own config; a red-team probe checks (section 13). |
+| Sound | Rated by a grader who cannot listen. | Measured by the harness from fixed test notes (section 9); every sound criterion reachable from the pack (section 10). |
+| Grader | The model the assessment says. | Also the model id the provider served and its request ids, in the ledger; drift from the pin is flagged (section 14). |
+| Gallery | Score and harness. | Also protocol version, isolation mode, footnotes, gateway tokens and cost, budget, seal-failure rounds, and measured audio. |
 
-Runs made under protocol 2.0 and earlier keep their scores and their labels. They are not held to any of this retroactively: every new rule binds by the protocol version recorded in a run when it was created. The gallery ranks protocol 2.0 and 3.0 runs in separate tiers even though the rubric is the same, because the conditions were not.
+Runs made under protocol 2.0 and earlier keep their scores and their labels. They are not held to any of this retroactively: every new rule binds by the protocol version recorded in a run when it was created, the rules of sections 11 and 12 by the copy a run takes of them at creation, and the rubric by the version recorded at creation. Every run in the repository was created under rubric 2.0.0 and is scored by it. The gallery ranks each rubric on its own board, and within one rubric ranks protocol 2.0 and 3.0 runs in separate tiers, because the conditions were not the same.
 
 ## 1. Candidates are offline
 
@@ -99,7 +105,9 @@ A protocol-3 seal fails, with a message written for the candidate, when:
 - the lockdown's own record is broken: the gateway log's hash chain does not verify, the gateway served anything from a package mirror, a credential or a decoy's token is in the tree or the build;
 - the phase was already sealed (section 5).
 
-Recorded but not blocking: agent instruction files in the artifact, assets byte-identical to another run's, decoys read, audio embedded as data URIs, a build that opens in quirks mode.
+Recorded but not blocking: agent instruction files in the artifact, assets byte-identical to another run's, decoys read, audio embedded as data URIs, a build that opens in quirks mode, and the harness's audio measurement (section 9), which is evidence, not a gate.
+
+A seal collects every failure the candidate can fix (gates, contract, feature tests, hard gates, samples, producer name, a capture that fails) and reports them together, so one relayed message carries everything that is wrong. Failures that are the operator's to fix (a broken boundary record, the wrong sample pack in the checkout, a missing transcript, a measurement the harness itself could not take) are never relayed to the candidate and never count as a seal-failure round.
 
 ## 4. Operator messages
 
@@ -109,7 +117,7 @@ An operator does not write to a boxed agent. They pick a template, and the launc
 | --- | --- | --- |
 | (first launch) | Start of a phase | The fixed initial prompt. |
 | `continue` | The session ended early (timeout, crash, usage limit) | "Continue… finish the phase as WORKSPACE.md describes." |
-| `seal-failure` | The seal failed | The seal's own output, verbatim, taken from the harness's record of the failure, with host paths and the run's name removed. The operator cannot edit it. |
+| `seal-failure` | The seal failed | The seal's own output, verbatim, taken from the harness's record of the failure, with host paths, the run's name, and the model's name removed. The operator cannot edit it. At most two per phase in an official run (section 11). |
 
 Every launch is recorded with its template, the hash of what was sent, and (for anything after the first message) the text, in the run's operator log and in the seal's `isolation.operator`. A message outside the templates can still be sent, by saying so: `--off-protocol-message "…"`. The phase is then marked, and the gallery footnotes it. `--interactive` is off-protocol for the same reason: what is typed into a live session is not a template. Evaluators get the same treatment (`evaluate`, `continue`, `review`).
 
@@ -146,6 +154,125 @@ Under #47 as first proposed, a Codex run on a ChatGPT login put a copy of `auth.
 
 One identifier remains: the account id. Codex checks it against the provider's own account list before it sends a turn, and fails with "selected workspace missing from routing discovery" if it is made up. It authenticates nothing without the token. The provider's account endpoints also return the account's name and plan to the client, as they did before.
 
+## 9. Harness-measured audio (rubric 3.0.0)
+
+Every audio criterion in rubric 2.0.0 was a grader's rating, and a grader is an agent that cannot listen: "the piano sounds musical" was either invented or inferred from the source. Rubric 3.0.0 scores sound from numbers the harness measures itself, at seal, the same way for every run.
+
+**How.** In a box with no network, the image's Chromium loads the sealed build (`dist/`, served on loopback), with two things injected before any app script runs: a stand-in Web MIDI input (the app gets it from `navigator.requestMIDIAccess()`), and a tap that copies whatever the app connects to its audio destination into an AudioWorklet, frame-accurate on the AudioContext's own clock. The harness clicks once at the page's top-left corner (the only interaction it ever makes), waits for the app to listen for MIDI, warms it up until a note sounds, and then plays a fixed plan. Every phase uses the same plan, `stagebench-audio-1`, against the instrument as it loads:
+
+| Test | MIDI (channel 1) | Measures |
+| --- | --- | --- |
+| tuning | notes 33, 45, 57, 60, 69, 81, 93 (A1–A6 and middle C), velocity 96, held 1.2 s | pitch of each: YIN with no bias toward the expected note picks the octave, then a zero-padded FFT refines it on the lowest strong partial (YIN alone reads a real piano's stretched partials 7–17 cents sharp); the five mid notes 45–81 are scored |
+| velocity | note 60 at velocities 16, 32, 48, 64, 80, 96, 112, 127, held 0.6 s | peak 50 ms level of each |
+| release | notes 40, 64, 84, velocity 96, held 1.5 s, 3 s of tail | time to fall 30 dB after note-off; a click at note-off |
+| sustain | CC64 127, note 64 on at 0.2 s and off at 0.7 s, CC64 0 at 2.2 s | still sounding 0.5 s after note-off; gone 1 s after pedal-up |
+| hold | note 52 held 4 s | clicks while held (sample loops) |
+| chord | notes 48, 50, 52, 55, 57, 59, 61, 63, 65, 68 at velocity 100, held 2 s | which of the ten tones are present (distinct pitch classes, none on another's 2nd–8th harmonic); clipping |
+
+Across all of it: clicks, from 30 ms after each attack so attacks are never counted (two rules: an isolated second-difference spike ten times the local level, and a hard stop into digital silence, which the first rule alone caught only two-thirds of the time on a bright note; a 5 ms fade trips neither), clipped output, how many audio contexts produced sound, and note-on-to-sound latency on the audio clock (to the 5 ms envelope step).
+
+**What is scored, and the thresholds.**
+
+| Measurement | Full credit | Zero | Why |
+| --- | --- | --- | --- |
+| `notesSounding` (of the single test notes) | all | — (ratio, squared) | a note that does not sound is the worst failure |
+| `tuningErrorCents` (mean over the five mid notes, each capped at 100) | ≤ 10 | ≥ 50 | 10 cents is about the smallest mistuning heard on a complex tone, and inside a real piano's mid-range stretch tuning; 50 is a quarter tone. Playing 44.1 kHz samples at 48 kHz, the classic bug, is 147 |
+| `velocityRisingSteps` | 7 of 7 steps up ≥ 0.5 dB | 0 | velocity must change the level at every step |
+| `velocityRangeDb` (127 vs 16) | ≥ 15 dB | ≤ 3 dB | the pack's grand spans about 30 dB; a linear gain curve gives 18; under 3 dB is no velocity response |
+| `releasesClean` | 3 of 3 | 0 | a release falls 30 dB within 3 s without a click |
+| `clicks` | 0 | 5 (20 points each) | |
+| `sustainChecksPassed` | 2 of 2 | 0 | holds (no more than 20 dB down 0.5 s after key-off: a sample piano's own decay can be 12 dB in that time, while a damped note falls 30 dB or more in every build measured), and lets go (20 dB down, or inaudible, 1 s after pedal-up) |
+| `latencyMs` (median) | ≤ 20 | ≥ 120 | on the audio clock, so a slow box does not count against the app; what it measures is the app's own scheduling |
+| `chordTonesHeard` | 10 of 10 | 0 | polyphony and voice allocation |
+| `clippedMs` | 0 | ≥ 50 ms | |
+| `extraAudioContexts` (with sound) | 0 | 2 (50 points each) | the contract is one AudioContext |
+
+| Rubric 3.0.0 criterion | Weight | Measurements (weight) |
+| --- | --- | --- |
+| Phase 1 `sound.pianoVoice` | 60 of sound | notesSounding 25, tuning 25, velocityRisingSteps 15, velocityRangeDb 15, releasesClean 10, clicks 10 |
+| Phase 1 `playability.sustainPedal` | 15 of playability | sustainChecksPassed 100 |
+| Phase 2 `sound.measuredVoice` | 25 of sound | notesSounding 20, tuning 20, velocityRisingSteps 10, velocityRangeDb 10, releasesClean 10, clicks 10, clippedMs 10, extraAudioContexts 10 |
+| Phase 3 `sound.qualityUnderLoad` | 25 of sound | latencyMs 25, chordTonesHeard 25, clippedMs 15, clicks 15, notesSounding 10, tuning 10 |
+
+Phase 3 does not score velocity or release: the instrument may load on an organ or a synth patch, which need not respond to velocity.
+
+**When a measurement cannot be taken.** The record says why, and nothing is skipped silently. If the build gave the harness nothing to measure (it never listened for MIDI, never sounded, a test note never sounded, a pitch could not be found), that measurement scores zero; it is never dropped and the rest re-weighted, as a grader's null is. If the harness itself failed (the browser would not start, the box broke), the seal stops with an operator-side error: nothing about the candidate is known, it is not relayed, and it does not count as a seal-failure round.
+
+**Where it goes.** `evidence/stage<N>-audio.json` in the sealed artifact (so its digest covers it, and the grader sees it in `artifact/evidence/`), a summary in the verification record and the run record (the gallery shows tuning, velocity range, clicks, and latency per phase), and its hash in the seal's ledger entry. The candidate is told that the seal plays test notes over Web MIDI and that the app must request MIDI access on load or on the first click anywhere, and sound without any other interaction (`TASK.md`); it is not given the thresholds. That sentence matters: of the seven protocol-2 Phase 1 builds that worked, four requested MIDI only from an "Enable MIDI" button and measure as `no-midi` without it. The record is reproducible: the plan, the browser, and the analysis are fixed, and `pnpm bench seal` on an unlocked run runs the same code with the host's Playwright.
+
+## 10. Rubric 3.0.0: every sound criterion reachable from the pack
+
+Rubric 2.0.0 was written when candidates found their own samples. Read against the pack they now share, it rewarded sounds no candidate can build from recordings, and a few things the specs exclude. Every phase anchor and criterion was read; these changed, and nothing else did (the panel axis, aggregate weights, technical gate, and every criterion not listed are as in 2.0.0, frozen in `bench/rubrics/2.0.0.json`):
+
+| Where | Rubric 2.0.0 | The problem | Rubric 3.0.0 |
+| --- | --- | --- | --- |
+| Rating anchors 3 and 4 | "a knowledgeable player would not distinguish from the hardware" | For sound, the hardware is the Nord's own multi-sampled library, which nobody has; a one-dynamic Rhodes or a synthesized B3 could never reach 4 | `ratingScale.soundReachability`: "the hardware" means the best the pack and synthesis can do; a rating never requires a recording the pack does not contain; lists the pack's real content |
+| All judged sound criteria | Evidence could be "sounds like" | A grader cannot listen | `ratingScale.listening`: evidence is a measurement of rendered audio or a reading of the source |
+| P1 `sound.pianoVoice` (60) | judged | a listening claim | harness-measured (section 9) |
+| P1 `sound.sourceHonesty` (40) | "verify by exercising the build" | — | also points the grader at the seal's sample check (which file is cut from which recording) |
+| P1 `playability.voiceLifecycle` (35) | velocity, sustain, stealing, cleanup | velocity and sustain are measurable | 20: stealing and cleanup only; new harness criterion `sustainPedal` (15) |
+| P1 `playability.inputCoverage` | unchanged weight | — | notes that the harness has already confirmed MIDI |
+| P2 `sound.instrumentBreadth` (35) | "grand, upright, electric, clavinet and digital are audibly distinct" | judged against the Nord's multi-velocity electric pianos; omitted Misc | 30: measured distinctness of all six types, each judged against what the pack offers (Salamander 8 layers, Kawai 2, Rhodes one dynamic and 15 roots, Wurlitzer 4, Pianet 2, CP80 4); a Rhodes model is not marked down for velocity layers the pack never had, and velocity made with gain and filtering is credited |
+| P2 `sound.effectAudibility` (35) | "A/B each one" | a listening instruction | 30: show each effect in the rendered signal (sidebands, delay taps, decay, compression) |
+| P2 `sound.signalGraph` (30) | graph, gain staging, no clipping | clipping and extra contexts are measurable | 15: buses and order; new harness criterion `measuredVoice` (25) measures the default voice, clipping, and contexts |
+| P2 `playability.pianoControlDepth` | "string resonance, pedal noise, dynamics, timbre and soft release" | pedal noise is excluded by `specs/nord-stage-4.piano.json` | the spec's six controls: KB Touch, Dyn Comp, Timbre, Unison, Soft Release, String Res |
+| P2 `features.instrumentLibraryCoverage` | "every instrument … actually loads" | — | says which may come from the pack and which may be synthesis, and that one model per type is the requirement |
+| P3 `sound.distinctEngines` | "genuinely different engines" | graders compared B3/Vox/Farfisa with sampled tonewheels and combo organs, which the pack does not have | B3, Vox, Farfisa and the synth are synthesized and a well-made synthesis is creditable in full; the pipe organ may be pack, synthesis, or both |
+| P3 `sound.qualityUnderLoad` (25) | "latency, polyphony and stability while actually playing" | a listening claim | harness-measured: latency, chord tones, clipping, clicks, notes sounding, tuning |
+| P3 `features.organSystem` | "drawbars, models, percussion, rotary, vibrato" | the Pipe drawbars name nine ranks, and the pack has two registrations (Loud, Quiet) | B3/Vox/Farf judged as synthesis; Pipe drawbars may mix and filter the two registrations, use synthesized ranks, or both, and are not marked down for per-rank recordings that do not exist |
+| P3 `features.synthSystem` | unchanged scope | — | notes there are no synth recordings and a sampled mode is optional |
+
+The candidate's materials say the same (the Phase 2 prompt now asks for "velocity layers where the pack has them"); the sample pack README already said B3, Vox, and Farfisa are to be synthesized.
+
+## 11. Seal-failure rounds
+
+A failing seal's output can be relayed to the agent (`--message seal-failure`). In an official run that happens **at most twice per phase** (`officialRules.sealFailureRounds` in `specs/benchmark-phases.json`, copied into the run at creation; fixed for official runs). What is counted is precise: a round is one relay of a seal failure to the agent. The first seal attempt is not a round, a `continue` is not a round, and a failure that is the operator's to fix (section 3) is never relayed and never counted.
+
+- Seal attempt 1 fails → relay (round 1) → the agent fixes → attempt 2 fails → relay (round 2) → attempt 3.
+- Attempt 3 is final. If it passes, the phase is sealed normally. If it fails, **the phase is sealed as it stands, marked failed**: the artifact is frozen and hashed like any other, its failing verification is kept with every failure listed, the preview is published if it built, and the phase is scored (the technical gate caps it, at 59, or 49 with no build). It is never left unsealed. The launcher refuses a third relay.
+- The same happens, sooner, when the budget leaves no room for another launch (section 12): a failure could not be fixed, so the failing seal is final.
+- An operator can seal a phase as failed early (`seal --as-failed`), for a harness that cannot continue. That is recorded as the operator's decision, and the phase is not official.
+
+The counts (attempts, relays, the limit, how the phase was finalized) are in the verification record (`seal`), the run record, every seal's ledger entry, and the gallery; each failed attempt is also a `seal-attempt` entry in the ledger, with the hash of what failed.
+
+## 12. Budget and gateway telemetry
+
+**Tokens and cost come from the gateway.** Every model call a boxed agent makes goes through the gateway, which logs each response's usage object in its hash-chained log, reduced to its numbers (OpenAI's per-item attribution would otherwise put tens of kilobytes on every line), merged across a streamed response (Anthropic reports input in `message_start` and output in `message_delta`), with the model id the provider says served it, the provider's request id, and the effort the request asked for. At seal the log is summed per model into input tokens (cached and cache writes included), cached input, cache writes, output, reasoning where the provider reports it (OpenAI does, Anthropic counts thinking as output), and cost. Cost uses `bench/prices.json`, one pinned, dated table (USD per million tokens, read 2026-11-17 from OpenAI's and Anthropic's published prices, long-context rates included); the seal records its date and hash, so a later price change never rewrites an earlier run's cost. A subscription login is priced at its API list-price equivalent. A model missing from the table leaves the cost unknown, never zero; a successful turn whose usage could not be read is counted as a gap. These are the official figures; they replace anything typed.
+
+`--cost-usd`, `--input-tokens`, and the other telemetry flags still work, and what they record is labelled **operator-entered, non-official**: for a boxed phase it is kept beside the gateway's figures (`operatorTelemetry`) and never shown as the run's cost; for a phase with no gateway it is all there is, and says so.
+
+**The budget, per phase, fixed for official runs:**
+
+| | Value | Enforced by |
+| --- | --- | --- |
+| Reasoning effort | `high` | The launcher passes it to the harness (Codex `model_reasoning_effort`, Claude Code `--effort`) when the operator names none; the gateway records the effort every request actually asked for, and the seal checks the run model's requests against it. Asking for another effort marks the phase unofficial. |
+| Agent time | 180 minutes, summed over launches | Each launch's timeout is what is left (or the operator's, if shorter). Time between launches (the operator reading a log, a seal running) is not counted. |
+| Generated tokens | 4,000,000 (output, reasoning included) | The gateway: once responses have reported that many, it refuses further model requests (`budget.exhausted` in its log). |
+
+Why these. `high` is the effort most protocol-2 runs recorded (ten of thirteen; two ran at `max`); `xhigh` and `max` buy quality with spending, which a fixed budget exists to take out of the comparison. The slowest phase on record took 108 minutes from start to seal, including the operator's time; 180 minutes of agent time is two-thirds more than that, enough for an offline Phase 3 that has to build its own samples, and still a cap a runaway session hits. Generated tokens per phase in the protocol-2 runs that recorded them ran from 26 thousand to 2.3 million; 4 million is room for the most verbose model on the hardest phase, and stops a loop. Input tokens are not capped: an agentic session re-reads its context every turn, so input mostly measures how a harness caches, not how much work was done.
+
+A phase the budget stops is sealed as it stands and is **still official** (`budget.status: stopped`): the budget is a rule everyone runs under. A phase that ran outside it (another effort, more time or tokens than allowed without being stopped) is `exceeded` and **not official**. Every phase's budget record (limits, agent time, generated tokens, status, what stopped it, the efforts launched and observed) is in its verification record, run record, ledger entry, and the gallery. The candidate is told the budget in `WORKSPACE.md`.
+
+**Official.** A phase is an official protocol-3 result when it was boxed under a run that carries the official rules, every operator message was a template, the budget was not exceeded, the effort matched, and the gateway recorded usage. Each sealed phase records `official` with its reasons; the gallery footnotes a phase that is not.
+
+## 13. The candidate is not told which model or run it is
+
+Nothing the launcher puts in front of a candidate names its model or its run: not the prompts or templates (a relayed seal failure has the run's and the model's names removed, in any punctuation), not the working directory (`/workspace`), environment, filenames, hostname (`stagebench`), container names (a hash), git config (none), or the workspace (`workspace.json`, which names the run, never enters the box). The seal still refuses an artifact that names its producer.
+
+The red team checks this. `pnpm bench redteam` now creates a throwaway run with made-up identifiers in a scratch checkout, starts a real phase workspace, opens a real session, writes each harness's home exactly as a launch would, and dumps from inside the box everything a candidate can read: environment, working directory, hostname, `/etc/hosts`, the container's own records, the process table, git config, every file in the workspace and home, and the messages an operator can send. The host searches that for the identifiers. Any hit outside the harness's own configuration and command line fails the red team.
+
+**What cannot be hidden:**
+
+- The model knows what it is from its training and from the system prompt its harness sends. Codex opens with "You are Codex, an agent based on GPT-6" and lists the current model among its subagent overrides; Claude Code tells the model its name and model id. Changing that means changing the harness, which is the unit under test.
+- The harness has to send the model id with every request, so it is in the harness's configuration (Codex: `~/.codex/config.toml`) or on its command line (Claude Code: `--model`), both readable inside the box. The probe reports these as known, not as leaks.
+- The harness's session files record the model for every turn, and the provider names the model in every response.
+
+What can be configured away is: nothing names the run anywhere a candidate can see, and nothing names the model outside what the harness itself requires.
+
+## 14. The grader's model id
+
+The rubric pins the grader (`evaluator.model`, and `evaluator.pinnedId` for the exact id). Anthropic publishes no dated snapshot of Claude Opus 5: its full model id is `claude-opus-5` itself, so that is the pin (`evaluator.snapshotNote` says so). For a boxed evaluation the gateway records, for every request, the model id it asked for, the id the response says served it, and the provider's `request-id`. Registration writes to the ledger, for every evaluation: the pin, the served ids (`claude-opus-5 -> claude-opus-5: N`, auxiliary calls such as a harness's small-model titles listed separately), the request ids (count, first, last, and a hash of all of them; the full list is in `runs/<id>/lockdown/stage<N>.evaluators.json`), and the harness and its version. A request for the pinned model served as any other id is **drift**: it is printed, recorded in the evaluation and the ledger, and footnoted in the gallery. An evaluation that was not boxed has no gateway, and its record says the model is unverified.
+
 ## Running an official run
 
 One-time, per machine:
@@ -163,9 +290,10 @@ A run:
 pnpm bench new --model <id> --target <1|2|3>                    # protocol 3, lockdown
 # per phase:
 pnpm bench start <run-id>
-pnpm bench agent <run-id> --harness codex --model <model> --effort high
-pnpm bench seal <run-id> --cost-usd … --input-tokens …
+pnpm bench agent <run-id> --harness codex --model <model>       # effort is pinned (high); the budget clamps the timeout
+pnpm bench seal <run-id>                                        # tokens and cost come from the gateway log
 #   if the seal fails:  pnpm bench agent <run-id> --harness codex --message seal-failure   then seal again
+#   (twice at most; after that, or once the budget is spent, a failing seal seals the phase as failed)
 pnpm bench score <run-id>                                       # builds the blind workspace
 pnpm bench evaluator <run-id> --harness claude                  # the grader, in its own box
 pnpm bench score <run-id>                                       # registers the assessment
@@ -187,3 +315,12 @@ Opting out is possible and visible: `--isolation none` at `new`, or `seal --unlo
 - **The acoustic check has limits** (section 2): adjacent velocity layers of one key, and encodes far below 48 kbps.
 - **The model API is still a channel.** A candidate can describe anything to its model. That is the normal case, and request bodies are stored.
 - **Thumbnails** are still shot by the host's browser. They are gallery art, made after scoring, and are not evidence or grader input.
+- **The grader's served model id has not been seen yet.** The mechanism is in place and tested on recorded logs; it needs one boxed Claude evaluation (above) to show what the Anthropic API returns for `claude-opus-5`.
+- **The audio measurement covers the instrument as it loads.** It reaches the app only through Web MIDI, the one input the contract makes universal, so it measures the default voice of each phase. Whether the six piano types, the organ models, and the effects are distinct is still judged, from measurements the grader takes.
+- **The audio tap lives in the candidate's page.** The stand-in MIDI port and the tap are injected before the app's scripts, but app code could look for them, and a hostile app could feed the tap something other than what it plays. The record keeps the tap's own frame gaps (`environment.tapGapFrames`) and the grader can render the build independently; a page-proof capture would need Chromium's own audio output, which a headless box does not have.
+- **Token caps compare generated tokens across tokenizers.** A model whose tokenizer splits text finer spends its budget faster. The agent-time cap is the one that is the same for everyone.
+
+## Changelog
+
+- **3.0.0** (this PR). Offline lockdown, one sample pack, executed feature tests, template-only operator messages, transcripts required, append-only seal ledger, blind boxed grading (sections 1–8). Then, before any official run: at most two seal-failure rounds per phase, after which a failing seal seals the phase as failed (11); a fixed budget per phase, pinned effort `high`, 180 agent minutes, 4,000,000 generated tokens (12); tokens and cost from the gateway log, priced with `bench/prices.json` (12); the candidate not told its model or run, with a red-team identity probe (13); the grader's served model id and request ids in the ledger, with drift flagged (14).
+- **Rubric 3.0.0**. Sound scored from harness measurements (9); every sound criterion reachable from the pack (10); the grader pinned to the exact id `claude-opus-5`. Runs created before it keep rubric 2.0.0, and every run in the repository was.
