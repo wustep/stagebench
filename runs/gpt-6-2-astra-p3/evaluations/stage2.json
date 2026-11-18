@@ -1,0 +1,576 @@
+{
+  "rubricVersion": "3.0.0",
+  "runId": "gpt-6-2-astra-p3",
+  "stage": 2,
+  "stageName": "Piano library and working effects",
+  "status": "complete",
+  "evaluator": "Stagebench blind evaluator (Claude Opus 5)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-11-18T07:05:00.000Z",
+  "summary": "A complete, honest Phase 2. Measured in the published build/ at 1440x900: deck/keybed 0.5344/0.4656, width fraction 0.932, aspect 3.0928, worst section-fraction deviation 0.0035, 73 keys (43/30) all inside the keybed at black-height 0.6094, 33/33 landmarks, 219/219 controls pointer-reachable, 0 forbidden, 5/5 reference colours within deltaE 2.4. Audio is real throughout: six piano types separated by 7.3-26 dB of 1/3-octave spectral shape and 200-2075 ms decays; all 24 effect types measurably behave like their namesakes (delay taps at the set 274/139 ms, feedback filter moves the tail 11-31 dB while the dry path moves 0.68 dB, compressor narrows 21.2 dB to 5.3 dB, reverb 290-1940 ms, rotary pans at 0.66/5.40 Hz and modulates the reverb tail, proving reverb precedes it); KB Touch, Dyn Comp, Timbre, Unison, Soft Release and String Res each move the signal correctly. One context, one destination, one limiter. Shortfalls are detail: 2 of the pack's 8 grand layers with a hard switch at velocity 70, Twin vs JC only 1.60 dB apart, and an undeclared presentation-only Model dial.",
+  "score": 94.6,
+  "rawScore": 94.6,
+  "categories": [
+    {
+      "id": "sound",
+      "label": "Sound",
+      "weight": 55,
+      "score": 92.5,
+      "contribution": 50.9,
+      "criteria": [
+        {
+          "id": "instrumentBreadth",
+          "label": "Instrument breadth & character",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "Rendered C4 at velocity 100 captured from the live build (tap inserted ahead of ctx.destination) and compared as peak-normalised 1/3-octave spectra: the minimum off-diagonal spectral-shape distance across the six types is 7.34 dB (Grand vs Upright, the two acoustic pianos) and the maximum 26.05 dB (Upright vs Digital). No two types render the same voice.",
+            "Envelopes separate them as clearly as the spectra: time to -10 dB is Misc 200 ms, Clav 250 ms, Upright 400 ms, Grand 500 ms, Digital 600 ms, Electric 2075 ms; the 1.5-2.0 s level relative to the attack runs -7.5 dB (Electric, looped harp sustain) to -34 dB (Misc); spectral centroid 349-915 Hz.",
+            "Sources are genuinely different recordings, not one relabelled: IMPLEMENTATION_DETAILS.json audio.files lists 50 Salamander files (25 roots, MIDI 27-99 in minor thirds, layers v4/v10), 58 Kawai upright files (L/H) and 15 one-dynamic Rhodes roots with author loop points; inputs/verification.json sampleProvenance confirms 123/123 match the named pack recording, lowest similarity 0.9145.",
+            "Shortfall against what the pack supplies: src/piano.ts:331 selects a layer with a single hard threshold (`v*127 >= (l.type === 1 ? 81 : 70)`), so Grand uses 2 of the pack's 8 Salamander velocity layers with a switch rather than a crossfade, and the Wurlitzer, Pianet T and CP80 in the pack are unused. Clav, Digital and Misc are fixed additive/FM harmonic tables (src/piano.ts:412-420) - recognisable but thin next to the sampled types."
+          ]
+        },
+        {
+          "id": "effectAudibility",
+          "label": "Effect audibility & correctness",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Mod 1, all six types, measured against the same note with the unit bypassed: A-Pan drives L/R envelope correlation from 1.000 to -0.206; Tremolo 32.8% envelope modulation at the 4.74 Hz LFO the rate knob sets; Ring Mod puts sidebands at 384 Hz either side of the carrier within 4.5 dB of it (-39.4/-39.5 vs -35.0 dB); A-Wah shows 0.6% LFO-rate modulation but a 4.74 dB spectral shift, i.e. it is envelope-driven not LFO-driven; Wah 49.2% modulation at the LFO plus 5.91 dB; Pump 17.3% sawtooth ducking.",
+            "Mod 2, all six types: Flanger 15.89 dB and Vibe 13.47 dB of comb/phase colouring; Phaser 89.7% and Spin 67.6% envelope modulation; Chorus decorrelates L/R to 0.362, Ensemble to 0.507, Spin to -0.346 (mono source baseline = 1.000).",
+            "Delay: with the editor reading 'Tempo 274 ms' the recorded envelope peaks sit at 270 and 550 ms; at 'Tempo 139 ms' they sit at 140, 280, 530 ms. Feedback filter Off/LP/HP/BP changes the 0.9-2.5 s tail by 11.32/31.25/16.46 dB while the first 200 ms of dry signal changes 0.68 dB - the filter processes the repeats, not the dry path, as effects.json requires.",
+            "Compressor and reverb: v28-to-v120 level range falls 21.24 dB (bypassed) -> 19.09 -> 10.86 -> 5.25 dB at amount 40/70/100, and Fast changes the post-peak recovery (-5.2 vs -12.9 dB at +100 ms). Reverb t-30 is Booth 290, Spring 580, Room 610, Stage 780, Hall 1360, Cathedral 1940 ms; Bright/Dark move the tail centroid to 987/765 Hz from 872; dry/wet 0/50/100 gives t-30 200/1010/1360 ms.",
+            "Rotary (reached via Amp Sim type 'To Rotary'): the L-R pan signal modulates at 0.66 Hz on slow and 5.40 Hz on fast (source rotors 0.67/5.4 Hz), and Stop Mode drops RMS pan deviation from 0.217 to 0.0035. Weakest point: Twin and JC are only 1.60 dB apart in mean 1/3-octave distance (they do differ by 3.2 dB in level and 2.5 dB in crest), which is less separation than a player would expect between those two amps."
+          ]
+        },
+        {
+          "id": "signalGraph",
+          "label": "Signal graph & routing",
+          "weight": 15,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Instrumenting AudioNode.prototype.connect/disconnect in the running build: 1 AudioContext, 1 AudioDestinationNode, and exactly one node connected to it - a DynamicsCompressorNode (the limiter, threshold -4, knee 1, ratio 20, attack 1 ms at src/effects.ts:431) fed by a single master GainNode whose own fan-in is the two layer level gains. Nothing bypasses that path.",
+            "Chain order in src/effects.ts matches effects.json signalContract.requiredOrder and IMPLEMENTATION_DETAILS.audio.signalOrder exactly: `order` = [mod1, mod2, delay, amp, compressor, reverb] wired slot[i-1].output -> slot[i].input (Rack.lanes, effects.ts:393-406), then direct/rotating -> layer level -> master -> limiter -> destination.",
+            "Reverb precedes Rotary, shown by measurement rather than by reading: with Cathedral at 100% wet and the rotary fast, the 0.6-3.0 s reverb tail pans at exactly 5.40 Hz; with To Rotary off the same tail shows no coherent pan component (1.66 Hz, amplitude 0.06).",
+            "Master gain 0 renders exact digital silence (RMS 0.0, reported as -240 dB) and master 100 renders -11.81 dB; the graph grows from 70 to 122 live edges when all six units are engaged and tears the bypassed branches down after a 35 ms crossfade (Slot.update, effects.ts:332-371)."
+          ]
+        },
+        {
+          "id": "measuredVoice",
+          "label": "Default voice & output (measured)",
+          "weight": 25,
+          "scoring": "harness",
+          "source": "audio",
+          "score": 100,
+          "measurements": [
+            {
+              "id": "notesSounding",
+              "label": "Single test notes that sounded",
+              "weight": 20,
+              "value": 19,
+              "of": 19,
+              "score": 100
+            },
+            {
+              "id": "tuningErrorCents",
+              "label": "Mean tuning error of the five mid-range test notes (cents, each capped at 100)",
+              "weight": 20,
+              "value": 3.1,
+              "score": 100
+            },
+            {
+              "id": "velocityRisingSteps",
+              "label": "Velocity steps (16→127, eight velocities) that raise the level by at least 0.5 dB",
+              "weight": 10,
+              "value": 7,
+              "of": 7,
+              "score": 100
+            },
+            {
+              "id": "velocityRangeDb",
+              "label": "Level range from velocity 16 to 127 (dB)",
+              "weight": 10,
+              "value": 29.54,
+              "score": 100
+            },
+            {
+              "id": "releasesClean",
+              "label": "Released notes that fall 30 dB within the tail with no click at note-off",
+              "weight": 10,
+              "value": 3,
+              "of": 3,
+              "score": 100
+            },
+            {
+              "id": "clicks",
+              "label": "Clicks (discontinuities) while notes hold, release, and ring out",
+              "weight": 10,
+              "value": 0,
+              "score": 100
+            },
+            {
+              "id": "clippedMs",
+              "label": "Clipped output (ms at full scale, all tests)",
+              "weight": 10,
+              "value": 0,
+              "score": 100
+            },
+            {
+              "id": "extraAudioContexts",
+              "label": "Audio contexts producing sound beyond the one allowed",
+              "weight": 10,
+              "value": 0,
+              "score": 100
+            }
+          ],
+          "evidence": [
+            "notesSounding = 19 of 19 → 100",
+            "tuningErrorCents = 3.1 → 100",
+            "velocityRisingSteps = 7 of 7 → 100",
+            "velocityRangeDb = 29.54 → 100",
+            "releasesClean = 3 of 3 → 100",
+            "clicks = 0 → 100",
+            "clippedMs = 0 → 100",
+            "extraAudioContexts = 0 → 100"
+          ],
+          "plan": "stagebench-audio-1",
+          "status": "measured"
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "label": "Playability & control",
+      "weight": 20,
+      "score": 100,
+      "contribution": 20,
+      "criteria": [
+        {
+          "id": "layerBehavior",
+          "label": "Two-layer piano behaviour",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "All four layer parameters reach the audio graph, measured on the same struck note: A alone -28.68 dB; enabling B on Electric gives -25.97 dB and a 6.41 dB spectral-shape change; B octave +1 shifts the centroid 789 -> 855 Hz (8.75 dB shape change); B level 0 returns to -28.61 dB (A alone) and B level 100 gives -22.82 dB; disabling B returns to -28.89 dB.",
+            "The panel follows: pressing #piano-layer-b-on sets aria-pressed=true/aria-description='Enabled', moves the green focus lamp from x=606 to x=641, lights the B ON/OFF lamp, and changes the Program OLED header from 'PIANO A / GRAND' to 'PIANO B / GRAND'. Driving #piano-layer-a-level with Home/End moves the fader cap transform between translate(0 33.5) and translate(0 -33.5) with aria-valuenow 0/100.",
+            "Focus propagates to the effects chain as the spec requires (effectFocusFollowsLayerFocus): after focusing B, #effects-layer-focus-piano reads 'FX Piano B', and clicking it alternates to 'FX Piano A'. Group mode verified live - with A focused and Reverb on at 88% wet, enabling Piano group gives B reverb on at 88%, later edits from B propagate back to A (33%), and ungrouping lets them diverge again (A 10 / B 33).",
+            "Voice ownership is per layer (src/piano.ts:166 builds one Piano per layer) and per-layer SUSTPED/PSTICK routing is exposed by shift-clicking the layer buttons, with lamps at x=588 and x=626 tracking it; turning the Piano section off silenced every voice to RMS 0."
+          ]
+        },
+        {
+          "id": "pianoControlDepth",
+          "label": "Detailed piano controls",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "KB Touch, at a fixed MIDI velocity of 40: Heavy -49.89 dB, Medium -42.34 dB, Light -36.35 dB over the first 400 ms - a 13.5 dB spread from the touch curve alone. Dyn Comp behaves exactly as manual p.25 describes, raising soft strokes without touching loud ones: the v30-to-v120 range falls 20.37 / 16.35 / 12.08 / 7.88 dB across Off/1/2/3 while the loud level stays within 0.35 dB.",
+            "Timbre moves the spectrum in the documented direction: acoustic centroid Off 922, Soft 764, Mid 1001, Bright 1052 Hz. On Electric the list correctly extends to six entries and all five non-Off settings differ from Off by 3.08-6.62 dB of 1/3-octave shape, including Dyno 1 and Dyno 2.",
+            "Unison widens monotonically - L/R sample correlation 0.517 (Off) -> 0.386 -> 0.255 -> 0.201 with +4.8 dB of level from the added voices. Soft Release lengthens the fall to -30 dB after note-off from 75 ms to 155 ms, and is correctly disabled for Clav (the editor checkbox reports disabled=true).",
+            "String Res is a real sympathetic excitation, not a reverb tail: holding C3 undamped and striking F#4, the level at 784.9 Hz (the 6th partial of the held C3, not a harmonic of F#4) rises 19.93 dB while the struck note's own 370/740/1110 Hz harmonics move 0.48/0.25/0.10 dB and total RMS moves 0.13 dB."
+          ]
+        },
+        {
+          "id": "inputReliability",
+          "label": "Input reliability & failure behaviour",
+          "weight": 30,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Stress: a 40-note MIDI burst against a 32-voice limit rendered peak 0.8713 with zero samples at full scale, all 40 keys showed aria-pressed, and after the matching note-offs the output fell to exact digital silence (RMS 0.0). Three stacked note-ons on the same note were FIFO-matched by three note-offs back to silence.",
+            "Every escape hatch works and is visible: CC123 cleared 10 held notes to silence, a window blur event cleared 5, turning the Piano section off silenced held voices, and CC64 held a released note (-38.42 dB) then let it go on pedal-up (-65.96 dB) while the on-page Sustain button tracked the MIDI pedal with aria-pressed=true.",
+            "All three input paths reach a full note lifecycle: keydown/keyup on 'a' and a pointer press/release on #key-64 each produced exactly one pressed key then zero, and five synthetic repeat keydown events still produced only one voice (repeat suppression, src/inputs.ts:54).",
+            "Failures degrade visibly rather than silently: the status strip reports 'Piano ready', 'Piano ready - touch to enable' when the context is suspended, 'Audio unavailable' with no context, and 'Sample error - synth fallback' with a flashing type LED plus the Program OLED reading 'Sample error' (src/piano.ts:204-227); at 390x844 with MIDI blocked it read 'Access denied'. No console errors or page errors in any of the eleven probe runs."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "label": "Feature completeness",
+      "weight": 25,
+      "score": 95,
+      "contribution": 23.8,
+      "criteria": [
+        {
+          "id": "instrumentLibraryCoverage",
+          "label": "Required piano instruments",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "All six Phase 2 types are selectable and load in the published build: cycling #piano-piano-type and the editor Instrument select reached Grand, Upright, Electric, Clav, Digital and Misc, each returning the status 'Piano ready' and a sounding note (peaks 0.097-0.151 at velocity 100). The Program OLED named the model each time (Yamaha C5, Kawai Upright, Rhodes Mark I, Plucked Clav, Glass Piano, Rosewood Mallet).",
+            "Grand, Upright and Electric are bundled recordings, offline and provenanced: build/samples carries 123 .ogg files; inputs/verification.json sampleProvenance reports 123 declared, 123 from the pack, 0 generated, 123/123 acoustically matched to the named recording (lowest similarity 0.9145) across salamander-grand-v3 (CC-BY-3.0), upright-piano-kw (CC0) and learman-rhodes-gm (CC0), with full attribution in IMPLEMENTATION_DETAILS.json audio.sampleSources.",
+            "The three are audibly distinct by measurement, not by label - peak-normalised 1/3-octave distances Grand-Upright 7.34 dB, Grand-Electric 21.41 dB, Upright-Electric 18.23 dB - and Clav/Digital/Misc are declared as live synthesis and are synthesis (src/piano.ts:411-448), so nothing generated is described as a recording.",
+            "A labelled playable fallback exists and is exercised: tests/phase2.test.ts routes the upright samples to invalid audio and asserts the panel enters 'Sample error', one .type-failure indicator appears, the Program OLED reports it, and recovery to a synthesized model restores 'Piano ready'. One model per type is the stated requirement and is met."
+          ]
+        },
+        {
+          "id": "effectUnitCoverage",
+          "label": "Required effect units and types",
+          "weight": 40,
+          "scoring": "judged",
+          "rating": 4,
+          "score": 100,
+          "evidence": [
+            "Every required unit is on the rendered panel with its own group box and controls: MOD 1 and MOD 2 (rate, amount, type, on), AMP SIM / EQ (drive, mid frequency, bass, mid, treble, type, on), DELAY (tempo, feedback, mix, tap, type, ping pong, on), COMP (amount, on), REVERB (tone, type, mix, on), plus the shared ROTARY SPEAKER block (drive, organ/on, stop mode, slow-fast) in the performance band and FX FOCUS Organ/Piano/Synth with an Effects Shift latch.",
+            "Every listed type is reachable by cycling the panel type button and all were exercised: Mod 1 A-Pan/Tremolo/Ring Mod/A-Wah/Wah/Pump, Mod 2 Chorus/Flanger/Phaser/Vibe/Ensemble/Spin, Amp EQ only/Twin/JC/Small/LP24/HP24/To Rotary, Reverb Room/Booth/Spring/Stage/Hall/Cathedral - 24 types, each confirmed to change the rendered signal.",
+            "The routing features are present and work from the panel, verified by observation: shift-clicking #effects-reverb-on sets aria-description 'On - global' and lights the global lamp at (1679,278); shift-clicking #effects-layer-focus-piano reads 'Piano group' and lights the group lamp at (1385,182); selecting FX Focus Organ makes every effect control report 'Section offline' instead of pretending to work; #effects-section-on bypasses the whole chain (stereo correlation returns to 1.000 and the rotary disappears).",
+            "Two listed parameters are reachable only through the in-app layer editor rather than the panel itself - the Delay feedback filter (Off/LP/HP/BP) and the Compressor Fast mode - and the Delay 'variation' button is decorative because the delay loop effects it selects are spec-excluded."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "label": "Declared gaps are accurate",
+          "weight": 20,
+          "scoring": "judged",
+          "rating": 3,
+          "score": 75,
+          "evidence": [
+            "The positive declarations check out against behaviour and source. IMPLEMENTATION_DETAILS.json audio.strategy claims 'Grand selects v4/v10 at MIDI velocity 70 and Upright switches from L to H above 80'; src/piano.ts:331 is `v*127 >= (l.type === 1 ? 81 : 70)`. It claims the Rhodes uses one dynamic with the original loops and gain/filter velocity; src/piano.ts:364 is a lowpass at 450 + 11500*v^2 over looped buffers. Its signalOrder matches the graph I traced through connect().",
+            "Everything listed under surface.unsupported really is inert: I pressed/dragged organ drawbars, the modulation wheel, Ping pong, Delay variation and program controls and they changed only their own presentation state (aria-valuenow moved 17 -> 22 on #organ-drawbar-1-16 with no OLED or audio change), which the build's own browser test enforces for every control without a binding.",
+            "One undeclared gap: #piano-piano-model, the Model dial inside the section that surface.panelBehavior says 'operate[s] the shared audio graph', has no binding (src/bindings.ts has no 'piano-model' entry), so it rotates and displays the current model name but cannot select anything, and it is not listed under surface.unsupported. With one model per type there is nothing to select, so the behaviour is honest in substance but the declaration is incomplete.",
+            "Nothing required is undeclared-missing: the six required piano controls, two layers, six types, sustain routing, fallback, six effect units plus Rotary, focus/group/global, bypass and the documented order were all exercised and all work, and the seal recorded 20/20 feature-matrix IDs covered with test, typecheck, lint and build all passing."
+          ]
+        }
+      ]
+    }
+  ],
+  "runAxis": {
+    "id": "panelFidelity",
+    "label": "Panel fidelity",
+    "weight": 40,
+    "scoredAgainst": "stage2",
+    "rawScore": 98,
+    "score": 98,
+    "hardGate": {
+      "tripped": [],
+      "scoreCap": null
+    },
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "label": "Chassis, silhouette & geometry",
+        "weight": 20,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "deckFraction",
+            "label": "Deck vertical allocation",
+            "weight": 26,
+            "value": 0.5344,
+            "score": 100
+          },
+          {
+            "id": "keybedFraction",
+            "label": "Keybed vertical allocation",
+            "weight": 16,
+            "value": 0.4656,
+            "score": 100
+          },
+          {
+            "id": "widthFraction",
+            "label": "Instrument width fraction of viewport",
+            "weight": 20,
+            "value": 0.932,
+            "score": 100
+          },
+          {
+            "id": "aspectRatio",
+            "label": "Instrument aspect ratio",
+            "weight": 18,
+            "value": 3.0928,
+            "score": 100
+          },
+          {
+            "id": "sectionFractionMaxDeviation",
+            "label": "Worst of the six section-fraction deviations",
+            "weight": 20,
+            "value": 0.0035,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "Measured with getBoundingClientRect in the published build/ served from 127.0.0.1 at 1440x900, page unscrolled: #instrument is 1342.078 x 433.938 px at (48.95, 208.42), giving aspect 3.09279 against the variant's measured 3.0951 and width fraction 1342.078/1440 = 0.93200 inside the 0.88-0.97 range. #control-deck is 231.881 px tall (0.53436) and #keybed 202.057 px (0.46564), against 0.54/0.46 +/-0.025.",
+          "Six section bands measured from each '#section-<id> > rect': performance 182.67, organ 253.50, piano 110.35, program 163.29, synth 322.84, effects 257.23 px, summing to 1289.88. As fractions of that band they are 0.14162 / 0.19653 / 0.08555 / 0.12659 / 0.25029 / 0.19942 against the spec's 0.14 / 0.20 / 0.085 / 0.125 / 0.25 / 0.20, worst deviation 0.00347 (organ). Taken instead against the full instrument width the worst deviation is 0.0111, still inside the 0.012 tolerance, so the criterion passes on either denominator; I report the band-relative figure because the spec's six fractions sum to 1.",
+          "The instrument fits without scrolling: document.documentElement.scrollHeight is 900 and scrollWidth 1440 at the desktop viewport, and the instrument's bottom edge is at y=642.4. No marketing hero sits above it - the 66 px header is app chrome carrying the product name and a Playing guide button."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "label": "Hardware inventory & placement",
+        "weight": 24,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "requiredLandmarksPresent",
+            "label": "Required section landmarks rendered in their own section",
+            "weight": 30,
+            "value": 33,
+            "score": 100
+          },
+          {
+            "id": "controlsReachable",
+            "label": "Controls a pointer can actually operate",
+            "weight": 60,
+            "value": 219,
+            "score": 100
+          },
+          {
+            "id": "forbiddenPresent",
+            "label": "Forbidden elements present",
+            "weight": 10,
+            "value": 0,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "All 33 sectionLandmarks entries render inside their own section, checked element by element at 1440x900: performance 5/5 (master level knob, four rotary controls under a ROTARY SPEAKER group box, pitch stick, modulation wheel, 'nord stage 4' text), organ 4/4 (9 data-kind=drawbar controls, 11 of 11 faders/drawbars carrying >=9 LED ladder segments, ORGAN MODEL switch, four B3 PERCUSSION controls), piano 5/5, program 7/7 (program-oled, program dial, program-1..8, both page buttons, Live mode and Layer scene, Store and Split, three MORPH ASSIGN buttons), synth 6/6, effects 6/6 (MOD 1 and MOD 2 groups, AMP SIM / EQ, DELAY, COMP, REVERB, three FX focus buttons).",
+          "Reachability measured as specified - a 5x5 grid of document.elementFromPoint probes per bounding box at 1440x900 with the page unscrolled, no framework click helper: 146 of 146 panel controls (.physical inside #control-deck) and 73 of 73 keys resolve to themselves or a descendant at at least one grid point, so 219/219. The worst case is 9 of 25 points (the small effects knobs, whose numbered scale rings overlap the box corners); no control scored 0. Repeating the same test at 390x844 also returned an empty unreachable list.",
+          "forbiddenPresent = 0, applying each forbiddenDetection rule literally to the rendered DOM. Only two elements match the displayElement name/id/class/data clause - #program-oled (75.3 px, 0.461 of its band) and #synth-oled (73.8 px, 0.229 of its band) - so 'wide OLED display', 'wide display spanning the section' and 'multiple primary displays' all fail their thresholds, and neither the performance nor the effects band contains one. 'generic equal-width control grid' cannot fire in organ because 11 drawbar-like controls (>=3x taller than wide) are present; 'drawbar bank' needs 6 in piano and there are 2; 'uniform repeated knob matrix' needs 8 controls within 5% of both median dimensions and synth has 6; 'single undifferentiated control grid' fails because effects has 6 stroked group boxes and 0 such controls; 'full dark inset plate' fails because the performance band samples 92.1% reddish pixels with only 11.6% at or below panelBlueGray luminance, far under 0.8.",
+          "No disagreement found between sectionLandmarks and inputs/reference/nord-stage-4-73.jpg. Spot checks against the photograph: the Rotary Speaker block sits on exposed red chassis below Master Level at 0.111-0.135 of instrument width (the spec note gives about 0.10-0.13); the eight program buttons are laid out 4+4 with the SYSTEM/SOUND/ORGANIZE/AUX KB and OUTPUT/PEDAL/MIDI/EXTERN label rows exactly as photographed; the pitch stick and modulation wheel sit at 0.047 and 0.080 of instrument width against 0.043 and 0.082 measured off the photograph."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "label": "Keybed fidelity",
+        "weight": 18,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "keysInsideKeybed",
+            "label": "Keys whose box falls inside the keybed",
+            "weight": 46,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "keyCount",
+            "label": "Total keys",
+            "weight": 18,
+            "value": 73,
+            "score": 100
+          },
+          {
+            "id": "whiteKeys",
+            "label": "White keys",
+            "weight": 8,
+            "value": 43,
+            "score": 100
+          },
+          {
+            "id": "blackKeys",
+            "label": "Black keys",
+            "weight": 8,
+            "value": 30,
+            "score": 100
+          },
+          {
+            "id": "blackKeyHeightFraction",
+            "label": "Black-key height fraction",
+            "weight": 20,
+            "value": 0.6094,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "73 .piano-key elements render at 1440x900 with unique data-note values spanning MIDI 28 to 100 (E1 to E7), split 43 white and 30 black by data-color, matching the stage-4-73 variant entry exactly. All 73 bounding boxes fall entirely inside the keybed bounds rect (#keybed > rect at x 48.95-1391.03, y 440.30-642.36) with zero out-of-bounds keys; the same check at 390x844 also returned 73/73.",
+          "Median key geometry: white 28.476 x 190.873 px, black 18.233 x 116.313 px. Black-key height fraction 116.313/190.873 = 0.60938 against the specified 0.61 +/-0.03, and black/white width ratio 0.640, consistent with the reference photograph.",
+          "Pressed state works and is visible: pressing #key-60 with the pointer sets aria-pressed=true and shortens the key rect from height 256 to 252, and releasing restores both. The keybed group carries role=group with the accessible name '73 piano keys, E1 to E7' and each key is a labelled, tabbable role=button."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "label": "Chassis & plate colour fidelity",
+        "weight": 8,
+        "scoring": "computed",
+        "score": 100,
+        "measurements": [
+          {
+            "id": "referenceColorsMatched",
+            "label": "Reference colours matched within deltaE 12",
+            "weight": 100,
+            "value": 5,
+            "score": 100
+          }
+        ],
+        "evidence": [
+          "A 1440x900 screenshot of the published build was cropped to the instrument (1342x434 px at 49,208), decoded to raw RGB with ffmpeg, and every one of its 17,271 distinct colours converted to CIE L*a*b*. Nearest rendered surface covering at least 60 px, by CIE76 deltaE: chassisMid #851a25 -> #882028, deltaE 1.68; chassisDark #5a0c13 -> #5a1015, 1.53; panelBlueGray #3c424d -> #3b424d, 0.41 (912 px); keyBlack #0b0b0b -> #0c0b0c, 0.54 (5,926 px); keyWhite #dcdcdc -> #d9d9d5, 2.40 (1,308 px). All five are inside deltaE 12, with a worst case of 2.40, so 5/5.",
+          "The colours are structural, not incidental: src/Panel.tsx defines eleven named gradients and the per-band pixel histogram confirms they land where the spec puts them - the performance band is 92.1% reddish with rgb(136,32,48) covering 49.7% of it, while organ, piano, synth and effects are dominated by the blue-grey plate at rgb(64,72,80) (20-24% each), which is the 'dark inset plate with red perimeter' the spec describes."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "label": "Materials, legends & displays",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 3,
+        "score": 75,
+        "evidence": [
+          "The material and cap vocabulary is complete and specific. src/Panel.tsx defines eleven named linear gradients (metal, cheek, plate, silver, rubber, black, ivory, brown, red, wood, wheel). Knobs draw a rubber-gradient cap with a white pointer plus eleven scale marks - rendered as numerals 0-10 on the effects plate and the light synth sub-panels and as tick strokes elsewhere, which is how the photographed hardware distinguishes them. Drawbars carry the Nord's brown/brown/ivory/ivory/black/ivory/black/black/ivory cap sequence over a nine-segment numbered red LED ladder; layer faders carry thirteen-segment green ladders; LED lamps are 1.9-unit circles that switch between #635754 unlit, #ff6656 red and #bbda53 green.",
+          "OLED treatment is a real screen rather than a label: #program-oled renders a 101x50 unit dark panel with a 1.6-unit bezel, an inverted header strip carrying 'PIANO A / GRAND', an 11 px monospace model line ('Yamaha C5'), a divider rule and a 6.7 px status line, and it updates live. Silver section header plates with a stepped notch, the rear-panel jack-label row (MONITOR IN ... POWER ON/OFF) along the top rail, and 'nord stage 4' plus letter-spaced 'HAMMER ACTION' branding are all present.",
+          "Limitation at rendered size: the default Ink size is 4.8 viewBox units and the SVG scales 1800 units to 1342 px, so secondary legends draw at roughly 3.6 CSS px and are unreadable at 100%. I cropped the reference photograph to the measured instrument bounds and downscaled it to the same 1342 px width, and its silkscreen is equally unreadable at the same crop, so this is faithful rather than a defect, and the app supplies a 1-4x zoom plus a full-size editor.",
+          "Where it does diverge from the photograph: the hardware prints shift functions (MST CLK, TO ROTARY, GLOBAL, VARIATION) in red and sets the per-unit type lists inside white or silver boxes with their own LEDs, while the build prints both in plain light silkscreen directly on the blue-grey plate; and the OLEDs are given an inverted light header bar the photographed displays do not have. These are the simplifications a knowledgeable player would spot."
+        ]
+      },
+      {
+        "id": "panelState",
+        "label": "Panel state & displays",
+        "weight": 14,
+        "scoring": "judged",
+        "rating": 4,
+        "score": 100,
+        "evidence": [
+          "Control positions track their parameters. Driving #performance-master-level and #effects-reverb-mix with Home then End moves the knob pointer transform from rotate(-135) to rotate(135) with aria-valuenow 0 then 100; #piano-layer-a-level moves its cap between translate(0 33.5) and translate(0 -33.5) over the same range; four ArrowUp presses on it moved 76 -> 96 with the cap transform changing from translate(0 -17.42) to translate(0 -30.82). Every control also exposes a live title and aria-description, e.g. 'Master level - 81%'.",
+          "LEDs follow the active layer and section. Pressing #piano-piano-type moved the type lamp from (672,200) to (671,194) and the OLED from 'PIANO A / GRAND / Yamaha C5' to 'PIANO A / UPRIGHT / Kawai Upright'; enabling layer B moved the green focus lamp from x=606 to x=641 and lit the B ON/OFF lamp; shift-clicking #effects-reverb-on lit the global lamp at (1679,278) and set aria-description 'On - global'; shift-clicking #effects-layer-focus-piano lit the group lamp at (1385,182) and read 'Piano group'; cycling #effects-reverb-variation moved the reverb type lamp and the description Room -> Booth.",
+          "Displays read live values and stay truthful about what is offline. The Program OLED carries the focused layer, type, model name and a feedback line; the Synth OLED reads 'SYNTH / IDLE / Oscillator / Section offline' because that engine is decorative in this phase; selecting FX Focus Organ changes every effect control's description to 'Section offline' rather than letting it appear to work; the audio-engine strip reports 'Piano ready', 'touch to enable', 'Sample error - synth fallback' or 'Audio unavailable' as the real state demands.",
+          "Keys report their own state - #key-60 goes aria-pressed=true with its rect shortening 256 -> 252 while held and restores on release - and the whole pass produced zero console errors or page errors."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "label": "Narrow-viewport retention",
+        "weight": 8,
+        "scoring": "judged",
+        "rating": 4,
+        "score": 100,
+        "evidence": [
+          "At 390x844 with touch emulation the instrument stays whole and proportionally identical to desktop: #instrument measures 366.6 x 118.5 px at (11.7, 169.1), aspect 3.0928, width fraction 0.940 (inside 0.88-0.97), deck 0.534 and keybed 0.466 of its height. document.documentElement.scrollWidth is 390 and scrollHeight 844, the instrument's left and right edges are inside the viewport, and nothing clips.",
+          "Nothing collapses. All 73 keys still render inside the keybed bounds, all 146 panel controls still pass the 5x5 elementFromPoint reachability test at this size (empty unreachable list), all six section bands keep their order and relative widths, and both OLEDs still render their text ('PIANO A / GRAND / Yamaha C5', 'SYNTH / IDLE'). A touchscreen tap on #key-60 worked and the run logged no console or page errors.",
+          "The scale problem is acknowledged and mitigated rather than hidden: the deck band is 47 CSS px tall at 100%, so the app supplies a 1-4x zoom with a scrolling .viewport, a 'Playing guide' dialog, a full-size layer editor for the piano and effect parameters, and a status strip that correctly reported 'Piano ready - touch to enable' and 'Access denied' for the blocked MIDI permission in that context.",
+          "The dark tabs visible above the chassis top edge are the rear-panel brackets drawn at viewBox y=1-29, which appear the same way above the top edge in inputs/reference/nord-stage-4-73.jpg - they are modelled hardware, not a detached rail or an overflow artifact."
+        ]
+      }
+    ]
+  },
+  "technicalGate": {
+    "passed": true,
+    "scoreCap": null,
+    "checks": [
+      {
+        "id": "test",
+        "label": "test",
+        "passed": true,
+        "durationMs": 9088,
+        "detail": "Passed (lockdown)"
+      },
+      {
+        "id": "typecheck",
+        "label": "typecheck",
+        "passed": true,
+        "durationMs": 1735,
+        "detail": "Passed (lockdown)"
+      },
+      {
+        "id": "lint",
+        "label": "lint",
+        "passed": true,
+        "durationMs": 739,
+        "detail": "Passed (lockdown)"
+      },
+      {
+        "id": "build",
+        "label": "build",
+        "passed": true,
+        "durationMs": 1876,
+        "detail": "Passed (lockdown)"
+      },
+      {
+        "id": "artifact",
+        "label": "Built phase artifact",
+        "passed": true,
+        "detail": "dist/index.html present"
+      },
+      {
+        "id": "lint-coverage",
+        "label": "Lint covers candidate sources",
+        "advisory": true,
+        "passed": true,
+        "detail": "Lint reported the probe at src/__stagebench_lint_coverage_probe.tsx, so the script covers the candidate's own sources (lockdown)"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "Piano Model dial is presentation-only but not declared unsupported",
+      "detail": "#piano-piano-model has no entry in src/bindings.ts, so dragging it changes only local presentation state while its accessible description reports the live model name. IMPLEMENTATION_DETAILS.json surface.panelBehavior states that Piano controls 'operate the shared audio graph' and surface.unsupported does not mention the model dial. Because the build ships one model per type there is nothing for the dial to select, so no required behaviour is missing - but the declaration overstates what the Piano plate does."
+    },
+    {
+      "severity": "minor",
+      "criterion": "instrumentBreadth",
+      "title": "Grand uses 2 of the pack's 8 Salamander velocity layers, switched not crossfaded",
+      "detail": "src/piano.ts:331 picks a layer with a single hard threshold at touch-adjusted velocity 70 (81 for Upright), and IMPLEMENTATION_DETAILS.json bundles only v4 and v10 for each of the 25 grand roots. The shared pack carries eight Salamander layers, so the available timbral resolution is halved four times over and the transition is a step rather than a crossfade. The pack's Wurlitzer EP200, Pianet T and CP80 are not used at all, so Electric rests entirely on the one-dynamic Rhodes."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectAudibility",
+      "title": "Twin and JC amp models are only 1.60 dB apart in spectral shape",
+      "detail": "Measured on the same held note, mean 1/3-octave distance between the Twin and JC amp types is 1.60 dB, against 12.8-36.9 dB for the filter types and 3.9-6.0 dB for Small versus the rest. They are not identical - level differs by 3.2 dB and crest factor by 2.5 dB because the cabinet lowpass (3800 vs 6500 Hz) and tanh drive (2.6 vs 1.3) differ - so effects.json's 'must not sound identical' is satisfied, but a player who knows a Twin Reverb from a JC-120 would find them closer than the hardware."
+    },
+    {
+      "severity": "minor",
+      "criterion": "effectUnitCoverage",
+      "title": "Delay feedback filter and Compressor Fast are editor-only, not on the panel",
+      "detail": "effects.json lists 'Feedback filter Off/LP/HP/BP' among the Delay parameters and 'Fast mode' among the Compressor parameters. Both are implemented and measurably change the rendered signal (the filter moves the delay tail 11.3-31.3 dB), but they are reachable only from the in-app layer editor dialog opened from the voice name below the chassis; no control or shift-function on the rendered Layer Effects plate selects them."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Silkscreen legends render at about 3.6 CSS px and lose the hardware's red shift lettering",
+      "detail": "The default Ink size is 4.8 viewBox units and the instrument renders 1342 px wide for an 1800-unit viewBox, so secondary legends draw at roughly 3.6 CSS px and are illegible at 100%. Downscaling the reference photograph to the same 1342 px makes its silkscreen equally unreadable, so this is faithful rather than wrong, and a 1-4x zoom is provided. The real divergence is treatment: the hardware prints shift functions such as MST CLK, TO ROTARY and GLOBAL in red and sets the type lists in white boxes, while the build renders them in plain light silkscreen directly on the plate, and its OLEDs carry an inverted light header bar the hardware does not have."
+    },
+    {
+      "severity": "minor",
+      "criterion": "narrowRetention",
+      "title": "At 390x844 the control deck is 47 px tall, so panel use depends on the zoom control",
+      "detail": "The instrument keeps its proportions exactly (366.6 x 118.5 px, aspect 3.0928, width fraction 0.940, deck/keybed 0.534/0.466) and every one of the 146 panel controls still passes the 5x5 elementFromPoint test, but the deck band is only 47 CSS px high and individual keys about 5 px wide, so precise operation at the default scale is impractical. The 1-4x zoom with a scrolling viewport and the playing guide mitigate this; the viewport width fraction is itself pinned to 0.88-0.97 by the spec, so the build cannot simply draw it larger."
+    }
+  ],
+  "grader": {
+    "boxed": true,
+    "requested": "claude-opus-5",
+    "pinned": "claude-opus-5",
+    "sessions": [
+      {
+        "slot": 1,
+        "harness": [
+          "Claude Code 2.1.326 (Claude Code)"
+        ]
+      }
+    ],
+    "served": {
+      "claude-opus-5 -> claude-opus-5": 139,
+      "claude-opus-5 -> unreported": 2
+    },
+    "pinnedRequests": 141,
+    "requestIds": {
+      "count": 141,
+      "first": "req_011Ch9wWkrvQYHFf2oXVmir7",
+      "last": "req_011Ch9yzprYWdY5hbCa6pAfZ",
+      "sha256": "8d34f8c017eff338645a68998a859c4e01182c289fd61205ec66d6b3a1e2b1c7"
+    },
+    "drift": [
+      {
+        "servedAs": "unreported",
+        "requests": 2
+      }
+    ]
+  },
+  "registeredAt": "2026-11-18T07:17:26.540Z"
+}
