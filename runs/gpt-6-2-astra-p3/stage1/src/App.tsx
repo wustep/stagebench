@@ -1,0 +1,246 @@
+import { useEffect, useRef, useState } from 'react'
+import { Instrument } from './Instrument'
+import { connectInputs } from './inputs'
+import { Grand, Piano, browserAudio, type AudioBoundary } from './piano'
+
+function Book() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      aria-hidden="true"
+    >
+      <path d="M12 5Q7 2 2 4v15q6-2 10 1 4-3 10-1V4q-6-2-10 1v15" />
+    </svg>
+  )
+}
+const requestMidi = () => navigator.requestMIDIAccess?.()
+export default function App({
+  boundary = browserAudio,
+  midi = requestMidi,
+}: {
+  boundary?: AudioBoundary
+  midi?: () => Promise<MIDIAccess> | undefined
+}) {
+  const [sound, setSound] = useState('Loading samples'),
+    [midiState, setMidi] = useState('Connecting')
+  const [pressed, setPressed] = useState(new Set<number>()),
+    [sustain, setSustain] = useState(false)
+  const [zoom, setZoom] = useState(1),
+    [source, setSource] = useState('guide')
+  const piano = useRef<Piano | null>(null),
+    dialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const grand = new Grand(setSound, boundary)
+    const model = new Piano(grand, () => {
+      setPressed(model.pressed)
+      setSustain(model.sustained)
+    })
+    piano.current = model
+    void grand.load()
+    const disconnect = connectInputs(
+      window,
+      model,
+      () => grand.unlock(),
+      midi,
+      setMidi,
+    )
+    return () => {
+      disconnect()
+      grand.dispose()
+      piano.current = null
+    }
+  }, [boundary, midi])
+  const open = (page: string) => {
+    piano.current?.clear()
+    setSource(page)
+    dialog.current?.showModal()
+  }
+  return (
+    <div className="studio">
+      <header>
+        <div className="identity">
+          <span className="brandmark" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          Keyroom
+        </div>
+        <span className="header-line" />
+        <span className="studio-name">Instrument studio</span>
+        <button className="guide" onClick={() => open('guide')}>
+          <Book />
+          Playing guide
+        </button>
+      </header>
+      <main>
+        <div className="titlebar">
+          <div>
+            <div className="category">
+              <span />
+              STAGE KEYBOARD
+            </div>
+            <h1>
+              Nord Stage 4 <em>73</em>
+            </h1>
+          </div>
+          <div className="zoom" aria-label="Instrument magnification">
+            <button
+              aria-label="Zoom out"
+              disabled={zoom === 1}
+              onClick={() => setZoom((v) => Math.max(1, v - 0.5))}
+            >
+              −
+            </button>
+            <output>{zoom * 100}%</output>
+            <button
+              aria-label="Zoom in"
+              disabled={zoom === 4}
+              onClick={() => setZoom((v) => Math.min(4, v + 0.5))}
+            >
+              +
+            </button>
+          </div>
+        </div>
+        <div className="viewport">
+          <div className="instrument-wrap" style={{ width: zoom * 100 + '%' }}>
+            <Instrument piano={piano.current} pressed={pressed} />
+          </div>
+        </div>
+        <div className="spec-strip">
+          <span>
+            <b>73</b> keys <i /> Hammer action
+          </span>
+          <span>E1 — E7</span>
+        </div>
+        <section className="session" aria-label="Playing status">
+          <div className="voice">
+            <span className="voice-icon" aria-hidden="true">
+              ♩
+            </span>
+            <div>
+              <small>PIANO VOICE</small>
+              <strong>
+                {sound.includes('fallback')
+                  ? 'Synthesized piano'
+                  : 'Acoustic grand'}
+              </strong>
+            </div>
+          </div>
+          <div>
+            <small>AUDIO ENGINE</small>
+            <span className="status">
+              <i className={sound === 'Piano ready' ? 'green' : ''} />
+              {sound}
+            </span>
+          </div>
+          <div>
+            <small>MIDI INPUT</small>
+            <span className="status">
+              <i
+                className={
+                  midiState.includes('connected') &&
+                  !midiState.startsWith('Dis')
+                    ? 'green'
+                    : ''
+                }
+              />
+              {midiState}
+            </span>
+          </div>
+          <button
+            className={'pedal ' + (sustain ? 'engaged' : '')}
+            aria-pressed={sustain}
+            onClick={() => {
+              piano.current?.pedal('switch', !piano.current.hasPedal('switch'))
+            }}
+          >
+            <span className="switch">
+              <i />
+            </span>
+            Sustain
+          </button>
+        </section>
+        <footer>
+          <span>
+            <kbd>A</kbd> – <kbd>K</kbd> Play notes <i /> <kbd>Space</kbd>{' '}
+            Sustain
+          </span>
+          <button onClick={() => open('credits')}>
+            Sample credits <span>↗</span>
+          </button>
+        </footer>
+      </main>
+      <dialog
+        ref={dialog}
+        onClick={(e) => {
+          if (e.target === dialog.current) dialog.current?.close()
+        }}
+      >
+        <div className="dialog-body">
+          <div className="dialog-top">
+            <small>KEYROOM</small>
+            <button aria-label="Close" onClick={() => dialog.current?.close()}>
+              ×
+            </button>
+          </div>
+          {source === 'guide' ? (
+            <>
+              <h2>Playing guide</h2>
+              <p>
+                Click or touch the keys to play the grand piano. Use the zoom
+                controls to inspect the panel, then scroll across the
+                instrument.
+              </p>
+              <h3>Computer keyboard</h3>
+              <p>
+                Play white keys from C4 to E5 with{' '}
+                <kbd>A S D F G H J K L ;</kbd>. The black keys are{' '}
+                <kbd>W E T Y U O P</kbd>. Hold <kbd>Space</kbd> for sustain.
+              </p>
+              <h3>MIDI</h3>
+              <p>
+                Allow MIDI access and click anywhere to enable sound. Connected
+                inputs send notes, velocity and sustain pedal (CC64).
+              </p>
+              <h3>Panel controls</h3>
+              <p>
+                The panel is an interactive hardware study. Press buttons or
+                drag controls vertically. Use Tab to focus, arrow keys to adjust
+                and Enter or Space to press. Panel adjustments are visual only.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Sample credits</h2>
+              <p>
+                Salamander Grand Piano V3 by Alexander Holm, licensed under CC
+                BY 3.0. Stereo Yamaha C5 recordings, trimmed, levelled and
+                encoded as Ogg Vorbis.
+              </p>
+              <p>
+                <a href="https://creativecommons.org/licenses/by/3.0/">
+                  CC BY 3.0 license
+                </a>{' '}
+                ·{' '}
+                <a href="https://archive.org/details/SalamanderGrandPianoV3">
+                  Original recordings
+                </a>
+              </p>
+              <p>
+                A synthesized piano plays while samples load, or if loading
+                fails.
+              </p>
+            </>
+          )}
+        </div>
+      </dialog>
+    </div>
+  )
+}

@@ -1,0 +1,662 @@
+import { memo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  controls,
+  groups,
+  initialPanel,
+  legends,
+  sections,
+  type Control,
+} from './hardware'
+
+const materials: Record<string, string[]> = {
+  metal: ['#571119', '#a04448', '#96272f', '#891b29', '#74151e', '#4a0911'],
+  cheek: ['#540e13', '#94262e', '#862028', '#62131c'],
+  plate: ['#474e59', '#414954', '#353b45'],
+  silver: ['#c1c6cd', '#a6afbc', '#7d8799'],
+  rubber: ['#74716e', '#413e3b', '#2d2a28', '#1c1b1c', '#0b0a0c'],
+  black: ['#535052', '#333134', '#232225', '#111114'],
+  ivory: ['#eeece2', '#d6d3c8', '#bcbab0', '#8e8c84'],
+  brown: ['#534440', '#382e2f', '#241f20', '#130f11'],
+  red: ['#da6861', '#b64943', '#8b2529', '#561619'],
+  wood: ['#976842', '#daa16a', '#e4b687', '#9a6949'],
+  wheel: ['#232023', '#8f8588', '#ded5d1', '#5c5355', '#282326'],
+}
+export function Materials() {
+  return (
+    <defs>
+      {Object.entries(materials).map(([id, colors]) => (
+        <linearGradient
+          id={'mat-' + id}
+          key={id}
+          x2={id === 'cheek' || id === 'wheel' ? '100%' : '0%'}
+          y2={id === 'cheek' || id === 'wheel' ? '0%' : '100%'}
+        >
+          {colors.map((color, i) => (
+            <stop key={i} offset={i / (colors.length - 1)} stopColor={color} />
+          ))}
+        </linearGradient>
+      ))}
+      <linearGradient id="deck-paint" x2="0" y2="1">
+        <stop stopColor="#ae4e52" />
+        <stop offset=".047" stopColor="#a33540" />
+        <stop offset=".069" stopColor="#8d2732" />
+        <stop offset=".83" stopColor="#861f30" />
+        <stop offset=".94" stopColor="#821b2a" />
+        <stop offset=".974" stopColor="#6b1522" />
+        <stop offset="1" stopColor="#360d14" />
+      </linearGradient>
+      <linearGradient id="key-white" x2="0" y2="1">
+        <stop stopColor="#99948e" />
+        <stop offset=".045" stopColor="#ccc8c1" />
+        <stop offset=".15" stopColor="#eeeae3" />
+        <stop offset=".93" stopColor="#e5e2db" />
+        <stop offset=".985" stopColor="#d3d0c9" />
+        <stop offset="1" stopColor="#bbb8b0" />
+      </linearGradient>
+      <linearGradient id="key-black" x2="0" y2="1">
+        <stop stopColor="#0c0b0c" />
+        <stop offset=".08" stopColor="#3a3736" />
+        <stop offset=".92" stopColor="#292625" />
+        <stop offset=".94" stopColor="#383533" />
+        <stop offset="1" stopColor="#151315" />
+      </linearGradient>
+    </defs>
+  )
+}
+const mat = (s: string) => 'url(#mat-' + s + ')'
+function Ink({
+  x,
+  y,
+  children,
+  size = 4.8,
+  fill = '#e3e1de',
+  bold = true,
+}: {
+  x: number
+  y: number
+  children: React.ReactNode
+  size?: number
+  fill?: string
+  bold?: boolean
+}) {
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      fontFamily="Arial, sans-serif"
+      fontSize={size}
+      fontWeight={bold ? 700 : 500}
+      fill={fill}
+    >
+      {children}
+    </text>
+  )
+}
+function Lamp({
+  x,
+  y,
+  lit = false,
+  green = false,
+}: {
+  x: number
+  y: number
+  lit?: boolean
+  green?: boolean
+}) {
+  return (
+    <circle
+      cx={x}
+      cy={y}
+      r="1.9"
+      stroke="#202427"
+      strokeWidth=".5"
+      fill={lit ? (green ? '#bbda53' : '#ff6656') : '#635754'}
+    />
+  )
+}
+function SliderCap({ c, value }: { c: Control; value: number }) {
+  const bar = c.kind === 'drawbar',
+    reach = c.height - (bar ? 34 : 13),
+    offset = reach * (0.5 - value / 100)
+  return (
+    <>
+      <rect
+        x={-3}
+        y={-c.height / 2}
+        width={6}
+        height={c.height}
+        fill="#151719"
+        stroke="#555763"
+      />
+      {bar && (
+        <rect
+          x="4.2"
+          y={-c.height / 2 - 2}
+          width="14.5"
+          height="63.5"
+          rx=".8"
+          fill="#a4a3a1"
+          stroke="#24262b"
+          strokeWidth="1"
+        />
+      )}
+      {Array.from({ length: bar ? 9 : 13 }, (_, i) => (
+        <g key={i}>
+          <rect
+            x={bar ? 10 : 12}
+            y={-c.height / 2 + i * (bar ? 6.7 : 5.9)}
+            width={bar ? 6 : 4}
+            height={bar ? 5.4 : 4.6}
+            fill={
+              i >= (bar ? value / 100 : 1 - value / 100) * (bar ? 9 : 13)
+                ? bar
+                  ? '#f66a58'
+                  : '#b1d94e'
+                : bar
+                  ? '#78413d'
+                  : '#515744'
+            }
+          />
+          {bar && (
+            <Ink
+              x={7.5}
+              y={-c.height / 2 + i * 6.7 + 4.3}
+              size={4.9}
+              fill="#2f3135"
+            >
+              {i + 1}
+            </Ink>
+          )}
+        </g>
+      ))}
+      <g transform={`translate(0 ${offset})`}>
+        <rect
+          x={-c.width / 2 + 1}
+          y={bar ? -14 : -4}
+          width={c.width}
+          height={bar ? 35 : 14}
+          rx="2"
+          fill="#131315"
+          opacity=".7"
+        />
+        <rect
+          x={-c.width / 2}
+          y={bar ? -17 : -7}
+          width={c.width}
+          height={bar ? 34 : 14}
+          rx="1.8"
+          fill={mat(bar ? c.finish : 'ivory')}
+          stroke="#332c2b"
+        />
+        <path
+          d={`M${-c.width * 0.45} 0h${c.width * 0.9}`}
+          stroke={bar ? '#9c9990' : '#555354'}
+          strokeOpacity=".65"
+        />
+      </g>
+    </>
+  )
+}
+const Physical = memo(function Physical({
+  c,
+  value,
+  change,
+}: {
+  c: Control
+  value: number
+  change: (id: string, v: number) => void
+}) {
+  const drag = useRef<{ y: number; value: number; scale: number } | null>(null)
+  const button = c.kind === 'button',
+    r = c.width / 2,
+    light = c.section === 'synth' && c.y >= 209 && c.x > 1030
+  const ink = light ? '#242935' : '#f0e9e4'
+  const label = c.legend.toUpperCase()
+  const layerButton = /^Layer [ABC] on$/.test(c.name)
+  const sectionSwitch = c.name === 'Section on'
+  const update = (v: number) =>
+    change(c.id, Math.min(100, Math.max(0, Math.round(v))))
+  function keyboard(e: KeyboardEvent<SVGGElement>) {
+    if (button && [' ', 'Enter'].includes(e.key)) {
+      e.preventDefault()
+      if (!e.repeat) update(value ? 0 : 100)
+      return
+    }
+    if (button) return
+    const values: Record<string, number> = {
+      ArrowUp: value + 5,
+      ArrowRight: value + 5,
+      ArrowDown: value - 5,
+      ArrowLeft: value - 5,
+      Home: 0,
+      End: 100,
+      PageUp: value + 20,
+      PageDown: value - 20,
+    }
+    if (e.key in values) {
+      e.preventDefault()
+      update(values[e.key])
+    }
+  }
+  return (
+    <g
+      transform={`translate(${c.x} ${c.y})`}
+      id={c.id}
+      data-kind={c.kind}
+      role={button ? 'button' : 'slider'}
+      tabIndex={0}
+      aria-label={c.section + ' ' + c.name}
+      aria-pressed={button ? !!value : undefined}
+      aria-valuemin={button ? undefined : 0}
+      aria-valuemax={button ? undefined : 100}
+      aria-valuenow={button ? undefined : value}
+      aria-orientation={button ? undefined : 'vertical'}
+      className="physical"
+      onKeyDown={keyboard}
+      onClick={() => {
+        if (button) update(value ? 0 : 100)
+      }}
+      onPointerDown={(e) => {
+        if (button) return
+        e.currentTarget.setPointerCapture(e.pointerId)
+        const scale = e.currentTarget.getScreenCTM()?.a || 1
+        const local =
+          (e.clientY - e.currentTarget.getBoundingClientRect().top) / scale
+        const next = ['fader', 'drawbar'].includes(c.kind)
+          ? Math.max(0, Math.min(100, 100 - (local / c.height) * 100))
+          : value
+        update(next)
+        drag.current = { y: e.clientY, value: next, scale }
+      }}
+      onPointerMove={(e) => {
+        if (drag.current)
+          update(
+            drag.current.value +
+              ((drag.current.y - e.clientY) / drag.current.scale) * 1.4,
+          )
+      }}
+      onLostPointerCapture={() => {
+        drag.current = null
+      }}
+    >
+      <title>{c.name} · panel preview</title>
+      <rect
+        className="hit"
+        x={-r - 1}
+        y={-c.height / 2 - 1}
+        width={c.width + 2}
+        height={c.height + 2}
+        fill="transparent"
+        rx="2"
+      />
+      <g pointerEvents="none">
+        {layerButton && (
+          <>
+            <rect
+              x="-14"
+              y="-16"
+              width="29"
+              height="6.5"
+              rx="1"
+              fill="#b6bdc5"
+            />
+            <Lamp x={-11} y={-12.6} lit green />
+            <Ink x={3} y={-11} fill="#30353c" size={4.4}>
+              ON/OFF ▾
+            </Ink>
+            <Ink x={0} y={-19} size={4.8}>
+              {c.name.split(' ')[1]} AUX KB •
+            </Ink>
+          </>
+        )}
+        {sectionSwitch && (
+          <Ink x={-20} y={-1} fill="#242830">
+            ON
+          </Ink>
+        )}
+        {c.kind === 'knob' && (
+          <>
+            {Array.from({ length: 11 }, (_, i) =>
+              c.section === 'effects' || (light && c.kind === 'knob') ? (
+                <Ink
+                  key={i}
+                  x={Math.sin(((-134 + 26.8 * i) * Math.PI) / 180) * (r + 4)}
+                  y={
+                    -Math.cos(((-134 + 26.8 * i) * Math.PI) / 180) * (r + 4) +
+                    1.3
+                  }
+                  size={3.9}
+                  fill={ink}
+                >
+                  {i}
+                </Ink>
+              ) : (
+                <path
+                  key={i}
+                  d={`M0 ${-r - 2}v-2`}
+                  transform={`rotate(${-134 + 26.8 * i})`}
+                  stroke={ink}
+                  strokeWidth=".9"
+                />
+              ),
+            )}
+            <circle cx="1.3" cy="3" r={r + 1} fill="#151415" opacity=".85" />
+            <circle
+              r={r}
+              fill={mat('rubber')}
+              stroke="#666361"
+              strokeWidth=".8"
+            />
+            <circle cy="-1" r={r * 0.82} fill="#353230" />
+            <path
+              d={`M0 ${-r + 1} v${r * 0.52}`}
+              stroke="#f2ede8"
+              strokeWidth="2.4"
+              transform={`rotate(${-135 + value * 2.7})`}
+            />
+          </>
+        )}
+        {button && (
+          <>
+            {/^(Program [1-8]|Morph |Split$|Store$|Live mode|KB hold|Arp run|Ping pong|Layer focus)/i.test(
+              c.name,
+            ) && (
+              <Lamp
+                x={-r + 1}
+                y={-c.height / 2 - 5}
+                lit={
+                  !!value || c.name === 'Program 1' || c.name === 'Morph Wheel'
+                }
+                green={c.name === 'Morph Wheel'}
+              />
+            )}
+
+            <rect
+              x={-r - 1.1}
+              y={-c.height / 2 - 0.8}
+              width={c.width + 2.2}
+              height={c.height + 2.7}
+              fill="#151619"
+              stroke="#696568"
+              rx="1"
+            />
+            <rect
+              x={-r + 1.1}
+              y={-c.height / 2 + (value ? 2 : 0)}
+              width={c.width - 2.2}
+              height={c.height - (value ? 3 : 1)}
+              rx={Math.min(c.height / 3, 4)}
+              fill={mat(value ? 'red' : c.finish)}
+              stroke="#373233"
+              strokeWidth=".85"
+            />
+            {value > 0 && <Lamp x={r - 3} y={-c.height / 2 + 3} lit />}
+          </>
+        )}
+        {(c.kind === 'drawbar' || c.kind === 'fader') && (
+          <SliderCap c={c} value={value} />
+        )}
+        {c.kind === 'pitch' && (
+          <g transform="rotate(-15)">
+            <rect
+              x="-27"
+              y="-10"
+              width="54"
+              height="21"
+              fill="#230e12"
+              rx="2"
+            />
+            <rect
+              x={-21 + value * 0.11}
+              y="-7"
+              width="33"
+              height="15"
+              rx="4"
+              fill={mat('wood')}
+            />
+          </g>
+        )}
+        {c.kind === 'wheel' && (
+          <g transform="rotate(-14)">
+            <rect x="-8" y="-41" width="16" height="82" rx="8" fill="#241318" />
+            <ellipse
+              cy={value * 0.08 - 4}
+              rx="5.1"
+              ry="33"
+              fill={mat('wheel')}
+            />
+          </g>
+        )}
+        {label && !layerButton && !sectionSwitch && (
+          <Ink
+            x={0}
+            y={
+              c.kind === 'drawbar'
+                ? c.height / 2 + 10
+                : c.kind === 'knob' && c.y !== 88
+                  ? r + 6
+                  : -c.height / 2 - 3.3
+            }
+            fill={ink}
+          >
+            {label}
+          </Ink>
+        )}
+      </g>
+    </g>
+  )
+})
+function Oled({ s }: { s: 'program' | 'synth' }) {
+  const program = s === 'program',
+    x = program ? 797 : 1086,
+    y = program ? 144 : 80,
+    w = program ? 101 : 99,
+    h = 50
+  return (
+    <g
+      id={s + '-oled'}
+      aria-label={s + ' OLED'}
+      transform={`translate(${x} ${y})`}
+    >
+      <rect
+        width={w}
+        height={h}
+        fill="#101619"
+        stroke="#6a6260"
+        strokeWidth="1.6"
+      />
+      <rect x="3" y="3" width={w - 6} height="9" fill="#8aaeb8" />
+      <text x="6" y="10" fontSize="6.5" fontFamily="monospace" fill="#17242a">
+        {program ? 'PIANO   /   GRAND' : 'SYNTH   /   IDLE'}
+      </text>
+      <text x="5" y="25" fontSize="11" fontFamily="monospace" fill="#aac4c8">
+        {program ? 'Stage 4 73' : 'Oscillator'}
+      </text>
+      <path d={'M4 29h' + (w - 8)} stroke="#61838b" strokeWidth=".65" />
+      <text x="6" y="39" fontSize="6.7" fill="#81a1ae" fontFamily="monospace">
+        {program ? 'Acoustic Grand' : 'Section offline'}
+      </text>
+      <path d="M6 44h17m3 0h10m3 0h4" stroke="#597480" />
+    </g>
+  )
+}
+function Backplate({ s }: { s: (typeof sections)[number] }) {
+  const { x, width, id } = s,
+    bg = id !== 'performance' && id !== 'program',
+    hdr =
+      id === 'effects'
+        ? 147
+        : id === 'synth'
+          ? 180
+          : id === 'organ'
+            ? 140
+            : width - 5
+  return (
+    <g pointerEvents="none">
+      {bg && (
+        <>
+          <rect
+            x={x + 1}
+            y="68"
+            width={width - 4}
+            height="218"
+            rx="3"
+            fill={mat('plate')}
+            stroke="#8e6665"
+            strokeWidth="1"
+          />
+          <path
+            d={`M${x + 1} 77V59q0 -3 4 -3h${hdr - 4}v11h${width - hdr - 5}v10z`}
+            fill={mat('silver')}
+          />
+          <text
+            x={x + 5}
+            y="68"
+            fontSize="10.6"
+            fontWeight="900"
+            letterSpacing=".7"
+            fill="#161a20"
+          >
+            {s.name.toUpperCase()}
+          </text>
+          <text
+            x={x + 5}
+            y="74.5"
+            fontSize="5"
+            fontWeight="bold"
+            fill="#232832"
+          >
+            {id === 'effects' ? 'FX FOCUS' : 'SECTION'}
+          </text>
+          <Lamp
+            x={
+              id === 'organ'
+                ? 351
+                : id === 'piano'
+                  ? 674
+                  : id === 'synth'
+                    ? 1078
+                    : 1495
+            }
+            y={65}
+            lit
+          />
+        </>
+      )}
+      {groups
+        .filter((g) => g.section === id)
+        .map((g) => (
+          <g key={g.title}>
+            <rect
+              x={g.x}
+              y={g.y}
+              width={g.width}
+              height={g.height}
+              rx="2.8"
+              fill={g.light ? mat('silver') : 'none'}
+              stroke={g.light ? '#818694' : '#c0bfbe'}
+              strokeWidth=".82"
+            />
+            <rect
+              x={g.x + g.width / 2 - g.title.length * 1.72 - 2}
+              y={g.y - 2}
+              width={g.title.length * 3.44 + 4}
+              height="7"
+              fill={
+                g.light
+                  ? '#b4bdcb'
+                  : id === 'program' || id === 'performance'
+                    ? '#86232e'
+                    : '#424953'
+              }
+            />
+            <Ink
+              x={g.x + g.width / 2}
+              y={g.y + 3.3}
+              size={5.7}
+              fill={g.light ? '#252a33' : '#f1eeee'}
+            >
+              {g.title}
+            </Ink>
+          </g>
+        ))}
+      {legends
+        .filter((l) => l.section === id)
+        .map((l) => (
+          <g key={l.x + '-' + l.y}>
+            {l.lines.map((line, i) => (
+              <Ink key={line} x={l.x} y={l.y + 6 * i}>
+                {line}
+              </Ink>
+            ))}
+          </g>
+        ))}
+      {['piano', 'synth', 'organ'].includes(id) &&
+        [0, 1, 2, 3].map((i) => (
+          <Lamp key={i} x={x + 23 + i * 6} y={281} lit={i > 1} green />
+        ))}
+      {id === 'performance' && (
+        <>
+          <text
+            x="47"
+            y="278"
+            fontSize="29"
+            fontWeight="500"
+            textLength="142"
+            lengthAdjust="spacingAndGlyphs"
+            letterSpacing="-1.9"
+            fill="#f5e9df"
+          >
+            nord stage 4
+          </text>
+          <text
+            x="51"
+            y="286"
+            fontSize="4.3"
+            letterSpacing="3.8"
+            fill="#ecd9ce"
+          >
+            HAMMER ACTION
+          </text>
+        </>
+      )}
+      {(id === 'synth' || id === 'program') && <Oled s={id} />}
+    </g>
+  )
+}
+export function Panel() {
+  const [values, setValues] = useState(initialPanel)
+  const change = useRef((id: string, v: number) =>
+    setValues((old) => (old[id] === v ? old : { ...old, [id]: v })),
+  ).current
+  return (
+    <g id="control-deck" aria-label="Decorative control deck">
+      <rect width="1800" height="311" fill="none" pointerEvents="none" />
+      {sections.map((s) => (
+        <g
+          key={s.id}
+          id={'section-' + s.id}
+          data-section={s.id}
+          role="group"
+          aria-label={s.name}
+        >
+          <rect
+            x={s.x}
+            y="55"
+            width={s.width}
+            height="232"
+            fill="none"
+            pointerEvents="none"
+          />
+          <Backplate s={s} />
+          {controls
+            .filter((c) => c.section === s.id)
+            .map((c) => (
+              <Physical key={c.id} c={c} value={values[c.id]} change={change} />
+            ))}
+        </g>
+      ))}
+    </g>
+  )
+}
