@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process'
 import { blindArtifactCopy, blindVerification, createEvalWorkspace, evalWorkspaceDir, namePattern } from '../bench/lib/eval/workspace.mjs'
 import { loadRubric } from '../bench/lib/eval/evaluate.mjs'
 import { appendLedger, readLedger, sealedEntry, treeDifference, verifySealedRun } from '../bench/lib/run/ledger.mjs'
-import { BAND_EDGES, MATCH_THRESHOLD, RATE, activeWindow, bandCoherence, bestCorrelation, fft, matchEntries } from '../bench/lib/run/sample-match.mjs'
+import { BAND_EDGES, MATCH_THRESHOLD, RATE, SAMPLE_MATCH_VERSION, SUPPORT_THRESHOLD, activeWindow, bandCoherence, bestCorrelation, fft, isMatch, matchEntries } from '../bench/lib/run/sample-match.mjs'
 import { applyMatchResults, checkSampleProvenance, findBundledAudio, sampleProvenanceEvidence, sniffAudio } from '../bench/lib/run/sample-provenance.mjs'
 import { addFootnote, createRun, forkRun, isolationSummary, loadRun, markSealed, protocolConstants, registryEntry, runFootnotes, saveRun } from '../bench/lib/run/store.mjs'
 import {
@@ -609,7 +609,8 @@ test('the acoustic check: a cut of a recording matches it; another signal does n
   assert.ok(different.score < MATCH_THRESHOLD, `another instrument does not match: ${JSON.stringify(different)}`)
   assert.ok(same.score - different.score > 0.2)
   // (Synthesis against a real recording is covered by the ffmpeg test below.)
-  assert.deepEqual(bandCoherence(new Float32Array(4096), recording.subarray(0, 4096)), { bands: 0, score: 0, weakest: 0 }, 'nothing to compare')
+  assert.deepEqual(bandCoherence(new Float32Array(4096), recording.subarray(0, 4096)), { bands: 10, score: 0, support: 0, weakest: 0 }, 'a silent candidate agrees with no band of the recording')
+  assert.deepEqual(bandCoherence(recording.subarray(0, 4096), new Float32Array(4096)), { bands: 0, score: 0, support: 0, weakest: 0 }, 'a silent recording leaves nothing to compare')
   assert.equal(activeWindow(new Float32Array(1000)).length, 0, 'silence has no window')
   assert.ok(BAND_EDGES.at(-1) <= RATE / 2)
   // The FFT is its own inverse.
@@ -619,6 +620,61 @@ test('the acoustic check: a cut of a recording matches it; another signal does n
   fft(re, im)
   fft(re, im, true)
   for (let i = 0; i < 64; i += 1) assert.ok(Math.abs(re[i] - before[i]) < 1e-9 && Math.abs(im[i]) < 1e-9)
+})
+
+test('the acoustic check weighs bands by how loud they are in the recording, and one loud band cannot carry a match', () => {
+  // A recording with one strong partial, weak partials 30 dB under it, and a
+  // little noise: a high piano note, or an organ pipe. `phases` and `offset`
+  // make another waveform with the same spectrum.
+  const onset = (t) => Math.min(1, t / 0.02)
+  const make = (phases, offset, seed) => {
+    const out = new Float32Array(4 * RATE)
+    let state = seed
+    for (let i = 0; i < out.length; i += 1) {
+      const t = i / RATE
+      let sample = Math.sin(2 * Math.PI * 1046.5 * t) * Math.exp(-t * 0.8)
+      ;[180, 470, 2093, 3140, 5200].forEach((frequency, k) => { sample += 0.03 * Math.sin(2 * Math.PI * (frequency + offset) * t + phases[k]) * Math.exp(-t * 1.2) })
+      state = (state * 1103515245 + 12345) & 0x7fffffff
+      out[i] = onset(t) * sample + (state / 0x7fffffff - 0.5) * 0.004
+    }
+    return out
+  }
+  const recording = make([0.3, 1.1, 2.0, 0.7, 1.9], 0, 3)
+  // What a lossy encoder does to it: the loud partial kept, the quiet bands
+  // half rebuilt as another waveform at the same level. An equal vote of the
+  // bands (version 1) scored this 0.74, a mismatch; weighed by amplitude it
+  // matches.
+  const rebuilt = make([2.2, 0.1, 3.0, 2.5, 0.4], 0.9, 11)
+  const coded = recording.map((value, index) => 0.5 * value + 0.5 * rebuilt[index])
+  const kept = bandCoherence(coded, recording)
+  assert.ok(isMatch(kept) && kept.score > 0.9, `a coarsely coded cut matches: ${JSON.stringify(kept)}`)
+  // The loud partial alone, exactly in tune and in phase: the quieter bands
+  // say nothing for it, so it is not a match however well the partial agrees.
+  const lone = recording.map((_, i) => onset(i / RATE) * Math.sin(2 * Math.PI * 1046.5 * i / RATE) * Math.exp(-i / RATE * 0.8))
+  const alone = bandCoherence(lone, recording)
+  assert.ok(alone.score >= MATCH_THRESHOLD, `the loud band agrees: ${JSON.stringify(alone)}`)
+  assert.ok(alone.support < 0.1 && !isMatch(alone), `the quieter bands do not: ${JSON.stringify(alone)}`)
+  assert.ok(SUPPORT_THRESHOLD > 0.1)
+  assert.equal(SAMPLE_MATCH_VERSION, 2)
+})
+
+test('with ffmpeg and the fetched pack: a lossy stereo encode of a high piano note matches its recording', (t) => {
+  const packFiles = path.join(sourceRoot, 'sample-pack', 'files')
+  const grand = path.join(packFiles, 'grand/salamander-grand-v3/Samples')
+  if (spawnSync('ffmpeg', ['-version']).status !== 0 || !fs.existsSync(path.join(grand, 'C7v10.flac'))) return t.skip('needs ffmpeg and `pnpm bench fetch`')
+  // The seal failure that showed the problem: Salamander C7 v10, trimmed,
+  // levelled, faded, 48 kHz stereo, lossy. Version 1 scored the AAC 0.69 and a
+  // Vorbis q5 encode 0.76 (the seal said 0.7658), both mismatches.
+  const stage = fs.mkdtempSync(path.join(scratch, 'acoustic-lossy-'))
+  const ffmpeg = (...args) => spawnSync('ffmpeg', ['-v', 'error', '-y', ...args]).status === 0
+  const edit = ['-af', 'silenceremove=start_periods=1:start_threshold=-50dB,atrim=0:4.2,volume=2.3,afade=t=out:st=3.92:d=0.28', '-ar', '48000', '-ac', '2']
+  assert.ok(ffmpeg('-i', path.join(grand, 'C7v10.flac'), ...edit, '-c:a', 'aac', '-b:a', '128k', path.join(stage, 'c7.m4a')))
+  const entries = [{ path: 'c7.m4a', packFile: 'grand/salamander-grand-v3/Samples/C7v10.flac' }, { path: 'c7.m4a', packFile: 'grand/salamander-grand-v3/Samples/D#7v10.flac' }, { path: 'c7.m4a', packFile: 'upright/upright-piano-kw/samples/C7vH.flac' }]
+  if (ffmpeg('-i', path.join(grand, 'C7v10.flac'), ...edit, '-c:a', 'libvorbis', '-q:a', '5', path.join(stage, 'c7.ogg'))) entries.push({ path: 'c7.ogg', packFile: 'grand/salamander-grand-v3/Samples/C7v10.flac' })
+  const result = matchEntries({ stage, pack: packFiles, entries })
+  assert.equal(result.version, SAMPLE_MATCH_VERSION)
+  assert.deepEqual(result.results.map((entry) => entry.status), ['match', 'mismatch', 'mismatch', ...(entries[3] ? ['match'] : [])], JSON.stringify(result.results))
+  assert.ok(result.results[0].score > 0.85, JSON.stringify(result.results[0]))
 })
 
 test('with ffmpeg and the fetched pack: processed cuts match, other recordings and synthesis do not', (t) => {
@@ -639,8 +695,8 @@ test('with ffmpeg and the fetched pack: processed cuts match, other recordings a
     { path: 'synth.mp3', packFile: `${G}/A4v7.flac` },
     { path: 'missing.mp3', packFile: `${G}/A4v7.flac` },
   ] })
-  assert.deepEqual(results.map((result) => result.status), ['match', 'mismatch', 'mismatch', 'match', 'too-narrow', 'missing'])
-  assert.ok(results[0].score > 0.95 && results[2].score < 0.6, `${results[0].score} vs ${results[2].score}`)
+  assert.deepEqual(results.map((result) => result.status), ['match', 'mismatch', 'mismatch', 'match', 'mismatch', 'missing'])
+  assert.ok(results[0].score > 0.95 && results[2].score < MATCH_THRESHOLD - 0.05, `${results[0].score} vs ${results[2].score}`)
   // Folded into the report, a mismatch is a problem that says what to do.
   const report = applyMatchResults({ problems: [], unverifiable: [], inlineAudio: [], sources: {}, bundled: 2, fromPack: 2, generated: 0 }, { threshold: MATCH_THRESHOLD, results: results.slice(0, 3) })
   assert.deepEqual([report.acoustic.checked, report.acoustic.matched, report.acoustic.failed.length], [3, 1, 2])

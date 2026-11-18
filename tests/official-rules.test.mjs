@@ -283,26 +283,69 @@ test('each evaluation records the model id the provider served and its request i
     fs.mkdirSync(path.join(stateDir, 'gateway'), { recursive: true })
     fs.writeFileSync(path.join(stateDir, 'gateway', 'events.jsonl'), `${events.map((entry) => JSON.stringify(entry)).join('\n')}\n`)
   }
-  const turn = (seq, asked, served, requestId) => [
-    { seq, kind: 'inspect.request', method: 'POST', model: asked },
-    { seq: seq + 1, kind: 'inspect.response', request: seq, status: 200, model: served, requestId },
+  const turn = (seq, asked, served, requestId, { path: requestPath = '/v1/messages', status = 200 } = {}) => [
+    { seq, kind: 'inspect.request', method: 'POST', path: requestPath, model: asked },
+    { seq: seq + 1, kind: 'inspect.response', request: seq, status, model: served, requestId },
   ]
   write('evaluator', 1, [...turn(1, 'claude-opus-5', 'claude-opus-5', 'req_1'), ...turn(3, 'claude-haiku-5-5', 'claude-haiku-5-5', 'req_2')])
   const steady = graderRecord(root, id, 1, { requested: 'claude-opus-5', pinned: 'claude-opus-5' })
   assert.equal(steady.boxed, true)
+  assert.equal(steady.version, 2)
   assert.equal(steady.drift, null)
+  assert.equal(steady.unverified, 0)
   assert.equal(steady.pinnedRequests, 1, 'the harness\'s auxiliary calls are recorded, not held to the pin')
   assert.deepEqual(steady.served, { 'claude-opus-5 -> claude-opus-5': 1, 'claude-haiku-5-5 -> claude-haiku-5-5': 1 })
   assert.deepEqual([steady.requestIds.count, steady.requestIds.first, steady.requestIds.last], [2, 'req_1', 'req_2'])
   assert.deepEqual(steady.requestIdList, ['req_1', 'req_2'])
   assert.deepEqual(steady.sessions[0].harness, ['Claude Code 2.1.326'])
 
-  write('evaluator-2', 2, turn(1, 'claude-opus-5', 'claude-opus-5-preview-x', 'req_3'))
+  // What every protocol-3 evaluation did, and grader record 1 called drift:
+  // Claude Code asks /v1/messages/count_tokens for the pinned model, and the
+  // count names no model. Neither that nor a request the API refused (an
+  // overloaded 529) is a turn anyone served, so neither is held to the pin.
+  write('evaluator-2', 2, [
+    ...turn(1, 'claude-opus-5', null, 'req_3', { path: '/v1/messages/count_tokens' }),
+    ...turn(3, 'claude-opus-5', null, 'req_4', { status: 529 }),
+    ...turn(5, 'claude-opus-5', 'claude-opus-5', 'req_5'),
+  ])
+  const counted = graderRecord(root, id, 1, { requested: 'claude-opus-5', pinned: 'claude-opus-5' })
+  assert.equal(counted.drift, null, 'a token count is not drift')
+  assert.equal(counted.unverified, 0)
+  assert.deepEqual(counted.notServed, { 'claude-opus-5 count_tokens': 1, 'claude-opus-5 status 529': 1 })
+  assert.deepEqual(counted.served, { 'claude-opus-5 -> claude-opus-5': 2, 'claude-haiku-5-5 -> claude-haiku-5-5': 1 })
+  assert.equal(counted.pinnedRequests, 2)
+  assert.equal(counted.requestIds.count, 5, 'every request id the provider returned is kept')
+
+  // A generation whose response names no model is unverified, not drift; one
+  // served as another id is drift.
+  write('evaluator-2', 2, [...turn(1, 'claude-opus-5', null, 'req_3'), ...turn(3, 'claude-opus-5', 'claude-opus-5-preview-x', 'req_4')])
   const drifted = graderRecord(root, id, 1, { requested: 'claude-opus-5', pinned: 'claude-opus-5' })
   assert.deepEqual(drifted.drift, [{ servedAs: 'claude-opus-5-preview-x', requests: 1 }])
+  assert.equal(drifted.unverified, 1)
   const unboxed = graderRecord(root, 'never-boxed', 1, { requested: 'claude-opus-5', pinned: 'claude-opus-5' })
   assert.equal(unboxed.boxed, false)
   assert.match(unboxed.note, /unverified/)
+})
+
+test('grader records are footnoted as registered: version-1 drift stands, version 2 adds unverified', () => {
+  const root = fixtureRoot()
+  const { id } = createRun(root, { model: 'grader-footnote-fixture', target: '3' })
+  const run = loadRun(root, id)
+  const grader = (fields) => ({ status: 'complete', isolation: { mode: 'lockdown' }, evaluation: { score: 50, grader: { pinned: 'claude-opus-5', boxed: true, ...fields } } })
+  run.stages = [
+    // As registered under grader record 1 (a token count recorded as drift to
+    // "unreported"): the stored record is not reinterpreted.
+    { number: 1, ...grader({ served: ['claude-opus-5 -> claude-opus-5', 'claude-opus-5 -> unreported'], drift: [{ servedAs: 'unreported', requests: 1 }] }) },
+    { number: 2, ...grader({ version: 2, served: ['claude-opus-5 -> claude-opus-5-preview-x'], drift: [{ servedAs: 'claude-opus-5-preview-x', requests: 3 }], unverified: 0 }) },
+    { number: 3, ...grader({ version: 2, served: ['claude-opus-5 -> claude-opus-5', 'claude-opus-5 -> unreported'], drift: null, unverified: 2 }) },
+  ]
+  const notes = runFootnotes(run)
+  assert.deepEqual(notes.filter((note) => note.kind === 'grader-drift').map((note) => [note.phases, note.text]), [
+    [[1], "Phase 1: the grader's requests for claude-opus-5 were served as unreported."],
+    [[2], "Phase 2: the grader's requests for claude-opus-5 were served as claude-opus-5-preview-x."],
+  ])
+  assert.deepEqual(notes.filter((note) => note.kind === 'grader-unverified').map((note) => [note.phases, note.text]), [[[3], "Phase 3: 2 of the grader's responses for claude-opus-5 did not say which model served them."]])
+  assert.deepEqual(registryEntry(run).stages.map((stage) => stage.grader?.drift), [true, true, false])
 })
 
 // --- rubric 3.0.0 ---------------------------------------------------------------
