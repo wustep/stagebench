@@ -1,7 +1,7 @@
-// The run leaderboard: one row per benchmark run, grouped by result tier, with
-// per-phase score sectors, a wall-time column, and an expandable details drawer.
-// Each row also says under which conditions the run was built — protocol
-// version, isolation mode — and marks any footnotes; the drawer spells them out.
+// The run leaderboard: one ranked list of every run, with per-phase score
+// sectors, a wall-time column, and an expandable details drawer. Protocol
+// version lives on the row and in the drawer, not as a split. Isolation is
+// badged only when it is a lockdown, a mixed seal, or off-protocol.
 // Memoized: all props are reference-stable, so App's dialog/viewer state
 // changes (open preview, copy link, phase switch) skip re-rendering the
 // largest subtree in the app.
@@ -11,9 +11,8 @@ import type { PhaseNumber } from '../run-utils'
 import { floorScore, getRunTitle, getThumbPath } from '../run-utils'
 import type { RunEntry, StageEntry } from '../types'
 import {
-  bestByTierPanel,
-  bestByTierPhase,
-  currentResultClass,
+  bestByPhase,
+  bestPanel,
   formatDate,
   formatDuration,
   formatDurationCompact,
@@ -22,12 +21,11 @@ import {
   getPhaseList,
   getProtocolLabel,
   getProtocolNote,
-  getResultClass,
   harnessSlug,
   rankByRun,
+  showsIsolationBadge,
   visibleRuns,
 } from '../runs-data'
-import type { ResultClass } from '../runs-data'
 import { ChevronIcon, InfoIcon, PlayIcon, ReportIcon, StatusLight } from './icons'
 
 // Tallest a hover card gets (a near-square instrument crop at the card's width,
@@ -60,38 +58,13 @@ function stagePhaseLine(stage: StageEntry) {
   return `0${stage.number}: ${parts.join(' · ')}`
 }
 
-// " Sealed phases: 01 lockdown, 02 no isolation." — which sealed phase had
-// which mode, for a run whose phases disagree. Empty when no phase says.
+// " Sealed phases: 01 lockdown, 02 outside the lockdown." — which sealed
+// phase had which mode, for a run whose phases disagree. Empty when no phase says.
 function sealedIsolation(run: RunEntry) {
   const phases = run.stages
     .filter((stage) => stage.isolation !== null)
-    .map((stage) => `0${stage.number} ${stage.isolation === 'lockdown' ? 'lockdown' : 'no isolation'}`)
+    .map((stage) => `0${stage.number} ${stage.isolation === 'lockdown' ? 'lockdown' : 'outside the lockdown'}`)
   return phases.length > 0 ? ` Sealed phases: ${phases.join(', ')}.` : ''
-}
-
-// A tier's title line. It sits on the tower's own grid (hence `style`, which
-// carries the sector count) so the description starts at the first phase
-// column. The protocol-info button rides on the current tier, which is always
-// rendered — even before any run has reached it.
-function TierHeading({ resultClass, onOpenProtocolInfo, style }: { resultClass: ResultClass; onOpenProtocolInfo: () => void; style?: CSSProperties }) {
-  return (
-    <header className={`result-group-heading result-group-${resultClass.id}`} style={style}>
-      <span className="result-group-label">
-        {resultClass.label}
-        {resultClass.id === 'current' && (
-          <button
-            aria-label={`About ${resultClass.label}`}
-            className="protocol-info-btn"
-            onClick={onOpenProtocolInfo}
-            type="button"
-          >
-            <InfoIcon />
-          </button>
-        )}
-      </span>
-      {resultClass.description ? <p>{resultClass.description}</p> : null}
-    </header>
-  )
 }
 
 export const RunList = memo(function RunList({
@@ -128,50 +101,54 @@ export const RunList = memo(function RunList({
     )
   }
 
+  const headerPhases = getPhaseList(visibleRuns[0])
+  const headerStyle = { '--sectors': headerPhases.length } as CSSProperties
+
   return (
     <div className="run-list">
-      {getResultClass(visibleRuns[0]).id !== 'current' && (
-        <>
-          <TierHeading onOpenProtocolInfo={onOpenProtocolInfo} resultClass={currentResultClass} />
-          <p className="result-group-empty">No {currentResultClass.label} runs yet.</p>
-        </>
-      )}
-      {visibleRuns.map((run, index) => {
-        const resultClass = getResultClass(run)
-        const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
+      <header className="result-group-heading result-group-current" style={headerStyle}>
+        <span className="result-group-label">
+          Runs
+          <button
+            aria-label="About the protocol"
+            className="protocol-info-btn"
+            onClick={onOpenProtocolInfo}
+            type="button"
+          >
+            <InfoIcon />
+          </button>
+        </span>
+      </header>
+      <div aria-hidden="true" className="tower-head" style={headerStyle}>
+        <span>Pos</span>
+        <span>Model</span>
+        <span>Harness</span>
+        {headerPhases.map((name, phaseIndex) => <span key={name}>0{phaseIndex + 1} · {name}</span>)}
+        <span>Panel Visuals</span>
+        <span className="num">Time</span>
+        <span className="num">Score</span>
+        <span />
+      </div>
+      {visibleRuns.map((run) => {
         const phaseList = getPhaseList(run)
         const rank = rankByRun.get(run.id) ?? null
         const playable = Boolean(run.previewPath)
         const thumbPath = getThumbPath(run)
         const showThumb = playable && thumbPath !== null && hovered?.id === run.id
         const expanded = expandedRunId === run.id
-        // Sector column count rides on a CSS variable so legacy tiers
-        // with a four-phase protocol keep their own aligned grid.
+        // Sector column count rides on a CSS variable so a four-phase
+        // legacy run still keeps its own aligned grid.
         const sectorsStyle = { '--sectors': phaseList.length } as CSSProperties
         const panel = run.panelVisuals
-        const bestPanel = panel !== null && panel === bestByTierPanel.get(resultClass.id)
+        const isBestPanel = panel !== null && panel === bestPanel
         const protocolLabel = getProtocolLabel(run)
         const protocolNote = getProtocolNote(run)
         const isolation = getIsolation(run)
+        const showIsolation = showsIsolationBadge(isolation)
         const footnoteCount = run.footnotes.length
         return (
         <Fragment key={run.id}>
-        {resultClass.id !== previousClass && (
-          <>
-            <TierHeading onOpenProtocolInfo={onOpenProtocolInfo} resultClass={resultClass} style={sectorsStyle} />
-            <div aria-hidden="true" className="tower-head" style={sectorsStyle}>
-              <span>Pos</span>
-              <span>Model</span>
-              <span>Harness</span>
-              {phaseList.map((name, phaseIndex) => <span key={name}>0{phaseIndex + 1} · {name}</span>)}
-              <span>Panel Visuals</span>
-              <span className="num">Time</span>
-              <span className="num">Score</span>
-              <span />
-            </div>
-          </>
-        )}
-        <article className={`run-row result-${resultClass.id}${rank !== null && rank <= 3 ? ` podium-${rank}` : ''}`}>
+        <article className={`run-row${rank !== null && rank <= 3 ? ` podium-${rank}` : ''}`}>
           <div
             className={`row-main${playable ? ' is-playable' : ''}`}
             onClick={playable ? () => onOpenPreview(run) : undefined}
@@ -226,20 +203,22 @@ export const RunList = memo(function RunList({
             </div>
             <div className="entry">
               {run.harness && <span className={`harness harness-${harnessSlug(run.harness)}`}>{run.harness}</span>}
-              <span
-                className={`isolation isolation-${isolation.mode}${isolation.offProtocol ? ' is-off-protocol' : ''}`}
-                title={isolation.meaning}
-              >
-                {isolation.label}
-                {/* The flag is a colour; say it in words for screen readers too. */}
-                {isolation.offProtocol && <span className="visually-hidden">, off-protocol</span>}
-              </span>
+              {showIsolation && (
+                <span
+                  className={`isolation isolation-${isolation.mode}${isolation.offProtocol ? ' is-off-protocol' : ''}`}
+                  title={isolation.meaning}
+                >
+                  {isolation.label}
+                  {/* The flag is a colour; say it in words for screen readers too. */}
+                  {isolation.offProtocol && <span className="visually-hidden">, off-protocol</span>}
+                </span>
+              )}
             </div>
             {phaseList.map((name, phaseIndex) => {
               const phase = (phaseIndex + 1) as PhaseNumber
               const stage = run.stages.find((candidate) => candidate.number === phase)
               const score = stage?.score ?? null
-              const best = score !== null && score === bestByTierPhase.get(`${resultClass.id}:${phase}`)
+              const best = score !== null && score === bestByPhase.get(phase)
               const label = score !== null
                 ? String(floorScore(score))
                 : stage
@@ -258,8 +237,8 @@ export const RunList = memo(function RunList({
               )
             })}
             <div
-              aria-label={panel !== null ? `Panel visuals ${floorScore(panel)} out of 100${bestPanel ? ', best of the field' : ''}` : 'Panel visuals unavailable'}
-              className={`sector sector-panel${bestPanel ? ' is-best' : ''}${panel === null ? ' is-na' : ''}`}
+              aria-label={panel !== null ? `Panel visuals ${floorScore(panel)} out of 100${isBestPanel ? ', best of the field' : ''}` : 'Panel visuals unavailable'}
+              className={`sector sector-panel${isBestPanel ? ' is-best' : ''}${panel === null ? ' is-na' : ''}`}
             >
               <b>{panel !== null ? String(floorScore(panel)) : '—'}</b>
               <span aria-hidden="true" className="sector-bar"><i style={{ width: `${panel !== null ? Math.min(100, Math.max(0, panel)) : 0}%` }} /></span>
@@ -330,10 +309,12 @@ export const RunList = memo(function RunList({
                 <div>
                   <dt>Conditions</dt>
                   {protocolNote && <dd>{protocolNote}</dd>}
-                  <dd className={isolation.offProtocol ? 'is-off-protocol' : undefined}>
-                    <b>{isolation.label}.</b> {isolation.meaning}
-                    {isolation.mode === 'mixed' && sealedIsolation(run)}
-                  </dd>
+                  {showIsolation && (
+                    <dd className={isolation.offProtocol ? 'is-off-protocol' : undefined}>
+                      <b>{isolation.label}.</b> {isolation.meaning}
+                      {isolation.mode === 'mixed' && sealedIsolation(run)}
+                    </dd>
+                  )}
                 </div>
                 {footnoteCount > 0 && (
                   <div>

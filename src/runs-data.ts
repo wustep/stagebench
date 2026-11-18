@@ -314,71 +314,66 @@ export function getIsolation(run: RunEntry) {
   }
 }
 
-// Leaderboard ordering and per-tier rankings are pure functions of the
-// module-constant `runs`, so they're computed once at module load rather than
-// on every render. This keeps the toy keyboard's high-frequency note/bend
-// updates from re-sorting and re-ranking the whole field.
+// "No isolation" is how every protocol before the lockdown worked, so the
+// gallery does not badge it. A lockdown, a mixed seal, or an off-protocol
+// miss still shows: those are the cases that change how a row should be read.
+export function showsIsolationBadge(isolation: { mode: IsolationMode; offProtocol: boolean }) {
+  return isolation.offProtocol || isolation.mode !== 'none'
+}
+
+// Leaderboard ordering and ranks are pure functions of the module-constant
+// `runs`, so they're computed once at module load rather than on every render.
+// This keeps the toy keyboard's high-frequency note/bend updates from
+// re-sorting and re-ranking the whole field.
 //
-// Within each result tier, rank by aggregate score (highest first) so the
-// gallery's job — comparing model results — is legible at a glance. Runs still
-// in progress have no score yet, so they sink below the scored runs of their
-// tier; newest-first breaks any remaining ties.
-// Tier id breaks ties within a rank so tiers stay contiguous: several older
-// rubrics share one rank, and sorting them by score alone would interleave them
-// back into the single mixed leaderboard the tiers exist to prevent.
+// Every run shares one ranked list, whatever protocol or rubric produced the
+// score. Protocol version stays on the row and in the drawer. Rank by
+// aggregate score (highest first); runs still in progress have no score yet,
+// so they sink below the scored runs; newest-first breaks any remaining ties.
 export const visibleRuns = [...runs]
   .sort((left, right) =>
-    getResultClass(left).rank - getResultClass(right).rank
-    || getResultClass(right).id.localeCompare(getResultClass(left).id)
-    || (right.score ?? -1) - (left.score ?? -1)
+    (right.score ?? -1) - (left.score ?? -1)
     || right.startedAt.localeCompare(left.startedAt))
 export const activeCount = visibleRuns.filter((run) => run.status === 'in-progress').length
 export const runningModel = runs.find((run) => run.status === 'in-progress')?.model
 
-// Position among the scored runs of each tier, so "#1" always names the top
-// score of its protocol group. Unscored (in-progress) runs get no rank.
+// Position among every scored run. Unscored (in-progress) runs get no rank.
 function buildRankByRun(orderedRuns: RunEntry[]) {
   const ranks = new Map<string, number>()
-  const tierRankCounter = new Map<string, number>()
+  let next = 0
   for (const run of orderedRuns) {
     if (run.score === null) continue
-    const tierId = getResultClass(run).id
-    const next = (tierRankCounter.get(tierId) ?? 0) + 1
-    tierRankCounter.set(tierId, next)
+    next += 1
     ranks.set(run.id, next)
   }
   return ranks
 }
 
-// The field's best score per phase within each tier — the timing-tower
-// "fastest split" highlight, so per-phase winners read independently of the
-// aggregate ranking.
-function buildBestByTierPhase(orderedRuns: RunEntry[]) {
-  const best = new Map<string, number>()
+// The field's best score per phase — the timing-tower "fastest split"
+// highlight, so per-phase winners read independently of the aggregate ranking.
+function buildBestByPhase(orderedRuns: RunEntry[]) {
+  const best = new Map<number, number>()
   for (const run of orderedRuns) {
-    const tierId = getResultClass(run).id
     for (const stage of run.stages) {
       if (stage.score === null) continue
-      const key = `${tierId}:${stage.number}`
-      best.set(key, Math.max(best.get(key) ?? -1, stage.score))
+      best.set(stage.number, Math.max(best.get(stage.number) ?? -1, stage.score))
     }
   }
   return best
 }
 
 export const rankByRun = buildRankByRun(visibleRuns)
-export const bestByTierPhase = buildBestByTierPhase(visibleRuns)
+export const bestByPhase = buildBestByPhase(visibleRuns)
 
-// Best run-level panel score in each tier, so the Panel Visuals cell can
+// Best run-level panel score on the board, so the Panel Visuals cell can
 // light up the same way a phase sector does for the field's fastest split.
-function buildBestByTierPanel(orderedRuns: RunEntry[]) {
-  const best = new Map<string, number>()
+function buildBestPanel(orderedRuns: RunEntry[]) {
+  let best = -1
   for (const run of orderedRuns) {
     if (run.panelVisuals === null) continue
-    const tierId = getResultClass(run).id
-    best.set(tierId, Math.max(best.get(tierId) ?? -1, run.panelVisuals))
+    best = Math.max(best, run.panelVisuals)
   }
   return best
 }
 
-export const bestByTierPanel = buildBestByTierPanel(visibleRuns)
+export const bestPanel = buildBestPanel(visibleRuns)
