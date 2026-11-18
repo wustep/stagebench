@@ -37,7 +37,7 @@ export function perfectAudioRecord() {
 function fixtureRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-bench-'))
   for (const relative of [
-    'BENCHMARK.md', 'TASK.md', 'package.json',
+    'BENCHMARK.md', 'TASK.md', 'package.json', 'bench/prices.json',
     'specs/benchmark-phases.json', 'specs/nord-stage-4.variants.json', 'specs/nord-stage-4.visual.json', 'specs/nord-stage-4.piano.json',
     'prompts/stage1.md',
     'bench/schemas/implementation-details.schema.json',

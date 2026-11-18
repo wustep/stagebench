@@ -51,7 +51,7 @@ const cli = (root, args) => spawnSync(process.execPath, [path.join(sourceRoot, '
 function fixtureRoot({ pack = true } = {}) {
   const root = fs.mkdtempSync(path.join(scratch, 'repo-'))
   for (const relative of [
-    'BENCHMARK.md', 'TASK.md', 'package.json', 'bench/rubric.json',
+    'BENCHMARK.md', 'TASK.md', 'package.json', 'bench/rubric.json', 'bench/prices.json',
     'specs/benchmark-phases.json', 'specs/nord-stage-4.variants.json', 'specs/nord-stage-4.visual.json', 'specs/nord-stage-4.piano.json', 'specs/nord-stage-4.effects.json',
     'prompts/stage1.md', 'prompts/stage2.md', 'bench/schemas/implementation-details.schema.json', 'bench/starter/package.json', 'bench/starter/index.html',
   ]) {
@@ -837,6 +837,11 @@ test('an evaluator workspace is blind all the way down: path, handle, artifact, 
     isolation: { mode: 'lockdown', launches: [{ harness: 'Codex CLI', model: 'gpt-6.2-sol' }], operator: { messages: [{ text: 'seal output' }] } },
     sampleProvenance: { bundled: 2, fromPack: 2, generated: 0, sources: { 'fixture-grand': { license: 'CC-BY-3.0', files: 2 } }, toMatch: [{ path: 'a', packFile: 'b' }], problems: [], unverifiable: [], inlineAudio: [], acoustic: { checked: 2, matched: 2 } },
     operatorPatch: { reason: 'x' },
+    // What the seal wrote for the six graders the protocol-3 audit found were not blind.
+    usage: { source: 'gateway', costUsd: 2.88, byModel: { 'gpt-6.2-sol': { requests: 36, priceId: 'gpt-6.2-sol' } }, efforts: { 'gpt-6.2-sol:high': 36 }, responseModels: { 'gpt-6.2-sol -> gpt-6.2-sol': 36 } },
+    budget: { rules: { effort: 'high' }, effort: { pinned: 'high', primaryModel: 'gpt-6.2-sol', observed: { 'gpt-6.2-sol:high': 36 } } },
+    seal: { outcome: 'passed', attempts: 2, sealFailureRelays: 1 },
+    verifiedAt: '2026-11-18T06:42:19.731Z',
   })
   const rubric = loadRubric()
   const workspace = createEvalWorkspace(root, {
@@ -868,7 +873,11 @@ test('an evaluator workspace is blind all the way down: path, handle, artifact, 
   const record = readJson(path.join(workspace.inputs, 'verification.json'))
   assert.equal(record.runId, workspace.blindId)
   assert.deepEqual(record.evidence.map((entry) => entry.id), ['sample provenance'], 'what would point at the producer is left out')
-  assert.equal('isolation' in record || 'operatorPatch' in record, false)
+  assert.deepEqual(['isolation', 'operatorPatch', 'usage', 'budget', 'seal', 'verifiedAt'].filter((key) => key in record), [])
+  // Built and checked under the current blinding, and stamped so.
+  assert.deepEqual(readJson(path.join(workspace.workspace, '.blinding.json')), { version: 2 })
+  assert.equal(workspace.blinding.version, 2)
+  assert.ok(workspace.blinding.guard.filesChecked > 5)
   assert.deepEqual(record.sampleProvenance.sources, { 'fixture-grand': { license: 'CC-BY-3.0', files: 2 } }, 'where the samples came from is the grader’s business')
   assert.equal('toMatch' in record.sampleProvenance, false)
   assert.match(record.checks[0].detail, /^ran in <artifact>\/stage1 under ~$/)
@@ -877,6 +886,43 @@ test('an evaluator workspace is blind all the way down: path, handle, artifact, 
   assert.match(guide, /A container with no internet/)
   assert.deepEqual(readJson(path.join(workspace.workspace, '.assessment.template.json')), readJson(workspace.assessment))
   assert.equal(blindVerification({ runId: id, evidence: [], checks: [] }, id, 'run-x').runId, 'run-x')
+})
+
+test('grading fails closed when an input the grader reads names a model: at build, at launch, and at registration', () => {
+  const root = fixtureRoot()
+  const id = 'gpt-6-2-astra'
+  assert.equal(createRun(root, { model: 'GPT 6.2 Astra', target: '1' }).id, id)
+  const { stageDir, artifactDigest } = sealFixtureStage(root, id, 1)
+  const options = { id, phase: 1, variantId: 'stage-4-73', stageDir, expectedDigest: artifactDigest, rubric: loadRubric(), producerNames: ['GPT 6.2 Astra'] }
+  // A model id where nothing scrubs it (the task the grader is given): the
+  // workspace is not built, and nothing of it is left to point an evaluator at.
+  const task = fs.readFileSync(path.join(root, 'TASK.md'), 'utf8')
+  fs.writeFileSync(path.join(root, 'TASK.md'), `${task}\nCalibrated against gpt-6.2-sol.\n`)
+  assert.throws(() => createEvalWorkspace(root, options), /The grader's inputs name a model or run[\s\S]*inputs\/TASK\.md: "gpt-6\.2-sol" \(gpt-6\.2-sol\)/)
+  assert.equal(fs.existsSync(evalWorkspaceDir(root, id, 1)), false)
+  fs.writeFileSync(path.join(root, 'TASK.md'), task)
+
+  // Built clean, through the CLI.
+  const built = cli(root, ['score', id, '--phase', '1'])
+  assert.equal(built.status, 0, built.stderr)
+  assert.equal(JSON.parse(built.stdout).blinding.version, 2)
+  const workspace = evalWorkspaceDir(root, id, 1)
+  // Registration runs the guard first: clean, it gets as far as the unrated template.
+  assert.match(cli(root, ['score', id, '--phase', '1']).stderr, /still has unrated criteria/)
+  // A workspace built under the old blinding is refused, whatever it holds.
+  fs.rmSync(path.join(workspace, '.blinding.json'))
+  const stale = cli(root, ['score', id, '--phase', '1'])
+  assert.equal(stale.status, 1)
+  assert.match(stale.stderr, /built under grader blinding 1, not 2/)
+  fs.writeFileSync(path.join(workspace, '.blinding.json'), '{"version":2}')
+  // An input edited after the build to name a model: neither the evaluator nor the registration goes ahead.
+  fs.writeFileSync(path.join(workspace, 'inputs', 'verification.json'), JSON.stringify({ runId: 'run-x', usage: { byModel: { 'gpt-6.2-astra': {} } } }))
+  for (const args of [['score', id, '--phase', '1'], ['evaluator', id, '--phase', '1', '--harness', 'claude']]) {
+    const refused = cli(root, args)
+    assert.equal(refused.status, 1, args[0])
+    assert.match(refused.stderr, /inputs\/verification\.json: "gpt-6\.2-astra"[\s\S]*/, args[0])
+  }
+  assert.equal(loadRun(root, id).stages[0].evaluation ?? null, null, 'nothing was registered')
 })
 
 // --- sealed evidence is never edited ------------------------------------------------------

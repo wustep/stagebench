@@ -38,6 +38,7 @@ import {
   statusSummary,
 } from './lib/run/store.mjs'
 import { importWorkspace, removeWorkspace, startPhase, workspaceDir } from './lib/run/workspace.mjs'
+import { EVAL_BLINDING_VERSION, checkEvalWorkspace } from './lib/eval/blinding.mjs'
 import { createEvalWorkspace, evalAssessmentPath, evalWorkspaceDir, removeEvalWorkspace } from './lib/eval/workspace.mjs'
 import { exportRun } from './lib/run/export.mjs'
 import {
@@ -570,6 +571,24 @@ function officialStatus(run, stage, { locked, rules, budget, usage, finalize }) 
   return { official: reasons.length === 0, reasons }
 }
 
+// Anything that names the producer is taken out of the grader's copy.
+const producerNamesOf = (run) => [run.model, run.title, run.agent?.model].filter(Boolean)
+
+// The blinding guard as run before an evaluator is launched and before an
+// assessment is registered: the workspace was built under the current
+// blinding, and nothing the harness put in it for the grader names a model or
+// run (bench/lib/eval/blinding.mjs). Throws, so both fail closed.
+function guardEvalWorkspace(root, run, phase, rubric) {
+  const verificationPath = path.join(root, 'runs', run.id, 'verifications', `stage${phase}.json`)
+  return checkEvalWorkspace(root, {
+    id: run.id,
+    workspace: evalWorkspaceDir(root, run.id, phase),
+    producerNames: producerNamesOf(run),
+    record: fs.existsSync(verificationPath) ? readJson(verificationPath) : null,
+    rubric,
+  })
+}
+
 function archivedAssessmentPathFor(root, id, phase) {
   return path.join(root, 'runs', id, 'evaluations', `stage${phase}.assessment.json`)
 }
@@ -621,8 +640,7 @@ async function score(root, id, options) {
       expectedDigest: stage.artifactDigest,
       rubric,
       sealedPhases,
-      // Anything that names the producer is taken out of the grader's copy.
-      producerNames: [run.model, run.title, run.agent?.model].filter(Boolean),
+      producerNames: producerNamesOf(run),
       boxed,
     })
     appendOperatorEvent(root, id, { command: 'score', phase, action: 'eval-workspace-created', blindHandle: created.blindId, boxed, blinding: created.blinding })
@@ -630,12 +648,16 @@ async function score(root, id, options) {
       action: 'eval-workspace-created',
       workspace: created.workspace,
       assessmentPath: created.assessment,
-      blinding: { strippedInstructionFiles: created.blinding.stripped.length + (created.blinding.strippedFromBuild?.length ?? 0), filesWithProducerNameRedacted: created.blinding.redacted.length },
+      blinding: { version: created.blinding.version, strippedInstructionFiles: created.blinding.stripped.length + (created.blinding.strippedFromBuild?.length ?? 0), filesWithProducerNameRedacted: created.blinding.redacted.length, inputsChecked: created.blinding.guard.filesChecked },
       next: boxed
         ? `Run the evaluator inside the lockdown: pnpm bench evaluator ${id} --phase ${phase} --harness claude   (model ${rubric.evaluator?.model ?? 'as pinned by the rubric'}; its box holds this workspace and nothing else). Then run: pnpm bench score ${id} --phase ${phase}`
         : `Spawn a fresh evaluator agent whose working directory is ${created.workspace} — it reads EVAL.md, inspects artifact/ against inputs/ (blind to model identity), and fills every rating in assessment.json with evidence. Then run: pnpm bench score ${id} --phase ${phase}`,
     }
   }
+
+  // Nothing is registered from a workspace whose inputs could have told the
+  // grader who made the artifact.
+  const blindingGuard = guardEvalWorkspace(root, run, phase, rubric)
 
   // A panel: the primary assessment.json plus any assessment.<n>.json filled
   // by additional independent evaluators. One evaluator is the common case and
@@ -694,6 +716,8 @@ async function score(root, id, options) {
   const grader = lockdown.graderRecord(root, id, phase, { requested: rubric.evaluator?.model ?? null, pinned: pinnedGrader })
   const { requestIdList, ...graderSummary } = grader
   evaluation.grader = graderSummary
+  // Which blinding the grader's inputs were built and checked under.
+  evaluation.blinding = { version: blindingGuard.version, inputsChecked: blindingGuard.filesChecked }
   if (grader.drift) console.error(`! grader drift: requests for ${grader.requested} were served as ${grader.drift.map((entry) => `${entry.servedAs} (${entry.requests})`).join(', ')}, not the pinned ${grader.pinned}. Recorded in the evaluation and the ledger.`)
   // When the harness registered it, as opposed to when the grader says it
   // graded: two leaderboard rows carried hand-entered evaluation times.
@@ -733,7 +757,7 @@ async function score(root, id, options) {
   writeReports(root, loadRun(root, id))
   await reindexRegistry(root)
   appendLedger(root, id, {
-    kind: 'score', phase, score: evaluation.score, evaluationSha256: hashFile(evaluationPath), evaluatorModel: evaluation.evaluatorModel ?? null, rubricVersion: evaluation.rubricVersion ?? null, panel: panel.length,
+    kind: 'score', phase, score: evaluation.score, evaluationSha256: hashFile(evaluationPath), evaluatorModel: evaluation.evaluatorModel ?? null, rubricVersion: evaluation.rubricVersion ?? null, panel: panel.length, blinding: EVAL_BLINDING_VERSION,
     // The grader as the provider reported it: the id it served the pinned
     // model's requests as, and its request ids (all of them, hashed; the list
     // is in runs/<id>/lockdown/stage<N>.evaluators.json).
@@ -1006,6 +1030,8 @@ try {
       if (!options.harness) throw new Error('--harness is required (claude, codex, or custom)')
       const workspace = evalWorkspaceDir(root, id, phase)
       const slot = Number(options.slot ?? 1)
+      // The box gets these inputs as they are now; nothing in them may name the producer.
+      guardEvalWorkspace(root, run, phase, rubric)
       const { launchEvaluator, exportEvalSession } = await import('./lockdown/session.mjs')
       const launched = await launchEvaluator(root, {
         id, phase, workspace, slot, harness: options.harness,
