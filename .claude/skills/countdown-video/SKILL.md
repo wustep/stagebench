@@ -19,8 +19,9 @@ Start from `recording/shows/etude6-countdown.json` and copy it to `recording/sho
 
 - **Song.** Pick a folder under `recording/songs/`. For a new song, see step 4.
 - **Models and order.**
-  - Build the options from the repo, not from memory: `node -e 'for (const d of require("fs").readdirSync("runs")) { try { const r = require("./runs/"+d+"/run.json"); if (r.evaluation?.score) console.log(d, r.title, r.evaluation.score) } catch {} }'`.
-  - `"order": "countdown"` goes from lowest rank to #1. Ranks and labels come from `runs/<id>/run.json`, so the video always shows the repo's current leaderboard.
+  - Build the options from the repo, not from memory: `node -e 'for (const r of require("./src/data/runs.json")) if (typeof r.score === "number") console.log(r.id, r.title, r.score)'`.
+  - `"order": "countdown"` goes from lowest rank to #1; anything else keeps the listed order (the Alla Turca demo v2 show uses a fixed order). Ranks and labels come from `src/data/runs.json`, one combined leaderboard ranked exactly as the gallery ranks it, computed whenever the show loads. Never write rank numbers into a show, an overlay or a doc.
+  - A model that has no run record or no preview yet becomes a placeholder slot instead of failing; see README "Placeholders".
 - **Length.** Set `startBar`, `barsPerModel` and `last`.
   - Cut on the song's grid (`song.json` → `grid`); one cycle per model is about 7 s for the Étude.
   - Start on strong material (`song.json` → `sections`).
@@ -40,7 +41,7 @@ cd recording && node scripts/make.mjs --show shows/<name>.json --plan
 
 `--plan` prints each model's bars and seconds and the total length. Show it to the user before recording anything long.
 
-If a model has no entry in `models.json`, the loader warns. Probe it with `node scripts/probe.mjs --model <id>` and write a fixture:
+If a model has no entry in `models.json`, the loader warns. Probe it with `node scripts/probe.mjs --model <id>` (`--base local` for shows with `"previewBase": "local"`) and write a fixture:
 
 - **Just the grand plus basic reverb.** Piano A only; organ, synth, Piano B, unison and mod effects off. Use only controls the preview ships. Confirm with `scripts/audit.mjs`, and use `scripts/abtest.mjs` to prove a control really changes the sound. Some cycle buttons always report `aria-pressed=true`, so a blind toggle can switch things **on**.
 - **Reverb.** Turn it on only when the probe's tail test shows a real tail. Set it to about 35% dry/wet with a `setValue` step.
