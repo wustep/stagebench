@@ -131,6 +131,13 @@ export function loadShow(showArg) {
 // holds the next section's pickup); without it the last model plays into the next downbeat.
 // show.finalHold: with lastBarBeats, hold the notes struck on that final beat for this many
 // seconds from the beat (a fermata on the closing chord), then release into `breathe`.
+// show.breathe: seconds from that release (the last note lifting) to the end of the last model's
+// picture. An end card's crossfade (endCard.crossfade) takes the last seconds of it.
+// show.pickupInIntro (with an intro): the first model's picture starts on startBar's downbeat like
+// every other turn; its idle and pickup play under the end of the intro (from = the downbeat cut,
+// audioFrom = t0). Without it the first turn's picture starts at t0 and carries both.
+// show.ringOut: seconds the audio runs on past the last picture (audioEnd = end + ringOut), so the
+// final chord's reverb tail decays under the end card instead of being cut; compose fades it out.
 function makePlan(show, song, files, order) {
   const midi = loadMidi(files.audio);
   const ppq = midi.header.ppq, bpb = song.beatsPerBar || 4, pick = (song.pickupBeats || 0) * ppq;
@@ -159,12 +166,14 @@ function makePlan(show, song, files, order) {
   const firstPlay = midi.header.ticksToSeconds(Math.max(0, barTick(starts[0]) - (show.pickupBeats || 0) * ppq));
   const t0 = firstPlay - IDLE;
   const end = t0 + Math.round((finalRelease + BREATHE - t0) * FPS) / FPS;
+  const audioEnd = end + Math.round((show.ringOut ?? 0) * FPS) / FPS;
   const cut = (t) => t0 + Math.floor((t - t0) * FPS + 1e-6) / FPS;
+  const pickupInIntro = !!(show.pickupInIntro && show.intro);
   const segments = order.map((model, k) => {
     const first = k === 0, last = k === n - 1, bar = starts[k];
     return {
       model, bars: [bar, last ? finalBar - 1 : bar + per - 1],
-      from: first ? t0 : cut(barTime(bar)), to: last ? end : cut(barTime(bar + per)),
+      from: first && !pickupInIntro ? t0 : cut(barTime(bar)), to: last ? end : cut(barTime(bar + per)),
       audioFrom: first ? t0 : barTime(bar), audioTo: last ? end : barTime(bar + per),
       playStart: first ? firstPlay : barTime(Math.max(1, bar - LEADIN_BARS)),
       playBefore: last ? finalCut : barTime(bar + per), // onsets played: [playStart, playBefore)
@@ -184,7 +193,9 @@ function makePlan(show, song, files, order) {
   blocks.at(-1).to = Math.min(blocks.at(-1).to, finalRelease);
   const refBars = song.levelReferenceBars || [show.startBar, show.startBar + per - 1];
   const ref = { from: barTime(refBars[0]), to: barTime(refBars[1] + 1) };
-  return { t0, end, duration: +(end - t0).toFixed(3), segments, blocks, ref, songBars, finalCut, finalHold, finalRelease };
+  // lead: seconds of the timeline (idle + pickup) before the first turn's picture starts; with
+  // pickupInIntro they play under the intro.
+  return { t0, end, audioEnd, lead: +(segments[0].from - t0).toFixed(5), pickupInIntro, duration: +(end - t0).toFixed(3), segments, blocks, ref, songBars, finalCut, finalHold, finalRelease };
 }
 
 export const argv = (name, def) => {

@@ -38,14 +38,16 @@ Record serially and leave the machine alone while the audio passes run. They pla
 | `order` | `"countdown"` sorts from the lowest rank up to #1. Anything else keeps the listed order. |
 | `startBar`, `barsPerModel` | Where the video starts, and how long each model plays. Cut on the song's grid (`song.json` → `grid`; a song that opens on an anacrusis sets `pickupBeats`, and bar 1 starts after it). |
 | `pickupBeats` | Optional. The first model also plays this many beats before `startBar`, so a phrase that starts on a pickup opens the film whole. |
+| `pickupInIntro` | Optional, with an `intro`. The first model's picture starts on `startBar`'s downbeat like every other turn. Its `idle` and pickup play under the last moments of the intro instead of padding its turn. The intro must be at least that long. |
 | `last` | `"to-end"` means the last model plays every remaining bar. A number means that many bars. If omitted, the last model gets `barsPerModel` bars and lands on the next downbeat. |
 | `lastBarBeats` | Optional. The film's final bar plays only its first N beats, for a cadence whose bar also holds the next section's pickup (Alla Turca: the march's A-major chord on beat 1 of bar 192, with the coda's pickup on beat 2). Without it the last model plays into the next downbeat. |
-| `finalHold` | Optional, with `lastBarBeats`. The notes struck on that final beat are held this many seconds from the beat, like a fermata, then released into `breathe`. Keys in the picture hold too. |
-| `idle`, `breathe` | Idle keyboard before the first note (0.4 s), and the hold after the last note lifts (2.5 s). |
+| `finalHold` | Optional, with `lastBarBeats`. The notes struck on that final beat are held this many seconds from the beat, like a fermata, then released into `breathe`. Keys in the picture hold too. It is part of the performance: changing it means re-recording the last model. |
+| `idle`, `breathe` | Idle keyboard before the first note (0.4 s), and the last model's picture after the last note lifts (2.5 s). An end card's `crossfade` takes the last seconds of `breathe`. |
+| `ringOut` | Optional. Seconds the audio runs on past the last model's picture, so the closing chord's reverb decays under the end card instead of being cut. Compose fades the audio out from the start of the end card's crossfade (or the cut) to the end of the ring-out. |
 | `caption` | Top-right `title`, `subtitle` and `date`. `fadeOut: [start, gone]` fades it out by `gone` seconds; the default is `[3.5, 5]`. |
 | `labels` | Optional `{ "<run-id>": "Display name" }` overrides. |
 | `placeholderLabels` | Optional names for models that have no run record in this checkout yet (placeholder slots), used only until the run's own title is available. |
-| `intro`, `endCard` | Optional cards over silence: `intro` before the first model (the caption then comes on with the first model), `endCard` after the last. Each card has an `image` (a path relative to `recording/`; a PNG shows at its natural size, an SVG at `imageWidth`, so it stays a crisp vector), optionally `title`, `subtitle` and `footer` beneath it, and runs for `secs` seconds. Each part fades in on its own schedule, `fades: { "image": [start, secs], "title": […], "footer": […] }`: the image from black, the type over it. Compose renders the cards, so `make.mjs` (or `--compose`) includes them. It saves each finished card as `output/<show>.intro.png` / `.end-card.png`. `compose.mjs --show … --cards` renders just the cards and card-only clips (`.takes/<show>/_work/<card>-preview.mp4`) without takes. Card type is house style (below). |
+| `intro`, `endCard` | Optional cards: `intro` before the first model (the caption then comes on with the first model), `endCard` after the last. Each card has an `image` (a path relative to `recording/`), optionally `title`, `subtitle`, `date` and `footer`, and runs for `secs` seconds. Placement:<br>• `"frame": "first-model"` (the intro): the image, a keyed photo, is scaled and placed so its chassis lands on the first model's chassis as composed. Compose measures both, so the cut into the first turn keeps the keyboard in place. The title and subtitle sit above it, the date and footer below.<br>• Otherwise (the end card): the image is centered, with the type beneath it. An SVG is drawn at `imageScale`, a whole-number multiple of its own `width`/`height` (or at `imageWidth`), on even pixels. `imageFilter` is CSS applied to it, with lengths at 1× that scale with it.<br>Each part fades on its own schedule: `fades: { "image": [in at, in for], "title": [in at, in for, out at, out for], … }`. The image fades from black and the type in alpha. An end card with `crossfade` (seconds) dissolves in from the last model instead of starting on black. Compose renders the cards, so `make.mjs` (or `--compose`) includes them, and saves each finished card as `output/<show>.intro.png` / `.end-card.png`. `compose.mjs --show … --cards` renders just the cards and card-only clips (`.takes/<show>/_work/<card>-preview.mp4`). Card type is house style (below). |
 | `titleCardSecs` | Legacy text intro (the caption on a black card). `intro` replaces it; 0 in the current shows. |
 | `loudness.targetLufs` | Final integrated loudness (−14). |
 | `leveling` | Gentle per-block nudges: `strength` 0.4, `deadbandDb` 2, `maxBoostDb` 3, `maxCutDb` 1.5. Each `barsPerModel` block more than `deadbandDb` from the median moves `strength` of its distance toward it, within the caps. Gains ramp inside a model's turn and step at cuts. Keep it gentle; the song's dynamics are the point. |
@@ -59,18 +61,21 @@ Record serially and leave the machine alone while the audio passes run. They pla
 
 `shows/demo-v2-alla-turca.json` renders `output/demo-v2-alla-turca.mp4` and its report. It's a draft and isn't used on the site. Eight models play the last third of Mozart's Rondo Alla Turca in the show's listed order, not a countdown:
 
-- one 8-bar phrase each, from the start of the A-minor theme's return (bar 129, with its one-beat pickup) through the C-major episode, the theme's return and the janissary march;
-- the last model stops on the march's A-major cadence (bar 192, beat 1, `lastBarBeats`) and holds that chord for 1.6 s (`finalHold`) instead of running into the coda;
-- it opens on a 2.5 s intro, the real Nord Stage 4 photo on black (no title), and hard-cuts to the first model;
-- it closes on a 4 s end card: the StageBench keyboard illustration from wustep.me, with "StageBench" and the link fading in beneath it.
+- one 8-bar phrase each, from the start of the A-minor theme's return (bar 129) through the C-major episode, the theme's return and the janissary march;
+- it opens on a 3.5 s intro: the real Nord Stage 4 photo on black, framed exactly like the first model's keyboard, with "StageBench", "Eight AI models rebuild the Nord Stage 4" and "November 2026". The type fades out as the theme's one-beat pickup starts under the photo (`pickupInIntro`), then it hard-cuts to the first model on bar 129's downbeat;
+- the last model stops on the march's A-major cadence (bar 192, beat 1, `lastBarBeats`), holds that chord 0.6 s (`finalHold`), and 0.2 s after the release dissolves into the end card over 0.37 s;
+- it closes on a 4 s end card: the StageBench keyboard illustration from wustep.me at 8×, with "StageBench" and the link at full opacity 0.5 s in. The chord's reverb rings out under the card (`ringOut`).
 
-It runs about 69 s, in the house style below. Every cut lands on a phrase boundary, and every turn is one phrase (the last one is longer only by its held chord and the closing breath).
+It runs about 66 s, in the house style below. Every cut lands on a phrase boundary, and every turn is one phrase on screen for 7.2–7.53 s. The spread is the performance's tempo: the march bars run about 0.945 s against 0.90 s for the theme. The last turn is on screen as long as the others, its held chord included.
 
 ```sh
 cd recording
 node scripts/make.mjs --show shows/demo-v2-alla-turca.json --plan   # timeline, computed ranks, placeholder slots
 node scripts/make.mjs --show shows/demo-v2-alla-turca.json          # record every filmable model, prep, compose (~25 min)
-node scripts/qa.mjs --show shows/demo-v2-alla-turca.json            # contact sheet + timing/level checks
+node scripts/make.mjs --show shows/demo-v2-alla-turca.json --compose   # prep + compose from existing takes
+node scripts/qa.mjs --show shows/demo-v2-alla-turca.json --grabs output/demo-v2-qa   # contact sheet, card frames, timing/level checks
+node scripts/site-compare.mjs --show shows/demo-v2-alla-turca.json \
+  --frame output/demo-v2-qa/end-card-faded-in.png --out output/demo-v2-qa/site-svg-vs-end-card.png   # needs network
 ```
 
 - **Song.** `songs/mozart-rondo-alla-turca/` is the third movement of the Piano Sonata K. 331. Mozart died in 1791 and the sonata was published in 1784, so the composition is public domain. The MIDI is from Stephen's library, with a dynamics pass from this repo:
@@ -83,8 +88,13 @@ node scripts/qa.mjs --show shows/demo-v2-alla-turca.json            # contact sh
 - **Previews are local** (`"previewBase": "local"`). Each script that opens a preview serves this checkout's `public/` itself, so recording needs no network and no separately started server.
 - **Levels.** Each piano is level-matched on the same reference bars (177–200, the march into the coda). This show's block leveling uses a 3 dB deadband, not 2, so that only a real outlier gets nudged. That keeps the theme return's piano from being lifted toward the forte march, which would undo the dynamics pass. Today only GPT 6.1 Sol's turn moves, by +1.6 dB: its piano's velocity curve is steep and its turn is the forte-then-piano episode.
 - **Same piano, same reverb.** Every model plays its acoustic grand with every other effect off, and its reverb is matched to Opus 5.5's own default by measurement, not by knob value (see [Reverb parity](#reverb-parity)). GPT-6 Sol is the exception: its reverb produces no real tail, so it plays dry.
-- **End card art.** `assets/stagebench-keyboard.svg` is the StageBench keyboard from wustep.me, vendored from `github.com/wustep/me` (`components/AboutPage.tsx` `StageBenchArt` for the geometry, `AboutPage.module.css` `.stagebench` for the colours, `--sb-body #c4202f` and the rest). It's static, in its idle pose, without the site's card, shadow or hover animation. Compose draws it 640 px wide as a vector.
-- **Intro photo.** `assets/nord-stage-4-on-black.png` is the Nord Stage 4 product photo from wustep.me, keyed off its white studio background onto black by `scripts/key-photo.mjs`. The 11600×3866 source (`nord-stage-4-wustep-me.png`, ~19 MB) is kept out of git. To regenerate it, put the source in `recording/` and run `node scripts/key-photo.mjs`. The script flood-fills the background from the border, so the light-gray white keys are never touched. It unmixes the edge pixels against the nearest solid colour, which leaves no white fringe or gray matte, then reports a fringe count.
+- **End card art.** `assets/stagebench-keyboard.svg` is the StageBench keyboard from wustep.me, vendored from `github.com/wustep/me` (`components/AboutPage.tsx` `StageBenchArt` for the geometry, `AboutPage.module.css` `.stagebench` for the colours). It uses the light-theme colours, which are the site's default: `--sb-body #c4202f`, not dark mode's duller `#b31c2a`. It's static, in its idle pose, without the site's card or hover animation.
+  - **Shadow.** The site's `drop-shadow(0 2px 5px rgba(0, 0, 0, 0.18))` comes from the show's `endCard.imageFilter`, scaled with the art.
+  - **Scale.** Compose draws it as a vector at 8× its 132×50 site size (1056×400), at an even position. At 8× every quarter-unit coordinate of the art (key edges, keybed, screen) lands on a whole pixel, so those edges are exact rather than anti-aliased. In the keybed, 0.5% of pixels are blends (the rounded corners), against 5.3% at round 2's 640 px, a 4.85× scale. H.264 4:2:0 still leaves its usual one-pixel chroma fringe where the red meets black.
+  - **Comparison.** `scripts/site-compare.mjs` screenshots the live site card at the same scale and puts it beside a frame of the film.
+- **Intro photo.** `assets/nord-stage-4-on-black.png` (1922×624) is the Nord Stage 4 product photo from wustep.me, keyed off its white studio background onto black by `scripts/key-photo.mjs --width 1920`. Compose scales it down so it lands on the first model's chassis.
+  - **Source.** The 11600×3866 source (`nord-stage-4-wustep-me.png`, ~19 MB) is kept out of git. To regenerate the asset, put the source in `recording/` and run the script.
+  - **Keying.** The script flood-fills the background from the border, so the light-gray white keys are never touched. It unmixes the edge pixels against the nearest solid colour, which leaves no white fringe or gray matte, then reports a fringe count.
 
 ### Placeholders
 
@@ -123,7 +133,14 @@ The style lives in `scripts/compose.mjs`:
 - **Audio switches:** 30 ms equal-power crossfade ending exactly on the downbeat, with no fades.
 - **Encode:** H.264 High CRF 16, AAC 256 kbps at 48 kHz. Gentle block leveling, then −14 LUFS through a −1.7 dBFS lookahead limiter.
 - **Type:** SF Pro via `-apple-system`. Compose checks which platform fonts actually rendered, records them in the report (`fonts`), and fails if a non-house face shows up. The one exception is the end card's title.
-- **Cards (intro, end card):** the image on black. Beneath it sit the title in Crimson Pro at 58 px, weight 500, warm white (`#f6eee2`), and the link in SF Pro at 22 px in 50% white. There's no box or frame around anything, and the block is centered on the frame. The image fades in from black, then the title, then the link. Crimson Pro is wustep.me's heading serif (SIL OFL), vendored in `assets/fonts/` with its license. Compose fails if a card title doesn't render in it, and records each card's faces in the report (`intro.fonts`, `endCard.fonts`). Inter, Instrument Serif, Fraunces, Bricolage Grotesque, Space Grotesk, Sora, Young Serif, Bodoni, Geist and Syne are never used.
+- **Cards (intro, end card):** the image on black, with no box or frame around anything.
+  - **Type.** The title is Crimson Pro at 58 px, weight 500, in warm white (`#f6eee2`). The rest is SF Pro: the subtitle at 26 px in 66% white, the date at 18 px caps in 45% white (like the caption's date), and the link at 22 px in 50% white.
+  - **Intro.** The image covers the first model's chassis. The title and subtitle sit 64 px above that chassis and the date 52 px below it.
+  - **End card.** Art and type are one group centered on the frame, with 64 px between the art and the title.
+  - **Fades.** The image fades in first, then the type.
+  - **Font checks.** Crimson Pro is wustep.me's heading serif (SIL OFL), vendored in `assets/fonts/` with its license. Compose fails if a card title doesn't render in it, and records each card's faces in the report (`intro.fonts`, `endCard.fonts`).
+  - **Banned faces.** Inter, Instrument Serif, Fraunces, Bricolage Grotesque, Space Grotesk, Sora, Young Serif, Bodoni, Geist and Syne are never used.
+- **Into the end card:** a dissolve of whole frames (`endCard.crossfade`), with the audio fading out under it.
 
 ## How a take is made (`scripts/record.mjs`)
 

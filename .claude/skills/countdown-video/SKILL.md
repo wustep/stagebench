@@ -26,6 +26,7 @@ Start from `recording/shows/etude6-countdown.json` and copy it to `recording/sho
   - Cut on the song's grid (`song.json` → `grid`); one cycle per model is about 7 s for the Étude.
   - Start on strong material (`song.json` → `sections`).
   - End with #1 on strong material or on the song's real ending (`"last": "to-end"`). Give every model one phrase; to stop on a cadence whose bar also carries the next section's pickup, use `lastBarBeats` (and `finalHold` to let the chord ring).
+  - Keep every turn about equally long on screen. With an intro, `pickupInIntro` plays the first model's idle and pickup under the intro instead of padding its turn. Keep the last turn's chord short: a `finalHold` of about 0.6 s, a `breathe` that ends its picture under 1 s after the strike, then `endCard.crossfade` and `ringOut` (README "Levers").
   - For Twitter, 45–90 s is the target.
 - **Caption and date.** Set `caption.title`, `caption.subtitle` and `caption.date`. Use today's date unless told otherwise.
 

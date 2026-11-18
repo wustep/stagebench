@@ -10,11 +10,21 @@
  * Audio: one timeline from the takes, 30 ms equal-power switches that end exactly on each
  * downbeat (no fades), then linear make-up gain to the target LUFS through a -1.7 dBFS lookahead
  * limiter. No intro or end card unless the show sets one.
- * Optional cards over silence (renderCard): show.intro before the first model, show.endCard after
- * the last. Each is { secs, image, imageWidth, title, subtitle, footer, fades }: the image (path
- * relative to recording/; a PNG at its natural size or an SVG at imageWidth) fades in from black,
- * then the title (Crimson Pro, the one non-system face, vendored in assets/fonts/) and the link
- * (SF Pro) fade in beneath it, each on its own layer and schedule (fades.<part> = [start, seconds]).
+ * Optional cards (renderCard): show.intro before the first model, show.endCard after the last.
+ * Each is { secs, image, title, subtitle, date, footer, fades } plus its placement:
+ *  - intro with frame "first-model": the image (a keyed photo) is scaled and placed so its chassis
+ *    lands exactly on the first model's chassis as composed (measured from both images), so the cut
+ *    into the first turn keeps the keyboard where it is; title and subtitle sit above it, the date
+ *    below. With show.pickupInIntro the first model's idle and pickup play under its last moments.
+ *  - otherwise (the end card): the image centered, an SVG drawn at a whole-number imageScale of its
+ *    own size on even pixels (pick a scale that puts the art's coordinates on whole pixels, so its
+ *    straight edges are exact rather than anti-aliased), with imageFilter (CSS, lengths at 1x,
+ *    scaled with it); the type beneath it.
+ * Type: the title in Crimson Pro (the one non-system face, vendored in assets/fonts/), everything
+ * else SF Pro. Each part is its own layer on its own schedule: fades.<part> = [in at, in for] or
+ * [in at, in for, out at, out for]; the image fades from black, the type in alpha. An end card with
+ * `crossfade` dissolves in from the last model over that many seconds (the last seconds of its
+ * turn) instead of starting on black; show.ringOut lets the audio decay under it and fades it out.
  * With an intro, the caption comes on with the first model. `--cards` renders just the cards.
  * Placeholder slots (models not filmable yet, see lib/show.mjs) keep their bars: black frame, the
  * same label (NEW / not yet ranked) and a centered "Take pending" line in the caption's subtitle
@@ -42,6 +52,13 @@ const INTRO_SECS = INTRO?.secs || 0;
 const TITLE_SECS = INTRO_SECS || S.show.titleCardSecs || 0; // film time before the music
 const END = S.show.endCard || null;
 const END_SECS = END?.secs || 0;
+// The end card's crossfade, on whole frames (xfade offsets must land on a frame).
+const XF_END = END_SECS ? Math.round((END.crossfade || 0) * FPS) / FPS : 0;
+// Timeline before the first turn's picture (idle + pickup), played under the intro (pickupInIntro).
+const LEAD = P.lead;
+const MUSIC_AT = TITLE_SECS - LEAD; // film time of the timeline's t0
+if (MUSIC_AT < 0) throw new Error(`intro (${INTRO_SECS} s) is shorter than the idle + pickup it carries (${LEAD.toFixed(2)} s)`);
+if (P.audioEnd - P.end > END_SECS - XF_END + 1e-6) throw new Error(`ringOut runs past the end card (${(P.audioEnd - P.end).toFixed(2)} s > ${(END_SECS - XF_END).toFixed(2)} s)`);
 const TARGET_LUFS = S.show.loudness?.targetLufs ?? -14;
 const cap = S.show.caption || {};
 const WORK = S.workDir;
@@ -100,31 +117,135 @@ const dataUri = (rel) => {
   if (!type) throw new Error(`unsupported asset type ${file}`);
   return `data:${type};base64,${fs.readFileSync(file).toString('base64')}`;
 };
-// Cards (house style): the intro before the first model and the end card after the last, both over
-// silence. A card is an image on the black field (a PNG at its natural size, or an SVG drawn at
-// imageWidth, so a vector stays crisp), optionally with a small serif title and the link in SF Pro
-// beneath it. The title face is Crimson Pro (wustep.me's heading serif, SIL OFL, vendored in
-// assets/fonts/); compose checks it actually rendered. Image, title, subtitle and footer are each
-// rendered as their own layer, so they fade in one after another (card.fades.<part> = [start, s]).
+// Cards (house style): the intro before the first model and the end card after the last. A card is
+// an image on the black field with a little type: the title in Crimson Pro (wustep.me's heading
+// serif, SIL OFL, vendored in assets/fonts/; compose checks it actually rendered), the subtitle,
+// date and link in SF Pro. No box or frame around anything. Layout is absolute and computed here,
+// not left to flexbox, so the art lands on exact pixels:
+//  - frame layout (intro, `frame: "first-model"`): the image is placed by cardFrame() so its chassis
+//    covers the first model's chassis; title + subtitle are centered above that chassis, the date
+//    (and any footer) below it;
+//  - stack layout (end card): the image centered, an SVG at a whole-number `imageScale` of its own
+//    size (or `imageWidth`) on even pixels, then the title and link beneath it, the group centered.
+// Image, title, subtitle, date and footer are each rendered as their own layer, so each fades on its
+// own schedule (card.fades.<part>).
 const TITLE_FONT = 'assets/fonts/crimson-pro-latin-wght-normal.woff2';
+const CARD_GAP = { above: 64, below: 52, stack: 64 }; // art to type, px
 const CARD_LAYER_CSS = `
     @font-face { font-family: "Crimson Pro"; src: url(${dataUri(TITLE_FONT)}) format("woff2"); font-weight: 200 900; font-style: normal; font-display: block; }
-    body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    body { background: #000; }
     body.layer { background: transparent; }
-    .card-image { display: block; height: auto; }
-    .card-title { margin-top: 52px; font-family: "Crimson Pro", serif; font-size: 58px; font-weight: 500; line-height: 1; letter-spacing: 0; color: #f6eee2; }
-    .card-sub { margin-top: 16px; font-size: 24px; font-weight: 400; color: rgba(255,255,255,0.62); }
-    .card-link { margin-top: 16px; font-size: 22px; font-weight: 400; letter-spacing: 0.4px; color: rgba(255,255,255,0.5); }
+    .card-image { position: absolute; display: block; }
+    .card-block { position: absolute; left: 0; width: ${W}px; text-align: center; }
+    .card-title { font-family: "Crimson Pro", serif; font-size: 58px; font-weight: 500; line-height: 1; letter-spacing: 0; color: #f6eee2; }
+    .card-sub { font-size: 26px; font-weight: 400; line-height: 1.25; letter-spacing: 0.1px; color: rgba(255,255,255,0.66); }
+    .card-date { font-size: 18px; font-weight: 600; line-height: 1.2; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+    .card-link { font-size: 22px; font-weight: 400; line-height: 1.2; letter-spacing: 0.4px; color: rgba(255,255,255,0.5); }
+    .card-block > * + * { margin-top: 18px; }
     .hide { visibility: hidden; }`;
-const CARD_PARTS = ['image', 'title', 'subtitle', 'footer'];
+const CARD_PARTS = ['image', 'title', 'subtitle', 'date', 'footer'];
+const CARD_CLASS = { title: 'card-title', subtitle: 'card-sub', date: 'card-date', footer: 'card-link' };
+const even = (v) => 2 * Math.round(v / 2);
+const imageSize = (rel) => {
+  const file = path.resolve(REC, rel);
+  if (/\.svg$/i.test(file)) {
+    const head = fs.readFileSync(file, 'utf8').match(/<svg\b[^>]*>/)?.[0] || '';
+    const w = Number(/\bwidth="([\d.]+)"/.exec(head)?.[1]), h = Number(/\bheight="([\d.]+)"/.exec(head)?.[1]);
+    if (!w || !h) throw new Error(`${rel}: the <svg> needs width and height (its size at 1x)`);
+    return { w, h };
+  }
+  return probe(file);
+};
+// Placement of a card's parts in px: { img: {src, x, y, w, h, filter}, blocks: [{ parts, top|bottom }] }.
+// `typeH` is the stack layout's type block height, measured in the page (cardLayout runs twice).
+function cardLayout(C, frame, typeH = 0) {
+  const type = (ps) => ps.filter((p) => C[p]);
+  if (frame) {
+    const c = frame.target;
+    return {
+      img: { src: dataUri(frame.file), x: frame.x, y: frame.y, w: frame.w, h: frame.h },
+      blocks: [{ parts: type(['title', 'subtitle']), bottom: c.y - CARD_GAP.above }, { parts: type(['date', 'footer']), top: c.y + c.h + CARD_GAP.below }],
+    };
+  }
+  const L = { blocks: [] };
+  let y = H / 2;
+  if (C.image) {
+    const nat = imageSize(C.image);
+    const scale = C.imageScale ?? (C.imageWidth ? C.imageWidth / nat.w : 1);
+    const w = Math.round(nat.w * scale), h = Math.round(nat.h * scale);
+    const groupH = h + (typeH ? CARD_GAP.stack + typeH : 0);
+    const top = even((H - groupH) / 2);
+    // CSS lengths in the filter are at the art's 1x size (the site's), so they scale with it.
+    const filter = C.imageFilter ? C.imageFilter.replace(/(-?[\d.]+)px/g, (_, v) => `${+(Number(v) * scale).toFixed(3)}px`) : null;
+    L.img = { src: dataUri(C.image), x: even((W - w) / 2), y: top, w, h, scale, filter };
+    y = top + h + CARD_GAP.stack;
+  }
+  L.blocks.push({ parts: type(['title', 'subtitle', 'date', 'footer']), top: C.image ? y : even((H - typeH) / 2) });
+  return L;
+}
 // show = which parts are visible (the rest keep their space, so every layer shares one layout).
-const cardHtml = (C, show, layer) => `<style>${css}${CARD_LAYER_CSS}</style><body class="${layer ? 'layer' : ''}">` +
-  (C.image ? `<img class="card-image${show.includes('image') ? '' : ' hide'}" alt="" src="${dataUri(C.image)}"${C.imageWidth ? ` style="width:${C.imageWidth}px"` : ''}>` : '') +
-  (C.title ? `<div class="card-title${show.includes('title') ? '' : ' hide'}">${esc(C.title)}</div>` : '') +
-  (C.subtitle ? `<div class="card-sub${show.includes('subtitle') ? '' : ' hide'}">${esc(C.subtitle)}</div>` : '') +
-  (C.footer ? `<div class="card-link${show.includes('footer') ? '' : ' hide'}">${esc(C.footer)}</div>` : '') + '</body>';
-// Fade timing per part: [start, duration] seconds into the card. Defaults: image first, then the type.
-const cardFades = (C) => ({ image: [0, C.fadeIn ?? 1], title: [1.2, 0.8], subtitle: [1.4, 0.8], footer: [1.55, 0.8], ...(C.fades || {}) });
+const cardHtml = (C, L, show, layer) => {
+  const vis = (p) => (show.includes(p) ? '' : ' hide');
+  const img = L.img ? `<img class="card-image${vis('image')}" alt="" src="${L.img.src}" style="left:${L.img.x}px;top:${L.img.y}px;width:${L.img.w}px;height:${L.img.h}px${L.img.filter ? `;filter:${L.img.filter}` : ''}">` : '';
+  const blocks = L.blocks.filter((b) => b.parts.length).map((b) => `<div class="card-block" style="${b.bottom != null ? `bottom:${H - b.bottom}px` : `top:${b.top}px`}">` +
+    b.parts.map((p) => `<div class="${CARD_CLASS[p]}${vis(p)}">${esc(C[p])}</div>`).join('') + '</div>').join('');
+  return `<style>${css}${CARD_LAYER_CSS}</style><body class="${layer ? 'layer' : ''}">${img}${blocks}</body>`;
+};
+// Fade timing per part, seconds into the card: [in at, in for] or [in at, in for, out at, out for].
+// Defaults: image first, then the type.
+const cardFades = (C) => ({ image: [0, C.fadeIn ?? 1], title: [1.2, 0.8], subtitle: [1.4, 0.8], date: [1.5, 0.8], footer: [1.55, 0.8], ...(C.fades || {}) });
+
+// The instrument's chassis in an RGB frame: the rows more than half lit (any channel > 40), then the
+// columns more than half lit between them, so thin protrusions (handles, a drop shadow, the black
+// pad around a take) don't count.
+function chassisBox(px, w, h) {
+  const lit = (x, y) => { const i = (y * w + x) * 3; return Math.max(px[i], px[i + 1], px[i + 2]) > 40; };
+  const rows = [];
+  for (let y = 0; y < h; y++) { let n = 0; for (let x = 0; x < w; x++) n += lit(x, y); if (n > w / 2) rows.push(y); }
+  if (!rows.length) throw new Error('no chassis found');
+  const y0 = rows[0], y1 = rows.at(-1), cols = [];
+  for (let x = 0; x < w; x++) { let n = 0; for (let y = y0; y <= y1; y++) n += lit(x, y); if (n > (y1 - y0 + 1) / 2) cols.push(x); }
+  return { x: cols[0], y: y0, w: cols.at(-1) - cols[0] + 1, h: y1 - y0 + 1 };
+}
+const rgbFrame = (file, vf, ss = null) => {
+  const r = spawnSync(FF, ['-v', 'error', ...(ss != null ? ['-ss', ss.toFixed(4)] : []), '-i', file, '-frames:v', '1', '-vf', vf, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 30 });
+  if (r.status !== 0) throw new Error(String(r.stderr).slice(-600));
+  return r.stdout;
+};
+// Where the intro's photo goes (`frame: "first-model"`): measure the first filmed model's chassis on
+// its first composed frame (the take scaled into the 1800x610 box exactly as below) and the photo's
+// own chassis, scale the photo so the two chassis are the same width (Lanczos, written to _work/),
+// and center it on the model's chassis. A photo with a different aspect is letterboxed by the black
+// field, never shrunk or raised.
+function cardFrame(C) {
+  if (C.frame !== 'first-model') return null;
+  const s = P.segments.find((x) => !S.model(x.model).placeholder);
+  const dir = s && S.takeDir(s.model);
+  if (!dir || !fs.existsSync(path.join(dir, 'meta.json'))) throw new Error('intro frame "first-model" needs a recorded first model');
+  const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
+  const take = path.join(dir, 'take-video.mp4');
+  const { w, h } = probe(take);
+  const g = boxFit(w, h);
+  const m = chassisBox(rgbFrame(take, `scale=${g.rw}:${g.rh}:flags=lanczos`, s.from - meta.videoStartMidi), g.rw, g.rh);
+  const target = { x: g.x + m.x, y: g.y + m.y, w: m.w, h: m.h };
+  const src = path.resolve(REC, C.image);
+  const nat = probe(src);
+  const pc = chassisBox(rgbFrame(src, 'null'), nat.w, nat.h);
+  const k = target.w / pc.w;
+  const fw = Math.round(nat.w * k), fh = Math.round(nat.h * k);
+  const file = path.join(WORK, 'intro-photo.png');
+  ff(['-i', src, '-vf', `scale=${fw}:${fh}:flags=lanczos`, '-frames:v', '1', file]);
+  const x = Math.round(target.x - pc.x * k), y = Math.round(target.y + target.h / 2 - (pc.y + pc.h / 2) * k);
+  const placed = { x: x + Math.round(pc.x * k), y: y + Math.round(pc.y * k), w: Math.round(pc.w * k), h: Math.round(pc.h * k) };
+  console.log(`intro frame: ${s.model} chassis ${JSON.stringify(target)}; photo chassis ${JSON.stringify(pc)} of ${nat.w}x${nat.h}, scaled ${k.toFixed(4)} to ${fw}x${fh} at ${x},${y} (chassis ${JSON.stringify(placed)})`);
+  return { model: s.model, target, photo: { size: [nat.w, nat.h], chassis: pc }, scale: +k.toFixed(4), file: path.relative(REC, file), x, y, w: fw, h: fh, placed };
+}
+// A take's frame fitted into the house keyboard box (shared by the picture and cardFrame).
+function boxFit(w, h) {
+  const sc = Math.min(BOX_W / w, BOX_H / h);
+  const rw = Math.round((w * sc) / 2) * 2, rh = Math.round((h * sc) / 2) * 2;
+  return { rw, rh, x: Math.round((W - rw) / 2), y: Math.round(BOX_CY - rh / 2) };
+}
 const CAPTION = `<div class="cap">${cap.title ? `<div class="t">${esc(cap.title)}</div>` : ''}${cap.subtitle ? `<div class="s">${esc(cap.subtitle)}</div>` : ''}${cap.date ? `<div class="d">${esc(cap.date)}</div>` : ''}</div>`;
 const FORBIDDEN = /inter|instrument serif|fraunces|bricolage|space grotesk|sora|young serif|bodoni|geist|syne/i;
 // Renders a card: the full card (saved next to the film as output/<show>.<name>.png), a check of
@@ -136,8 +257,21 @@ async function renderCard(page, C, name) {
     await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0));
   };
   const parts = CARD_PARTS.filter((p) => C[p]);
-  await page.setContent(cardHtml(C, parts, false));
+  const frame = cardFrame(C);
+  let L = cardLayout(C, frame);
+  if (!frame) { // stack: measure the type block, then center art + type as one group
+    await page.setContent(cardHtml(C, L, parts, false));
+    await ready();
+    const typeH = await page.evaluate(() => { const b = [...document.querySelectorAll('.card-block')].at(-1); return b ? b.getBoundingClientRect().height : 0; });
+    L = cardLayout(C, null, typeH);
+  }
+  await page.setContent(cardHtml(C, L, parts, false));
   await ready();
+  const layout = {
+    image: L.img ? { x: L.img.x, y: L.img.y, w: L.img.w, h: L.img.h, ...(L.img.scale ? { scale: L.img.scale } : {}), ...(L.img.filter ? { filter: L.img.filter } : {}) } : null,
+    type: await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.card-block > *')].map((e) => { const r = e.getBoundingClientRect(); return [e.className.replace(/ hide$/, ''), [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]]; }))),
+    ...(frame ? { frame } : {}),
+  };
   const fullPng = path.join(WORK, `${name}.png`);
   await page.screenshot({ path: fullPng });
   fs.copyFileSync(fullPng, S.output.replace(/\.mp4$/, `.${name}.png`));
@@ -146,7 +280,7 @@ async function renderCard(page, C, name) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
     const { root } = await cdp.send('DOM.getDocument', { depth: -1 });
-    for (const [k, sel] of [['title', '.card-title'], ['subtitle', '.card-sub'], ['footer', '.card-link']]) {
+    for (const [k, sel] of Object.entries(CARD_CLASS).map(([p, c]) => [p, `.${c}`])) {
       const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel });
       if (nodeId) fonts[k] = (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts.map((f) => f.familyName);
     }
@@ -156,22 +290,23 @@ async function renderCard(page, C, name) {
   const all = Object.values(fonts).flat();
   if (all.some((f) => FORBIDDEN.test(f))) throw new Error(`a non-house font rendered on the ${name}: ${all.join(', ')}`);
   if (fonts.title && !fonts.title.every((f) => /Crimson Pro/i.test(f))) throw new Error(`${name} title did not render in Crimson Pro: ${fonts.title.join(', ')}`);
-  for (const k of ['subtitle', 'footer']) if (fonts[k] && !fonts[k].some((f) => /SF|System/i.test(f))) console.warn(`warning: ${name} ${k} did not render in SF Pro: ${fonts[k].join(', ')}`);
+  for (const k of ['subtitle', 'date', 'footer']) if (fonts[k] && !fonts[k].some((f) => /SF|System/i.test(f))) console.warn(`warning: ${name} ${k} did not render in SF Pro: ${fonts[k].join(', ')}`);
   // One layer per part: the image on black (it fades in from black), the type on transparent.
   const fades = cardFades(C);
   for (const p of parts) {
-    await page.setContent(cardHtml(C, [p], p !== 'image'));
+    await page.setContent(cardHtml(C, L, [p], p !== 'image'));
     await ready();
     const file = path.join(WORK, `${name}-${p}.png`);
     await page.screenshot({ path: file, omitBackground: p !== 'image' });
-    layers.push({ part: p, file, fade: fades[p] });
+    layers.push({ part: p, file, fade: fades[p] || [0, 0] });
   }
   if (!layers.some((l) => l.part === 'image')) layers.unshift({ part: 'black', file: null, fade: [0, 0] });
-  return { name, secs: C.secs, layers, fonts, fades: Object.fromEntries(layers.filter((l) => l.file).map((l) => [l.part, l.fade])) };
+  return { name, secs: C.secs, layers, fonts, layout, fades: Object.fromEntries(layers.filter((l) => l.file).map((l) => [l.part, l.fade])) };
 }
 
 // Adds a rendered card to an ffmpeg graph as [<out>]: the image layer fades in from black, each type
-// layer fades in (alpha) over it on its own schedule. Returns the next input index.
+// layer fades in (and out, if its fade has an out) in alpha over it on its own schedule. Returns the
+// next input index.
 function cardGraph(card, out, vin, graph, idx) {
   let base = null;
   card.layers.forEach((l, i) => {
@@ -179,8 +314,9 @@ function cardGraph(card, out, vin, graph, idx) {
     if (!l.file) graph.push(`color=c=black:s=${W}x${H}:r=${FPS}:d=${card.secs}[${lab}]`);
     else {
       vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(card.secs), '-i', l.file);
-      const [st, d] = l.fade;
-      graph.push(`[${idx++}:v]format=rgba${d > 0 ? `,fade=t=in:st=${st}:d=${d}${l.part === 'image' ? '' : ':alpha=1'}` : ''}[${lab}]`);
+      const [st, d, ost, od] = l.fade;
+      const alpha = l.part === 'image' ? '' : ':alpha=1';
+      graph.push(`[${idx++}:v]format=rgba${d > 0 ? `,fade=t=in:st=${st}:d=${d}${alpha}` : ''}${od > 0 ? `,fade=t=out:st=${ost}:d=${od}${alpha}` : ''}[${lab}]`);
     }
     if (base) { graph.push(`[${base}][${lab}]overlay=0:0[${out}o${i}]`); lab = `${out}o${i}`; }
     base = lab;
@@ -216,21 +352,19 @@ const segs = P.segments.map((s, k) => {
   const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
   if (meta.segment?.bars?.join() !== s.bars.join()) throw new Error(`${s.model}: take covers bars ${meta.segment?.bars?.join('-')}, plan needs ${s.bars.join('-')}; re-record it`);
   const { w, h } = probe(path.join(dir, 'take-video.mp4'));
-  const sc = Math.min(BOX_W / w, BOX_H / h);
-  const rw = Math.round((w * sc) / 2) * 2, rh = Math.round((h * sc) / 2) * 2;
-  return { ...seg, dir, meta, rw, rh, x: Math.round((W - rw) / 2), y: Math.round(BOX_CY - rh / 2) };
+  return { ...seg, dir, meta, ...boxFit(w, h) };
 });
 const filmed = segs.filter((s) => !s.placeholder);
 if (!filmed.length) throw new Error('no filmed models yet; record some first');
 for (const s of segs) if (s.placeholder) console.log(`placeholder: ${s.model} bars ${s.bars.join('-')} (${s.placeholder})`);
 
-// --- 1. Timeline audio (t=0 is plan.t0). ---
-const tlDur = P.end - P.t0;
+// --- 1. Timeline audio (t=0 is plan.t0; it runs to plan.audioEnd, past the last picture by ringOut). ---
+const tlDur = P.audioEnd - P.t0;
 const inputs = [], chains = [];
 filmed.forEach((s, i) => {
   inputs.push('-i', path.join(s.dir, 'take-audio.wav'));
   const from = s.first ? s.audioFrom : s.audioFrom - XF;
-  const to = s.last ? P.end : s.audioTo;
+  const to = s.last ? P.audioEnd : s.audioTo;
   const a = from - s.meta.videoStartMidi, b = to - s.meta.videoStartMidi;
   let c = `[${i}:a]atrim=start=${a.toFixed(5)}:end=${b.toFixed(5)},asetpts=PTS-STARTPTS`;
   if (!s.first) c += `,afade=t=in:d=${XF}:curve=qsin`;
@@ -274,7 +408,7 @@ for (const b of blocks) {
     const first = i === 0 || blocks[i - 1].seg !== b.seg;
     const last = i === blocks.length - 1 || blocks[i + 1].seg !== b.seg;
     const from = first ? (b.seg === 0 ? P.t0 : segs[b.seg].audioFrom) : b.from;
-    const to = last ? (b.seg === segs.length - 1 ? P.end : segs[b.seg].audioTo) : blocks[i + 1].from;
+    const to = last ? (b.seg === segs.length - 1 ? P.audioEnd : segs[b.seg].audioTo) : blocks[i + 1].from;
     for (let j = idxOf(from); j < idxOf(to); j++) gainAt[j] = b.nudgeDb;
   });
   // Smooth only the within-turn block boundaries.
@@ -294,7 +428,11 @@ console.log('leveling (median ' + median.toFixed(1) + ' LUFS): ' + blocks.map((b
 const pre = loudness(mixed);
 const makeup = TARGET_LUFS - pre.I;
 const master = path.join(WORK, 'timeline-master.wav');
-ff(['-i', mixed, '-af', `volume=${makeup.toFixed(2)}dB,alimiter=limit=${Math.pow(10, LIMIT_DBFS / 20).toFixed(4)}:attack=1:release=80:level=disabled:asc=1`,
+// Ring-out: when the audio runs past the last picture (ringOut) or the picture dissolves into the
+// end card, the tail fades out from the start of that dissolve to the end of the audio.
+const tailFrom = P.end - XF_END - P.t0;
+const tailFade = tlDur - tailFrom > 0.05 && (XF_END > 0 || P.audioEnd > P.end) ? `,afade=t=out:st=${tailFrom.toFixed(5)}:d=${(tlDur - tailFrom).toFixed(5)}:curve=qsin` : '';
+ff(['-i', mixed, '-af', `volume=${makeup.toFixed(2)}dB,alimiter=limit=${Math.pow(10, LIMIT_DBFS / 20).toFixed(4)}:attack=1:release=80:level=disabled:asc=1${tailFade}`,
   '-t', tlDur.toFixed(5), '-c:a', 'pcm_f32le', master]);
 const raw = spawnSync(FF, ['-v', 'error', '-i', mixed, '-ac', '1', '-f', 'f32le', '-'], { maxBuffer: 1 << 30 }).stdout;
 const pcm = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
@@ -390,33 +528,55 @@ segs.forEach((s, i) => {
   graph.push(`[c${i}][${oi}:v]overlay=0:0,format=yuv420p,setsar=1,trim=end_frame=${Math.round(D * FPS)}[v${i + 1}]`);
 });
 const parts = Array.from({ length: segs.length + 1 }, (_, i) => `v${i}`).filter((v) => v !== 'v0' || title || introCard);
-if (endCard) { idx = cardGraph(endCard, 'vend', vin, graph, idx); parts.push('vend'); }
-const total = TITLE_SECS + tlDur + END_SECS;
+// Film time: the intro (or title card) runs TITLE_SECS, then the turns' pictures from the first
+// turn's `from`; the end card follows, dissolving in over the last XF_END seconds of the last turn.
+const picEnd = TITLE_SECS + (P.end - P.segments[0].from); // film time the last turn's picture ends
+const endAt = picEnd - XF_END; // film time the end card starts (its crossfade's first frame)
+const total = endAt + END_SECS;
+if (endCard && XF_END > 0) {
+  idx = cardGraph(endCard, 'vend', vin, graph, idx);
+  graph.push(`${parts.map((v) => `[${v}]`).join('')}concat=n=${parts.length}:v=1:a=0,fps=${FPS},settb=AVTB[vmain]`);
+  graph.push(`[vend]fps=${FPS},settb=AVTB[vendt]`);
+  graph.push(`[vmain][vendt]xfade=transition=fade:duration=${XF_END.toFixed(5)}:offset=${endAt.toFixed(5)}[vcat]`);
+} else {
+  if (endCard) { idx = cardGraph(endCard, 'vend', vin, graph, idx); parts.push('vend'); }
+  graph.push(`${parts.map((v) => `[${v}]`).join('')}concat=n=${parts.length}:v=1:a=0[vcat]`);
+}
 // Caption: on with the first model (after any intro), fully visible, then fades out and is gone by
 // fadeOut[1] seconds into the music.
 const [capFadeStart, capGone] = cap.fadeOut || [3.5, 5];
-graph.push(`${parts.map((v) => `[${v}]`).join('')}concat=n=${parts.length}:v=1:a=0[vcat]`);
 graph.push(`[${idx}:v]format=rgba,fade=t=out:st=${capFadeStart}:d=${(capGone - capFadeStart).toFixed(3)}:alpha=1${TITLE_SECS ? `,setpts=PTS+${TITLE_SECS}/TB` : ''}[cap]`);
 graph.push(`[vcat][cap]overlay=0:0:eof_action=pass,format=yuv420p[v]`);
 vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(capGone + 0.5), '-i', captionPng);
 idx++;
-graph.push(`[${idx}:a]${TITLE_SECS > 0 ? `adelay=${TITLE_SECS * 1000}:all=1,` : ''}apad=whole_dur=${total.toFixed(5)}[a]`);
+// The timeline audio starts at MUSIC_AT: the intro's length, less any idle + pickup it carries.
+graph.push(`[${idx}:a]${MUSIC_AT > 0 ? `adelay=${Math.round(MUSIC_AT * SR)}S:all=1,` : ''}apad=whole_dur=${total.toFixed(5)}[a]`);
 vin.push('-i', master);
 ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-t', total.toFixed(5),
   '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-r', String(FPS), '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart',
   '-c:a', 'aac', '-b:a', '256k', '-ar', String(SR), S.output]);
 
+const film = (t) => +(TITLE_SECS + t - P.segments[0].from).toFixed(3); // MIDI time -> film time
+const lastSeg = P.segments.at(-1);
 const report = {
   show: S.name, file: path.relative(process.cwd(), S.output), duration: duration(S.output), loudness: loudness(S.output),
-  musicStart: TITLE_SECS, musicEnd: +(TITLE_SECS + tlDur).toFixed(3),
-  intro: introCard ? { from: 0, secs: INTRO_SECS, artwork: INTRO.image ?? null, imageWidth: INTRO.imageWidth ?? 'natural', title: INTRO.title ?? null, footer: INTRO.footer ?? null, fades: introCard.fades, fonts: introCard.fonts, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.intro.png')) } : null,
-  endCard: endCard ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, artwork: END.image ?? null, imageWidth: END.imageWidth ?? 'natural', title: END.title, subtitle: END.subtitle ?? null, footer: END.footer,
-    fades: endCard.fades, fonts: endCard.fonts, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
+  // musicStart: the timeline's t0 (idle before the first note); firstNoteAt: the first note (with
+  // pickupInIntro, under the intro); pictureStart: the cut into the first turn; musicEnd: the end of
+  // the last turn's picture; audioEnd: the end of its ring-out under the end card.
+  musicStart: +MUSIC_AT.toFixed(3), firstNoteAt: film(P.segments[0].playStart), pictureStart: TITLE_SECS, musicEnd: +picEnd.toFixed(3), audioEnd: film(P.audioEnd),
+  finalChord: P.finalHold ? { struckAt: film(P.finalHold.from), releasedAt: film(P.finalRelease), hold: +(P.finalRelease - P.finalHold.from).toFixed(3),
+    pictureAfterStrike: +(endAt - film(P.finalHold.from)).toFixed(3), pictureAfterRelease: +(endAt - film(P.finalRelease)).toFixed(3) } : null,
+  intro: introCard ? { from: 0, secs: INTRO_SECS, artwork: INTRO.image ?? null, title: INTRO.title ?? null, subtitle: INTRO.subtitle ?? null, date: INTRO.date ?? null, footer: INTRO.footer ?? null,
+    underIntro: LEAD > 0 ? { from: +MUSIC_AT.toFixed(3), firstNote: film(P.segments[0].playStart), note: 'the first model\'s idle and pickup play under the intro' } : null,
+    fades: introCard.fades, fonts: introCard.fonts, layout: introCard.layout, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.intro.png')) } : null,
+  endCard: endCard ? { from: +endAt.toFixed(3), secs: END_SECS, crossfade: +XF_END.toFixed(3), artwork: END.image ?? null, title: END.title, subtitle: END.subtitle ?? null, footer: END.footer,
+    fades: endCard.fades, fonts: endCard.fonts, layout: endCard.layout, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
   fonts: fontsUsed, makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, ...(b.placeholder ? { placeholder: true } : { lufs: b.I }), nudgeDb: +b.nudgeDb.toFixed(2) })) },
   timeline: segs.map((s) => {
     const m = S.model(s.model);
+    // visibleSecs: on screen alone (the last turn's dissolve into the end card is not counted).
     const at = { model: s.model, label: m.label, rank: m.rank, score: m.score, bars: s.bars,
-      filmFrom: +(TITLE_SECS + s.from - P.t0).toFixed(3), filmTo: +(TITLE_SECS + s.to - P.t0).toFixed(3), secs: s.secs };
+      filmFrom: film(s.from), filmTo: film(s.to), secs: s.secs, visibleSecs: +(s.to - s.from - (s.model === lastSeg.model && endCard ? XF_END : 0)).toFixed(3) };
     if (s.placeholder) return { ...at, placeholder: s.placeholder };
     return { ...at,
       prep: JSON.parse(fs.readFileSync(path.join(s.dir, 'prep.json'), 'utf8')),
@@ -425,5 +585,7 @@ const report = {
 };
 fs.writeFileSync(S.output.replace(/\.mp4$/, '.report.json'), JSON.stringify(report, null, 1));
 console.log('wrote', S.output, report.duration.toFixed(3) + 's', JSON.stringify(report.loudness));
-for (const t of report.timeline) console.log(`  ${t.filmFrom.toFixed(2).padStart(6)}–${t.filmTo.toFixed(2).padStart(6)}  bars ${t.bars.join('–').padEnd(8)} ${t.rank ? `#${t.rank}` : 'NEW'}  ${t.label}${t.placeholder ? '  (placeholder)' : ''}`);
+for (const t of report.timeline) console.log(`  ${t.filmFrom.toFixed(2).padStart(6)}–${t.filmTo.toFixed(2).padStart(6)}  ${t.visibleSecs.toFixed(2)} s  bars ${t.bars.join('–').padEnd(8)} ${t.rank ? `#${t.rank}` : 'NEW'}  ${t.label}${t.placeholder ? '  (placeholder)' : ''}`);
+if (report.finalChord) console.log('final chord', JSON.stringify(report.finalChord));
+if (report.endCard) console.log(`end card from ${report.endCard.from} s, crossfade ${report.endCard.crossfade} s, fades ${JSON.stringify(report.endCard.fades)}`);
 console.log('limiter', JSON.stringify(limiter));

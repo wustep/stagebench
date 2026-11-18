@@ -20,11 +20,15 @@ const S = loadShow(showArg);
 const P = S.plan;
 
 console.log(`${S.name}: ${S.song.title}, ${S.models.length} models, ${P.duration.toFixed(1)} s`);
+const xf = S.show.endCard?.secs ? Math.round((S.show.endCard.crossfade || 0) * 30) / 30 : 0;
+if (S.show.intro?.secs) console.log(`  intro ${S.show.intro.secs.toFixed(2)} s${P.lead ? `, the first model's idle + pickup (${P.lead.toFixed(2)} s) under its end` : ''}`);
 for (const s of P.segments) {
   const m = S.model(s.model);
   const rank = m.rank ? `#${m.rank}` : 'NEW';
-  console.log(`  ${(s.from - P.t0).toFixed(2).padStart(6)}–${(s.to - P.t0).toFixed(2).padStart(6)}  ${s.secs.toFixed(2).padStart(5)} s  bars ${s.bars.join('–').padEnd(8)} ${rank.padEnd(4)} ${m.label}${m.placeholder ? `  [placeholder: ${m.placeholder}]` : ''}`);
+  const last = s === P.segments.at(-1);
+  console.log(`  ${(s.from - P.t0).toFixed(2).padStart(6)}–${(s.to - P.t0).toFixed(2).padStart(6)}  ${(s.secs - (last ? xf : 0)).toFixed(2).padStart(5)} s  bars ${s.bars.join('–').padEnd(8)} ${rank.padEnd(4)} ${m.label}${last && xf ? `  (+ ${xf.toFixed(2)} s dissolve into the end card)` : ''}${m.placeholder ? `  [placeholder: ${m.placeholder}]` : ''}`);
 }
+if (S.show.endCard?.secs) console.log(`  end card ${S.show.endCard.secs.toFixed(2)} s${P.audioEnd > P.end ? `, ring-out ${(P.audioEnd - P.end).toFixed(2)} s under it` : ''}`);
 if (process.argv.includes('--plan')) process.exit(0);
 
 // record.mjs exits 2 when the page crashed; retry those (renderer crashes can be intermittent).

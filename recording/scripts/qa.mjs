@@ -40,7 +40,9 @@ const a = new Float32Array(pcmBuf.buffer, pcmBuf.byteOffset, pcmBuf.byteLength /
 const SR = 48000;
 const db = (t0, t1) => { let s = 0, n = 0; for (let i = Math.max(0, Math.round(t0 * SR)); i < Math.min(a.length, Math.round(t1 * SR)); i++) { s += a[i] * a[i]; n++; } return n ? 10 * Math.log10(s / n + 1e-15) : -150; };
 let onset = 0; while (onset < a.length && Math.abs(a[onset]) < 0.003) onset++;
-const firstPlanned = report.timeline[0].filmFrom + (S.show.idle ?? 0.4); // filmFrom already includes any title card
+// The first note: report.firstNoteAt (it may play under the intro, see pickupInIntro); older
+// reports put it idle seconds after the first turn's picture.
+const firstPlanned = report.firstNoteAt ?? report.timeline[0].filmFrom + (S.show.idle ?? 0.4);
 console.log(`contact sheet: ${contact}`);
 // --grabs <dir>: full-size frames of the cards (first frame, mid fade, faded in, last frame) and of
 // the cut from the intro into the first model, named by what they show.
@@ -51,21 +53,26 @@ if (grabsDir) {
   const fr = (t) => Math.round(t * 30);
   const total = Math.round(report.duration * 30);
   const shots = [];
+  // Fades are [in at, in for] or [in at, in for, out at, out for], seconds into the card.
   const card = (c, name) => {
     if (!c) return;
     const f0 = fr(c.from), f1 = Math.min(total, fr(c.from + c.secs)) - 1;
-    const fadeEnds = Object.values(c.fades || {}).map(([st, d]) => st + d);
-    const typeFade = Object.entries(c.fades || {}).filter(([k]) => k !== 'image').map(([, f]) => f);
+    const fades = Object.entries(c.fades || {});
+    const fadeEnds = fades.map(([, [st, d]]) => st + d).concat(c.crossfade ? [c.crossfade] : []);
+    const typeFade = fades.filter(([k]) => k !== 'image').map(([, f]) => f);
+    const typeOut = typeFade.filter((f) => f[3] > 0);
     shots.push([`${name}-first-frame`, f0]);
-    if (c.fades?.image) shots.push([`${name}-image-mid-fade`, f0 + fr(c.fades.image[0] + c.fades.image[1] / 2)]);
+    if (c.crossfade) shots.push([`${name}-crossfade-mid`, f0 + fr(c.crossfade / 2)]);
+    if (c.fades?.image?.[1] > 0) shots.push([`${name}-image-mid-fade`, f0 + fr(c.fades.image[0] + c.fades.image[1] / 2)]);
     if (typeFade.length) shots.push([`${name}-type-mid-fade`, f0 + fr((Math.min(...typeFade.map((f) => f[0])) + Math.max(...typeFade.map((f) => f[0] + f[1]))) / 2)]);
     shots.push([`${name}-faded-in`, Math.min(f1, f0 + fr(Math.max(...fadeEnds, 0) + 0.2))]);
+    if (typeOut.length) shots.push([`${name}-type-fading-out`, f0 + fr((Math.min(...typeOut.map((f) => f[2])) + Math.max(...typeOut.map((f) => f[2] + f[3]))) / 2)]);
     shots.push([`${name}-last-frame`, f1]);
   };
   card(report.intro, 'intro');
   if (report.intro) shots.push(['intro-cut-to-first-model', fr(report.intro.secs)], ['first-model-caption', fr(report.intro.secs + 1.5)]);
   card(report.endCard, 'end-card');
-  if (report.endCard) shots.push(['before-end-card-last-music-frame', fr(report.endCard.from) - 1]);
+  if (report.endCard) shots.push(['before-end-card-last-model-frame', fr(report.endCard.from) - 1]);
   shots.sort((x, y) => x[1] - y[1]);
   const tmp = path.join(work, 'grabs');
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -84,9 +91,19 @@ for (const t of report.timeline.slice(1)) {
   const c = t.filmFrom;
   console.log(`cut @${c.toFixed(2).padStart(6)} to ${t.label.padEnd(24)} before ${db(c - 0.25, c - 0.05).toFixed(1)} dB | downbeat ${db(c + 0.01, c + 0.15).toFixed(1)} dB${t.placeholder ? '  (placeholder: silent)' : ''}`);
 }
-const end = report.musicEnd ?? a.length / SR; // the music's end (an end card follows in silence)
-if (report.intro) console.log(`intro 0-${report.intro.secs.toFixed(2)} s: ${db(0, report.intro.secs).toFixed(1)} dB (silent by design)`);
-console.log(`tail: last 0.5 s ${db(end - 0.5, end).toFixed(1)} dB, final 50 ms ${db(end - 0.05, end).toFixed(1)} dB${report.endCard ? `; end card ${report.endCard.from.toFixed(2)}-${(report.endCard.from + report.endCard.secs).toFixed(2)} s: ${db(report.endCard.from, report.endCard.from + report.endCard.secs).toFixed(1)} dB` : ''}`);
+// The audio's end: after a ring-out under the end card (audioEnd), else the last picture (musicEnd).
+const end = report.audioEnd ?? report.musicEnd ?? a.length / SR;
+if (report.intro) {
+  const quietTo = Math.min(report.intro.secs, firstPlanned) - 0.05;
+  console.log(`intro 0-${report.intro.secs.toFixed(2)} s: ${db(0, quietTo).toFixed(1)} dB until ${quietTo.toFixed(2)} s (silent)${firstPlanned < report.intro.secs ? `; the pickup plays under its last ${(report.intro.secs - firstPlanned).toFixed(2)} s: ${db(firstPlanned, report.intro.secs).toFixed(1)} dB` : ''}`);
+}
+console.log(`tail: last 0.5 s ${db(end - 0.5, end).toFixed(1)} dB, final 50 ms ${db(end - 0.05, end).toFixed(1)} dB, after ${end.toFixed(2)} s ${db(end, a.length / SR).toFixed(1)} dB`);
+if (report.endCard) {
+  const e0 = report.endCard.from, e1 = e0 + report.endCard.secs;
+  console.log(`end card ${e0.toFixed(2)}-${e1.toFixed(2)} s: ${db(e0, e1).toFixed(1)} dB overall; first 0.5 s ${db(e0, e0 + 0.5).toFixed(1)} dB, 0.5-1 s ${db(e0 + 0.5, e0 + 1).toFixed(1)} dB, 1-1.5 s ${db(e0 + 1, e0 + 1.5).toFixed(1)} dB (ring-out)`);
+}
+if (report.finalChord) console.log(`final chord: struck ${report.finalChord.struckAt} s, released ${report.finalChord.releasedAt} s (held ${report.finalChord.hold} s); picture holds ${report.finalChord.pictureAfterStrike} s after the strike, ${report.finalChord.pictureAfterRelease} s after the release`);
+console.log('visible per turn: ' + report.timeline.map((t) => `${t.label} ${(t.visibleSecs ?? t.secs).toFixed(2)}`).join(' | '));
 for (const t of report.timeline) {
   if (t.placeholder) { console.log(`  NEW  ${t.label.padEnd(24)} placeholder: ${t.placeholder}`); continue; }
   const lim = report.limiter.find((l) => l.model === t.model);
