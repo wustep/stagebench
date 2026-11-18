@@ -346,6 +346,9 @@ if (process.argv.includes('--cards')) {
 
 const segs = P.segments.map((s, k) => {
   const seg = { ...s, k, first: k === 0, last: k === P.segments.length - 1, placeholder: S.model(s.model).placeholder };
+  // A placeholder that already has a take means the loader lost sight of its run or preview
+  // (usually STAGEBENCH_EXTRA_CHECKOUTS unset); filming "Take pending" over a real take is never wanted.
+  if (seg.placeholder && fs.existsSync(path.join(S.takeDir(s.model), 'prep.json'))) throw new Error(`${s.model} has a recorded take but is a placeholder here (${seg.placeholder}); set STAGEBENCH_EXTRA_CHECKOUTS (README "Dropping in GPT 6.2")`);
   if (seg.placeholder) return seg;
   const dir = S.takeDir(s.model);
   if (!fs.existsSync(path.join(dir, 'prep.json'))) throw new Error(`${s.model}: no prepped take in ${dir}; record it with make.mjs --models ${s.model}`);

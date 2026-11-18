@@ -109,7 +109,12 @@ Every other turn is unaffected. `qa.mjs` lists placeholder slots but has no take
 
 ### Dropping in GPT 6.2 Sol and Astra (protocol 3)
 
-`gpt-6-2-sol-p3` and `gpt-6-2-astra-p3` are placeholders until their stage-3 previews exist. They're filmed at stage 3 like everyone else; there's no fallback to an earlier stage. Once a run has a sealed stage 3:
+`gpt-6-2-sol-p3` and `gpt-6-2-astra-p3` were placeholders until their stage-3 previews existed.
+- **Filmed:** both were filmed on 2026-11-18 from their grading checkouts through `STAGEBENCH_EXTRA_CHECKOUTS`, with fixtures in `models.json`.
+- **Composing:** until their runs and previews are in this checkout, every script that loads the show needs that variable set, compose included. Without it they're placeholders again, and compose stops with an error if a take exists for one.
+- **Stage:** they're filmed at stage 3 like everyone else; there's no fallback to an earlier stage.
+
+Once a run has a sealed stage 3:
 
 1. **Make it visible to the loader.** Copy `runs/<id>/` and `public/previews/<id>/stage3/` into this checkout. Don't commit them, or a reindexed `src/data/runs.json`, on this branch: they reach the gallery only through the normal publishing PR. Alternatively, read them in place from the grading checkout without copying anything:
    ```sh
@@ -200,6 +205,8 @@ The reference is Opus 5.5's own default: Hall at 35%. Each model gets the reverb
 | Sonnet 5.5 | Hall, 3.5 / 10 | ~3 dB | already the same type |
 | GPT 6.1 Sol | Stage, 45 | 3.7 dB | Room at 35 was nearly dry; Hall at 45 rings longer (5.0 dB) |
 | GPT-6 Astra | Hall, 50% | 4.2 dB | Room at 30% was short; the reverb lowers its dry level ~5 dB, which the level match absorbs |
+| GPT 6.2 Sol | Hall, dry/wet 5 (50%) | 1.5 dB | Ships bypassed as Spring at 60%, which is short. Hall 5's tail reaches −60 dB at 2.1 s, like the reference; Hall 4 is 2.4 dB off, and Stage and Room die within 1 s. |
+| GPT 6.2 Astra | Stage, mix 60 | 1.5 dB | Ships off as Room at 45%, gone by 1 s. Its Hall rings longer than the reference (4.0–7.9 dB); Stage 55 is 1.9 dB off. |
 | Fable 5.2 | 1.0 / 10 | 7.3 dB | Its type button is decorative and its one impulse decays about 3× slower than the Hall, so it can only be turned down. 1.0 is the best fit (0.5: 9.2, 1.5: 7.9, 2.0: 9.4): 7–9 dB drier early, 5–10 dB longer late. The old 3.5 was 16–33 dB over from 1 s on. |
 | GPT-6 Sol | dry | n/a | Its reverb makes no real tail, even as Hall at Amount 80: 25–30 dB under the reference, and it cuts the dry level up to 14 dB. |
 

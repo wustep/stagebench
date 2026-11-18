@@ -2,7 +2,8 @@
 // Steps only use controls the preview ships:
 //   pressIfOff / pressOffIfOn: <selector>          click to reach aria-pressed true / false
 //   select: [<selector>, <option label>]
-//   cycleTo: [<selector>, <label regex>]           click a cycling button until its aria-label (+ title) matches
+//   cycleTo: [<selector>, <label regex>, "text"?]  click a cycling button until its aria-label (+ title,
+//                                                  + its text with "text") matches
 //   click: <selector>                              click once (for cycle buttons with no readable state)
 //   setValue: [<selector>, <target>, <regex?>]     step a slider/knob with arrow keys until its value
 //                                                  (aria-valuenow, or the number in aria-valuetext
@@ -18,11 +19,14 @@ export async function runSetup(page, steps) {
       if (pressed === want) log.push(`already ${want === 'true' ? 'on' : 'off'}: ${sel}`);
       else { await b.click({ timeout: 2000 }); log.push(`turned ${want === 'true' ? 'on' : 'off'}: ${sel}`); }
     } else if (step.cycleTo) {
-      const [sel, re] = step.cycleTo;
+      const [sel, re, from_ = 'label'] = step.cycleTo;
       const b = page.locator(sel).first();
       if (!(await b.count())) { log.push(`missing ${sel}`); continue; }
-      // The state is read from the aria-label, plus the title where a preview puts it there.
-      const label = async () => [await b.getAttribute('aria-label'), await b.getAttribute('title')].filter(Boolean).join(' · ');
+      // The state is read from the aria-label, plus the title where a preview puts it there, plus
+      // (third element "text") the element's own text, for previews that only print it there
+      // (GPT 6.2 Astra's SVG panel: "Reverb type · Room").
+      const label = async () => [await b.getAttribute('aria-label'), await b.getAttribute('title'),
+        from_ === 'text' ? (await b.textContent())?.replace(/\s+/g, ' ').trim() : null].filter(Boolean).join(' · ');
       const from = await label();
       for (let i = 0; i < 12 && !new RegExp(re).test(await label()); i++) {
         await b.click({ timeout: 2000 });
