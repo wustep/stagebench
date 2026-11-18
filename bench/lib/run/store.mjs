@@ -36,7 +36,7 @@ const V2_PHASE_NAMES = ['Visual', 'Piano', 'Programs + FX', 'Organ + Synth']
 export const PROTOCOL_NOTES = {
   1: 'Protocol 1.x: the workspace sat inside the repository in 1.0 (candidates could reach other runs and were handed the benchmark\'s own scoring notes); 1.1 moved it out. No enforced isolation; candidates sourced samples from the internet.',
   2: 'Protocol 2.0: workspace outside the repository, but no enforced isolation — a candidate could read whatever its harness\'s own sandbox allowed, including this machine\'s disk and the internet. Candidates sourced their own samples.',
-  3: 'Protocol 3.0: candidates run in a lockdown with none of the operator\'s filesystem and no internet (only their own model API), are not told which model or run they are, and work under a fixed budget with at most two seal-failure rounds per phase; packages come from a fixed offline mirror and recorded samples from one shared raw pack; tokens and cost come from the gateway\'s log; grading is blind and boxed, and sound is measured by the harness.',
+  3: 'Protocol 3.0: candidates run in a lockdown with none of the operator\'s filesystem and no internet (only their own model API), are not told which model or run they are, and work under a fixed budget with at most two seal-failure rounds per phase; packages come from a fixed offline mirror and recorded samples from one shared raw pack; tokens and cost come from the gateway\'s log; grading is blind and boxed, and sound is measured by the harness. Phases graded before grader blinding 2 (2026-11-18) gave the grader a copy of the seal record that still named the producing model and its token usage, so their grading was not fully blind; their scores stand as graded.',
 }
 
 function rubricVersionOf(root) {

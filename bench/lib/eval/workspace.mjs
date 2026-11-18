@@ -2,15 +2,18 @@
 // out-of-repo directory named by a blind handle (not the run id, so the model
 // identity is not printed in the path it reads) with a copy of the sealed
 // artifact and the scoring materials beside it, and never touches runs/, other
-// runs' scores, or any other solution. The CLI passes run facts in; this
-// module never reads or writes run.json.
+// runs' scores, or any other solution. The CLI passes this run's facts in; this
+// module never writes a run record, and reads other runs' only for the names
+// the blinding guard looks for (./blinding.mjs).
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
-import { NON_ARTIFACT_DIRS, blindRunCode, hashTree, loadProtocol, readJson, stagebenchHome, workspaceRoot, writeJson } from '../shared.mjs'
+import { NON_ARTIFACT_DIRS, blindRunCode, hashTree, loadProtocol, readJson, workspaceRoot, writeJson } from '../shared.mjs'
 import { filterTaskToPhase, projectProtocol, projectVariants } from '../materials.mjs'
 import { AGENT_INSTRUCTION_DIRS, AGENT_INSTRUCTION_FILES } from '../run/verify.mjs'
+import { EVAL_BLINDING_VERSION, assertBlindInputs, blindVerification, graderNames, knownIdentities, namePattern, producerIdentities, writeBlindingStamp } from './blinding.mjs'
 import { createAssessmentTemplate, isTopPhase } from './scoring.mjs'
+
+export { blindVerification, namePattern } from './blinding.mjs'
 
 // Must stay identical to what hashTree ignores, or the copy's digest can never
 // match the digest recorded at seal.
@@ -22,32 +25,6 @@ export function evalWorkspaceDir(root, id, phase) {
 
 export function evalAssessmentPath(root, id, phase) {
   return path.join(evalWorkspaceDir(root, id, phase), 'assessment.json')
-}
-
-// Blinding: harness-written inputs must not name the run. The verification
-// record carries the real runId (and could embed it in check output or
-// workspace paths), so every string in it is rewritten to the blind handle
-// before it reaches the evaluator.
-function scrubRunIdentity(value, id, blindId, paths = []) {
-  if (typeof value === 'string') {
-    let text = value
-    // Host paths name the operator, the checkout, and often the run.
-    for (const [needle, replacement] of paths) if (needle) text = text.split(needle).join(replacement)
-    return text.split(id).join(blindId)
-  }
-  if (Array.isArray(value)) return value.map((entry) => scrubRunIdentity(entry, id, blindId, paths))
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key.split(id).join(blindId), scrubRunIdentity(entry, id, blindId, paths)]))
-  }
-  return value
-}
-
-// A name as a pattern that survives re-punctuation: "gpt-6-2-sol" also finds
-// "GPT 6.2 Sol" and "gpt_6.2_sol".
-export function namePattern(name) {
-  const tokens = String(name ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
-  if (tokens.join('').length < 5) return null
-  return new RegExp(tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^a-z0-9\\n]{0,3}'), 'gi')
 }
 
 // Make the grader's copy blind. Two things are removed from it, after its
@@ -101,47 +78,6 @@ export function blindArtifactCopy(directory, names = []) {
   return { stripped: stripped.sort(), redacted: redacted.sort() }
 }
 
-// What the grader is shown of the seal record. Everything about how the
-// artifact was produced is left out, because it identifies the producer: the
-// isolation record names the harness, its version, the model the gateway saw,
-// and the provider's endpoints; asset provenance names other runs. The grader
-// keeps what describes the artifact itself — gates, contract, evidence — and
-// only a count for provenance.
-export function blindVerification(record, id, blindId, { root = null } = {}) {
-  const { isolation: _isolation, assetProvenance, sampleProvenance, operatorPatch: _patch, ...artifactFacts } = record
-  const paths = [
-    [root ? path.join(root, 'runs', id) : null, '<artifact>'],
-    [root, '<repository>'],
-    [stagebenchHome(), '<workspace-home>'],
-    [os.homedir(), '~'],
-  ]
-  const blind = scrubRunIdentity(artifactFacts, id, blindId, paths)
-  if (Array.isArray(blind.evidence)) {
-    blind.evidence = blind.evidence
-      // None of these describes the artifact's quality, and two of them would
-      // point the grader at whatever gives the producer away.
-      .filter((entry) => !['lockdown decoys', 'artifact does not name its run', 'artifact does not name its producer', 'agent instruction files', 'transcripts'].includes(entry.id))
-      .map((entry) => (entry.id === 'asset provenance' && assetProvenance
-        ? {
-          ...entry,
-          detail: assetProvenance.matched > 0
-            ? `${assetProvenance.matched} of ${assetProvenance.assets} bundled assets are byte-identical to assets that already exist outside this artifact`
-            : `${assetProvenance.assets} bundled assets; none is byte-identical to an asset known outside this artifact`,
-        }
-        : entry))
-  }
-  if (assetProvenance) blind.assetProvenance = { assets: assetProvenance.assets, matched: assetProvenance.matched }
-  // Where each sample came from is the grader's business: it is how "recorded,
-  // with truthful provenance" gets judged. Nothing in it names the producer.
-  if (sampleProvenance) {
-    const { toMatch: _toMatch, problems: _problems, ...facts } = sampleProvenance
-    blind.sampleProvenance = facts
-  }
-  // Gate results keep their outcome; where they ran is not the grader's concern.
-  if (Array.isArray(blind.checks)) blind.checks = blind.checks.map(({ isolation: _where, ...check }) => check)
-  return blind
-}
-
 function copyInput(root, relativePath, inputRoot) {
   const source = path.resolve(root, relativePath)
   if (!source.startsWith(`${path.resolve(root)}${path.sep}`)) throw new Error(`Input escapes repository: ${relativePath}`)
@@ -187,8 +123,14 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     }
   }
 
+  // Every name a producer is known by, for the scrub and the guard. Read after
+  // the digest check, so a drifted artifact is reported as that.
+  const record = verificationPath && fs.existsSync(verificationPath) ? readJson(verificationPath) : null
+  const identities = knownIdentities(root, { id, producerNames, record })
+  const producer = producerIdentities({ id, producerNames, record })
+
   // Blind the copy (after the digest check, which is about the sealed bits).
-  const blinding = blindArtifactCopy(artifact, [id, ...producerNames])
+  const blinding = blindArtifactCopy(artifact, producer)
 
   // The built app the operator captured and the gallery serves, copied in as
   // `build/`. Every evaluator then exercises identical bits instead of each
@@ -220,8 +162,8 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
   writeJson(path.join(inputs, 'specs', 'benchmark-phases.json'), projectProtocol(protocol, phase, variantId))
   writeJson(path.join(inputs, 'specs', 'nord-stage-4.variants.json'), projectVariants(variants, variantId))
   writeJson(path.join(inputs, 'rubric.json'), rubric)
-  if (verificationPath && fs.existsSync(verificationPath)) {
-    writeJson(path.join(inputs, 'verification.json'), blindVerification(readJson(verificationPath), id, blindId, { root }))
+  if (record) {
+    writeJson(path.join(inputs, 'verification.json'), blindVerification(record, id, blindId, { root, names: identities.names, vendors: identities.vendors }))
   }
   // Blind template: identified by the handle, never the model id. The
   // run-level panel axis rides on the highest sealed phase only.
@@ -339,6 +281,18 @@ export function createEvalWorkspace(root, { id, phase, variantId, stageDir, veri
     fs.chmodSync(target, entry.isDirectory() ? 0o555 : 0o444)
   }
   fs.chmodSync(artifact, 0o555)
+
+  // The guard: read back everything written for the grader and fail closed if
+  // a known model or run name is in it. A workspace that fails is removed, so
+  // no evaluator can be pointed at it.
+  writeBlindingStamp(workspace)
+  try {
+    blinding.version = EVAL_BLINDING_VERSION
+    blinding.guard = assertBlindInputs(workspace, { names: identities.names, producer, grader: graderNames(rubric) })
+  } catch (error) {
+    removeWorkspaceTree(workspace)
+    throw error
+  }
 
   return { id, blindId, phase: Number(phase), workspace, artifact, inputs, build, assessment: path.join(workspace, 'assessment.json'), blinding }
 }

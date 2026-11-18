@@ -871,14 +871,19 @@ test('the grader’s copy of the seal record says nothing about who produced the
       launches: [{ harness: 'Codex CLI', harnessVersion: 'codex-cli 0.169.0', auth: 'chatgpt', model: 'gpt-6.2-sol', operatorMessage: 'fix the plan' }],
       gateway: { models: { 'gpt-6.2-sol': 37 }, deniedTargets: { 'chatgpt.com/backend-api/ps/mcp': 25 } },
     },
+    // The blocks the first, denylist version let through (the protocol-3 audit, section 2.9).
+    usage: { source: 'gateway', costUsd: 1.23, outputTokens: 4567, byModel: { 'gpt-6.2-sol': { requests: 37, costUsd: 1.23, priceId: 'gpt-6.2-sol' } }, efforts: { 'gpt-6.2-sol:high': 37 }, responseModels: { 'gpt-6.2-sol -> gpt-6.2-sol': 37 } },
+    budget: { rules: { effort: 'high' }, used: { outputTokens: 4567 }, effort: { pinned: 'high', primaryModel: 'gpt-6.2-sol', observed: { 'gpt-6.2-sol:high': 37 } } },
+    seal: { outcome: 'passed', attempts: 1 },
+    verifiedAt: '2026-11-18T06:42:19.731Z',
   }
   const blind = blindVerification(record, 'gpt-6-2-sol', 'run-abcdef012345')
   const text = JSON.stringify(blind)
-  for (const giveaway of ['gpt-6-2-sol', 'gpt-6.2-sol', 'gpt-6-2-astra', 'Codex', 'codex', 'chatgpt', 'nordstage4', 'sb-0123456789', 'fix the plan', 'lockdown', 'IMPLEMENTATION_PLAN.md']) {
+  for (const giveaway of ['gpt-6-2-sol', 'gpt-6.2-sol', 'GPT 6.2 Sol', 'gpt-6-2-astra', 'Codex', 'codex', 'chatgpt', 'nordstage4', 'sb-0123456789', 'fix the plan', 'lockdown', 'IMPLEMENTATION_PLAN.md', 'priceId', 'costUsd', 'primaryModel', 'observed', 'efforts', 'responseModels', '4567', '2026-11-18']) {
     assert.equal(text.includes(giveaway), false, `the grader must not see "${giveaway}"`)
   }
   assert.equal(blind.runId, 'run-abcdef012345')
-  assert.equal('isolation' in blind, false)
+  assert.deepEqual(['isolation', 'usage', 'budget', 'seal', 'verifiedAt', 'version'].filter((key) => key in blind), [])
   assert.deepEqual(blind.assetProvenance, { assets: 89, matched: 89 }, 'the count survives; the origins do not')
   assert.deepEqual(blind.evidence.map((entry) => entry.id), ['evidence/stage2-desktop.png', 'asset provenance'])
   assert.match(blind.evidence[1].detail, /^89 of 89 bundled assets are byte-identical to assets that already exist outside this artifact$/)
