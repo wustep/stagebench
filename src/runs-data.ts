@@ -3,19 +3,23 @@
 // here, so the derived leaderboard data is computed exactly once at module
 // load (it is a pure function of the generated runs.json) rather than on every
 // render.
-import runsData from './data/runs.json'
-import protocol from './data/protocol.json'
+//
+// The JSON imports carry import attributes so the node:test suite can load
+// this module as-is (Node strips the types and requires the attribute); Vite
+// treats them exactly like a bare JSON import.
+import runsData from './data/runs.json' with { type: 'json' }
+import protocol from './data/protocol.json' with { type: 'json' }
 import type { PhaseNumber } from './run-utils'
-import type { RawRunEntry, RunEntry, Telemetry } from './types'
+import type { IsolationMode, RawRunEntry, RunEntry, Telemetry } from './types'
 import { TELEMETRY_FIELDS } from './telemetry-fields.mjs'
 
 export { protocol }
 
 // Project a raw runs.json entry into a complete RunEntry so the render path can
 // assume every field is present. Legacy-schema runs that omitted optional
-// fields get honest defaults (null telemetry, empty previews) rather than
-// scattered optional chaining downstream.
-function normalizeRunEntry(raw: RawRunEntry): RunEntry {
+// fields get honest defaults (null telemetry, empty previews, no isolation, no
+// footnotes) rather than scattered optional chaining downstream.
+export function normalizeRunEntry(raw: RawRunEntry): RunEntry {
   const telemetry: Telemetry | null = raw.telemetry
     ? Object.fromEntries(TELEMETRY_FIELDS.map((field) => [field, raw.telemetry?.[field] ?? null])) as Telemetry
     : null
@@ -28,6 +32,16 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
     targetPhase: raw.targetPhase ?? null,
     harness: raw.harness ?? null,
     protocolVersion: raw.protocolVersion ?? null,
+    // Anything that is not a recorded lockdown counts as no isolation: the
+    // default must never claim more containment than the record shows.
+    isolation: raw.isolation === 'lockdown' || raw.isolation === 'mixed' ? raw.isolation : 'none',
+    footnotes: (raw.footnotes ?? []).map((note) => ({
+      kind: note.kind ?? 'note',
+      text: note.text,
+      phases: note.phases ?? [],
+      at: note.at ?? null,
+    })),
+    derivedFrom: raw.derivedFrom ? { run: raw.derivedFrom.run, fromPhase: raw.derivedFrom.fromPhase } : null,
     rubricVersion: raw.rubricVersion ?? null,
     legacy: raw.legacy,
     status: raw.status,
@@ -46,6 +60,7 @@ function normalizeRunEntry(raw: RawRunEntry): RunEntry {
       status: stage.status ?? 'queued',
       score: stage.score ?? null,
       reportPath: stage.reportPath ?? null,
+      isolation: stage.isolation ?? null,
     })),
   }
 }
@@ -120,27 +135,171 @@ export function getPhaseName(run: RunEntry, phase: PhaseNumber) {
   return getPhaseList(run)[phase - 1]
 }
 
-// Runs are tiered by the protocol they were SCORED under, which is not always
-// the one they were built under — rescoring an older run moves it into the
-// newer group. The rubric carries the same version number as the protocol, so
-// there is one number to track rather than two.
+// --- protocol versions --------------------------------------------------------
+
+// The fields of src/data/protocol.json the tiering reads. `version` is the
+// current protocol (the conditions candidates work under), `rubricVersion` the
+// current rubric (what makes two scores comparable), and `protocolNotes` one
+// sentence per protocol generation, keyed by major version.
+export type ProtocolInfo = {
+  version: string
+  rubricVersion: string
+  protocolNotes: Record<string, string>
+}
+
+const protocolInfo: ProtocolInfo = protocol
+
+// "3.0.0" -> { major: 3, minor: 0 }. Null when the string does not start with
+// a number, so callers show nothing rather than a guess.
+function parseVersion(version: string | null) {
+  const match = /^(\d+)(?:\.(\d+))?/.exec((version ?? '').trim())
+  if (!match) return null
+  return { major: Number(match[1]), minor: match[2] === undefined ? null : Number(match[2]) }
+}
+
+// "3.0.0" -> "3.0": the form the gallery prints.
+export function shortVersion(version: string | null) {
+  const parsed = parseVersion(version)
+  if (!parsed) return null
+  return parsed.minor === null ? String(parsed.major) : `${parsed.major}.${parsed.minor}`
+}
+
+// A protocol generation is a major version: one set of conditions candidates
+// worked under (see protocolNotes).
+export function protocolGeneration(version: string | null) {
+  return parseVersion(version)?.major ?? null
+}
+
+// What to call each generation in a heading, from the versions actually on
+// record: "2.0" when every run of the generation agrees, "1.x" when the
+// generation spans several minors (1.0 and 1.1 share a tier).
+export function buildGenerationLabels(versions: Iterable<string | null>) {
+  const seen = new Map<number, Set<string>>()
+  for (const version of versions) {
+    const generation = protocolGeneration(version)
+    const short = shortVersion(version)
+    if (generation === null || short === null) continue
+    seen.set(generation, (seen.get(generation) ?? new Set<string>()).add(short))
+  }
+  return new Map([...seen].map(([generation, shorts]) => [generation, shorts.size === 1 ? [...shorts][0] : `${generation}.x`]))
+}
+
+// --- result tiers -------------------------------------------------------------
+
+export type ResultClass = { id: string; label: string; rank: number; description: string }
+
+// Tier order, top to bottom. Just below RANK_CURRENT sits one board for every
+// run built before the current protocol generation and scored under the
+// current rubric.
+const RANK_CURRENT = 0
+const RANK_EARLIER = 1
+const RANK_UNVERSIONED = 97
+const RANK_OLDER_RUBRIC = 98
+const RANK_LEGACY = 99
+
+// Two things have to match before two scores belong in one ranked list.
 //
-// Ranking across tiers would be a false comparison: different weights,
-// different criteria, and (before the evaluator was pinned) different judges.
-// One list would put a 93.8 scored under 1.1 above a 91 scored under 2.0 and
-// imply a result neither number supports.
-export function getResultClass(run: RunEntry) {
-  if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: 2, description: 'Runs recorded before the current run schema, under earlier prompts, specs, or scoring. Kept for reference with their frozen scores and reports.' }
-  const scoredUnder = run.rubricVersion ?? null
-  if (scoredUnder && scoredUnder !== protocol.version) {
+// The RUBRIC that produced them: different weights, different criteria, and
+// (before the evaluator was pinned) different judges. One list would put a
+// 93.8 scored under rubric 1.1 above a 91 scored under 2.0 and imply a result
+// neither number supports. A run is tiered by the rubric it was scored under,
+// which is not always the one current when it was built — rescoring moves it.
+//
+// The CONDITIONS it was built under, which is what a protocol generation is.
+// Protocol 3 kept the rubric and changed the conditions (the lockdown), so a
+// run built before it is scored the same way but did not do the same job: it
+// is ranked on a board below the current one.
+//
+// That board is ONE board, however many earlier generations it holds. The
+// runs built under protocols 1 and 2 were already ranked together (one rubric
+// scored them all), and a new protocol is no reason to split a ranking that
+// existed before it. Each row says which protocol it was built under.
+export function classifyResult(
+  run: Pick<RunEntry, 'legacy' | 'rubricVersion' | 'protocolVersion'>,
+  info: ProtocolInfo,
+  generationLabels: ReadonlyMap<number, string>,
+): ResultClass {
+  if (run.legacy) return { id: 'legacy', label: 'Legacy', rank: RANK_LEGACY, description: 'Runs recorded before the current run schema, under earlier prompts, specs, or scoring. Kept for reference with their frozen scores and reports.' }
+  const scoredUnder = run.rubricVersion
+  if (scoredUnder && scoredUnder !== info.rubricVersion) {
     return {
       id: `protocol-${scoredUnder}`,
       label: `Protocol ${scoredUnder}`,
-      rank: 1,
-      description: `Scored under protocol ${scoredUnder}, before the current version changed the weights, the criteria, and the evaluator. Ranked separately from Protocol ${protocol.version} rather than merged into one leaderboard.`,
+      rank: RANK_OLDER_RUBRIC,
+      description: `Scored under protocol ${scoredUnder}, before rubric ${shortVersion(info.rubricVersion) ?? info.rubricVersion} changed the weights, the criteria, and the evaluator. Ranked separately rather than merged into one leaderboard.`,
     }
   }
-  return { id: 'current', label: `Protocol ${protocol.version}`, rank: 0, description: '' }
+  const labelOf = (generation: number) => generationLabels.get(generation) ?? `${generation}.x`
+  const currentGeneration = protocolGeneration(info.version)
+  const currentLabel = `Protocol ${currentGeneration === null ? info.version : labelOf(currentGeneration)}`
+  const generation = protocolGeneration(run.protocolVersion)
+  if (generation === null) {
+    return { id: 'protocol-unversioned', label: 'Unversioned', rank: RANK_UNVERSIONED, description: `No protocol version on record, so the conditions these runs were built under are unknown. Ranked separately from ${currentLabel}.` }
+  }
+  if (currentGeneration === null || generation >= currentGeneration) {
+    return { id: 'current', label: currentLabel, rank: RANK_CURRENT, description: info.protocolNotes[String(currentGeneration)] ?? '' }
+  }
+  const earlier = [...generationLabels.keys()].filter((known) => known < currentGeneration).sort((left, right) => right - left)
+  const newest = earlier[0] ?? generation
+  return {
+    id: `before-protocol-${currentGeneration}`,
+    label: `Protocol ${labelOf(newest)}${earlier.length > 1 ? ' and earlier' : ''}`,
+    rank: RANK_EARLIER,
+    description: `Built before ${currentLabel} and scored with the same rubric. Ranked separately because the conditions differ; each run's details say what its protocol guaranteed.`,
+  }
+}
+
+// Legacy records are left out: their versions come from a retired numbering
+// (an earlier "2.0" and "3.x") that would otherwise read as today's protocols.
+const generationLabels = buildGenerationLabels([
+  protocolInfo.version,
+  ...runs.filter((run) => !run.legacy).map((run) => run.protocolVersion),
+])
+
+export function getResultClass(run: RunEntry) {
+  return classifyResult(run, protocolInfo, generationLabels)
+}
+
+// The top tier exists whether or not a run has reached it yet, so the page can
+// always name the current protocol above the boards ranked separately from it.
+export const currentResultClass = classifyResult({ legacy: false, rubricVersion: null, protocolVersion: protocolInfo.version }, protocolInfo, generationLabels)
+
+// --- per-run conditions -------------------------------------------------------
+
+// "P2.0": the protocol a run was built under, for the row's meta line. Legacy
+// records get no label, for the same reason they get no generation.
+export function getProtocolLabel(run: RunEntry) {
+  const short = run.legacy ? null : shortVersion(run.protocolVersion)
+  return short === null ? null : `P${short}`
+}
+
+// The one-sentence conditions note of the generation a run was built under.
+export function getProtocolNote(run: RunEntry) {
+  const generation = run.legacy ? null : protocolGeneration(run.protocolVersion)
+  return generation === null ? null : protocolInfo.protocolNotes[String(generation)] ?? null
+}
+
+const ISOLATION: Record<IsolationMode, { label: string; meaning: string }> = {
+  lockdown: { label: 'Lockdown', meaning: "Built in a container with none of the operator's filesystem and no internet, only its own model API." },
+  none: { label: 'No isolation', meaning: 'Nothing was enforced: the candidate could read whatever its harness allowed.' },
+  mixed: { label: 'Mixed', meaning: 'Some phases were sealed outside the lockdown.' },
+}
+
+// The first protocol generation that requires the lockdown; mirrors
+// isStrictProtocol in bench/lib/shared.mjs. Before it, "no isolation" is simply
+// how the protocol worked. From it on, anything but a lockdown is off-protocol.
+const LOCKDOWN_REQUIRED_FROM = 3
+
+export function getIsolation(run: RunEntry) {
+  const generation = run.legacy ? null : protocolGeneration(run.protocolVersion)
+  const offProtocol = generation !== null && generation >= LOCKDOWN_REQUIRED_FROM && run.isolation !== 'lockdown'
+  const { label, meaning } = ISOLATION[run.isolation]
+  return {
+    mode: run.isolation,
+    label,
+    offProtocol,
+    meaning: offProtocol ? `${meaning} Off-protocol: protocol ${shortVersion(run.protocolVersion)} requires the lockdown.` : meaning,
+  }
 }
 
 // Leaderboard ordering and per-tier rankings are pure functions of the
@@ -153,7 +312,7 @@ export function getResultClass(run: RunEntry) {
 // in progress have no score yet, so they sink below the scored runs of their
 // tier; newest-first breaks any remaining ties.
 // Tier id breaks ties within a rank so tiers stay contiguous: several older
-// rubrics share rank 1, and sorting them by score alone would interleave them
+// rubrics share one rank, and sorting them by score alone would interleave them
 // back into the single mixed leaderboard the tiers exist to prevent.
 export const visibleRuns = [...runs]
   .sort((left, right) =>

@@ -909,11 +909,17 @@ a { color: inherit; }
   letter-spacing: -.025em;
 }
 
-.result-group-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; padding: 18px 4px 9px; border-bottom: 2px solid var(--ink); }
-.result-group-label { display: inline-flex; align-items: center; gap: 8px; font: 900 17px/1 'Barlow Condensed', sans-serif; letter-spacing: .03em; text-transform: uppercase; }
-.result-group-heading p { margin: 0; color: var(--muted); font-size: 10px; }
+/* A tier's title line shares the tower's grid (declared below with the tower),
+   so its description — a sentence or two on which conditions set the tier
+   apart — starts at the first phase column instead of floating at the right. */
+.result-group-heading { padding: 18px 12px 9px; border-bottom: 2px solid var(--ink); }
+/* The label keeps its 4px inset from the table edge; the grid's own is 12px. */
+.result-group-label { grid-column: 1 / 4; display: inline-flex; align-items: center; gap: 8px; margin-left: -8px; font: 900 17px/1 'Barlow Condensed', sans-serif; letter-spacing: .03em; text-transform: uppercase; }
+.result-group-heading p { grid-column: 4 / -1; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; text-wrap: pretty; }
 .result-group-current { border-color: oklch(42% 0.11 145); }
 .result-group-legacy { border-color: var(--muted); }
+/* The current protocol's tier before any run has reached it. */
+.result-group-empty { margin: 0; padding: 16px 12px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 
 /* Bare circled-i affordance that opens the protocol-differences modal — the
    glyph is its own ring, so no button chrome around it. */
@@ -953,12 +959,15 @@ a { color: inherit; }
    aggregate score. The whole row plays the run; the chevron expands full
    run metadata. */
 
-.tower-head, .row-main {
+.tower-head, .row-main, .result-group-heading {
   display: grid;
   grid-template-columns: 40px minmax(150px, 1.25fr) 92px repeat(var(--sectors, 3), minmax(78px, .72fr)) minmax(88px, .78fr) 62px 74px 30px;
   gap: clamp(10px, 1.5vw, 22px);
   align-items: center;
 }
+/* `last baseline` keeps a tier's label sitting on the rule when its description
+   runs to a second line (plain `baseline` is the fallback). */
+.result-group-heading { align-items: baseline; align-items: last baseline; }
 
 .tower-head {
   padding: 12px 12px 9px;
@@ -978,6 +987,8 @@ a { color: inherit; }
   position: relative;
   min-height: 66px;
   padding: 10px 12px;
+  /* Only an operator-patched fork has a second grid line (its row note). */
+  row-gap: 5px;
   transition: background-color .14s ease;
 }
 .row-main.is-playable { cursor: pointer; }
@@ -1057,9 +1068,57 @@ a { color: inherit; }
   .row-thumb.is-above, .row-thumb.is-below, .row-thumb.is-loaded { transform: none; }
 }
 
-.driver { min-width: 0; }
-.driver strong { display: block; overflow: hidden; font-size: 15px; font-weight: 800; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
-.driver > span { color: var(--muted); font: 500 9.5px/1.9 ui-monospace, monospace; }
+.driver { min-width: 0; container-type: inline-size; }
+.driver-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.driver strong { min-width: 0; overflow: hidden; font-size: 15px; font-weight: 800; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+/* Meta line: start date, then the protocol the run was built under ("P2.0"). */
+.driver-meta { display: flex; flex-wrap: wrap; column-gap: 7px; margin-top: 5px; color: var(--muted); font: 500 9.5px/1.9 ui-monospace, monospace; }
+.driver-meta > span { white-space: nowrap; }
+.driver-meta > span:not(:last-child)::after { content: '·'; margin-left: 7px; }
+/* The protocol label gives way before the meta line would wrap: where the
+   model cell is too narrow for both (small phones), the date stays and the
+   tier heading and run details still name the protocol. */
+@container (max-width: 112px) {
+  .driver-meta > span + span { display: none; }
+  .driver-meta > span:not(:last-child)::after { content: none; }
+}
+
+/* Footnote marker: a dagger (with a count past one) after the title. It is a
+   button — it opens the run details, where the footnotes are written out. */
+.footnote-mark {
+  position: relative;
+  flex: none;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--nord-red);
+  font: 800 13px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition: color .14s ease;
+}
+/* 24px tap target (WCAG 2.5.8) around the small glyph. */
+.footnote-mark::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+}
+.footnote-mark:hover, .footnote-mark[aria-expanded="true"] { color: var(--nord-red-dark); }
+/* Tighter than the page's 3px ring offset, so the ring clears the title. */
+.footnote-mark:focus-visible { outline-offset: 1px; }
+
+/* Second line of a forked row: says plainly whose artifact this is. */
+.row-note { grid-column: 2 / -1; grid-row: 2; margin: 0; color: var(--ink); font-size: 11px; line-height: 1.45; }
+.row-note b { font: 600 10.5px/1 ui-monospace, monospace; }
+
+/* Entry cell: the harness pill on the title's line and, on the meta line under
+   it, how the candidate was contained. */
+.entry { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-width: 0; }
 
 /* Harness livery pills — one color per coding harness. */
 .harness {
@@ -1081,6 +1140,28 @@ a { color: inherit; }
 .harness-cursor { background: oklch(28% 0.015 270); }
 .harness-opencode { background: oklch(46% 0.1 160); }
 .harness-omp { background: oklch(62% 0.14 75); }
+
+/* Isolation tag. "No isolation" is how every protocol before the lockdown
+   worked, so it stays a quiet outline; a lockdown takes the current tier's
+   green; anything short of a lockdown where the protocol requires one is
+   off-protocol and is flagged in the chassis red. */
+.isolation {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--muted);
+  font: 800 8px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .1em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.isolation-lockdown { border-color: oklch(42% 0.11 145); color: oklch(36% 0.11 145); }
+.isolation.is-off-protocol { border-color: var(--nord-red); background: color-mix(in oklch, var(--nord-red) 9%, transparent); color: var(--nord-red-dark); }
+/* Text for screen readers only (the off-protocol flag is otherwise a colour). */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Phase sectors: split value + micro bar; the tier's best split lights up. */
 .sector { min-width: 0; }
@@ -1143,6 +1224,16 @@ a { color: inherit; }
 .run-details dt { margin-bottom: 5px; color: var(--muted); font: 800 8.5px/1 'Barlow Condensed', sans-serif; letter-spacing: .14em; text-transform: uppercase; }
 .run-details dd { margin: 0; overflow: hidden; font: 500 11.5px/1.35 ui-monospace, monospace; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
 .detail-status { display: flex; align-items: center; gap: 6px; text-transform: capitalize; }
+
+/* Below the data grid: the conditions the run was built under, then its
+   footnotes — prose, so set in the text face at a reading measure. */
+.run-details .run-notes { flex: none; width: 100%; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.run-details .run-notes dd { max-width: 92ch; overflow: visible; color: var(--muted); font: inherit; font-size: 11.5px; line-height: 1.55; }
+.run-details .run-notes dd + dd { margin-top: 5px; }
+.run-notes dd b { color: var(--ink); font-weight: 700; }
+.run-notes dd.is-off-protocol b { color: var(--nord-red-dark); }
+.run-details .run-notes .footnote { color: var(--ink); }
+.footnote-tag { margin-right: 8px; color: var(--muted); font: 800 8.5px/1 'Barlow Condensed', sans-serif; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
 
 .status-light { display: inline-block; width: 7px; height: 7px; flex: none; border-radius: 50%; background: oklch(62% 0 0); }
 .status-complete { background: oklch(68% 0.18 145); }
@@ -1449,6 +1540,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
      their own labeled line below. The column header row goes away, so each
      sector shows its own phase name. */
   .tower-head { display: none; }
+  /* No tower grid to share below this width: label left, description right. */
+  .result-group-heading { display: flex; justify-content: space-between; gap: 20px; padding: 18px 4px 9px; }
+  .result-group-label { flex: none; margin-left: 0; }
   .row-main {
     display: flex;
     flex-wrap: wrap;
@@ -1462,7 +1556,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
      always share the first line; long titles then ellipsize. */
   .driver { flex: 1 1 80px; min-width: 0; }
   .driver strong { font-size: 14px; }
-  .driver > span { white-space: nowrap; }
+  /* A fork's note takes its own full line, between identity and sectors,
+     indented to the title (position cell + gap). */
+  .row-note { order: 5; flex: 1 1 100%; padding-left: 50px; }
   .cell-num { display: none; }
   .sector { flex: 1 1 26%; order: 10; }
   .sector-panel { flex-basis: 30%; }
@@ -1529,6 +1625,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .rail-range { font-variant-numeric: tabular-nums; }
   .run-index { padding: 46px 0 56px; }
   .run-index-heading h2 { font-size: 34px; }
+  .result-group-heading { flex-direction: column; align-items: flex-start; gap: 7px; }
   .row-main { padding: 16px 4px; }
   /* Phase + panel-visuals bars are a second-row dump on the phone layout.
      Rank, title, date, harness, total, and chevron stay. Desktop (and the
@@ -1536,6 +1633,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .sector { display: none; }
   .run-details { flex-direction: column; }
   .run-details dl { width: 100%; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  /* Conditions and footnotes read before the report button on a phone. */
+  .run-details .open-report { order: 1; }
   .benchmark-details ol { grid-template-columns: 1fr; }
   .artifacts { width: calc(100% - 32px); }
   .film-band { padding: 10px 10px 12px; }

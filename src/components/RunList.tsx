@@ -1,5 +1,7 @@
 // The run leaderboard: one row per benchmark run, grouped by result tier, with
 // per-phase score sectors, a wall-time column, and an expandable details drawer.
+// Each row also says under which conditions the run was built — protocol
+// version, isolation mode — and marks any footnotes; the drawer spells them out.
 // Memoized: all props are reference-stable, so App's dialog/viewer state
 // changes (open preview, copy link, phase switch) skip re-rendering the
 // largest subtree in the app.
@@ -11,22 +13,64 @@ import type { RunEntry } from '../types'
 import {
   bestByTierPanel,
   bestByTierPhase,
+  currentResultClass,
   formatDate,
   formatDuration,
   formatDurationCompact,
+  getIsolation,
   getPhaseList,
+  getProtocolLabel,
+  getProtocolNote,
   getResultClass,
   harnessSlug,
-  protocol,
   rankByRun,
   visibleRuns,
 } from '../runs-data'
+import type { ResultClass } from '../runs-data'
 import { ChevronIcon, InfoIcon, PlayIcon, ReportIcon, StatusLight } from './icons'
 
 // Tallest a hover card gets (a near-square instrument crop at the card's width,
 // plus its frame). A row closer than this to the top of the viewport shows its
 // card below instead of above.
 const THUMB_MAX_HEIGHT = 300
+
+function plural(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
+}
+
+// " Sealed phases: 01 lockdown, 02 no isolation." — which sealed phase had
+// which mode, for a run whose phases disagree. Empty when no phase says.
+function sealedIsolation(run: RunEntry) {
+  const phases = run.stages
+    .filter((stage) => stage.isolation !== null)
+    .map((stage) => `0${stage.number} ${stage.isolation === 'lockdown' ? 'lockdown' : 'no isolation'}`)
+  return phases.length > 0 ? ` Sealed phases: ${phases.join(', ')}.` : ''
+}
+
+// A tier's title line. It sits on the tower's own grid (hence `style`, which
+// carries the sector count) so the description starts at the first phase
+// column. The protocol-info button rides on the current tier, which is always
+// rendered — even before any run has reached it.
+function TierHeading({ resultClass, onOpenProtocolInfo, style }: { resultClass: ResultClass; onOpenProtocolInfo: () => void; style?: CSSProperties }) {
+  return (
+    <header className={`result-group-heading result-group-${resultClass.id}`} style={style}>
+      <span className="result-group-label">
+        {resultClass.label}
+        {resultClass.id === 'current' && (
+          <button
+            aria-label={`About ${resultClass.label}`}
+            className="protocol-info-btn"
+            onClick={onOpenProtocolInfo}
+            type="button"
+          >
+            <InfoIcon />
+          </button>
+        )}
+      </span>
+      {resultClass.description ? <p>{resultClass.description}</p> : null}
+    </header>
+  )
+}
 
 export const RunList = memo(function RunList({
   expandedRunId,
@@ -64,6 +108,12 @@ export const RunList = memo(function RunList({
 
   return (
     <div className="run-list">
+      {getResultClass(visibleRuns[0]).id !== 'current' && (
+        <>
+          <TierHeading onOpenProtocolInfo={onOpenProtocolInfo} resultClass={currentResultClass} />
+          <p className="result-group-empty">No {currentResultClass.label} runs yet.</p>
+        </>
+      )}
       {visibleRuns.map((run, index) => {
         const resultClass = getResultClass(run)
         const previousClass = index > 0 ? getResultClass(visibleRuns[index - 1]).id : null
@@ -78,26 +128,15 @@ export const RunList = memo(function RunList({
         const sectorsStyle = { '--sectors': phaseList.length } as CSSProperties
         const panel = run.panelVisuals
         const bestPanel = panel !== null && panel === bestByTierPanel.get(resultClass.id)
+        const protocolLabel = getProtocolLabel(run)
+        const protocolNote = getProtocolNote(run)
+        const isolation = getIsolation(run)
+        const footnoteCount = run.footnotes.length
         return (
         <Fragment key={run.id}>
         {resultClass.id !== previousClass && (
           <>
-            <header className={`result-group-heading result-group-${resultClass.id}`}>
-              <span className="result-group-label">
-                {resultClass.label}
-                {resultClass.id === 'current' && (
-                  <button
-                    aria-label={`About protocol ${protocol.version}`}
-                    className="protocol-info-btn"
-                    onClick={onOpenProtocolInfo}
-                    type="button"
-                  >
-                    <InfoIcon />
-                  </button>
-                )}
-              </span>
-              {resultClass.description ? <p>{resultClass.description}</p> : null}
-            </header>
+            <TierHeading onOpenProtocolInfo={onOpenProtocolInfo} resultClass={resultClass} style={sectorsStyle} />
             <div aria-hidden="true" className="tower-head" style={sectorsStyle}>
               <span>Pos</span>
               <span>Model</span>
@@ -143,12 +182,37 @@ export const RunList = memo(function RunList({
               )}
             </span>
             <div className="driver">
-              <strong>{getRunTitle(run)}</strong>
-              <span>{formatDate(run.startedAt)}</span>
+              <span className="driver-title">
+                <strong>{getRunTitle(run)}</strong>
+                {footnoteCount > 0 && (
+                  <button
+                    aria-expanded={expanded}
+                    aria-label={`${plural(footnoteCount, 'footnote')} on ${getRunTitle(run)}`}
+                    className="footnote-mark"
+                    onClick={(event) => { event.stopPropagation(); onToggleExpand(run.id) }}
+                    title={run.footnotes.map((note) => note.text).join('\n\n')}
+                    type="button"
+                  >
+                    †{footnoteCount > 1 ? footnoteCount : ''}
+                  </button>
+                )}
+              </span>
+              <span className="driver-meta">
+                <span>{formatDate(run.startedAt)}</span>
+                {protocolLabel && <span title={`Built under protocol ${run.protocolVersion}`}>{protocolLabel}</span>}
+              </span>
             </div>
-            {run.harness ? (
-              <span className={`harness harness-${harnessSlug(run.harness)}`}>{run.harness}</span>
-            ) : <span />}
+            <div className="entry">
+              {run.harness && <span className={`harness harness-${harnessSlug(run.harness)}`}>{run.harness}</span>}
+              <span
+                className={`isolation isolation-${isolation.mode}${isolation.offProtocol ? ' is-off-protocol' : ''}`}
+                title={isolation.meaning}
+              >
+                {isolation.label}
+                {/* The flag is a colour; say it in words for screen readers too. */}
+                {isolation.offProtocol && <span className="visually-hidden">, off-protocol</span>}
+              </span>
+            </div>
             {phaseList.map((name, phaseIndex) => {
               const phase = (phaseIndex + 1) as PhaseNumber
               const stage = run.stages.find((candidate) => candidate.number === phase)
@@ -194,6 +258,11 @@ export const RunList = memo(function RunList({
             >
               <ChevronIcon />
             </button>
+            {run.derivedFrom && (
+              <p className="row-note">
+                Operator-patched fork of <b>{run.derivedFrom.run}</b> from Phase {run.derivedFrom.fromPhase}. Not the model&rsquo;s own sealed output.
+              </p>
+            )}
           </div>
           {expanded && (
             <div className="run-details">
@@ -202,7 +271,7 @@ export const RunList = memo(function RunList({
                 <div><dt>Run</dt><dd>{run.id}</dd></div>
                 <div><dt>Model</dt><dd>{run.model}</dd></div>
                 <div><dt>Target</dt><dd>{run.target}</dd></div>
-                <div><dt>Protocol</dt><dd>{run.protocolVersion ?? '—'}</dd></div>
+                <div><dt>Protocol</dt><dd>{run.protocolVersion ?? '—'}{run.legacy && run.protocolVersion ? ' (legacy numbering)' : ''}</dd></div>
                 <div><dt>Started</dt><dd>{formatDate(run.startedAt)}</dd></div>
                 <div><dt>Updated</dt><dd>{formatDate(run.updatedAt)}</dd></div>
                 {run.telemetry?.wallTimeSeconds != null && <div><dt>Wall time</dt><dd>{formatDuration(run.telemetry.wallTimeSeconds)}</dd></div>}
@@ -215,6 +284,30 @@ export const RunList = memo(function RunList({
                   <span>Evaluation report</span>
                 </button>
               )}
+              <dl className="run-notes">
+                <div>
+                  <dt>Conditions</dt>
+                  {protocolNote && <dd>{protocolNote}</dd>}
+                  <dd className={isolation.offProtocol ? 'is-off-protocol' : undefined}>
+                    <b>{isolation.label}.</b> {isolation.meaning}
+                    {isolation.mode === 'mixed' && sealedIsolation(run)}
+                  </dd>
+                </div>
+                {footnoteCount > 0 && (
+                  <div>
+                    <dt>{plural(footnoteCount, 'footnote')}</dt>
+                    {run.footnotes.map((note, noteIndex) => (
+                      <dd className="footnote" key={noteIndex}>
+                        <span className="footnote-tag">
+                          {note.kind.replace(/-/g, ' ')}
+                          {note.phases.length > 0 && ` · ${note.phases.length === 1 ? 'Phase' : 'Phases'} ${note.phases.join(', ')}`}
+                        </span>
+                        {' '}{note.text}
+                      </dd>
+                    ))}
+                  </div>
+                )}
+              </dl>
             </div>
           )}
         </article>

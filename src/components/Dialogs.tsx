@@ -5,7 +5,7 @@
 import type { PhaseNumber } from '../run-utils'
 import { floorScore, getPreviewPath, getRunTitle } from '../run-utils'
 import type { RunEntry } from '../types'
-import { getPhaseName, protocol } from '../runs-data'
+import { currentResultClass, getPhaseName, protocol, shortVersion } from '../runs-data'
 import { CloseIcon, StatusLight } from './icons'
 import { PreviewFrame } from './PreviewFrame'
 
@@ -121,22 +121,30 @@ export function Dialogs({
             tabIndex={-1}
           >
             <div className="info-modal-head">
-              <h3 id="protocol-info-heading">Protocol {protocol.version}</h3>
+              <h3 id="protocol-info-heading">{currentResultClass.label}</h3>
               <button aria-label="Close" onClick={onCloseProtocolInfo} type="button">
                 <CloseIcon />
               </button>
             </div>
             <div className="info-modal-body">
               <p>
-                Stagebench bumps its protocol version whenever the prompts, specs, rubric, or verifier behavior
-                change — anything that could shift what&rsquo;s being measured. The rubric carries the same
-                version number, so there is one number to track. A run is grouped by the protocol it was
-                <em> scored</em> under, which is not always the one it was built under: rescoring an older run
-                moves it into the newer group.
+                Stagebench bumps its protocol version whenever the prompts, specs, rubric, verifier behavior, or
+                the conditions candidates work under change — anything that could shift what&rsquo;s being
+                measured. The rubric is versioned on its own (currently {shortVersion(protocol.rubricVersion)}):
+                scores are comparable only within one rubric version, and rescoring an older run moves it to
+                the newer rubric. Runs scored under the same rubric are still ranked apart from the current protocol
+                when they were <em>built</em> before it, because the conditions differ.
               </p>
               <dl className="protocol-history">
                 <div>
-                  <dt>Protocol 2.0 <span>Current</span></dt>
+                  <dt>{currentResultClass.label} <span>Current</span></dt>
+                  <dd>
+                    {currentResultClass.description} Scored with
+                    rubric {shortVersion(protocol.rubricVersion)}.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Protocol 2.0</dt>
                   <dd>
                     Rewrote how a run is scored, not what is asked of it. Panel fidelity became a run-level axis
                     worth 40%, scored once against the final artifact instead of three times at three different
