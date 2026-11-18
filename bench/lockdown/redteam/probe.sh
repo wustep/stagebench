@@ -71,7 +71,7 @@ must_fail fs.write-decoy       sh -c 'echo x > /srv/stagebench/bench/rubric.json
 must_fail fs.write-samples     sh -c 'echo x > /workspace/inputs/samples/README.md && echo wrote'
 must_fail fs.write-samples.new sh -c 'echo x > /workspace/inputs/samples/planted.flac && echo wrote'
 must_fail fs.write-npm-mirror  sh -c 'echo x > /opt/stagebench/npm-mirror/PACKAGES.md && echo wrote'
-out fs.samples INFO "sample pack: $(find /workspace/inputs/samples -name '*.flac' 2>/dev/null | wc -l | tr -d ' ') recordings, $(du -sm /workspace/inputs/samples 2>/dev/null | cut -f1) MB, mounted $(awk '$2 == "/workspace/inputs/samples" {print $4}' /proc/mounts | cut -d, -f1)"
+out fs.samples INFO "sample pack: $(find /workspace/inputs/samples \( -name '*.flac' -o -name '*.wav' \) 2>/dev/null | wc -l | tr -d ' ') recordings, $(du -sm /workspace/inputs/samples 2>/dev/null | cut -f1) MB, mounted $(awk '$2 == "/workspace/inputs/samples" {print $4}' /proc/mounts | cut -d, -f1)"
 out fs.mount-table INFO "$(awk '{print $2"("$3")"}' /proc/mounts | grep -vE '^/(proc|sys|dev)' | tr '\n' ' ')"
 out fs.decoy INFO "$(head -c 120 /srv/stagebench/bench/rubric.json 2>&1)"
 

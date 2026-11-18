@@ -283,7 +283,7 @@ export function startPhase(root, id) {
     '4. The capture harness the prompt refers to: from `candidate/`, run `node ../inputs/harness/capture-evidence.mjs --phase ' + phase + '` after a build. Evidence lives in `candidate/evidence/` (see `inputs/harness/README.md`).',
     ...(strict ? [
       `5. \`inputs/hard-gates.md\` — the Phase ${phase} hard gates as a ready-made checklist. Paste it into \`IMPLEMENTATION_PLAN.md\` unchanged; the seal looks for each sentence word for word.`,
-      ...(samplePack ? ['6. `inputs/samples/` — the sample pack: raw, licensed piano recordings, and the only recordings you may bundle. Read `inputs/samples/README.md` before you use any; it says how each bundled audio file must be declared.'] : []),
+      ...(samplePack ? ['6. `inputs/samples/` — the sample pack: raw, licensed piano, electric piano, and organ recordings, and the only recordings you may bundle. Read `inputs/samples/README.md` before you use any; it says how each bundled audio file must be declared.'] : []),
       ...(offline ? [`${samplePack ? 7 : 6}. \`inputs/OFFLINE.md\` — this workspace has no internet. It lists the packages you can install and the tools you have.`] : []),
     ] : []),
     '',

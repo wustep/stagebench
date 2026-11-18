@@ -23,7 +23,7 @@ Each phase turns one set of features on and leaves everything else honestly deco
 - `reference/manual.pdf` and the assigned variant's product photo.
 - `hard-gates.md` — your phase's hard gates as a checklist to paste into `IMPLEMENTATION_PLAN.md` unchanged.
 - `harness/` — the canonical capture harness (`node ../inputs/harness/capture-evidence.mjs --phase <N>` from `candidate/`).
-- `samples/` — the sample pack: raw, permissively licensed piano recordings. It is the only source of recorded audio.
+- `samples/` — the sample pack: raw, permissively licensed piano, electric piano, and organ recordings. It is the only source of recorded audio.
 - `OFFLINE.md` — what you can install and run. The workspace has no internet.
 
 Precedence: the variant photo is authoritative for visible layout and materials; the manual is authoritative for behavior where a spec is ambiguous; the specs bind both to phases.

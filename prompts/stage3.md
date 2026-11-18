@@ -20,7 +20,7 @@ The remaining sections come alive: **Organ**, **Synth**, and the **Program/perfo
 
 **Organ section (organ spec):**
 
-- Two layers sharing one effect chain; audibly distinct B3, Vox, Farf, and Pipe engines (B3 Bass and Pipe 2 may reuse engines as documented).
+- Two layers sharing one effect chain; audibly distinct B3, Vox, Farf, and Pipe engines (B3 Bass and Pipe 2 may reuse engines as documented). Each engine may be synthesized, built from the recordings in `inputs/samples/` (the pack has a real pipe organ), or both.
 - Nine drawbars with LED graphs driving each model's spectrum; B3 percussion and key click; vibrato/chorus C1–C3/V1–V3; rotary routing with morphable slow/fast speed.
 
 **Synth section (synth spec):**
@@ -44,4 +44,4 @@ The remaining sections come alive: **Organ**, **Synth**, and the **Program/perfo
 
 ## Evidence
 
-Preserve all Phase 1–2 tests and mappings; add every Phase 3 ID from `TASK.md`. Tests must prove program round-trips, split/scene/morph behavior, organ model and drawbar distinctions, synth source/filter/envelope/LFO/voice/arp behavior, one-context routing, and cleanup. Exercise programs, Live Mode, splits, scenes, morphs, representative organ and synth sounds, and Panic in the browser. Update `IMPLEMENTATION_DETAILS.json` (every bundled audio file declared; organ and synth sources are generated unless you cut them from `inputs/samples/`), use the capture harness in `inputs/harness/`, and run all four pnpm gates.
+Preserve all Phase 1–2 tests and mappings; add every Phase 3 ID from `TASK.md`. Tests must prove program round-trips, split/scene/morph behavior, organ model and drawbar distinctions, synth source/filter/envelope/LFO/voice/arp behavior, one-context routing, and cleanup. Exercise programs, Live Mode, splits, scenes, morphs, representative organ and synth sounds, and Panic in the browser. Update `IMPLEMENTATION_DETAILS.json` (every bundled audio file declared: organ and synth audio is `generated` unless you cut it from a recording in `inputs/samples/`, such as the pipe organ), use the capture harness in `inputs/harness/`, and run all four pnpm gates.

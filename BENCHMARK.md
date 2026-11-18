@@ -25,7 +25,7 @@ The core rule in every phase (stated in full in `TASK.md`): a control either wor
 
 ## Running the benchmark
 
-Once per machine, set up the lockdown and fetch what is not in the repository: the copyrighted reference assets (never redistributed here) and the sample pack (each file from its pinned upstream commit, checked against its sha256):
+Once per machine, set up the lockdown and fetch what is not in the repository: the copyrighted reference assets (never redistributed here) and the sample pack (each file from its pinned upstream commit, checked against its sha256; WAV recordings are stored as FLAC-coded samples, which needs the `flac` command, and rebuilt byte for byte when a phase starts):
 
 ```sh
 pnpm bench lockdown-setup     # container VM with no host directories, both images, self-tests

@@ -258,7 +258,7 @@ Still to do on each operator machine: install an engine, `pnpm bench lockdown-se
 Measured on this machine (M-series, VM with 8 CPUs and 16 GB):
 
 - Images: 2.9 GB (candidate: Chromium and its libraries, the harness CLIs, plus the 229 MB package mirror) and 264 MB (gateway). First build takes a few minutes and is the only step that reads the npm registry.
-- The sample pack: 330 MB, loaded into the engine once and then shared read-only.
+- The sample pack: 501 MB as published (432 MB in the operator's store, where WAV recordings are kept as FLAC-coded samples), loaded into the engine once and then shared read-only.
 - Opening a session and running a command: about 8 seconds.
 - `pnpm install` of the starter from the image's mirror, with no network: under a second.
 - Seal of the starter: 43 seconds, of which 28 are its own lint walking `node_modules`. Seal of the real Phase 1 above: 18 seconds.
