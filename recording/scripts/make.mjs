@@ -5,6 +5,10 @@
  *   node scripts/make.mjs --show shows/<name>.json --plan     # print the timeline only (no browser)
  *   node scripts/make.mjs --show shows/<name>.json --models a,b   # re-record just these, then compose
  *   node scripts/make.mjs --show shows/<name>.json --compose  # prep + compose from existing takes
+ *
+ * Placeholder slots (models that can't be filmed yet, see lib/show.mjs) are never recorded; compose
+ * fills their bars with a label card. Once a placeholder's run and preview are in place it becomes
+ * filmable: record just it with --models <id>, and the compose that follows drops it in.
  */
 import { spawnSync } from 'child_process';
 import path from 'path';
@@ -18,7 +22,8 @@ const P = S.plan;
 console.log(`${S.name}: ${S.song.title}, ${S.models.length} models, ${P.duration.toFixed(1)} s`);
 for (const s of P.segments) {
   const m = S.model(s.model);
-  console.log(`  ${(s.from - P.t0).toFixed(2).padStart(6)}–${(s.to - P.t0).toFixed(2).padStart(6)}  ${s.secs.toFixed(2).padStart(5)} s  bars ${s.bars.join('–').padEnd(8)} #${String(m.rank).padEnd(3)} ${m.label}`);
+  const rank = m.rank ? `#${m.rank}` : 'NEW';
+  console.log(`  ${(s.from - P.t0).toFixed(2).padStart(6)}–${(s.to - P.t0).toFixed(2).padStart(6)}  ${s.secs.toFixed(2).padStart(5)} s  bars ${s.bars.join('–').padEnd(8)} ${rank.padEnd(4)} ${m.label}${m.placeholder ? `  [placeholder: ${m.placeholder}]` : ''}`);
 }
 if (process.argv.includes('--plan')) process.exit(0);
 
@@ -33,7 +38,12 @@ const node = (script, ...args) => {
   }
 };
 const only = argv('models')?.split(',');
-const toRecord = process.argv.includes('--compose') ? [] : (only || S.models.map((m) => m.id));
+for (const id of only || []) {
+  const m = S.model(id);
+  if (!m) { console.error(`${id} is not in ${S.name}`); process.exit(1); }
+  if (m.placeholder) { console.error(`${id} is still a placeholder (${m.placeholder}); see README 'Demo v2' for how to drop it in`); process.exit(1); }
+}
+const toRecord = process.argv.includes('--compose') ? [] : (only || S.filmable.map((m) => m.id));
 for (const id of toRecord) node('record.mjs', '--model', id);
-for (const m of S.models) node('prep.mjs', '--model', m.id);
+for (const m of S.filmable) node('prep.mjs', '--model', m.id);
 node('compose.mjs');

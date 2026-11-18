@@ -10,6 +10,11 @@
  * Audio: one timeline from the takes, 30 ms equal-power switches that end exactly on each
  * downbeat (no fades), then linear make-up gain to the target LUFS through a -1.7 dBFS lookahead
  * limiter. No intro slide or end card unless the show sets titleCardSecs.
+ * Optional end card (show.endCard: title / subtitle / footer, secs, fadeIn) after the last model,
+ * in the title card's type, fading in from black over silence.
+ * Placeholder slots (models not filmable yet, see lib/show.mjs) keep their bars: black frame, the
+ * same label (NEW / not yet ranked) and a centered "Take pending" line in the caption's subtitle
+ * style; their audio is silent and they are left out of the leveling.
  */
 import { chromium } from 'playwright';
 import fs from 'fs';
@@ -29,6 +34,8 @@ const SR = 48000;
 const S = loadShow(argv('show'));
 const P = S.plan;
 const TITLE_SECS = S.show.titleCardSecs || 0;
+const END = S.show.endCard || null;
+const END_SECS = END?.secs || 0;
 const TARGET_LUFS = S.show.loudness?.targetLufs ?? -14;
 const cap = S.show.caption || {};
 const WORK = S.workDir;
@@ -55,18 +62,25 @@ function loudness(file) {
 }
 
 const segs = P.segments.map((s, k) => {
+  const seg = { ...s, k, first: k === 0, last: k === P.segments.length - 1, placeholder: S.model(s.model).placeholder };
+  if (seg.placeholder) return seg;
   const dir = S.takeDir(s.model);
+  if (!fs.existsSync(path.join(dir, 'prep.json'))) throw new Error(`${s.model}: no prepped take in ${dir}; record it with make.mjs --models ${s.model}`);
   const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
+  if (meta.segment?.bars?.join() !== s.bars.join()) throw new Error(`${s.model}: take covers bars ${meta.segment?.bars?.join('-')}, plan needs ${s.bars.join('-')}; re-record it`);
   const { w, h } = probe(path.join(dir, 'take-video.mp4'));
   const sc = Math.min(BOX_W / w, BOX_H / h);
   const rw = Math.round((w * sc) / 2) * 2, rh = Math.round((h * sc) / 2) * 2;
-  return { ...s, k, dir, meta, rw, rh, x: Math.round((W - rw) / 2), y: Math.round(BOX_CY - rh / 2), first: k === 0, last: k === P.segments.length - 1 };
+  return { ...seg, dir, meta, rw, rh, x: Math.round((W - rw) / 2), y: Math.round(BOX_CY - rh / 2) };
 });
+const filmed = segs.filter((s) => !s.placeholder);
+if (!filmed.length) throw new Error('no filmed models yet; record some first');
+for (const s of segs) if (s.placeholder) console.log(`placeholder: ${s.model} bars ${s.bars.join('-')} (${s.placeholder})`);
 
 // --- 1. Timeline audio (t=0 is plan.t0). ---
 const tlDur = P.end - P.t0;
 const inputs = [], chains = [];
-segs.forEach((s, i) => {
+filmed.forEach((s, i) => {
   inputs.push('-i', path.join(s.dir, 'take-audio.wav'));
   const from = s.first ? s.audioFrom : s.audioFrom - XF;
   const to = s.last ? P.end : s.audioTo;
@@ -79,8 +93,8 @@ segs.forEach((s, i) => {
 });
 const mixed = path.join(WORK, 'timeline-premaster.wav');
 // apad needs whole_dur and the output needs -t: a bare apad pads forever (it once wrote ~1 TB).
-ff([...inputs, '-filter_complex', chains.join(';') + ';' + segs.map((_, i) => `[s${i}]`).join('') +
-  `amix=inputs=${segs.length}:normalize=0:duration=longest,apad=whole_dur=${tlDur.toFixed(5)},atrim=duration=${tlDur.toFixed(5)}`,
+ff([...inputs, '-filter_complex', chains.join(';') + ';' + filmed.map((_, i) => `[s${i}]`).join('') +
+  `amix=inputs=${filmed.length}:normalize=0:duration=longest,apad=whole_dur=${tlDur.toFixed(5)},atrim=duration=${tlDur.toFixed(5)}`,
   '-t', tlDur.toFixed(5), '-ar', String(SR), '-c:a', 'pcm_f32le', mixed]);
 
 // --- 1b. Gentle leveling: nudge only blocks that stand well off the median. ---
@@ -94,10 +108,12 @@ const blockLoud = (from, to) => {
     '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'], { encoding: 'utf8' });
   return Number(/I:\s+(-?[\d.]+) LUFS/.exec(r.stderr)?.[1]);
 };
-const blocks = P.blocks.map((b) => ({ ...b, I: blockLoud(b.from, b.to) }));
-const sorted = blocks.map((b) => b.I).sort((x, y) => x - y);
+// Placeholder blocks are silent: not measured, not in the median, never nudged.
+const blocks = P.blocks.map((b) => (segs[b.seg].placeholder ? { ...b, placeholder: true, I: null } : { ...b, I: blockLoud(b.from, b.to) }));
+const sorted = blocks.filter((b) => !b.placeholder).map((b) => b.I).sort((x, y) => x - y);
 const median = sorted[Math.floor(sorted.length / 2)];
 for (const b of blocks) {
+  if (b.placeholder) { b.nudgeDb = 0; continue; }
   const d = b.I - median;
   b.nudgeDb = Math.abs(d) <= LV.deadbandDb ? 0 : Math.max(-LV.maxCutDb, Math.min(LV.maxBoostDb, -LV.strength * d));
 }
@@ -126,7 +142,7 @@ for (const b of blocks) {
     '-c:a', 'pcm_f32le', mixed], { input: Buffer.from(st.buffer), maxBuffer: 1 << 30 });
   if (r.status !== 0) throw new Error(String(r.stderr).slice(-800));
 }
-console.log('leveling (median ' + median.toFixed(1) + ' LUFS): ' + blocks.map((b) => `${b.model} ${b.bars.join('-')} ${b.I.toFixed(1)}${b.nudgeDb ? ` ${b.nudgeDb > 0 ? '+' : ''}${b.nudgeDb.toFixed(1)}dB` : ''}`).join(' | '));
+console.log('leveling (median ' + median.toFixed(1) + ' LUFS): ' + blocks.map((b) => b.placeholder ? `${b.model} ${b.bars.join('-')} placeholder` : `${b.model} ${b.bars.join('-')} ${b.I.toFixed(1)}${b.nudgeDb ? ` ${b.nudgeDb > 0 ? '+' : ''}${b.nudgeDb.toFixed(1)}dB` : ''}`).join(' | '));
 
 const pre = loudness(mixed);
 const makeup = TARGET_LUFS - pre.I;
@@ -143,12 +159,14 @@ const limiter = segs.map((s) => {
     const db = 20 * Math.log10((pk * lin) / ceil + 1e-12); tot++;
     if (db > 0) { n++; if (db > 3) over3++; max = Math.max(max, db); }
   }
-  return { model: s.model, pctLimited: +((100 * n) / tot).toFixed(1), windowsOver3dB: over3, maxDb: +max.toFixed(1) };
+  return { model: s.model, ...(s.placeholder ? { placeholder: true } : {}), pctLimited: +((100 * n) / tot).toFixed(1), windowsOver3dB: over3, maxDb: +max.toFixed(1) };
 });
 console.log('timeline', tlDur.toFixed(3) + 's premaster', JSON.stringify(pre), `makeup ${makeup.toFixed(2)} dB`);
 
 // --- 2. Name/rank overlays (+ optional title card). ---
-const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif`;
+// House type is SF Pro through -apple-system; no web fonts. The platform fonts actually used are
+// checked below and recorded in the report.
+const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
 const css = `
   * { margin: 0; box-sizing: border-box; }
   html, body { width: ${W}px; height: ${H}px; background: transparent; font-family: ${FONT}; -webkit-font-smoothing: antialiased; color: #fff; }
@@ -162,11 +180,39 @@ const css = `
   .cap .t { font-size: 30px; font-weight: 600; color: rgba(255,255,255,0.86); letter-spacing: -0.2px; }
   .cap .s { margin-top: 8px; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.55); }
   .cap .d { margin-top: 10px; font-size: 18px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.42); }
+  .slot { position: absolute; left: 0; width: ${W}px; top: ${BOX_CY}px; transform: translateY(-50%); text-align: center; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.55); }
 `;
+// Title and end cards share one card style.
+const CARD_CSS = `
+    body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    h1 { font-size: 92px; font-weight: 650; letter-spacing: -1.5px; }
+    h2 { margin-top: 22px; font-size: 38px; font-weight: 500; color: rgba(255,255,255,0.72); }
+    p { margin-top: 48px; font-size: 24px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.45); }`;
 const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+const card = (h1, h2, p) => `<style>${css}${CARD_CSS}</style>${h1 ? `<h1>${esc(h1)}</h1>` : ''}${h2 ? `<h2>${esc(h2)}</h2>` : ''}${p ? `<p>${esc(p)}</p>` : ''}`;
 const CAPTION = `<div class="cap">${cap.title ? `<div class="t">${esc(cap.title)}</div>` : ''}${cap.subtitle ? `<div class="s">${esc(cap.subtitle)}</div>` : ''}${cap.date ? `<div class="d">${esc(cap.date)}</div>` : ''}</div>`;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
+// Which platform fonts render the house type (should be SF Pro / the macOS system font only).
+const fontsUsed = await (async () => {
+  await page.setContent(`<style>${css}</style><div class="card"><div class="rank"><span class="num">#1</span><span class="on">on StageBench</span><span class="new">NEW</span></div><div class="name">Model</div></div>${CAPTION}<div class="slot">Take pending</div><h1>T</h1><h2>S</h2><p>F</p>`);
+  await page.evaluate(() => document.fonts.ready);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1 });
+  const used = new Set();
+  for (const sel of ['.num', '.on', '.new', '.name', '.cap .t', '.cap .s', '.cap .d', '.slot', 'h1', 'h2', 'p']) {
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel });
+    if (!nodeId) continue;
+    for (const f of (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts) used.add(f.familyName);
+  }
+  await cdp.detach();
+  return [...used];
+})();
+console.log('fonts used:', fontsUsed.join(', '));
+const FORBIDDEN = /inter|instrument serif|fraunces|bricolage|space grotesk|sora|young serif|bodoni|geist|syne/i;
+if (fontsUsed.some((f) => FORBIDDEN.test(f))) throw new Error(`a non-house font rendered: ${fontsUsed.join(', ')}`);
+if (!fontsUsed.some((f) => /SF|System/i.test(f))) console.warn('warning: SF Pro did not render (not on macOS?); type will not match the house style');
 const overlays = [];
 for (const s of segs) {
   const m = S.model(s.model);
@@ -182,17 +228,26 @@ await page.setContent(`<style>${css}</style>${CAPTION}`);
 await page.evaluate(() => document.fonts.ready);
 const captionPng = path.join(WORK, 'caption.png');
 await page.screenshot({ path: captionPng, omitBackground: true });
+let slotPng = null;
+if (segs.some((s) => s.placeholder)) {
+  await page.setContent(`<style>${css}</style><div class="slot">Take pending</div>`);
+  await page.evaluate(() => document.fonts.ready);
+  slotPng = path.join(WORK, 'placeholder-slot.png');
+  await page.screenshot({ path: slotPng, omitBackground: true });
+}
 let title = null;
 if (TITLE_SECS > 0) {
-  await page.setContent(`<style>${css}
-    body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-    h1 { font-size: 92px; font-weight: 650; letter-spacing: -1.5px; }
-    h2 { margin-top: 22px; font-size: 38px; font-weight: 500; color: rgba(255,255,255,0.72); }
-    p { margin-top: 48px; font-size: 24px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.45); }
-  </style><h1>${esc(cap.title)}</h1><h2>${esc(cap.subtitle)}</h2><p>${esc(cap.date)}</p>`);
+  await page.setContent(card(cap.title, cap.subtitle, cap.date));
   await page.evaluate(() => document.fonts.ready);
   title = path.join(WORK, 'title.png');
   await page.screenshot({ path: title });
+}
+let endPng = null;
+if (END_SECS > 0) {
+  await page.setContent(card(END.title, END.subtitle, END.footer));
+  await page.evaluate(() => document.fonts.ready);
+  endPng = path.join(WORK, 'end-card.png');
+  await page.screenshot({ path: endPng });
 }
 await browser.close();
 
@@ -205,18 +260,31 @@ if (title) {
 }
 segs.forEach((s, i) => {
   const D = s.to - s.from;
-  const vi = idx++, oi = idx++;
-  vin.push('-i', path.join(s.dir, 'take-video.mp4'), '-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(5), '-i', overlays[i]);
+  const oi = idx++;
+  vin.push('-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(5), '-i', overlays[i]);
   graph.push(`color=c=black:s=${W}x${H}:r=${FPS}:d=${D.toFixed(5)}[bg${i}]`);
-  graph.push(`[${vi}:v]trim=start=${(s.from - s.meta.videoStartMidi).toFixed(5)}:duration=${D.toFixed(5)},setpts=PTS-STARTPTS,scale=${s.rw}:${s.rh}:flags=lanczos[p${i}]`);
-  graph.push(`[bg${i}][p${i}]overlay=${s.x}:${s.y}[c${i}]`);
+  if (s.placeholder) {
+    const si = idx++;
+    vin.push('-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(5), '-i', slotPng);
+    graph.push(`[bg${i}][${si}:v]overlay=0:0[c${i}]`);
+  } else {
+    const vi = idx++;
+    vin.push('-i', path.join(s.dir, 'take-video.mp4'));
+    graph.push(`[${vi}:v]trim=start=${(s.from - s.meta.videoStartMidi).toFixed(5)}:duration=${D.toFixed(5)},setpts=PTS-STARTPTS,scale=${s.rw}:${s.rh}:flags=lanczos[p${i}]`);
+    graph.push(`[bg${i}][p${i}]overlay=${s.x}:${s.y}[c${i}]`);
+  }
   graph.push(`[c${i}][${oi}:v]overlay=0:0,format=yuv420p,setsar=1,trim=end_frame=${Math.round(D * FPS)}[v${i + 1}]`);
 });
-const parts = Array.from({ length: segs.length + 1 }, (_, i) => i).filter((i) => i > 0 || title);
-const total = TITLE_SECS + tlDur;
+const parts = Array.from({ length: segs.length + 1 }, (_, i) => `v${i}`).filter((v) => v !== 'v0' || title);
+if (endPng) {
+  vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(END_SECS), '-i', endPng);
+  graph.push(`[${idx++}:v]format=yuv420p,setsar=1,fade=t=in:st=0:d=${END.fadeIn ?? 0.5},trim=end_frame=${Math.round(END_SECS * FPS)}[vend]`);
+  parts.push('vend');
+}
+const total = TITLE_SECS + tlDur + END_SECS;
 // Caption: fully visible, then fades out and is gone by fadeOut[1] seconds into the film.
 const [capFadeStart, capGone] = cap.fadeOut || [3.5, 5];
-graph.push(`${parts.map((i) => `[v${i}]`).join('')}concat=n=${parts.length}:v=1:a=0[vcat]`);
+graph.push(`${parts.map((v) => `[${v}]`).join('')}concat=n=${parts.length}:v=1:a=0[vcat]`);
 graph.push(`[${idx}:v]format=rgba,fade=t=out:st=${capFadeStart}:d=${(capGone - capFadeStart).toFixed(3)}:alpha=1[cap]`);
 graph.push(`[vcat][cap]overlay=0:0:eof_action=pass,format=yuv420p[v]`);
 vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(capGone + 0.5), '-i', captionPng);
@@ -229,16 +297,19 @@ ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-
 
 const report = {
   show: S.name, file: path.relative(process.cwd(), S.output), duration: duration(S.output), loudness: loudness(S.output),
-  makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, lufs: b.I, nudgeDb: +b.nudgeDb.toFixed(2) })) },
+  musicEnd: +(TITLE_SECS + tlDur).toFixed(3), endCard: END_SECS ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, title: END.title, subtitle: END.subtitle, footer: END.footer } : null,
+  fonts: fontsUsed, makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, ...(b.placeholder ? { placeholder: true } : { lufs: b.I }), nudgeDb: +b.nudgeDb.toFixed(2) })) },
   timeline: segs.map((s) => {
     const m = S.model(s.model);
-    return { model: s.model, label: m.label, rank: m.rank, score: m.score, bars: s.bars,
-      filmFrom: +(TITLE_SECS + s.from - P.t0).toFixed(3), filmTo: +(TITLE_SECS + s.to - P.t0).toFixed(3), secs: s.secs,
+    const at = { model: s.model, label: m.label, rank: m.rank, score: m.score, bars: s.bars,
+      filmFrom: +(TITLE_SECS + s.from - P.t0).toFixed(3), filmTo: +(TITLE_SECS + s.to - P.t0).toFixed(3), secs: s.secs };
+    if (s.placeholder) return { ...at, placeholder: s.placeholder };
+    return { ...at,
       prep: JSON.parse(fs.readFileSync(path.join(s.dir, 'prep.json'), 'utf8')),
       take: { setup: s.meta.setup, miss: s.meta.miss, missed: s.meta.missed, schedLateMs: s.meta.schedLateMs, quantizeVelocity: s.meta.quantizeVelocity } };
   }),
 };
 fs.writeFileSync(S.output.replace(/\.mp4$/, '.report.json'), JSON.stringify(report, null, 1));
 console.log('wrote', S.output, report.duration.toFixed(3) + 's', JSON.stringify(report.loudness));
-for (const t of report.timeline) console.log(`  ${t.filmFrom.toFixed(2).padStart(6)}–${t.filmTo.toFixed(2).padStart(6)}  bars ${t.bars.join('–').padEnd(8)} #${t.rank}  ${t.label}`);
+for (const t of report.timeline) console.log(`  ${t.filmFrom.toFixed(2).padStart(6)}–${t.filmTo.toFixed(2).padStart(6)}  bars ${t.bars.join('–').padEnd(8)} ${t.rank ? `#${t.rank}` : 'NEW'}  ${t.label}${t.placeholder ? '  (placeholder)' : ''}`);
 console.log('limiter', JSON.stringify(limiter));

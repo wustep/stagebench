@@ -8,16 +8,17 @@ import { chromium } from 'playwright';
 import { LAUNCH_ARGS, initScript } from './lib/page.mjs';
 import { loadShow, argv } from './lib/show.mjs';
 import { runSetup } from './lib/setup.mjs';
+import { previewUrl } from './lib/serve.mjs';
 
 const S = loadShow(argv('show'));
 const only = argv('model');
 const browser = await chromium.launch({ headless: true, args: LAUNCH_ARGS });
-for (const m of S.models.filter((x) => !only || x.id === only)) {
+for (const m of S.filmable.filter((x) => !only || x.id === only)) {
   const page = await browser.newPage({ viewport: { width: m.viewport.width, height: m.viewport.height } });
   page.setDefaultTimeout(15000);
   page.on('dialog', (d) => d.dismiss().catch(() => {}));
   await page.addInitScript(initScript);
-  await page.goto(m.url, { waitUntil: 'load', timeout: 60000 });
+  await page.goto(await previewUrl(m), { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(3500);
   const log = await runSetup(page, m.setup);
   const r = await page.evaluate(() => {

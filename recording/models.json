@@ -1,5 +1,5 @@
 {
-  "$comment": "Per-run capture fixtures (prewarm: play every pitch/velocity once before recording, only for engines that build notes on first use; quantizeVelocity: snap velocities to N levels), keyed by run id (runs/<id>). Labels, ranks and scores come from runs/<id>/run.json; this file only holds how to capture each preview. Add an entry with `node scripts/probe.mjs --model <id>` before putting a new model in a show. viewport: CSS size + DPR so the instrument renders ~2400 device px wide (fixed-width layouts get a smaller CSS viewport and higher DPR, never upscaling). setup: steps run before capture, using only controls the preview ships (see README 'Setup steps'). Every model plays just its grand plus basic reverb: reverb is switched on only where the staccato tail test shows a real tail, and set to ~35% of its dry/wet range (Opus 5.5's own default) with the model's own knob. Beware cycle buttons whose aria-pressed is always true (Kimi): pressIfOff/pressOffIfOn would toggle them blindly; A/B with scripts/abtest.mjs before adding a step.",
+  "$comment": "Per-run capture fixtures (prewarm: play every pitch/velocity once before recording, only for engines that build notes on first use; quantizeVelocity: snap velocities to N levels), keyed by run id (runs/<id>). Labels, ranks and scores come from src/data/runs.json (see README 'Levers'); this file only holds how to capture each preview. Add an entry with `node scripts/probe.mjs --model <id> [--base local]` before putting a new model in a show. instrument: optional selector for the instrument root when the detected one (lib/page.mjs findInstrument) carries the page's own scaling transform. viewport: CSS size + DPR so the instrument renders ~2400 device px wide (fixed-width layouts get a smaller CSS viewport and higher DPR, never upscaling). setup: steps run before capture, using only controls the preview ships (see README 'Setup steps'). Every model plays just its grand plus basic reverb: reverb is switched on only where the staccato tail test shows a real tail, and set to ~35% of its dry/wet range (Opus 5.5's own default) with the model's own knob. Beware cycle buttons whose aria-pressed is always true (Kimi): pressIfOff/pressOffIfOn would toggle them blindly; A/B with scripts/abtest.mjs before adding a step.",
   "default": {
     "viewport": {
       "width": 2560,
@@ -99,7 +99,7 @@
         ]
       }
     ],
-    "audit": "Fixed 1500 px layout. Synthesized piano (loads no samples), almost fully decorrelated L/R (attack correlation ~ -0.06) which reads hollow; fixed velocity. Effects off by default (turning 'Effect 1' on adds auto-pan). Reverb switch has no measurable effect, left at default."
+    "audit": "Fixed 1500 px layout. Recorded piano samples: 56 .ogg fetched in one burst on the first note (OLED \"SCENE I\"; if any fetch fails it falls back to synthesis and reads \"SAMPLE ERROR · FALLBACK\", see README \"Serving local previews\"). Almost fully decorrelated L/R (attack correlation ~ -0.06) which reads hollow; fixed velocity. Effects off by default (turning 'Effect 1' on adds auto-pan). Reverb switch has no measurable effect, left at default."
   },
   "kimi-k3": {
     "viewport": {
@@ -134,5 +134,47 @@
       }
     ],
     "audit": "Fixed 1600 px layout. Salamander Grand, model Studio (Studio/Warm/Bright). Keybed labeled E2-D#8, an octave above a real Stage 4 73, so notes below E2 are skipped (its Transpose control does not remap keys). Fixed velocity, mono output. Reverb switch adds no tail and drops the dry level ~5 dB, left at default."
+  },
+  "gpt-6-1-sol": {
+    "viewport": {
+      "width": 1920,
+      "height": 720,
+      "dpr": 1.3333
+    },
+    "setup": [
+      {
+        "pressIfOff": "button[aria-label=\"effects Reverb on\"]"
+      }
+    ],
+    "audit": "Program 1.1 Concert Grand: Piano A, Salamander C5 samples (all 183 load on the first note); Piano B, organ layers and synth layers A-C off, no split. Layout is fluid but caps the instrument at 1800 CSS px, so 1920 px CSS at DPR 1.33 renders it ~2400 device px. Velocity from strike depth. Reverb ships off (\"Bypass\"); the tail test shows a real tail when on, and its dry/wet already sits at 0.35 of 1, so it is just switched on (the detail panel then reads \"reverb bypass: On\", which mirrors the On/Bypass button, not a bypass). A/B 2026-11-17: switching the synth section off with its layers already off changes nothing (RMS within 0.05 dB, bands within A/A noise)."
+  },
+  "claude-sonnet-5-5": {
+    "setup": [
+      {
+        "pressIfOff": "button[aria-label=\"Reverb on\"]"
+      },
+      {
+        "setValue": [
+          "[aria-label=\"Reverb dry and wet\"]",
+          3.5
+        ]
+      }
+    ],
+    "audit": "Program 1.1 Grand Piano: Piano A Grand, Salamander Grand samples; Piano B off; organ and synth sections off. Velocity from strike depth. Reverb ships off; the tail test shows a real tail when on (-57 dB vs -109 dB at 1.5 s). Switched on and dry/wet 4 -> 3.5 (of 10) to match. Nothing else needed."
+  },
+  "claude-fable-5-2": {
+    "instrument": ".instrument-frame",
+    "setup": [
+      {
+        "pressIfOff": "button[aria-label=\"Reverb On\"]"
+      },
+      {
+        "setValue": [
+          "[aria-label=\"Reverb Dry/Wet\"]",
+          3.5
+        ]
+      }
+    ],
+    "audit": "Program 1.1 Grand Piano: Piano A Grand, Salamander Grand recorded samples; Piano B off. Organ and synth sections are off with their A layers still on: A/B 2026-11-17 forcing both layers off changes nothing (every band within 0.2 dB). Velocity from strike depth. Reverb ships off at dry/wet 6.5; the tail test shows a long tail when on. Switched on and dry/wet 6.5 -> 3.5 (of 10) to match. Its Fit mode lays the panel out at 9013 px and scales #instrument with its own inline transform (scale 0.26); the recorder clears that element's transform when centering, so the fixture points at the .instrument-frame wrapper (the 2321 x 750 on-screen box) instead."
   }
 }

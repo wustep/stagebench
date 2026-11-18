@@ -6,6 +6,7 @@
  * prints: first-note timing vs plan, level just before / at each cut (a gap or double hit shows as
  * a dip or spike), the final tail level (should have decayed below about -50 dB), loudness, and the
  * takes' misses/lateness. Look at the contact sheet: no chrome, one keyboard, the right name and rank.
+ * Placeholder slots (see lib/show.mjs) are shown on the contact sheet and named, but have no take to check.
  */
 import fs from 'fs';
 import path from 'path';
@@ -20,9 +21,11 @@ fs.mkdirSync(work, { recursive: true });
 const ff = (args, opts = {}) => spawnSync(FF, ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...args], { maxBuffer: 1 << 30, ...opts });
 
 // Contact sheet: 3 columns of 640x360 thumbnails.
-const shots = report.timeline.map((t, i) => {
+const at = report.timeline.map((t) => (t.filmFrom + t.filmTo) / 2);
+if (report.endCard) at.push(report.endCard.from + report.endCard.secs * 0.7); // the end card, faded in
+const shots = at.map((t, i) => {
   const f = path.join(work, `qa-${i}.png`);
-  ff(['-ss', ((t.filmFrom + t.filmTo) / 2).toFixed(2), '-i', S.output, '-frames:v', '1', '-vf', 'scale=640:-2', f]);
+  ff(['-ss', t.toFixed(2), '-i', S.output, '-frames:v', '1', '-vf', 'scale=640:-2', f]);
   return f;
 });
 const cols = 3, rows = Math.ceil(shots.length / cols);
@@ -42,13 +45,14 @@ console.log(`duration ${report.duration.toFixed(2)} s, ${JSON.stringify(report.l
 console.log(`first note at ${(onset / SR).toFixed(3)} s (planned ${firstPlanned.toFixed(3)} s)`);
 for (const t of report.timeline.slice(1)) {
   const c = t.filmFrom;
-  console.log(`cut @${c.toFixed(2).padStart(6)} to ${t.label.padEnd(24)} before ${db(c - 0.25, c - 0.05).toFixed(1)} dB | downbeat ${db(c + 0.01, c + 0.15).toFixed(1)} dB`);
+  console.log(`cut @${c.toFixed(2).padStart(6)} to ${t.label.padEnd(24)} before ${db(c - 0.25, c - 0.05).toFixed(1)} dB | downbeat ${db(c + 0.01, c + 0.15).toFixed(1)} dB${t.placeholder ? '  (placeholder: silent)' : ''}`);
 }
-const end = a.length / SR;
-console.log(`tail: last 0.5 s ${db(end - 0.5, end).toFixed(1)} dB, final 50 ms ${db(end - 0.05, end).toFixed(1)} dB`);
+const end = report.musicEnd ?? a.length / SR; // the music's end (an end card follows in silence)
+console.log(`tail: last 0.5 s ${db(end - 0.5, end).toFixed(1)} dB, final 50 ms ${db(end - 0.05, end).toFixed(1)} dB${report.endCard ? `; end card ${report.endCard.from.toFixed(2)}-${(report.endCard.from + report.endCard.secs).toFixed(2)} s: ${db(report.endCard.from, report.endCard.from + report.endCard.secs).toFixed(1)} dB` : ''}`);
 for (const t of report.timeline) {
+  if (t.placeholder) { console.log(`  NEW  ${t.label.padEnd(24)} placeholder: ${t.placeholder}`); continue; }
   const lim = report.limiter.find((l) => l.model === t.model);
-  console.log(`  #${String(t.rank).padEnd(3)} ${t.label.padEnd(24)} miss ${t.take.miss} late p95 ${t.take.schedLateMs.p95} ms, gain ${t.prep.gainDb} dB, limited ${lim.pctLimited}% (max ${lim.maxDb} dB)${t.take.quantizeVelocity ? `, velocity quantized to ${t.take.quantizeVelocity}` : ''}`);
+  console.log(`  ${(t.rank ? `#${t.rank}` : 'NEW').padEnd(4)} ${t.label.padEnd(24)} miss ${t.take.miss} late p95 ${t.take.schedLateMs.p95} ms, gain ${t.prep.gainDb} dB, limited ${lim.pctLimited}% (max ${lim.maxDb} dB)${t.take.quantizeVelocity ? `, velocity quantized to ${t.take.quantizeVelocity}` : ''}`);
 }
 
 // Note accounting: every MIDI note whose onset falls in a model's audible window must have been
@@ -59,6 +63,7 @@ const XF = 0.03;
 let totalExpected = 0, totalSkipped = 0, problems = 0;
 console.log('\nnotes per turn (audible window = from the switch before its downbeat to the next switch):');
 S.plan.segments.forEach((s, k) => {
+  if (S.model(s.model).placeholder) { console.log(`  ${S.model(s.model).label.padEnd(24)} placeholder (not recorded)`); return; }
   const meta = JSON.parse(fs.readFileSync(path.join(S.takeDir(s.model), 'meta.json'), 'utf8'));
   const from = k === 0 ? meta.playStart : s.audioFrom - XF, to = s.audioTo; // the first turn starts cold on its downbeat
   const inWin = onsets.filter((n) => n.t >= from - 1e-6 && n.t < to);
