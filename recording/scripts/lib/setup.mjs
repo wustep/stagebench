@@ -2,7 +2,7 @@
 // Steps only use controls the preview ships:
 //   pressIfOff / pressOffIfOn: <selector>          click to reach aria-pressed true / false
 //   select: [<selector>, <option label>]
-//   cycleTo: [<selector>, <aria-label regex>]      click a cycling button until its label matches
+//   cycleTo: [<selector>, <label regex>]           click a cycling button until its aria-label (+ title) matches
 //   click: <selector>                              click once (for cycle buttons with no readable state)
 //   setValue: [<selector>, <target>, <regex?>]     step a slider/knob with arrow keys until its value
 //                                                  (aria-valuenow, or the number in aria-valuetext
@@ -21,12 +21,15 @@ export async function runSetup(page, steps) {
       const [sel, re] = step.cycleTo;
       const b = page.locator(sel).first();
       if (!(await b.count())) { log.push(`missing ${sel}`); continue; }
-      const from = await b.getAttribute('aria-label');
-      for (let i = 0; i < 12 && !new RegExp(re).test((await b.getAttribute('aria-label')) || ''); i++) {
+      // The state is read from the aria-label, plus the title where a preview puts it there.
+      const label = async () => [await b.getAttribute('aria-label'), await b.getAttribute('title')].filter(Boolean).join(' · ');
+      const from = await label();
+      for (let i = 0; i < 12 && !new RegExp(re).test(await label()); i++) {
         await b.click({ timeout: 2000 });
         await page.waitForTimeout(150);
       }
-      log.push(`${from} -> ${await b.getAttribute('aria-label')}`);
+      if (!new RegExp(re).test(await label())) log.push(`NOT REACHED ${re}: ${from} -> ${await label()}`);
+      else log.push(`${from} -> ${await label()}`);
     } else if (step.select) {
       const [sel, val] = step.select;
       const s = page.locator(sel).first();

@@ -9,10 +9,13 @@
  * with -apple-system (SF Pro on macOS), so render on a Mac for identical type.
  * Audio: one timeline from the takes, 30 ms equal-power switches that end exactly on each
  * downbeat (no fades), then linear make-up gain to the target LUFS through a -1.7 dBFS lookahead
- * limiter. No intro slide or end card unless the show sets titleCardSecs.
- * Optional end card (show.endCard: image / title / subtitle / footer, secs, fadeIn) after the last
- * model: an image (path relative to recording/) above the text, in the title card's type, fading in
- * from black over silence.
+ * limiter. No intro or end card unless the show sets one.
+ * Optional cards over silence (renderCard): show.intro before the first model, show.endCard after
+ * the last. Each is { secs, image, imageWidth, title, subtitle, footer, fades }: the image (path
+ * relative to recording/; a PNG at its natural size or an SVG at imageWidth) fades in from black,
+ * then the title (Crimson Pro, the one non-system face, vendored in assets/fonts/) and the link
+ * (SF Pro) fade in beneath it, each on its own layer and schedule (fades.<part> = [start, seconds]).
+ * With an intro, the caption comes on with the first model. `--cards` renders just the cards.
  * Placeholder slots (models not filmable yet, see lib/show.mjs) keep their bars: black frame, the
  * same label (NEW / not yet ranked) and a centered "Take pending" line in the caption's subtitle
  * style; their audio is silent and they are left out of the leveling.
@@ -34,7 +37,9 @@ const SR = 48000;
 
 const S = loadShow(argv('show'));
 const P = S.plan;
-const TITLE_SECS = S.show.titleCardSecs || 0;
+const INTRO = S.show.intro || null; // a card before the first model (see renderCard)
+const INTRO_SECS = INTRO?.secs || 0;
+const TITLE_SECS = INTRO_SECS || S.show.titleCardSecs || 0; // film time before the music
 const END = S.show.endCard || null;
 const END_SECS = END?.secs || 0;
 const TARGET_LUFS = S.show.loudness?.targetLufs ?? -14;
@@ -60,6 +65,147 @@ function loudness(file) {
     LRA: Number(/LRA:\s+(-?[\d.]+) LU/.exec(r.stderr)?.[1]),
     TP: Number(/Peak:\s+(-?[\d.]+) dBFS/.exec(r.stderr.split('True peak:')[1] || '')?.[1]),
   };
+}
+
+// --- 2. Name/rank overlays (+ optional title card). ---
+// House type is SF Pro through -apple-system; no web fonts. The platform fonts actually used are
+// checked below and recorded in the report.
+const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
+const css = `
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: ${W}px; height: ${H}px; background: transparent; font-family: ${FONT}; -webkit-font-smoothing: antialiased; color: #fff; }
+  .card { position: absolute; left: ${MARGIN_X}px; top: 84px; }
+  .rank { display: flex; align-items: baseline; gap: 14px; }
+  .num { font-size: 60px; font-weight: 700; letter-spacing: -1px; color: #f6eee2; font-variant-numeric: tabular-nums; }
+  .new { font-size: 26px; font-weight: 700; letter-spacing: 3px; color: #000; background: #f6eee2; padding: 6px 14px; border-radius: 8px; align-self: center; }
+  .on { font-size: 30px; font-weight: 500; color: rgba(255,255,255,0.62); }
+  .name { margin-top: 4px; font-size: 84px; font-weight: 650; letter-spacing: -1.3px; line-height: 1.02; }
+  .cap { position: absolute; right: ${MARGIN_X}px; top: 98px; text-align: right; }
+  .cap .t { font-size: 30px; font-weight: 600; color: rgba(255,255,255,0.86); letter-spacing: -0.2px; }
+  .cap .s { margin-top: 8px; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.55); }
+  .cap .d { margin-top: 10px; font-size: 18px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.42); }
+  .slot { position: absolute; left: 0; width: ${W}px; top: ${BOX_CY}px; transform: translateY(-50%); text-align: center; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.55); }
+`;
+// The (optional) title card.
+const CARD_CSS = `
+    body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    h1 { font-size: 92px; font-weight: 650; letter-spacing: -1.5px; }
+    h2 { margin-top: 22px; font-size: 38px; font-weight: 500; color: rgba(255,255,255,0.72); }
+    p { margin-top: 48px; font-size: 24px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.45); }`;
+const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+const card = (h1, h2, p) => `<style>${css}${CARD_CSS}</style>${h1 ? `<h1>${esc(h1)}</h1>` : ''}${h2 ? `<h2>${esc(h2)}</h2>` : ''}${p ? `<p>${esc(p)}</p>` : ''}`;
+const dataUri = (rel) => {
+  const file = path.resolve(REC, rel);
+  const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }[path.extname(file).toLowerCase()];
+  if (!type) throw new Error(`unsupported asset type ${file}`);
+  return `data:${type};base64,${fs.readFileSync(file).toString('base64')}`;
+};
+// Cards (house style): the intro before the first model and the end card after the last, both over
+// silence. A card is an image on the black field (a PNG at its natural size, or an SVG drawn at
+// imageWidth, so a vector stays crisp), optionally with a small serif title and the link in SF Pro
+// beneath it. The title face is Crimson Pro (wustep.me's heading serif, SIL OFL, vendored in
+// assets/fonts/); compose checks it actually rendered. Image, title, subtitle and footer are each
+// rendered as their own layer, so they fade in one after another (card.fades.<part> = [start, s]).
+const TITLE_FONT = 'assets/fonts/crimson-pro-latin-wght-normal.woff2';
+const CARD_LAYER_CSS = `
+    @font-face { font-family: "Crimson Pro"; src: url(${dataUri(TITLE_FONT)}) format("woff2"); font-weight: 200 900; font-style: normal; font-display: block; }
+    body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    body.layer { background: transparent; }
+    .card-image { display: block; height: auto; }
+    .card-title { margin-top: 52px; font-family: "Crimson Pro", serif; font-size: 58px; font-weight: 500; line-height: 1; letter-spacing: 0; color: #f6eee2; }
+    .card-sub { margin-top: 16px; font-size: 24px; font-weight: 400; color: rgba(255,255,255,0.62); }
+    .card-link { margin-top: 16px; font-size: 22px; font-weight: 400; letter-spacing: 0.4px; color: rgba(255,255,255,0.5); }
+    .hide { visibility: hidden; }`;
+const CARD_PARTS = ['image', 'title', 'subtitle', 'footer'];
+// show = which parts are visible (the rest keep their space, so every layer shares one layout).
+const cardHtml = (C, show, layer) => `<style>${css}${CARD_LAYER_CSS}</style><body class="${layer ? 'layer' : ''}">` +
+  (C.image ? `<img class="card-image${show.includes('image') ? '' : ' hide'}" alt="" src="${dataUri(C.image)}"${C.imageWidth ? ` style="width:${C.imageWidth}px"` : ''}>` : '') +
+  (C.title ? `<div class="card-title${show.includes('title') ? '' : ' hide'}">${esc(C.title)}</div>` : '') +
+  (C.subtitle ? `<div class="card-sub${show.includes('subtitle') ? '' : ' hide'}">${esc(C.subtitle)}</div>` : '') +
+  (C.footer ? `<div class="card-link${show.includes('footer') ? '' : ' hide'}">${esc(C.footer)}</div>` : '') + '</body>';
+// Fade timing per part: [start, duration] seconds into the card. Defaults: image first, then the type.
+const cardFades = (C) => ({ image: [0, C.fadeIn ?? 1], title: [1.2, 0.8], subtitle: [1.4, 0.8], footer: [1.55, 0.8], ...(C.fades || {}) });
+const CAPTION = `<div class="cap">${cap.title ? `<div class="t">${esc(cap.title)}</div>` : ''}${cap.subtitle ? `<div class="s">${esc(cap.subtitle)}</div>` : ''}${cap.date ? `<div class="d">${esc(cap.date)}</div>` : ''}</div>`;
+const FORBIDDEN = /inter|instrument serif|fraunces|bricolage|space grotesk|sora|young serif|bodoni|geist|syne/i;
+// Renders a card: the full card (saved next to the film as output/<show>.<name>.png), a check of
+// the faces that rendered its type, and one layer per part.
+async function renderCard(page, C, name) {
+  const layers = [];
+  const ready = async () => {
+    await page.evaluate(async () => { await document.fonts.load('500 58px "Crimson Pro"'); await document.fonts.ready; });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0));
+  };
+  const parts = CARD_PARTS.filter((p) => C[p]);
+  await page.setContent(cardHtml(C, parts, false));
+  await ready();
+  const fullPng = path.join(WORK, `${name}.png`);
+  await page.screenshot({ path: fullPng });
+  fs.copyFileSync(fullPng, S.output.replace(/\.mp4$/, `.${name}.png`));
+  const fonts = {};
+  {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+    const { root } = await cdp.send('DOM.getDocument', { depth: -1 });
+    for (const [k, sel] of [['title', '.card-title'], ['subtitle', '.card-sub'], ['footer', '.card-link']]) {
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel });
+      if (nodeId) fonts[k] = (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts.map((f) => f.familyName);
+    }
+    await cdp.detach();
+  }
+  if (Object.keys(fonts).length) console.log(`${name} fonts:`, JSON.stringify(fonts));
+  const all = Object.values(fonts).flat();
+  if (all.some((f) => FORBIDDEN.test(f))) throw new Error(`a non-house font rendered on the ${name}: ${all.join(', ')}`);
+  if (fonts.title && !fonts.title.every((f) => /Crimson Pro/i.test(f))) throw new Error(`${name} title did not render in Crimson Pro: ${fonts.title.join(', ')}`);
+  for (const k of ['subtitle', 'footer']) if (fonts[k] && !fonts[k].some((f) => /SF|System/i.test(f))) console.warn(`warning: ${name} ${k} did not render in SF Pro: ${fonts[k].join(', ')}`);
+  // One layer per part: the image on black (it fades in from black), the type on transparent.
+  const fades = cardFades(C);
+  for (const p of parts) {
+    await page.setContent(cardHtml(C, [p], p !== 'image'));
+    await ready();
+    const file = path.join(WORK, `${name}-${p}.png`);
+    await page.screenshot({ path: file, omitBackground: p !== 'image' });
+    layers.push({ part: p, file, fade: fades[p] });
+  }
+  if (!layers.some((l) => l.part === 'image')) layers.unshift({ part: 'black', file: null, fade: [0, 0] });
+  return { name, secs: C.secs, layers, fonts, fades: Object.fromEntries(layers.filter((l) => l.file).map((l) => [l.part, l.fade])) };
+}
+
+// Adds a rendered card to an ffmpeg graph as [<out>]: the image layer fades in from black, each type
+// layer fades in (alpha) over it on its own schedule. Returns the next input index.
+function cardGraph(card, out, vin, graph, idx) {
+  let base = null;
+  card.layers.forEach((l, i) => {
+    let lab = `${out}${i}`;
+    if (!l.file) graph.push(`color=c=black:s=${W}x${H}:r=${FPS}:d=${card.secs}[${lab}]`);
+    else {
+      vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(card.secs), '-i', l.file);
+      const [st, d] = l.fade;
+      graph.push(`[${idx++}:v]format=rgba${d > 0 ? `,fade=t=in:st=${st}:d=${d}${l.part === 'image' ? '' : ':alpha=1'}` : ''}[${lab}]`);
+    }
+    if (base) { graph.push(`[${base}][${lab}]overlay=0:0[${out}o${i}]`); lab = `${out}o${i}`; }
+    base = lab;
+  });
+  graph.push(`[${base}]format=yuv420p,setsar=1,trim=end_frame=${Math.round(card.secs * FPS)}[${out}]`);
+  return idx;
+}
+
+// --cards: render just the intro and end card (their layers, full-card PNGs and card-only clips in
+// .takes/<show>/_work/<card>-preview.mp4) without takes, to look at them on their own.
+if (process.argv.includes('--cards')) {
+  if (!INTRO_SECS && !END_SECS) throw new Error('the show has no intro or endCard');
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: W, height: H } });
+  for (const [C, name] of [[INTRO, 'intro'], [END, 'end-card']]) {
+    if (!C?.secs) continue;
+    const card = await renderCard(page, C, name);
+    const vin = [], graph = [];
+    cardGraph(card, 'vc', vin, graph, 0);
+    const clip = path.join(WORK, `${name}-preview.mp4`);
+    ff([...vin, '-filter_complex', graph.join(';'), '-map', '[vc]', '-t', String(card.secs), '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-r', String(FPS), '-pix_fmt', 'yuv420p', clip]);
+    console.log(`${name}:`, S.output.replace(/\.mp4$/, `.${name}.png`), clip);
+  }
+  await browser.close();
+  process.exit(0);
 }
 
 const segs = P.segments.map((s, k) => {
@@ -164,43 +310,6 @@ const limiter = segs.map((s) => {
 });
 console.log('timeline', tlDur.toFixed(3) + 's premaster', JSON.stringify(pre), `makeup ${makeup.toFixed(2)} dB`);
 
-// --- 2. Name/rank overlays (+ optional title card). ---
-// House type is SF Pro through -apple-system; no web fonts. The platform fonts actually used are
-// checked below and recorded in the report.
-const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif`;
-const css = `
-  * { margin: 0; box-sizing: border-box; }
-  html, body { width: ${W}px; height: ${H}px; background: transparent; font-family: ${FONT}; -webkit-font-smoothing: antialiased; color: #fff; }
-  .card { position: absolute; left: ${MARGIN_X}px; top: 84px; }
-  .rank { display: flex; align-items: baseline; gap: 14px; }
-  .num { font-size: 60px; font-weight: 700; letter-spacing: -1px; color: #f6eee2; font-variant-numeric: tabular-nums; }
-  .new { font-size: 26px; font-weight: 700; letter-spacing: 3px; color: #000; background: #f6eee2; padding: 6px 14px; border-radius: 8px; align-self: center; }
-  .on { font-size: 30px; font-weight: 500; color: rgba(255,255,255,0.62); }
-  .name { margin-top: 4px; font-size: 84px; font-weight: 650; letter-spacing: -1.3px; line-height: 1.02; }
-  .cap { position: absolute; right: ${MARGIN_X}px; top: 98px; text-align: right; }
-  .cap .t { font-size: 30px; font-weight: 600; color: rgba(255,255,255,0.86); letter-spacing: -0.2px; }
-  .cap .s { margin-top: 8px; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.55); }
-  .cap .d { margin-top: 10px; font-size: 18px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.42); }
-  .slot { position: absolute; left: 0; width: ${W}px; top: ${BOX_CY}px; transform: translateY(-50%); text-align: center; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.55); }
-`;
-// Title and end cards share one card style.
-const CARD_CSS = `
-    body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-    h1 { font-size: 92px; font-weight: 650; letter-spacing: -1.5px; }
-    h2 { margin-top: 22px; font-size: 38px; font-weight: 500; color: rgba(255,255,255,0.72); }
-    p { margin-top: 48px; font-size: 24px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.45); }
-    .card-image { display: block; width: 960px; height: auto; border-radius: 16px; }
-    .card-image + h1 { margin-top: 44px; }
-    h1 + p { margin-top: 24px; }`;
-const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-const card = (h1, h2, p, img) => `<style>${css}${CARD_CSS}</style>${img ? `<img class="card-image" alt="" src="${img}">` : ''}${h1 ? `<h1>${esc(h1)}</h1>` : ''}${h2 ? `<h2>${esc(h2)}</h2>` : ''}${p ? `<p>${esc(p)}</p>` : ''}`;
-const dataUri = (rel) => {
-  const file = path.resolve(REC, rel);
-  const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[path.extname(file).toLowerCase()];
-  if (!type) throw new Error(`endCard.image: unsupported type ${file}`);
-  return `data:${type};base64,${fs.readFileSync(file).toString('base64')}`;
-};
-const CAPTION = `<div class="cap">${cap.title ? `<div class="t">${esc(cap.title)}</div>` : ''}${cap.subtitle ? `<div class="s">${esc(cap.subtitle)}</div>` : ''}${cap.date ? `<div class="d">${esc(cap.date)}</div>` : ''}</div>`;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 // Which platform fonts render the house type (should be SF Pro / the macOS system font only).
@@ -220,7 +329,6 @@ const fontsUsed = await (async () => {
   return [...used];
 })();
 console.log('fonts used:', fontsUsed.join(', '));
-const FORBIDDEN = /inter|instrument serif|fraunces|bricolage|space grotesk|sora|young serif|bodoni|geist|syne/i;
 if (fontsUsed.some((f) => FORBIDDEN.test(f))) throw new Error(`a non-house font rendered: ${fontsUsed.join(', ')}`);
 if (!fontsUsed.some((f) => /SF|System/i.test(f))) console.warn('warning: SF Pro did not render (not on macOS?); type will not match the house style');
 const overlays = [];
@@ -246,27 +354,21 @@ if (segs.some((s) => s.placeholder)) {
   await page.screenshot({ path: slotPng, omitBackground: true });
 }
 let title = null;
-if (TITLE_SECS > 0) {
+if (!INTRO_SECS && TITLE_SECS > 0) {
   await page.setContent(card(cap.title, cap.subtitle, cap.date));
   await page.evaluate(() => document.fonts.ready);
   title = path.join(WORK, 'title.png');
   await page.screenshot({ path: title });
 }
-let endPng = null;
-if (END_SECS > 0) {
-  await page.setContent(card(END.title, END.subtitle, END.footer, END.image ? dataUri(END.image) : null));
-  await page.evaluate(() => document.fonts.ready);
-  if (END.image) await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0));
-  endPng = path.join(WORK, 'end-card.png');
-  await page.screenshot({ path: endPng });
-  fs.copyFileSync(endPng, S.output.replace(/\.mp4$/, '.end-card.png')); // the card as shown, next to the film
-}
+const introCard = INTRO_SECS > 0 ? await renderCard(page, INTRO, 'intro') : null;
+const endCard = END_SECS > 0 ? await renderCard(page, END, 'end-card') : null;
 await browser.close();
 
 // --- 3. Picture: each model's bars full width; hard cuts. ---
 const vin = [], graph = [];
 let idx = 0;
-if (title) {
+if (introCard) idx = cardGraph(introCard, 'v0', vin, graph, idx);
+else if (title) {
   vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(TITLE_SECS), '-i', title);
   graph.push(`[${idx++}:v]format=yuv420p,setsar=1[v0]`);
 }
@@ -287,17 +389,14 @@ segs.forEach((s, i) => {
   }
   graph.push(`[c${i}][${oi}:v]overlay=0:0,format=yuv420p,setsar=1,trim=end_frame=${Math.round(D * FPS)}[v${i + 1}]`);
 });
-const parts = Array.from({ length: segs.length + 1 }, (_, i) => `v${i}`).filter((v) => v !== 'v0' || title);
-if (endPng) {
-  vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(END_SECS), '-i', endPng);
-  graph.push(`[${idx++}:v]format=yuv420p,setsar=1,fade=t=in:st=0:d=${END.fadeIn ?? 0.5},trim=end_frame=${Math.round(END_SECS * FPS)}[vend]`);
-  parts.push('vend');
-}
+const parts = Array.from({ length: segs.length + 1 }, (_, i) => `v${i}`).filter((v) => v !== 'v0' || title || introCard);
+if (endCard) { idx = cardGraph(endCard, 'vend', vin, graph, idx); parts.push('vend'); }
 const total = TITLE_SECS + tlDur + END_SECS;
-// Caption: fully visible, then fades out and is gone by fadeOut[1] seconds into the film.
+// Caption: on with the first model (after any intro), fully visible, then fades out and is gone by
+// fadeOut[1] seconds into the music.
 const [capFadeStart, capGone] = cap.fadeOut || [3.5, 5];
 graph.push(`${parts.map((v) => `[${v}]`).join('')}concat=n=${parts.length}:v=1:a=0[vcat]`);
-graph.push(`[${idx}:v]format=rgba,fade=t=out:st=${capFadeStart}:d=${(capGone - capFadeStart).toFixed(3)}:alpha=1[cap]`);
+graph.push(`[${idx}:v]format=rgba,fade=t=out:st=${capFadeStart}:d=${(capGone - capFadeStart).toFixed(3)}:alpha=1${TITLE_SECS ? `,setpts=PTS+${TITLE_SECS}/TB` : ''}[cap]`);
 graph.push(`[vcat][cap]overlay=0:0:eof_action=pass,format=yuv420p[v]`);
 vin.push('-loop', '1', '-framerate', String(FPS), '-t', String(capGone + 0.5), '-i', captionPng);
 idx++;
@@ -309,7 +408,10 @@ ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-
 
 const report = {
   show: S.name, file: path.relative(process.cwd(), S.output), duration: duration(S.output), loudness: loudness(S.output),
-  musicEnd: +(TITLE_SECS + tlDur).toFixed(3), endCard: END_SECS ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, artwork: END.image ?? null, title: END.title, subtitle: END.subtitle ?? null, footer: END.footer, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
+  musicStart: TITLE_SECS, musicEnd: +(TITLE_SECS + tlDur).toFixed(3),
+  intro: introCard ? { from: 0, secs: INTRO_SECS, artwork: INTRO.image ?? null, imageWidth: INTRO.imageWidth ?? 'natural', title: INTRO.title ?? null, footer: INTRO.footer ?? null, fades: introCard.fades, fonts: introCard.fonts, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.intro.png')) } : null,
+  endCard: endCard ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, artwork: END.image ?? null, imageWidth: END.imageWidth ?? 'natural', title: END.title, subtitle: END.subtitle ?? null, footer: END.footer,
+    fades: endCard.fades, fonts: endCard.fonts, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
   fonts: fontsUsed, makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, ...(b.placeholder ? { placeholder: true } : { lufs: b.I }), nudgeDb: +b.nudgeDb.toFixed(2) })) },
   timeline: segs.map((s) => {
     const m = S.model(s.model);

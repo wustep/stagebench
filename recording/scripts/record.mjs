@@ -42,8 +42,8 @@ assertSamePerformance(audioMidi, visualMidi);
 // Optional per-model velocity quantization (models.json quantizeVelocity): N evenly spaced levels.
 const q = model.quantizeVelocity;
 const quant = (ev) => (q ? ev.map((e) => (e.on ? { ...e, vel: 1 + Math.round(((e.vel - 1) / 126) * (q - 1)) * (126 / (q - 1)) } : e)) : ev);
-const audioEv = quant(events(audioMidi, playStart, seg.playBefore));
-const visualEv = quant(events(visualMidi, playStart, seg.playBefore));
+const audioEv = quant(events(audioMidi, playStart, seg.playBefore, seg.hold));
+const visualEv = quant(events(visualMidi, playStart, seg.playBefore, seg.hold));
 const refEv = quant(events(audioMidi, S.plan.ref.from, S.plan.ref.to).map((e) => ({ ...e, t: e.t - S.plan.ref.from })));
 const firstNoteMidi = audioEv.find((e) => e.on).t;
 console.log(`${key}: bars ${seg.bars.join('–')} MIDI ${playStart.toFixed(2)}–${playEnd.toFixed(2)}s`);
@@ -62,8 +62,13 @@ page.on('crash', () => { console.error(`Error: ${key} page crashed`); process.ex
 page.on('dialog', (d) => { console.log('dialog dismissed:', d.message().slice(0, 80)); d.dismiss().catch(() => {}); });
 // A request that fails at the network level (reset, refused) means the preview isn't playing as
 // shipped (a sample-based engine may fall back to synthesis). Aborts are the page's own choice.
+// An HTTP error (404, 5xx) counts too: the engine got no sample either way.
 const failedRequests = [];
 page.on('requestfailed', (r) => { const e = r.failure()?.errorText || ''; if (!/ERR_ABORTED/.test(e)) failedRequests.push(`${r.url().split('/').slice(-2).join('/')} ${e}`); });
+page.on('response', (r) => { if (r.status() >= 400) failedRequests.push(`${r.url().split('/').slice(-2).join('/')} HTTP ${r.status()}`); });
+// Some engines report a failed sample load only on their own display (GPT-6 Sol's OLED: "SAMPLE
+// ERROR · FALLBACK") and keep playing synthesis. Any "sample error" text on the page fails the take.
+const sampleError = () => page.evaluate(() => (/sample[s]?\s*(load\s*)?(error|failed)/i.exec(document.body.innerText || '') || [])[0] || null).catch(() => null);
 await page.addInitScript(initScript);
 // 'load', not 'networkidle': some previews never go network-idle.
 const url = await previewUrl(model);
@@ -115,6 +120,7 @@ console.log(`warmed ${warmPairs.length} pitch/velocity pair(s) in ${(warm / 1000
 await page.waitForTimeout(5000);
 const ctxInfo = await page.evaluate(() => window.__etude.contexts.map((c) => ({ state: c.ctx.state, sr: c.ctx.sampleRate, outputLatency: c.ctx.outputLatency })));
 if (failedRequests.length) { console.error(`Error: ${key}: ${failedRequests.length} request(s) failed while loading: ${failedRequests.slice(0, 4).join(', ')}`); process.exit(2); }
+{ const err = await sampleError(); if (err) { console.error(`Error: ${key}: the page reports "${err}" after warm-up`); process.exit(2); } }
 
 // Real-time player: records the tap while playing `events` (times relative to the run's t=0).
 const perform = ({ events, preroll, tail, mode }) => (async () => {
@@ -207,6 +213,7 @@ for (let i = 0; i < nFrames; i++) {
   fs.writeFileSync(path.join(outDir, 'frames', `f${String(i).padStart(6, '0')}.jpg`), Buffer.from(shot.data, 'base64'));
 }
 await page.evaluate(() => { for (let n = 21; n <= 108; n++) window.__etudeKey.up(n, window.__etudeVis.mode); });
+const sampleErrorAfter = await sampleError();
 console.log(`visual pass ${nFrames} frames in ${((Date.now() - tv0) / 1000).toFixed(1)}s`);
 
 await context.close();
@@ -218,7 +225,7 @@ const meta = {
   playStart, playEnd, videoStartMidi, firstNoteMidi, preroll: PREROLL, ref: S.plan.ref,
   viewport: vp, instrumentSelector: instSel, boxDevicePx: boxCss.map((v) => v * vp.dpr), surgery: { hidden: surg.hidden },
   setup: setupLog, controlsAfter, audioContexts: ctxInfo, velocityMode: mode, quantizeVelocity: q,
-  prewarmPairs: warmPairs.length, failedRequests,
+  prewarmPairs: warmPairs.length, failedRequests, sampleError: sampleErrorAfter,
   recStartMs: result.recStart, t0Ms: result.t0, hit: result.hit, miss: result.miss, missed: result.missed,
   schedLateMs: { max: +result.maxLate.toFixed(1), p95: +result.p95Late.toFixed(1) },
   fps: FPS, frames: nFrames, clipCss: clip, capturedAt: new Date().toISOString(),
@@ -226,4 +233,5 @@ const meta = {
 fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(meta, null, 1));
 console.log(`done ${key}: frames=${nFrames} hit=${result.hit} miss=${result.miss} ${result.missed.join(' ')} late p95=${meta.schedLateMs.p95}ms max=${meta.schedLateMs.max}ms`);
 if (failedRequests.length) { console.error(`Error: ${key}: request(s) failed during the take: ${failedRequests.slice(0, 4).join(', ')}`); process.exit(2); }
+if (meta.sampleError) { console.error(`Error: ${key}: the page reported "${meta.sampleError}" during the take`); process.exit(2); }
 if (result.p95Late > 50) process.exit(3);

@@ -50,12 +50,16 @@ export const findPreview = (id, stage) => {
 export const loadMidi = (file) => new Midi(fs.readFileSync(file));
 
 // Note events for notes starting in [from, before); offs sort before ons at equal times.
-export function events(midi, from, before) {
+// hold ({ from, until }, the plan's finalHold): a note struck at or after hold.from sounds until at
+// least hold.until (a held final chord), unless the same key is struck again before `before`.
+export function events(midi, from, before, hold = null) {
   const ev = [];
-  for (const tr of midi.tracks) for (const n of tr.notes) {
-    if (n.time < from - 1e-6 || n.time >= before) continue;
+  const notes = midi.tracks.flatMap((tr) => tr.notes).filter((n) => n.time >= from - 1e-6 && n.time < before);
+  for (const n of notes) {
+    let end = n.time + n.duration;
+    if (hold && n.time >= hold.from - 1e-6 && !notes.some((o) => o !== n && o.midi === n.midi && o.time > n.time)) end = Math.max(end, hold.until);
     ev.push({ t: n.time, on: 1, note: n.midi, vel: Math.max(1, Math.round(n.velocity * 127)) });
-    ev.push({ t: n.time + n.duration, on: 0, note: n.midi });
+    ev.push({ t: end, on: 0, note: n.midi });
   }
   return ev.sort((a, b) => a.t - b.t || a.on - b.on);
 }
@@ -123,6 +127,10 @@ export function loadShow(showArg) {
 // land on the frame at or before each downbeat, so every downbeat belongs to the incoming piano.
 // song.pickupBeats: the file opens with an anacrusis, so bar 1 starts that many beats in.
 // show.pickupBeats: the first model also plays that many beats before startBar (its pickup).
+// show.lastBarBeats: the film's final bar plays only its first N beats (a cadence whose bar also
+// holds the next section's pickup); without it the last model plays into the next downbeat.
+// show.finalHold: with lastBarBeats, hold the notes struck on that final beat for this many
+// seconds from the beat (a fermata on the closing chord), then release into `breathe`.
 function makePlan(show, song, files, order) {
   const midi = loadMidi(files.audio);
   const ppq = midi.header.ppq, bpb = song.beatsPerBar || 4, pick = (song.pickupBeats || 0) * ppq;
@@ -138,10 +146,16 @@ function makePlan(show, song, files, order) {
   const finalBar = starts[n - 1] + lastBars; // first bar after the film's music
   if (finalBar - 1 > songBars) throw new Error(`plan runs past the song (bar ${finalBar - 1} > ${songBars})`);
   const toEnd = finalBar - 1 >= songBars;
-  // Not to the end: play into the next downbeat (one beat) so the film lands on it.
-  const finalCut = toEnd ? Infinity : midi.header.ticksToSeconds(barTick(finalBar) + ppq);
+  const endBeats = toEnd ? 0 : show.lastBarBeats || 0;
+  if (endBeats && (endBeats >= bpb || !Number.isInteger(endBeats))) throw new Error(`lastBarBeats must be a whole number below ${bpb}`);
+  // Not to the end: play into the next downbeat (one beat) so the film lands on it, or, with
+  // lastBarBeats, stop after that many beats of the final bar.
+  const landTick = endBeats ? barTick(finalBar - 1) + (endBeats - 1) * ppq : barTick(finalBar);
+  const finalCut = toEnd ? Infinity : midi.header.ticksToSeconds(landTick + ppq);
+  const landAt = midi.header.ticksToSeconds(landTick);
+  const finalHold = endBeats && show.finalHold ? { from: landAt, until: landAt + show.finalHold } : null;
   const finalRelease = toEnd ? lastOff
-    : Math.max(barTime(finalBar), ...notes.filter((x) => x.time >= barTime(finalBar) - 1e-6 && x.time < finalCut).map((x) => x.time + x.duration));
+    : Math.max(endBeats ? finalCut : barTime(finalBar), finalHold?.until ?? 0, ...notes.filter((x) => x.time >= landAt - 1e-6 && x.time < finalCut).map((x) => x.time + x.duration));
   const firstPlay = midi.header.ticksToSeconds(Math.max(0, barTick(starts[0]) - (show.pickupBeats || 0) * ppq));
   const t0 = firstPlay - IDLE;
   const end = t0 + Math.round((finalRelease + BREATHE - t0) * FPS) / FPS;
@@ -154,6 +168,7 @@ function makePlan(show, song, files, order) {
       audioFrom: first ? t0 : barTime(bar), audioTo: last ? end : barTime(bar + per),
       playStart: first ? firstPlay : barTime(Math.max(1, bar - LEADIN_BARS)),
       playBefore: last ? finalCut : barTime(bar + per), // onsets played: [playStart, playBefore)
+      ...(last && finalHold ? { hold: finalHold } : {}),
     };
   });
   for (const s of segments) s.secs = +(s.to - s.from).toFixed(3);
@@ -169,7 +184,7 @@ function makePlan(show, song, files, order) {
   blocks.at(-1).to = Math.min(blocks.at(-1).to, finalRelease);
   const refBars = song.levelReferenceBars || [show.startBar, show.startBar + per - 1];
   const ref = { from: barTime(refBars[0]), to: barTime(refBars[1] + 1) };
-  return { t0, end, duration: +(end - t0).toFixed(3), segments, blocks, ref, songBars };
+  return { t0, end, duration: +(end - t0).toFixed(3), segments, blocks, ref, songBars, finalCut, finalHold, finalRelease };
 }
 
 export const argv = (name, def) => {

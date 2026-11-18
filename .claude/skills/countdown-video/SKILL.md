@@ -25,7 +25,7 @@ Start from `recording/shows/etude6-countdown.json` and copy it to `recording/sho
 - **Length.** Set `startBar`, `barsPerModel` and `last`.
   - Cut on the song's grid (`song.json` → `grid`); one cycle per model is about 7 s for the Étude.
   - Start on strong material (`song.json` → `sections`).
-  - End with #1 on strong material or on the song's real ending (`"last": "to-end"`).
+  - End with #1 on strong material or on the song's real ending (`"last": "to-end"`). Give every model one phrase; to stop on a cadence whose bar also carries the next section's pickup, use `lastBarBeats` (and `finalHold` to let the chord ring).
   - For Twitter, 45–90 s is the target.
 - **Caption and date.** Set `caption.title`, `caption.subtitle` and `caption.date`. Use today's date unless told otherwise.
 
@@ -43,8 +43,8 @@ cd recording && node scripts/make.mjs --show shows/<name>.json --plan
 
 If a model has no entry in `models.json`, the loader warns. Probe it with `node scripts/probe.mjs --model <id>` (`--base local` for shows with `"previewBase": "local"`) and write a fixture:
 
-- **Just the grand plus basic reverb.** Piano A only; organ, synth, Piano B, unison and mod effects off. Use only controls the preview ships. Confirm with `scripts/audit.mjs`, and use `scripts/abtest.mjs` to prove a control really changes the sound. Some cycle buttons always report `aria-pressed=true`, so a blind toggle can switch things **on**.
-- **Reverb.** Turn it on only when the probe's tail test shows a real tail. Set it to about 35% dry/wet with a `setValue` step.
+- **Just the grand plus the same reverb.** Piano A only; organ, synth, Piano B, unison and mod effects off (pin them off where the preview ships a switch). Use only controls the preview ships. Confirm with `scripts/audit.mjs`, and use `scripts/abtest.mjs` to prove a control really changes the sound. Some cycle buttons always report `aria-pressed=true`, so a blind toggle can switch things **on**.
+- **Reverb.** Turn it on only when the probe's tail test shows a real tail. Then match it by ear-relevant numbers, not knob value: `scripts/reverb.mjs` measures each model's chord tail against the reference (Opus 5.5's own default, Hall 35%). Pick the reverb type and amount the preview ships that minimize the tail mismatch, and record the numbers in the fixture's `audit` (README "Reverb parity").
 - **Fixed-width layouts.** Use the suggested viewport, which gets a higher DPR instead of upscaling.
 - **Flagged key cost.** If the probe flags a high key cost (a note built per velocity), `quantizeVelocity` may be needed. That changes the input, so **ask the user** first and disclose it.
 - **Record the reasoning.** Put what you found in the fixture's `audit` string.

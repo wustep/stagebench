@@ -39,12 +39,14 @@ Record serially and leave the machine alone while the audio passes run. They pla
 | `startBar`, `barsPerModel` | Where the video starts, and how long each model plays. Cut on the song's grid (`song.json` → `grid`; a song that opens on an anacrusis sets `pickupBeats`, and bar 1 starts after it). |
 | `pickupBeats` | Optional. The first model also plays this many beats before `startBar`, so a phrase that starts on a pickup opens the film whole. |
 | `last` | `"to-end"` means the last model plays every remaining bar. A number means that many bars. If omitted, the last model gets `barsPerModel` bars and lands on the next downbeat. |
+| `lastBarBeats` | Optional. The film's final bar plays only its first N beats, for a cadence whose bar also holds the next section's pickup (Alla Turca: the march's A-major chord on beat 1 of bar 192, with the coda's pickup on beat 2). Without it the last model plays into the next downbeat. |
+| `finalHold` | Optional, with `lastBarBeats`. The notes struck on that final beat are held this many seconds from the beat, like a fermata, then released into `breathe`. Keys in the picture hold too. |
 | `idle`, `breathe` | Idle keyboard before the first note (0.4 s), and the hold after the last note lifts (2.5 s). |
 | `caption` | Top-right `title`, `subtitle` and `date`. `fadeOut: [start, gone]` fades it out by `gone` seconds; the default is `[3.5, 5]`. |
 | `labels` | Optional `{ "<run-id>": "Display name" }` overrides. |
 | `placeholderLabels` | Optional names for models that have no run record in this checkout yet (placeholder slots), used only until the run's own title is available. |
-| `titleCardSecs` | Optional intro card in the same style. It's 0 in the current shows, meaning no intro slide. |
-| `endCard` | Optional closing card after the last model: an `image` (path relative to `recording/`, shown 960 px wide) above `title`, `subtitle` and `footer` in the title card's type, plus `secs` and `fadeIn` (from black, over silence). Rendered by compose, so `make.mjs` (or `--compose`) includes it; compose also saves it as `output/<show>.end-card.png`. |
+| `intro`, `endCard` | Optional cards over silence: `intro` before the first model (the caption then comes on with the first model), `endCard` after the last. Each card has an `image` (a path relative to `recording/`; a PNG shows at its natural size, an SVG at `imageWidth`, so it stays a crisp vector), optionally `title`, `subtitle` and `footer` beneath it, and runs for `secs` seconds. Each part fades in on its own schedule, `fades: { "image": [start, secs], "title": […], "footer": […] }`: the image from black, the type over it. Compose renders the cards, so `make.mjs` (or `--compose`) includes them. It saves each finished card as `output/<show>.intro.png` / `.end-card.png`. `compose.mjs --show … --cards` renders just the cards and card-only clips (`.takes/<show>/_work/<card>-preview.mp4`) without takes. Card type is house style (below). |
+| `titleCardSecs` | Legacy text intro (the caption on a black card). `intro` replaces it; 0 in the current shows. |
 | `loudness.targetLufs` | Final integrated loudness (−14). |
 | `leveling` | Gentle per-block nudges: `strength` 0.4, `deadbandDb` 2, `maxBoostDb` 3, `maxCutDb` 1.5. Each `barsPerModel` block more than `deadbandDb` from the median moves `strength` of its distance toward it, within the caps. Gains ramp inside a model's turn and step at cuts. Keep it gentle; the song's dynamics are the point. |
 | `previewBase`, `stage` | Where previews load from and which phase. A URL prefix (production by default), or `"local"`: serve this checkout's `public/` with `python3 -m http.server` on a free localhost port, started and stopped by each script (`scripts/lib/serve.mjs`). Local is reproducible offline and can film previews that aren't deployed. With `"local"`, a model with no run record or no `public/previews/<id>/stage<N>/` becomes a placeholder slot (see [Placeholders](#placeholders)). |
@@ -57,11 +59,12 @@ Record serially and leave the machine alone while the audio passes run. They pla
 
 `shows/demo-v2-alla-turca.json` renders `output/demo-v2-alla-turca.mp4` and its report. It's a draft and isn't used on the site. Eight models play the last third of Mozart's Rondo Alla Turca in the show's listed order, not a countdown:
 
-- eight bars each from the A-minor theme (bar 137, with its pickup), through the C-major episode and the janissary march;
-- the last model plays the coda to the final chord;
-- then a short StageBench end card.
+- one 8-bar phrase each, from the start of the A-minor theme's return (bar 129, with its one-beat pickup) through the C-major episode, the theme's return and the janissary march;
+- the last model stops on the march's A-major cadence (bar 192, beat 1, `lastBarBeats`) and holds that chord for 1.6 s (`finalHold`) instead of running into the coda;
+- it opens on a 2.5 s intro, the real Nord Stage 4 photo on black (no title), and hard-cuts to the first model;
+- it closes on a 4 s end card: the StageBench keyboard illustration from wustep.me, with "StageBench" and the link fading in beneath it.
 
-It runs about 87 s, in the house style below.
+It runs about 69 s, in the house style below. Every cut lands on a phrase boundary, and every turn is one phrase (the last one is longer only by its held chord and the closing breath).
 
 ```sh
 cd recording
@@ -71,12 +74,17 @@ node scripts/qa.mjs --show shows/demo-v2-alla-turca.json            # contact sh
 ```
 
 - **Song.** `songs/mozart-rondo-alla-turca/` is the third movement of the Piano Sonata K. 331. Mozart died in 1791 and the sonata was published in 1784, so the composition is public domain. The MIDI is from Stephen's library, with a dynamics pass from this repo:
-  - `dynamics.mjs` reads the original, which it never writes, and changes only note-on velocities. It verifies that every other byte is identical and prints a before/after.
+  - `dynamics.mjs` reads the original, which it never writes, and changes only note-on velocities. It verifies that every other byte is identical and prints a before/after. It refuses to write over a file that holds the original's bytes.
+  - The pass rebuilds each velocity as a section level that moves through the phrase (hairpins: the A-minor theme swells between ~52 and ~66, the march builds from ~96 to ~114), plus voicing (melody on top, a doubled inner voice 8 under it, the accompaniment 16 under), plus 0.6× the performer's own deviation, plus accents (march downbeats +10, their rolled grace chords −10). In the film's bars the theme averages 52 and the march 95, where the original had 70 and 86.
   - `make-song.mjs` bakes the pedal into the audio file and writes the written-length picture file.
   - Every note is D2–E6, inside every keybed, so nothing is skipped.
 - **Grid.** 2/4, counted through the performance with every repeat played. The file opens on a one-beat pickup (`"pickupBeats": 1` in `song.json`). Its 1/4 time signatures are only the half bars where a section's end meets the next pickup, so the downbeats stay on a steady 2/4 grid. Turns are 8-bar phrases.
 - **Order and ranks.** The models play in the order the show lists them. The `#N` on each turn is computed when the show loads, from `src/data/runs.json`, as described under `models` above. Nothing in the show, the overlays or this README stores a rank.
 - **Previews are local** (`"previewBase": "local"`). Each script that opens a preview serves this checkout's `public/` itself, so recording needs no network and no separately started server.
+- **Levels.** Each piano is level-matched on the same reference bars (177–200, the march into the coda). This show's block leveling uses a 3 dB deadband, not 2, so that only a real outlier gets nudged. That keeps the theme return's piano from being lifted toward the forte march, which would undo the dynamics pass. Today only GPT 6.1 Sol's turn moves, by +1.6 dB: its piano's velocity curve is steep and its turn is the forte-then-piano episode.
+- **Same piano, same reverb.** Every model plays its acoustic grand with every other effect off, and its reverb is matched to Opus 5.5's own default by measurement, not by knob value (see [Reverb parity](#reverb-parity)). GPT-6 Sol is the exception: its reverb produces no real tail, so it plays dry.
+- **End card art.** `assets/stagebench-keyboard.svg` is the StageBench keyboard from wustep.me, vendored from `github.com/wustep/me` (`components/AboutPage.tsx` `StageBenchArt` for the geometry, `AboutPage.module.css` `.stagebench` for the colours, `--sb-body #c4202f` and the rest). It's static, in its idle pose, without the site's card, shadow or hover animation. Compose draws it 640 px wide as a vector.
+- **Intro photo.** `assets/nord-stage-4-on-black.png` is the Nord Stage 4 product photo from wustep.me, keyed off its white studio background onto black by `scripts/key-photo.mjs`. The 11600×3866 source (`nord-stage-4-wustep-me.png`, ~19 MB) is kept out of git. To regenerate it, put the source in `recording/` and run `node scripts/key-photo.mjs`. The script flood-fills the background from the border, so the light-gray white keys are never touched. It unmixes the edge pixels against the nearest solid colour, which leaves no white fringe or gray matte, then reports a fringe count.
 
 ### Placeholders
 
@@ -114,7 +122,8 @@ The style lives in `scripts/compose.mjs`:
 - **Cuts:** hard picture cuts on the frame at or before each downbeat.
 - **Audio switches:** 30 ms equal-power crossfade ending exactly on the downbeat, with no fades.
 - **Encode:** H.264 High CRF 16, AAC 256 kbps at 48 kHz. Gentle block leveling, then −14 LUFS through a −1.7 dBFS lookahead limiter.
-- **Type:** SF Pro via `-apple-system`, with no web fonts. Compose checks which platform fonts actually rendered, records them in the report (`fonts`), and fails if a non-house face shows up.
+- **Type:** SF Pro via `-apple-system`. Compose checks which platform fonts actually rendered, records them in the report (`fonts`), and fails if a non-house face shows up. The one exception is the end card's title.
+- **Cards (intro, end card):** the image on black. Beneath it sit the title in Crimson Pro at 58 px, weight 500, warm white (`#f6eee2`), and the link in SF Pro at 22 px in 50% white. There's no box or frame around anything, and the block is centered on the frame. The image fades in from black, then the title, then the link. Crimson Pro is wustep.me's heading serif (SIL OFL), vendored in `assets/fonts/` with its license. Compose fails if a card title doesn't render in it, and records each card's faces in the report (`intro.fonts`, `endCard.fonts`). Inter, Instrument Serif, Fraunces, Bricolage Grotesque, Space Grotesk, Sora, Young Serif, Bodoni, Geist and Syne are never used.
 
 ## How a take is made (`scripts/record.mjs`)
 
@@ -135,7 +144,7 @@ Each model is recorded on one prepared page, with Playwright driving a headless 
 ## Adding a model
 
 1. Run `node scripts/probe.mjs --model <run-id>` (add `--base local` to probe this checkout's `public/previews/` instead of production), then `scripts/audit.mjs` (everything switched on after setup, and the effect/reverb amounts) and `scripts/abtest.mjs` (prove whether a control changes the sound). It reports the keybed range, fluid or fixed layout (with a suggested viewport), the sound-relevant controls as the page reports them, key-press cost, velocity response and the reverb tail test.
-2. Read the report's controls list and add a fixture to `models.json`. It should give just the grand on Piano A: organ, synth, Piano B, unison and mod effects off. Turn reverb on only if the tail test shows a real tail, and leave amounts at the model's defaults.
+2. Read the report's controls list and add a fixture to `models.json`. It should give just the grand on Piano A: organ, synth, Piano B, unison and mod effects off. Turn reverb on only if the tail test shows a real tail, then match it to the reference with `scripts/reverb.mjs` (see [Reverb parity](#reverb-parity)).
 3. Run `scripts/latency.mjs --model <id>`. Output latency should be steady, with a spread under about 20 ms, because prep aligns each take on its first note.
 4. Record the model alone: `make.mjs --models <id>`. Check its `meta.json` for `setup`, `miss` and `schedLateMs`, and look at `still.png`.
 
@@ -144,11 +153,38 @@ Each model is recorded on one prepared page, with Playwright driving a headless 
 - `pressIfOff: <selector>` clicks if `aria-pressed` isn't `true`.
 - `pressOffIfOn: <selector>` clicks if `aria-pressed` is `true`.
 - `select: [<selector>, <option label>]` chooses an option.
-- `cycleTo: [<selector>, <aria-label regex>]` clicks a cycling button until its label matches.
-- `setValue: [<selector>, <target>, <regex?>]` steps a slider or knob with the arrow keys to a target. It's used to set reverb to about 35%.
+- `cycleTo: [<selector>, <label regex>]` clicks a cycling button until its `aria-label` (plus its `title`, where a preview keeps the state there) matches. The log says `NOT REACHED` if it never does.
+- `setValue: [<selector>, <target>, <regex?>]` steps a slider or knob with the arrow keys to a target, such as a reverb amount.
 - `click: <selector>` clicks once, for cycle buttons with no readable state. Verify it with `abtest.mjs`.
 
-**Target sound: just the grand plus basic reverb.** Reverb is on only where the tail test shows it works, and set to about 35% of its dry/wet range, which is Opus 5.5's default. Some previews render toggles as cycle buttons whose `aria-pressed` is always `true`, such as Kimi's Piano Unison, Dyn Comp and Timbre. `pressIfOff`/`pressOffIfOn` would toggle those blindly: the old Kimi fixture's "unison off" step actually switched unison **on**. A/B any step with `scripts/abtest.mjs` before trusting it.
+**Target sound: just the grand plus the same reverb.** Every other effect is off, and pinned off where the preview ships the switch. Reverb is on only where the tail test shows it works, and matched by measurement (next section). Some previews render toggles as cycle buttons whose `aria-pressed` is always `true`, such as Kimi's Piano Unison, Dyn Comp and Timbre. `pressIfOff`/`pressOffIfOn` would toggle those blindly: the old Kimi fixture's "unison off" step actually switched unison **on**. A/B any step with `scripts/abtest.mjs` before trusting it.
+
+## Reverb parity
+
+The same knob value is not the same sound. At dry/wet 3.5 of 10, Fable 5.2's reverb was still 16 dB over Opus 5.5's one second after the keys lifted. GPT 6.1 Sol's Room at 0.35 was almost dry. So the fixtures match what the reverb sounds like:
+
+```sh
+node scripts/reverb.mjs --show shows/<name>.json                       # every filmable model, with its fixture
+node scripts/reverb.mjs --show shows/<name>.json --model <id> --steps '[{"setValue":["[aria-label=\"Reverb Dry/Wet\"]",1]}]'   # try a value
+```
+
+The test plays one staccato C-major chord (C3–G4, velocity 80, 150 ms) and records the page's own output. It reports:
+- the chord's level;
+- the tail's level 0.1, 0.3, 0.6, 1, 1.5 and 2 s after release, relative to the chord's peak;
+- the times to −40 and −60 dB;
+- the wet energy over the first second and over the whole tail, relative to the chord;
+- the mismatch against the reference: the RMS dB difference of the tail out to 1.5 s, and the wet-1 s difference.
+
+The reference is Opus 5.5's own default: Hall at 35%. Each model gets the reverb type and amount it ships that comes closest, and its fixture's `audit` records the numbers. The level itself needs no matching here, because prep sets every take to the same loudness on the same reference bars.
+
+| Model | Setting | Tail RMS vs reference | Notes |
+|---|---|---|---|
+| Opus 5.5 | Hall, 35% (default) | reference | −14.5 / −22.6 / −32.6 dB at 0.3 / 0.6 / 1 s, −60 dB at 2.1 s |
+| Sonnet 5.5 | Hall, 3.5 / 10 | ~3 dB | already the same type |
+| GPT 6.1 Sol | Stage, 45 | 3.7 dB | Room at 35 was nearly dry; Hall at 45 rings longer (5.0 dB) |
+| GPT-6 Astra | Hall, 50% | 4.2 dB | Room at 30% was short; the reverb lowers its dry level ~5 dB, which the level match absorbs |
+| Fable 5.2 | 1.0 / 10 | 7.3 dB | Its type button is decorative and its one impulse decays about 3× slower than the Hall, so it can only be turned down. 1.0 is the best fit (0.5: 9.2, 1.5: 7.9, 2.0: 9.4): 7–9 dB drier early, 5–10 dB longer late. The old 3.5 was 16–33 dB over from 1 s on. |
+| GPT-6 Sol | dry | n/a | Its reverb makes no real tail, even as Hall at Amount 80: 25–30 dB under the reference, and it cuts the dry level up to 14 dB. |
 
 ## Hard-won details
 
@@ -156,6 +192,7 @@ Each model is recorded on one prepared page, with Playwright driving a headless 
 - **Renderer crashes.** A key-up in the same tick as its key-down crashed Fable 5's renderer within about 100 presses, so the recorder always holds notes. Fable 5 also crashes intermittently in dense passages: its octave-hit reference pass crashed 2 of 3 times. The recorder exits with code 2 on a page crash rather than hanging, and `make.mjs` retries such a take twice.
 - **Fixed-width layouts.** Sol (1500 px), Luna (1600 px) and Kimi (1400 px) get a smaller CSS viewport and a higher DPR. They render natively at about 2400 device px instead of being upscaled.
 - **Keybed ranges.** A Stage 4 73 is E1–E7 (MIDI 28–100), and notes outside it are skipped. Luna Max's keybed is labeled E2–D♯8, so it also skips E1–D♯2. That's part of its recreation, so it's left alone.
+- **Sample failures.** A sample-based engine can degrade without failing the page. `record.mjs` fails a take, which `make.mjs` retries, in three cases: a request fails at the network level, a response is HTTP ≥ 400, or the page shows "sample error" text, such as GPT-6 Sol's OLED reading "SAMPLE ERROR · FALLBACK". GPT-6 Astra's "Grand synthesis fallback" is the name of its only piano model, not an error, so the check doesn't match it.
 - **Serving local previews.** Plain `python3 -m http.server` listens with a backlog of 5. GPT-6 Sol fetches its 56 samples in one burst, so some connections were reset, and its engine fell back to synthesis (its OLED reads "SAMPLE ERROR · FALLBACK"). Sample-based engines can degrade like this without failing the page. `scripts/lib/serve.mjs` runs the same handler on a threaded server with a 256-deep backlog. `record.mjs` also fails a take, which `make.mjs` retries, if any request fails at the network level, and it records `failedRequests` in `meta.json`.
 - **Self-scaling instruments.** Fable 5.2 lays its panel out at 9013 px and scales `#instrument` with its own inline `transform`, which the recorder's centering would clear. A fixture can name the root to center instead (`"instrument": ".instrument-frame"`).
 - **ffmpeg `apad`.** A bare `apad` pads forever; it once wrote about 1 TB. Always use `apad=whole_dur=…` plus an output `-t`.
