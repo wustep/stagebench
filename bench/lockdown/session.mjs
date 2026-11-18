@@ -168,7 +168,7 @@ export function boxArguments(runtime, { name, image, network, volumes = [], env 
 // The sample pack as a volume: built once per pack digest from the operator's
 // verified copy, checked again inside the engine, and from then on mounted
 // read-only into every session that was given the pack. Sharing it is what
-// keeps a 330 MB pack from being copied on every phase start.
+// keeps a 500 MB pack from being copied on every phase start.
 export async function ensureSamplePackVolume(runtime, image, packDir, digest, { onOutput } = {}) {
   const volume = `sb-samples-${digest.slice(0, 16)}`
   const marker = '.stagebench-pack-verified'

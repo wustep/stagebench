@@ -20,7 +20,7 @@ import {
 } from '../bench/lib/run/verify.mjs'
 import { hardGatesDocument, startPhase } from '../bench/lib/run/workspace.mjs'
 import {
-  FLAC_PCM, checkSamplePack, fetchSamplePack, flacAvailable, loadSamplePack, materializeSamplePack, storeRecording, storedName, upstreamUrl, wavLayout,
+  FLAC_PCM, RECORDING, checkSamplePack, fetchSamplePack, flacAvailable, loadSamplePack, materializeSamplePack, packIndex, rebuildRecordingSync, storeRecording, storedName, upstreamUrl, wavLayout,
 } from '../bench/lib/sample-pack.mjs'
 import { blindRunCode, hashTree, isStrictProtocol, protocolMajor, readJson, sha256, workspaceRoot, writeJson } from '../bench/lib/shared.mjs'
 import { normalizeConfig, startGateway } from '../bench/lockdown/image/gateway.mjs'
@@ -305,6 +305,8 @@ test('the sample pack manifest names permissively licensed sources at pinned com
     ['salamander-grand-v3', 'Grand', 'CC-BY-3.0'],
     ['upright-piano-kw', 'Upright', 'CC0-1.0'],
     ['greg-sullivan-e-pianos', 'Electric', 'CC-BY-3.0'],
+    ['learman-rhodes-gm', 'Electric', 'CC0-1.0'],
+    ['vcsl-pipe-organ', 'Organ', 'CC0-1.0'],
   ])
   const sources = new Map(manifest.sources.map((source) => [source.id, source]))
   for (const source of manifest.sources) {
@@ -322,17 +324,45 @@ test('the sample pack manifest names permissively licensed sources at pinned com
     assert.ok(upstreamUrl(source, file.upstreamPath).startsWith(`https://raw.githubusercontent.com/${source.repository}/${source.commit}/`))
   }
   assert.equal(upstreamUrl({ repository: 'a/b', commit: 'c' }, 'Wurlitzer EP200/Samples/D#1.flac'), 'https://raw.githubusercontent.com/a/b/c/Wurlitzer%20EP200/Samples/D%231.flac')
-  assert.deepEqual(manifest.totals, { sources: 3, files: manifest.files.length, recordings: manifest.files.filter((file) => file.path.endsWith('.flac')).length, bytes: manifest.files.reduce((total, file) => total + file.bytes, 0) })
-  assert.ok(manifest.totals.bytes < 400 * 1024 * 1024, 'the pack stays a reasonable size')
-  // Raw: only upstream's own formats, each source's LICENSE alongside, and nothing pre-processed by us.
-  for (const file of manifest.files) assert.match(file.path, /\.(flac|sfz|txt|md)$|\/LICENSE$/, file.path)
-  for (const source of manifest.sources) assert.ok(seen.has(`${source.directory}/LICENSE`), `${source.id} ships its license`)
+  assert.deepEqual(manifest.totals, {
+    sources: 5, files: manifest.files.length, recordings: manifest.files.filter((file) => RECORDING.test(file.path)).length,
+    bytes: manifest.files.reduce((total, file) => total + file.bytes, 0), storedBytes: manifest.sources.reduce((total, source) => total + source.storedBytes, 0),
+  })
+  assert.ok(manifest.totals.bytes < 550 * 1024 * 1024 && manifest.totals.storedBytes < 450 * 1024 * 1024, 'the pack stays a reasonable size')
+  // Raw: only upstream's own formats, each source's license statement alongside, and nothing pre-processed by us.
+  for (const file of manifest.files) assert.match(file.path, /\.(flac|wav|sfz|txt|md)$|\/LICENSE$/, file.path)
+  for (const source of manifest.sources) {
+    assert.ok(source.licenseFiles.length > 0, source.id)
+    for (const name of source.licenseFiles) assert.ok(seen.has(`${source.directory}/${name}`), `${source.id} ships ${name}`)
+  }
+  // Stored form: a WAV keeps its samples as FLAC and the bytes around them in the manifest; nothing else is transformed.
+  for (const file of manifest.files) {
+    if (/\.wav$/.test(file.path)) {
+      assert.equal(file.stored?.codec, FLAC_PCM, file.path)
+      assert.equal(Buffer.from(file.stored.head, 'base64').toString('latin1', 0, 4), 'RIFF')
+      assert.equal(storedName(file), `${file.path}.flac`)
+    } else assert.equal(file.stored, undefined, file.path)
+  }
+  // The grand: eight of Salamander's sixteen dynamics, every one for all thirty notes.
+  const layers = new Map()
+  for (const file of manifest.files) {
+    const layer = /^grand\/salamander-grand-v3\/Samples\/[A-G]#?\dv(\d+)\.flac$/.exec(file.path)?.[1]
+    if (layer) layers.set(Number(layer), (layers.get(Number(layer)) ?? 0) + 1)
+  }
+  assert.deepEqual([...layers.keys()].sort((a, b) => a - b), [1, 2, 3, 4, 7, 10, 13, 16])
+  for (const count of layers.values()) assert.equal(count, 30)
+  // A tine piano and a real organ, both whole as published, both CC0.
+  assert.deepEqual(manifest.sources.filter((source) => source.storedBytes < source.bytes).map((source) => source.id), ['learman-rhodes-gm', 'vcsl-pipe-organ'])
+  assert.equal(sources.get('learman-rhodes-gm').recordings, 15)
+  assert.equal(sources.get('vcsl-pipe-organ').recordings, 42)
+  assert.ok(sources.get('learman-rhodes-gm').licenseEvidence.some((line) => line.includes('kvraudio.com')), 'the author’s own statement is recorded')
   // The candidate-facing documents agree with the manifest.
   const credits = readJson(path.join(sourceRoot, 'sample-pack/sample-sources.json')).sampleSources
   assert.deepEqual(credits.map((entry) => [entry.id, entry.license]), manifest.sources.map((source) => [source.id, source.license]))
   const licenses = read('sample-pack/LICENSES.md')
   for (const source of manifest.sources) assert.ok(licenses.includes(source.commit) && licenses.includes(source.name), `${source.id} is documented`)
   assert.match(licenses, /jRhodes3d.*CC BY-NC/s, 'what was left out, and why, is written down')
+  assert.match(licenses, /setBfree.*Aeolus/s, 'organ renders of software synthesizers are not recordings of an organ')
   assert.match(read('sample-pack/README.md'), /byte-for-byte what its author published/)
   assert.match(read('.gitignore'), /^sample-pack\/files\/$/m, 'the audio itself is fetched, never committed')
 })
@@ -614,6 +644,38 @@ test('with ffmpeg and the fetched pack: processed cuts match, other recordings a
   const report = applyMatchResults({ problems: [], unverifiable: [], inlineAudio: [], sources: {}, bundled: 2, fromPack: 2, generated: 0 }, { threshold: MATCH_THRESHOLD, results: results.slice(0, 3) })
   assert.deepEqual([report.acoustic.checked, report.acoustic.matched, report.acoustic.failed.length], [3, 1, 2])
   assert.match(report.problems[0], /2 bundled sample\(s\) do not match the pack recording they are declared to come from.*"verifiable": false.*"origin": "generated"/s)
+})
+
+test('with ffmpeg, flac, and the fetched pack: organ and tine-piano cuts match their own recording only', (t) => {
+  const pack = loadSamplePack(sourceRoot)
+  const filesDir = path.join(sourceRoot, 'sample-pack', 'files')
+  const index = packIndex(pack)
+  const O = 'organ/vcsl-pipe-organ/Aerophones/Edge-blown Aerophones/Pipe Organ'
+  const R = 'electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1'
+  const wanted = [`${O}/Loud/Rode_Man3Open_C3.wav`, `${O}/Loud/Rode_Man3Open_D#3.wav`, `${O}/Quiet/NT5_Man3Quiet_C3_rr1.wav`, `${R}/A_050__D3_3.wav`, `${R}/A_055__G3_3.wav`]
+  const onDisk = (entry) => [storedName(entry), entry.path].map((name) => path.join(filesDir, name)).find((file) => fs.existsSync(file))
+  if (spawnSync('ffmpeg', ['-version']).status !== 0 || !flacAvailable() || !wanted.every((file) => index.byPath.has(file) && onDisk(index.byPath.get(file)))) return t.skip('needs ffmpeg, flac, and `pnpm bench fetch`')
+  // The recordings as a candidate gets them.
+  const packDir = fs.mkdtempSync(path.join(scratch, 'real-pack-'))
+  for (const file of wanted) {
+    const entry = index.byPath.get(file)
+    const found = onDisk(entry)
+    fs.mkdirSync(path.dirname(path.join(packDir, file)), { recursive: true })
+    fs.writeFileSync(path.join(packDir, file), found.endsWith(storedName(entry)) && entry.stored ? rebuildRecordingSync(entry, fs.readFileSync(found)) : fs.readFileSync(found))
+  }
+  const stage = fs.mkdtempSync(path.join(scratch, 'acoustic-organ-'))
+  const ffmpeg = (...args) => assert.equal(spawnSync('ffmpeg', ['-v', 'error', '-y', ...args]).status, 0, args.join(' '))
+  ffmpeg('-i', path.join(packDir, wanted[0]), '-ss', '0.1', '-t', '4', '-af', 'afade=t=out:st=3:d=1,volume=-3dB', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '96k', path.join(stage, 'organ.mp3'))
+  ffmpeg('-i', path.join(packDir, wanted[3]), '-t', '3', '-af', 'afade=t=out:st=2:d=1', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '96k', path.join(stage, 'rhodes.mp3'))
+  const { results } = matchEntries({ stage, pack: packDir, entries: [
+    { path: 'organ.mp3', packFile: wanted[0] },
+    { path: 'organ.mp3', packFile: wanted[1] },
+    { path: 'organ.mp3', packFile: wanted[2] },
+    { path: 'rhodes.mp3', packFile: wanted[3] },
+    { path: 'rhodes.mp3', packFile: wanted[4] },
+  ] })
+  assert.deepEqual(results.map((result) => result.status), ['match', 'mismatch', 'mismatch', 'match', 'mismatch'], JSON.stringify(results.map((result) => result.score)))
+  assert.ok(results[0].score > 0.9 && results[3].score > 0.9 && Math.max(results[1].score, results[2].score, results[4].score) < 0.5)
 })
 
 // --- feature tests that actually ran ------------------------------------------------

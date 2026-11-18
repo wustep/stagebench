@@ -1,5 +1,5 @@
 // A tiny stand-in for the sample pack, for tests that need a checkout to have
-// one (the real pack is 330 MB of fetched audio). Same manifest shape, a few
+// one (the real pack is about 500 MB of fetched audio). Same manifest shape, a few
 // kilobytes of made-up bytes.
 import crypto from 'node:crypto'
 import fs from 'node:fs'
