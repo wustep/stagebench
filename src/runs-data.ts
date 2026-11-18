@@ -314,11 +314,12 @@ export function getIsolation(run: RunEntry) {
   }
 }
 
-// "No isolation" is how every protocol before the lockdown worked, so the
-// gallery does not badge it. A lockdown, a mixed seal, or an off-protocol
-// miss still shows: those are the cases that change how a row should be read.
+// Official lockdowns are the protocol 3 default, and "no isolation" is how
+// every protocol before that worked, so the gallery does not badge either.
+// A mixed seal or an off-protocol miss still shows: those change how a row
+// should be read.
 export function showsIsolationBadge(isolation: { mode: IsolationMode; offProtocol: boolean }) {
-  return isolation.offProtocol || isolation.mode !== 'none'
+  return isolation.offProtocol || isolation.mode === 'mixed'
 }
 
 // Leaderboard ordering and ranks are pure functions of the module-constant

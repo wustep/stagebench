@@ -1,7 +1,8 @@
 // The run leaderboard: one ranked list of every run, with per-phase score
 // sectors, a wall-time column, and an expandable details drawer. Protocol
 // version lives on the row and in the drawer, not as a split. Isolation is
-// badged only when it is a lockdown, a mixed seal, or off-protocol.
+// badged only for a mixed seal or an off-protocol miss, not for an official
+// lockdown (the protocol 3 default).
 // Memoized: all props are reference-stable, so App's dialog/viewer state
 // changes (open preview, copy link, phase switch) skip re-rendering the
 // largest subtree in the app.
