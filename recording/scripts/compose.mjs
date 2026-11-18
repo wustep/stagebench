@@ -10,8 +10,9 @@
  * Audio: one timeline from the takes, 30 ms equal-power switches that end exactly on each
  * downbeat (no fades), then linear make-up gain to the target LUFS through a -1.7 dBFS lookahead
  * limiter. No intro slide or end card unless the show sets titleCardSecs.
- * Optional end card (show.endCard: title / subtitle / footer, secs, fadeIn) after the last model,
- * in the title card's type, fading in from black over silence.
+ * Optional end card (show.endCard: image / title / subtitle / footer, secs, fadeIn) after the last
+ * model: an image (path relative to recording/) above the text, in the title card's type, fading in
+ * from black over silence.
  * Placeholder slots (models not filmable yet, see lib/show.mjs) keep their bars: black frame, the
  * same label (NEW / not yet ranked) and a centered "Take pending" line in the caption's subtitle
  * style; their audio is silent and they are left out of the leveling.
@@ -20,7 +21,7 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { loadShow, argv, FPS } from './lib/show.mjs';
+import { loadShow, argv, FPS, REC } from './lib/show.mjs';
 
 const FF = process.env.FFMPEG || 'ffmpeg';
 const FFPROBE = process.env.FFPROBE || 'ffprobe';
@@ -187,9 +188,18 @@ const CARD_CSS = `
     body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
     h1 { font-size: 92px; font-weight: 650; letter-spacing: -1.5px; }
     h2 { margin-top: 22px; font-size: 38px; font-weight: 500; color: rgba(255,255,255,0.72); }
-    p { margin-top: 48px; font-size: 24px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.45); }`;
+    p { margin-top: 48px; font-size: 24px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+    .card-image { display: block; width: 960px; height: auto; border-radius: 16px; }
+    .card-image + h1 { margin-top: 44px; }
+    h1 + p { margin-top: 24px; }`;
 const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-const card = (h1, h2, p) => `<style>${css}${CARD_CSS}</style>${h1 ? `<h1>${esc(h1)}</h1>` : ''}${h2 ? `<h2>${esc(h2)}</h2>` : ''}${p ? `<p>${esc(p)}</p>` : ''}`;
+const card = (h1, h2, p, img) => `<style>${css}${CARD_CSS}</style>${img ? `<img class="card-image" alt="" src="${img}">` : ''}${h1 ? `<h1>${esc(h1)}</h1>` : ''}${h2 ? `<h2>${esc(h2)}</h2>` : ''}${p ? `<p>${esc(p)}</p>` : ''}`;
+const dataUri = (rel) => {
+  const file = path.resolve(REC, rel);
+  const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[path.extname(file).toLowerCase()];
+  if (!type) throw new Error(`endCard.image: unsupported type ${file}`);
+  return `data:${type};base64,${fs.readFileSync(file).toString('base64')}`;
+};
 const CAPTION = `<div class="cap">${cap.title ? `<div class="t">${esc(cap.title)}</div>` : ''}${cap.subtitle ? `<div class="s">${esc(cap.subtitle)}</div>` : ''}${cap.date ? `<div class="d">${esc(cap.date)}</div>` : ''}</div>`;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
@@ -244,8 +254,9 @@ if (TITLE_SECS > 0) {
 }
 let endPng = null;
 if (END_SECS > 0) {
-  await page.setContent(card(END.title, END.subtitle, END.footer));
+  await page.setContent(card(END.title, END.subtitle, END.footer, END.image ? dataUri(END.image) : null));
   await page.evaluate(() => document.fonts.ready);
+  if (END.image) await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0));
   endPng = path.join(WORK, 'end-card.png');
   await page.screenshot({ path: endPng });
   fs.copyFileSync(endPng, S.output.replace(/\.mp4$/, '.end-card.png')); // the card as shown, next to the film
@@ -298,7 +309,7 @@ ff([...vin, '-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-
 
 const report = {
   show: S.name, file: path.relative(process.cwd(), S.output), duration: duration(S.output), loudness: loudness(S.output),
-  musicEnd: +(TITLE_SECS + tlDur).toFixed(3), endCard: END_SECS ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, title: END.title, subtitle: END.subtitle, footer: END.footer, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
+  musicEnd: +(TITLE_SECS + tlDur).toFixed(3), endCard: END_SECS ? { from: +(TITLE_SECS + tlDur).toFixed(3), secs: END_SECS, artwork: END.image ?? null, title: END.title, subtitle: END.subtitle ?? null, footer: END.footer, image: path.relative(process.cwd(), S.output.replace(/\.mp4$/, '.end-card.png')) } : null,
   fonts: fontsUsed, makeupDb: +makeup.toFixed(2), limiter, leveling: { ...LV, medianLufs: median, blocks: blocks.map((b) => ({ model: b.model, bars: b.bars, ...(b.placeholder ? { placeholder: true } : { lufs: b.I }), nudgeDb: +b.nudgeDb.toFixed(2) })) },
   timeline: segs.map((s) => {
     const m = S.model(s.model);
