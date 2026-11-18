@@ -15,6 +15,9 @@ import { RunList } from './components/RunList'
 import { Dialogs } from './components/Dialogs'
 import './App.css'
 
+// Flip to true to put the featured showcase band back on the gallery.
+const SHOW_EVOLVING_STAGE_4 = false
+
 function App() {
   const initialViewer = parseViewerSearch(window.location.search, runs)
   const [selectedRun, setSelectedRun] = useState<RunEntry | null>(
@@ -201,16 +204,18 @@ function App() {
         <ToyKeyboard overlayOpen={overlayOpen} />
       </header>
 
-      <section className="showcase-band" aria-labelledby="showcase-heading">
-        <div className="showcase-copy">
-          <span className="showcase-flag">Featured showcase</span>
-          <h2 id="showcase-heading">The evolving Stage 4</h2>
-          <p>Edited by Stephen, starting from the Fable 5 run.</p>
-        </div>
-        <button type="button" className="open-preview showcase-play" onClick={openShowcase}>
-          <span>Play the showcase</span> <PlayIcon />
-        </button>
-      </section>
+      {SHOW_EVOLVING_STAGE_4 && (
+        <section className="showcase-band" aria-labelledby="showcase-heading">
+          <div className="showcase-copy">
+            <span className="showcase-flag">Featured showcase</span>
+            <h2 id="showcase-heading">The evolving Stage 4</h2>
+            <p>Edited by Stephen, starting from the Fable 5 run.</p>
+          </div>
+          <button type="button" className="open-preview showcase-play" onClick={openShowcase}>
+            <span>Play the showcase</span> <PlayIcon />
+          </button>
+        </section>
+      )}
 
       <figure className="film-band">
         <div className="film-frame">
