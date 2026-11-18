@@ -18,15 +18,36 @@
         "generatedSources": { "type": "array" },
         "sampleSources": {
           "type": "array",
+          "description": "Every source of recorded audio. Under protocol 3 the only source is the sample pack: copy the entry for each pack source you use from inputs/samples/sample-sources.json, unchanged.",
           "items": {
             "type": "object",
             "required": ["name", "source", "license"],
             "properties": {
+              "id": { "type": "string", "description": "Protocol 3: the pack source id, exactly as in inputs/samples/sample-sources.json." },
               "name": { "type": "string", "minLength": 1 },
               "source": { "type": "string", "minLength": 1 },
               "license": { "type": "string", "minLength": 1 },
+              "attribution": { "type": "string" },
               "files": { "type": "array", "items": { "type": "string" } },
               "notes": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "files": {
+          "type": "array",
+          "description": "Protocol 3: one entry for EVERY audio file bundled in the artifact (any audio under the candidate tree or its build, whatever its extension). The seal fails on an undeclared audio file, on a pack-derived file that does not match the recording it names, and on a 'generated' file that is really a pack recording.",
+          "items": {
+            "type": "object",
+            "required": ["path", "origin"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1, "description": "The bundled file, relative to the candidate root (e.g. public/samples/grand/A4-v7.ogg)." },
+              "origin": { "enum": ["pack", "generated"], "description": "pack: cut from a recording in inputs/samples/. generated: produced by your own code." },
+              "packFile": { "type": "string", "description": "origin pack: the recording it was cut from, relative to inputs/samples/ (e.g. grand/salamander-grand-v3/Samples/A4v7.flac)." },
+              "processing": { "type": "string", "description": "origin pack: what was done to the recording (trim, fade, gain, channel mix, resample, encode)." },
+              "verifiable": { "type": "boolean", "description": "origin pack: false only if the file was pitch-shifted, time-stretched, or layered, so it is no longer a cut of one recording. Needs a reason." },
+              "reason": { "type": "string" },
+              "description": { "type": "string", "description": "origin generated: what generates it (the script, or the synthesis)." }
             },
             "additionalProperties": true
           }

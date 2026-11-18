@@ -1,0 +1,29 @@
+# Codex profile for StageBench implementation agents.
+#
+# Load it with `scripts/bench-candidate-codex` (or `codex -p stagebench-candidate`
+# after that script has installed this file into $CODEX_HOME). Do not pass
+# `--sandbox`: that flag switches Codex back to the legacy sandbox, which
+# allows reading the whole disk.
+#
+# The profile writes the session workspace and denies reads everywhere else,
+# except a small toolchain allowlist so `node` and `pnpm` still run.
+# `scripts/bench-candidate-codex` also disables MCP servers, which execute
+# outside the sandbox.
+
+default_permissions = "candidate-isolated"
+
+[permissions.candidate-isolated]
+description = "StageBench candidate: write the workspace, deny reads elsewhere."
+extends = ":workspace"
+
+[permissions.candidate-isolated.filesystem]
+":root" = "deny"
+":minimal" = "read"
+"/opt/homebrew" = "read"
+"/usr/local" = "read"
+"~/.local" = "read"
+"~/Library/pnpm" = "read"
+"~/Library/Caches/ms-playwright" = "read"
+
+[permissions.candidate-isolated.network]
+enabled = false

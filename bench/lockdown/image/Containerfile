@@ -1,0 +1,93 @@
+# Stagebench lockdown images. One file, two targets (and one build stage):
+#
+#   gateway    the egress gateway (bench/lockdown/image/gateway.mjs) — the only
+#              container with a route to the internet.
+#   mirror     build stage only: downloads the offline npm mirror named by
+#              npm-mirror.lock.json and verifies every tarball's sha512.
+#   candidate  the box a candidate agent, its tools, its MCP servers, its
+#              subprocesses, the evaluator, canonical capture, and the
+#              seal/score gates all run in. It carries the mirror and Chromium,
+#              so nothing has to be fetched once a run starts.
+#
+# Build both with `pnpm bench lockdown-setup`. Tags are content-addressed from
+# this directory, so an image digest in a run record names an exact toolchain.
+ARG NODE_IMAGE=docker.io/library/node:24-bookworm-slim
+
+# ---------------------------------------------------------------------------
+FROM ${NODE_IMAGE} AS gateway
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
+COPY gateway.mjs /opt/stagebench/gateway.mjs
+RUN mkdir -p /var/log/gateway && chown node:node /var/log/gateway
+USER node
+EXPOSE 3128 4873
+ENTRYPOINT ["node", "/opt/stagebench/gateway.mjs"]
+
+# ---------------------------------------------------------------------------
+# The only step in the whole protocol that reads the npm registry, and it reads
+# exactly the tarballs the lock names. A mismatch fails the build.
+FROM ${NODE_IMAGE} AS mirror
+COPY npm-mirror.mjs npm-mirror.lock.json /build/
+RUN node /build/npm-mirror.mjs build --lock /build/npm-mirror.lock.json --out /opt/stagebench/npm-mirror \
+  && node /build/npm-mirror.mjs verify --lock /build/npm-mirror.lock.json --root /opt/stagebench/npm-mirror
+
+# ---------------------------------------------------------------------------
+FROM ${NODE_IMAGE} AS candidate
+# The starter pins this pnpm, so no candidate ever needs to fetch another.
+ARG PNPM_VERSION=11.7.0
+ARG PLAYWRIGHT_VERSION=1.64.1
+ARG CODEX_VERSION=0.169.0
+ARG CLAUDE_CODE_VERSION=2.1.326
+# Extra harness CLIs, space-separated npm specs (e.g. "opencode-ai@1.19.6").
+ARG EXTRA_NPM_GLOBALS=""
+
+# The same userland for every harness: what a candidate can shell out to is
+# part of the unit under test, so it is pinned here rather than inherited from
+# whichever machine the operator happens to use.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates curl git ripgrep jq less procps python3 unzip xz-utils file patch \
+    ffmpeg sox \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false
+
+RUN npm install -g \
+    pnpm@${PNPM_VERSION} \
+    playwright@${PLAYWRIGHT_VERSION} \
+    @openai/codex@${CODEX_VERSION} \
+    @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+    ${EXTRA_NPM_GLOBALS} \
+  && npm cache clean --force
+
+# Chromium plus its system libraries and fonts, for the one Playwright version
+# the offline mirror carries. There is no browser download at run time.
+RUN playwright install --with-deps chromium \
+  && chmod -R a+rX /opt/ms-playwright \
+  && rm -rf /var/lib/apt/lists/*
+
+# uid 1000, non-root, no sudo. /workspace and the home directory exist with the
+# right owner so fresh volumes mounted over them inherit it.
+RUN usermod -l candidate -d /home/candidate -m node \
+  && groupmod -n candidate node \
+  && mkdir -p /workspace/candidate /workspace/inputs /srv/stagebench /gate \
+  && chown -R candidate:candidate /workspace /home/candidate /gate
+
+# The offline npm mirror and the loopback registry that serves it.
+COPY --from=mirror /opt/stagebench/npm-mirror /opt/stagebench/npm-mirror
+COPY npm-mirror.mjs /opt/stagebench/npm-mirror.mjs
+COPY entrypoint.sh /opt/stagebench/entrypoint.sh
+RUN chmod 0755 /opt/stagebench/entrypoint.sh && chmod -R a+rX /opt/stagebench
+
+USER candidate
+ENV HOME=/home/candidate \
+    NPM_CONFIG_PREFIX=/home/candidate/.npm-global \
+    PNPM_HOME=/home/candidate/.local/share/pnpm \
+    PATH=/home/candidate/.npm-global/bin:/home/candidate/.local/share/pnpm:/home/candidate/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WORKDIR /workspace
+ENTRYPOINT ["/opt/stagebench/entrypoint.sh"]
+CMD ["bash"]

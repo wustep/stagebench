@@ -101,14 +101,14 @@ function implementationSection(details) {
 // A criterion is either judged (0-4) or computed from reported measurements.
 // Show the measurements inline so a reader can re-derive the score.
 function criterionValue(criterion) {
-  if (criterion.scoring !== 'computed') return `${criterion.rating}/4`
+  if (criterion.scoring !== 'computed' && criterion.scoring !== 'harness') return `${criterion.rating}/4`
   return `<ul class="measurements">${criterion.measurements.map((measurement) => `<li><code>${escapeHtml(measurement.id)}</code> <span>${escapeHtml(String(measurement.value ?? '—'))}</span>${measurement.score === null ? '' : ` <b>${floorScore(measurement.score)}</b>`}</li>`).join('')}</ul>`
 }
 
 function criterionRows(category) {
   return category.criteria.map((criterion) => `
     <tr>
-      <td><strong>${escapeHtml(criterion.label)}</strong>${criterion.scoring === 'computed' ? ' <span class="pill-computed">computed</span>' : ''}</td>
+      <td><strong>${escapeHtml(criterion.label)}</strong>${criterion.scoring === 'computed' ? ' <span class="pill-computed">computed</span>' : criterion.scoring === 'harness' ? ' <span class="pill-computed">harness-measured</span>' : ''}</td>
       <td>${criterionValue(criterion)}</td>
       <td>${floorScore(criterion.score)}</td>
       <td><ul>${criterion.evidence.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></td>

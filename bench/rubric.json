@@ -1,10 +1,15 @@
 {
-  "version": "2.0.0",
+  "version": "3.0.0",
   "title": "Stagebench Nord Stage 4 evaluation rubric",
+  "supersedes": "2.0.0",
+  "changes": "Rubric 3.0.0: sound is scored from measurements the harness takes at seal (fixed test notes played over Web MIDI into the sealed build, rendered and measured), not from a grader saying what it heard; and every sound criterion is reachable from the shared sample pack plus synthesis (a one-dynamic tine piano, a synthesized tonewheel or combo organ, a two-registration pipe organ). Runs created under rubric 2.0.0 are scored by 2.0.0.",
   "evaluator": {
     "model": "claude-opus-5",
     "label": "Claude Opus 5",
-    "policy": "Every assessment is produced by a fresh agent running this model, working only inside its isolated evaluator workspace. An assessment's evaluatorModel must equal this value; bench score refuses to register anything else unless run with --allow-evaluator-model."
+    "pinnedId": "claude-opus-5",
+    "snapshot": null,
+    "snapshotNote": "Anthropic publishes no dated snapshot of Claude Opus 5: its full model id is claude-opus-5 itself (the provider's model list, read 2026-11-17). So the pin is that exact id. For a boxed evaluation the gateway records, for every request, the model id the provider says served it and the provider's request id; registration writes them to the ledger and flags drift if a request for the pinned model was served as any other id.",
+    "policy": "Every assessment is produced by a fresh agent running this model, working only inside its isolated evaluator workspace. An assessment's evaluatorModel must equal this value; bench score refuses to register anything else unless run with --allow-evaluator-model. The model id the provider actually returned is recorded with each evaluation and checked against pinnedId."
   },
   "ratingScale": {
     "minimum": 0,
@@ -16,7 +21,9 @@
       "3": "Every specified measurement inside tolerance and every required element present, with detail simplified in ways a knowledgeable player would notice.",
       "4": "Matches the reference: measurements inside tolerance, nothing missing and nothing forbidden present, and detail a knowledgeable player would not distinguish from the hardware."
     },
-    "note": "Rate against the measurement where one is specified, not against impression. Criteria marked scoring:\"computed\" are not rated at all \u2014 report their measurements and the score is derived, so no judgment enters where the spec already gives ground truth."
+    "note": "Rate against the measurement where one is specified, not against impression. Criteria marked scoring:\"computed\" are not rated at all — report their measurements and the score is derived, so no judgment enters where the spec already gives ground truth. Criteria marked scoring:\"harness\" are not rated or measured by the evaluator at all: the harness measured them at seal and the score is derived from its record.",
+    "soundReachability": "For sound, \"the hardware\" in anchors 3 and 4 means the best that can be made from the shared sample pack and synthesis, not the Nord's own sample library, which no candidate has. The pack has an eight-layer Salamander grand, a two-dynamic Kawai upright, a Wurlitzer EP200 (four dynamics), a Pianet T (two), a CP80 (four), a Rhodes Mark I recorded at one dynamic on fifteen roots, and a pipe organ in two registrations (Loud and Quiet). It has no tonewheel, combo-organ, or synthesizer recordings. A rating never requires a recording the pack does not contain: a one-dynamic Rhodes is not marked down for missing velocity layers (credit velocity built from gain and filtering), and a synthesized B3, Vox, or Farfisa can reach 4.",
+    "listening": "An evaluator cannot listen. A judged sound criterion's evidence is a measurement of rendered audio (an OfflineAudioContext or analyser render, an ffmpeg analysis of a recording of the build) or a reading of the source, never \"sounds like\". The harness audio record in artifact/evidence/ may be cited."
   },
   "runAxis": {
     "weight": 40,
@@ -94,7 +101,7 @@
               "id": "sectionFractionMaxDeviation",
               "label": "Worst of the six section-fraction deviations",
               "kind": "band",
-              "target": 0.0,
+              "target": 0,
               "tolerance": 0.012,
               "decay": 3,
               "weight": 20
@@ -105,7 +112,7 @@
           "id": "hardwareInventory",
           "label": "Hardware inventory & placement",
           "weight": 24,
-          "guidance": "Two separate failures, measured separately \u2014 do not charge one defect twice. requiredLandmarksPresent counts the sectionLandmarks entries that are RENDERED in their own section, whatever their z-order and whether a pointer can reach them; that is inventory and placement. controlsReachable counts the controls a pointer can actually operate. A rendered but buried control is present AND unreachable. Where sectionLandmarks and the variant reference photograph disagree, score against the photograph and report the disagreement. Reachability is measured, not inferred. For every control, hit-test a 5x5 grid of points across its bounding box with document.elementFromPoint at 1440x900 with the page unscrolled; the control counts as reachable only if at least one grid point resolves to that control or a descendant of it. Do NOT use a framework click helper: Playwright's click() programmatically scrolls an overflow:hidden container and reports success for a control the user can never reach. forbiddenPresent is counted with the detection rules in specs/nord-stage-4.visual.json under forbiddenDetection: apply each rule literally against the rendered DOM, and count a descriptor once per section that satisfies it, never by eye and never once per element. Leave forbiddenPresent null if a rule cannot be evaluated — it was the one number in this axis still resting on judgment, and counts of 0-3 across the field were not reproducible. This criterion is COMPUTED from your measurements, not rated.",
+          "guidance": "Two separate failures, measured separately — do not charge one defect twice. requiredLandmarksPresent counts the sectionLandmarks entries that are RENDERED in their own section, whatever their z-order and whether a pointer can reach them; that is inventory and placement. controlsReachable counts the controls a pointer can actually operate. A rendered but buried control is present AND unreachable. Where sectionLandmarks and the variant reference photograph disagree, score against the photograph and report the disagreement. Reachability is measured, not inferred. For every control, hit-test a 5x5 grid of points across its bounding box with document.elementFromPoint at 1440x900 with the page unscrolled; the control counts as reachable only if at least one grid point resolves to that control or a descendant of it. Do NOT use a framework click helper: Playwright's click() programmatically scrolls an overflow:hidden container and reports success for a control the user can never reach. forbiddenPresent is counted with the detection rules in specs/nord-stage-4.visual.json under forbiddenDetection: apply each rule literally against the rendered DOM, and count a descriptor once per section that satisfies it, never by eye and never once per element. Leave forbiddenPresent null if a rule cannot be evaluated — it was the one number in this axis still resting on judgment, and counts of 0-3 across the field were not reproducible. This criterion is COMPUTED from your measurements, not rated.",
           "scoring": "computed",
           "measurements": [
             {
@@ -121,7 +128,7 @@
               "kind": "ratio",
               "denominator": "controlsTotal",
               "weight": 60,
-              "curve": 2.0
+              "curve": 2
             },
             {
               "id": "forbiddenPresent",
@@ -145,7 +152,7 @@
               "kind": "ratio",
               "denominator": "keyCount",
               "weight": 46,
-              "curve": 2.0
+              "curve": 2
             },
             {
               "id": "keyCount",
@@ -190,7 +197,7 @@
           "label": "Chassis & plate colour fidelity",
           "weight": 8,
           "scoring": "computed",
-          "guidance": "Sample the rendered page and compare against specs referenceColors. Report, for each of the five reference colours, whether the nearest rendered surface is within a CIE76 deltaE of 12 \u2014 count how many of the five match.",
+          "guidance": "Sample the rendered page and compare against specs referenceColors. Report, for each of the five reference colours, whether the nearest rendered surface is within a CIE76 deltaE of 12 — count how many of the five match.",
           "measurements": [
             {
               "id": "referenceColorsMatched",
@@ -206,7 +213,7 @@
           "label": "Materials, legends & displays",
           "weight": 8,
           "scoring": "judged",
-          "guidance": "Knob/fader/drawbar caps, LED ladders, silkscreen legends legible at rendered size, OLED treatment, and surface materials. Judged \u2014 these are not reducible to a measurement."
+          "guidance": "Knob/fader/drawbar caps, LED ladders, silkscreen legends legible at rendered size, OLED treatment, and surface materials. Judged — these are not reducible to a measurement."
         },
         {
           "id": "panelState",
@@ -251,16 +258,64 @@
           "criteria": [
             {
               "id": "pianoVoice",
-              "label": "Piano voice",
+              "label": "Piano voice (measured)",
               "weight": 60,
-              "guidance": "One dependable, musical basic piano voice across the keybed; level, decay and release behave.",
-              "scoring": "judged"
+              "scoring": "harness",
+              "source": "audio",
+              "guidance": "Measured by the harness, not rated: the instrument as it loads, played over Web MIDI. Notes across the keybed sound; the mid-range is in tune (full credit within 10 cents, which is about the smallest mistuning a listener hears on a complex tone and inside a real piano's mid-range stretch; nothing at 50, a quarter tone; the classic 44.1/48 kHz resampling bug is 147); velocity raises the level at every step and spans at least 15 dB; releases end cleanly; nothing clicks. The fixed test plan (stagebench-audio-1) is in docs/PROTOCOL-3.md and the record is artifact/evidence/stage<N>-audio.json.",
+              "measurements": [
+                {
+                  "id": "notesSounding",
+                  "label": "Single test notes that sounded",
+                  "kind": "ratio",
+                  "denominator": "notesTotal",
+                  "curve": 2,
+                  "weight": 25
+                },
+                {
+                  "id": "tuningErrorCents",
+                  "label": "Mean tuning error of the five mid-range test notes (cents, each capped at 100)",
+                  "kind": "atMost",
+                  "target": 10,
+                  "zero": 50,
+                  "weight": 25
+                },
+                {
+                  "id": "velocityRisingSteps",
+                  "label": "Velocity steps (16→127, eight velocities) that raise the level by at least 0.5 dB",
+                  "kind": "ratio",
+                  "denominator": "velocityStepsTotal",
+                  "weight": 15
+                },
+                {
+                  "id": "velocityRangeDb",
+                  "label": "Level range from velocity 16 to 127 (dB)",
+                  "kind": "atLeast",
+                  "target": 15,
+                  "zero": 3,
+                  "weight": 15
+                },
+                {
+                  "id": "releasesClean",
+                  "label": "Released notes that fall 30 dB within the tail with no click at note-off",
+                  "kind": "ratio",
+                  "denominator": "releasesTotal",
+                  "weight": 10
+                },
+                {
+                  "id": "clicks",
+                  "label": "Clicks (discontinuities) while notes hold, release, and ring out",
+                  "kind": "penaltyCount",
+                  "penaltyEach": 20,
+                  "weight": 10
+                }
+              ]
             },
             {
               "id": "sourceHonesty",
               "label": "Declared source honesty",
               "weight": 40,
-              "guidance": "IMPLEMENTATION_DETAILS.json declares what actually produces sound. Verify by exercising the build, not by reading the declaration.",
+              "guidance": "IMPLEMENTATION_DETAILS.json declares what actually produces sound. Verify by exercising the build and reading the source, not by reading the declaration; the seal's sample check (inputs/verification.json, sampleProvenance) says which bundled files are cut from which pack recording.",
               "scoring": "judged"
             }
           ]
@@ -274,15 +329,32 @@
               "id": "inputCoverage",
               "label": "Input coverage",
               "weight": 40,
-              "guidance": "Pointer, computer keyboard and Web MIDI all reach one note lifecycle. Exercise each.",
+              "guidance": "Pointer, computer keyboard and Web MIDI all reach one note lifecycle. Exercise each. The harness has already confirmed whether the build listens for Web MIDI on load and sounds from it (audio record: environment.midi, notesSounding); exercise pointer and keyboard yourself.",
               "scoring": "judged"
             },
             {
               "id": "voiceLifecycle",
               "label": "Voice lifecycle",
-              "weight": 35,
-              "guidance": "Velocity mapping, sustain, deterministic voice stealing, all-notes-off on blur/disconnect/unmount.",
-              "scoring": "judged"
+              "weight": 20,
+              "scoring": "judged",
+              "guidance": "Deterministic voice stealing, and all-notes-off on blur, MIDI disconnect, and unmount. Velocity and sustain are measured by the harness (sound.pianoVoice, playability.sustainPedal); do not rate them again here."
+            },
+            {
+              "id": "sustainPedal",
+              "label": "Sustain pedal (measured)",
+              "weight": 15,
+              "scoring": "harness",
+              "source": "audio",
+              "guidance": "Measured by the harness, not rated: with CC64 down, a note released after half a second is still sounding half a second later (no more than 20 dB down; a damped note falls 30 dB or more); after CC64 up it falls at least 20 dB within a second. The fixed test plan (stagebench-audio-1) is in docs/PROTOCOL-3.md and the record is artifact/evidence/stage<N>-audio.json.",
+              "measurements": [
+                {
+                  "id": "sustainChecksPassed",
+                  "label": "Sustain holds a released note, and lets it go on pedal-up",
+                  "kind": "ratio",
+                  "denominator": "sustainChecksTotal",
+                  "weight": 100
+                }
+              ]
             },
             {
               "id": "controlBoundary",
@@ -334,23 +406,93 @@
             {
               "id": "instrumentBreadth",
               "label": "Instrument breadth & character",
-              "weight": 35,
-              "guidance": "Grand, upright, electric, clavinet and digital are audibly distinct, not one voice relabelled.",
+              "weight": 30,
+              "guidance": "Grand, Upright, Electric, Clav, Digital and Misc are distinct instruments, not one voice relabelled; measure it (spectra and envelopes of the same note on each type). Judge each against what the pack can supply: Grand from up to eight Salamander layers; Upright from the Kawai's soft and loud layers; Electric from a tine model built on the one-dynamic, fifteen-root Rhodes, or a reed or electric-grand model from the Wurlitzer, Pianet T, or CP80. A tine piano made from the Rhodes is not marked down for having no velocity layers the pack never had: credit velocity response made with gain and filtering. Clav, Digital and Misc may be honest synthesis.",
               "scoring": "judged"
             },
             {
               "id": "effectAudibility",
               "label": "Effect audibility & correctness",
-              "weight": 35,
-              "guidance": "Each effect is individually audible and behaves like its namesake. A/B each one.",
+              "weight": 30,
+              "guidance": "Each effect is individually audible and behaves like its namesake. Show it with a measurement: the rendered signal with the effect on against bypassed (modulation sidebands, delay taps at the set time, reverb decay, compression of peaks), not a description of what it sounds like.",
               "scoring": "judged"
             },
             {
               "id": "signalGraph",
-              "label": "Signal graph & gain staging",
-              "weight": 30,
-              "guidance": "One shared context, per-layer buses, sane gain staging, no clipping under load.",
-              "scoring": "judged"
+              "label": "Signal graph & routing",
+              "weight": 15,
+              "scoring": "judged",
+              "guidance": "Per-layer buses, effects in the documented order, master gain and limiter before one destination. Read the source and probe the graph. Clipping and extra audio contexts are measured by the harness (sound.measuredVoice); do not rate them again here."
+            },
+            {
+              "id": "measuredVoice",
+              "label": "Default voice & output (measured)",
+              "weight": 25,
+              "scoring": "harness",
+              "source": "audio",
+              "guidance": "Measured by the harness, not rated: the instrument as it loads (in this phase, the piano section) through the same test notes as Phase 1, plus the output stage: no clipping under a ten-note fortissimo chord, and only one audio context making sound. The fixed test plan (stagebench-audio-1) is in docs/PROTOCOL-3.md and the record is artifact/evidence/stage<N>-audio.json.",
+              "measurements": [
+                {
+                  "id": "notesSounding",
+                  "label": "Single test notes that sounded",
+                  "kind": "ratio",
+                  "denominator": "notesTotal",
+                  "curve": 2,
+                  "weight": 20
+                },
+                {
+                  "id": "tuningErrorCents",
+                  "label": "Mean tuning error of the five mid-range test notes (cents, each capped at 100)",
+                  "kind": "atMost",
+                  "target": 10,
+                  "zero": 50,
+                  "weight": 20
+                },
+                {
+                  "id": "velocityRisingSteps",
+                  "label": "Velocity steps (16→127, eight velocities) that raise the level by at least 0.5 dB",
+                  "kind": "ratio",
+                  "denominator": "velocityStepsTotal",
+                  "weight": 10
+                },
+                {
+                  "id": "velocityRangeDb",
+                  "label": "Level range from velocity 16 to 127 (dB)",
+                  "kind": "atLeast",
+                  "target": 15,
+                  "zero": 3,
+                  "weight": 10
+                },
+                {
+                  "id": "releasesClean",
+                  "label": "Released notes that fall 30 dB within the tail with no click at note-off",
+                  "kind": "ratio",
+                  "denominator": "releasesTotal",
+                  "weight": 10
+                },
+                {
+                  "id": "clicks",
+                  "label": "Clicks (discontinuities) while notes hold, release, and ring out",
+                  "kind": "penaltyCount",
+                  "penaltyEach": 20,
+                  "weight": 10
+                },
+                {
+                  "id": "clippedMs",
+                  "label": "Clipped output (ms at full scale, all tests)",
+                  "kind": "atMost",
+                  "target": 0,
+                  "zero": 50,
+                  "weight": 10
+                },
+                {
+                  "id": "extraAudioContexts",
+                  "label": "Audio contexts producing sound beyond the one allowed",
+                  "kind": "penaltyCount",
+                  "penaltyEach": 50,
+                  "weight": 10
+                }
+              ]
             }
           ]
         },
@@ -371,7 +513,7 @@
               "label": "Detailed piano controls",
               "weight": 30,
               "scoring": "judged",
-              "guidance": "String resonance, pedal noise, dynamics, timbre and soft release measurably change rendered signal."
+              "guidance": "KB Touch, Dyn Comp, Timbre, Unison, Soft Release and String Res each measurably change the rendered signal (specs/nord-stage-4.piano.json). Pedal noise is excluded by that spec and is not rated."
             },
             {
               "id": "inputReliability",
@@ -392,7 +534,7 @@
               "label": "Required piano instruments",
               "weight": 40,
               "scoring": "judged",
-              "guidance": "Every instrument the Phase 2 contract requires is present and selectable, and actually loads."
+              "guidance": "Every instrument the Phase 2 contract requires is present, selectable, and actually loads: Grand, Upright and Electric from the pack (any of its sources for that type), Clav, Digital and Misc as recordings or synthesis. One model per type is the requirement; more is optional and not required for a 4."
             },
             {
               "id": "effectUnitCoverage",
@@ -424,7 +566,7 @@
               "id": "distinctEngines",
               "label": "Distinct engine character",
               "weight": 40,
-              "guidance": "Organ, Piano and Synth are genuinely different engines, not one engine with presets.",
+              "guidance": "Organ, Piano and Synth are genuinely different engines, not one engine with presets; show it in the source and in rendered spectra and envelopes. The pack has no tonewheel, combo-organ or synthesizer recordings, so B3, Vox, Farfisa and the synth are synthesized, and a well-made synthesis is creditable in full. The pack's pipe organ (Loud and Quiet registrations) may voice the Pipe models alone, with synthesis, or not at all.",
               "scoring": "judged"
             },
             {
@@ -436,10 +578,59 @@
             },
             {
               "id": "qualityUnderLoad",
-              "label": "Musical quality under load",
+              "label": "Musical quality under load (measured)",
               "weight": 25,
-              "guidance": "Latency, polyphony and stability while actually playing.",
-              "scoring": "judged"
+              "scoring": "harness",
+              "source": "audio",
+              "guidance": "Measured by the harness, not rated: the instrument as it loads. Note-on to sound on the audio clock (full credit within 20 ms, nothing at 120), every tone of a ten-note chord present, no clipping, no clicks, notes sounding and in tune. The fixed test plan (stagebench-audio-1) is in docs/PROTOCOL-3.md and the record is artifact/evidence/stage<N>-audio.json.",
+              "measurements": [
+                {
+                  "id": "latencyMs",
+                  "label": "Median note-on to sound, on the audio clock (ms)",
+                  "kind": "atMost",
+                  "target": 20,
+                  "zero": 120,
+                  "weight": 25
+                },
+                {
+                  "id": "chordTonesHeard",
+                  "label": "Tones of a ten-note chord present in the render",
+                  "kind": "ratio",
+                  "denominator": "chordTones",
+                  "weight": 25
+                },
+                {
+                  "id": "clippedMs",
+                  "label": "Clipped output (ms at full scale, all tests)",
+                  "kind": "atMost",
+                  "target": 0,
+                  "zero": 50,
+                  "weight": 15
+                },
+                {
+                  "id": "clicks",
+                  "label": "Clicks (discontinuities) while notes hold, release, and ring out",
+                  "kind": "penaltyCount",
+                  "penaltyEach": 20,
+                  "weight": 15
+                },
+                {
+                  "id": "notesSounding",
+                  "label": "Single test notes that sounded",
+                  "kind": "ratio",
+                  "denominator": "notesTotal",
+                  "curve": 2,
+                  "weight": 10
+                },
+                {
+                  "id": "tuningErrorCents",
+                  "label": "Mean tuning error of the five mid-range test notes (cents, each capped at 100)",
+                  "kind": "atMost",
+                  "target": 10,
+                  "zero": 50,
+                  "weight": 10
+                }
+              ]
             }
           ]
         },
@@ -480,14 +671,14 @@
               "id": "organSystem",
               "label": "Organ system",
               "weight": 30,
-              "guidance": "Drawbars, models, percussion, rotary, vibrato.",
+              "guidance": "Drawbars, models, percussion, key click, rotary, vibrato/chorus (specs/nord-stage-4.organ.json). B3, Vox and Farfisa are judged as synthesis (there is nothing in the pack to sample them from): drawbar partials, percussion, key click, scanner vibrato and chorus, rotary. The Pipe drawbars may be realized by mixing and filtering the pack's two registrations, by synthesized ranks, or both; a pack-built pipe organ is not marked down for lacking per-rank recordings the pack does not have.",
               "scoring": "judged"
             },
             {
               "id": "synthSystem",
               "label": "Synth system",
               "weight": 30,
-              "guidance": "Oscillators, filter, envelopes, LFO, unison, arpeggiator.",
+              "guidance": "Oscillators, filter, envelopes, LFO, unison, arpeggiator. All synthesis: the pack has no synthesizer recordings, and a sampled oscillator mode is optional.",
               "scoring": "judged"
             },
             {
@@ -511,6 +702,7 @@
   },
   "scoringKinds": {
     "judged": "0-4 rating against ratingScale.anchors, with evidence.",
-    "computed": "Derived from reported measurements. band: full credit within tolerance of target, decaying linearly to zero at decay x tolerance. range: full credit inside [minimum,maximum], decaying by the same rule using the half-width. ratio: (value/denominator)^curve as a percentage (curve defaults to 1). penaltyCount: 100 minus penaltyEach per occurrence, floored at 0."
+    "computed": "Derived from reported measurements. band: full credit within tolerance of target, decaying linearly to zero at decay x tolerance. range: full credit inside [minimum,maximum], decaying by the same rule using the half-width. ratio: (value/denominator)^curve as a percentage (curve defaults to 1). penaltyCount: 100 minus penaltyEach per occurrence, floored at 0. atMost: full credit at or below target, falling linearly to zero at zero. atLeast: full credit at or above target, falling linearly to zero at zero.",
+    "harness": "Derived from a record the harness wrote at seal, with the same measurement kinds. The evaluator does not fill these in. A measurement the harness could not take scores zero (it is never dropped and re-normalised), and a record that failed outright (no MIDI listener, no sound) scores zero throughout."
   }
 }

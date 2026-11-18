@@ -20,7 +20,7 @@ Build the entire visible Nord Stage 4 for the assigned variant. Two things are f
 
 **Basic piano (piano spec, Phase 1 subset):**
 
-One piano-like voice — a declared bundled sample set or honestly-described synthesis — fed by one deterministic note lifecycle:
+One piano-like voice — a declared bundled sample set cut from the recordings in `inputs/samples/`, or honestly-described synthesis — fed by one deterministic note lifecycle:
 
 - pointer down/up/cancel and independent multi-touch;
 - mapped computer keys with repeat suppression and blur cleanup;
@@ -37,7 +37,7 @@ Every visible physical input has a stable ID and accessible name, responds to po
 
 ## Order of work
 
-1. Write `IMPLEMENTATION_PLAN.md` citing both assigned spec filenames and copying the Phase 1 `Hard gates` as a checklist.
+1. Write `IMPLEMENTATION_PLAN.md` citing both assigned spec filenames and pasting the Phase 1 `Hard gates` checklist from `inputs/hard-gates.md`, word for word.
 2. Normalized typed hardware/key data with stable IDs; chassis, sections, exact keybed.
 3. Section controls with accessible decorative interaction.
 4. Injectable audio/MIDI/timing boundaries, the note lifecycle, then the piano voice.
@@ -45,4 +45,4 @@ Every visible physical input has a stable ID and accessible name, responds to po
 
 ## Evidence
 
-Maintain every Phase 1 feature ID from `TASK.md` in `tests/feature-matrix.json`. Use the parent capture harness for `stage1-desktop.png`, `stage1-narrow.png`, and `stage1-capture.json`; write `stage1-visual-audit.md` with measured bounds, ratios, key counts, corrections, and known deviations. Record the true audio source in `IMPLEMENTATION_DETAILS.json`. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before verification.
+Maintain every Phase 1 feature ID from `TASK.md` in `tests/feature-matrix.json`, each mapped to a test that `pnpm test` actually runs. Use the capture harness in `inputs/harness/` for `evidence/stage1-desktop.png`, `evidence/stage1-narrow.png`, and `evidence/stage1-capture.json`; write `evidence/stage1-visual-audit.md` with measured bounds, ratios, key counts, corrections, and known deviations. Record the true audio source in `IMPLEMENTATION_DETAILS.json`, declaring every bundled audio file. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` before verification.

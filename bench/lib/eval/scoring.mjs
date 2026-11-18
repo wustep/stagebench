@@ -52,10 +52,14 @@ export function validateRubric(rubric) {
   return rubric
 }
 
-const MEASUREMENT_KINDS = new Set(['band', 'range', 'ratio', 'penaltyCount'])
+const MEASUREMENT_KINDS = new Set(['band', 'range', 'ratio', 'penaltyCount', 'atMost', 'atLeast'])
+// Where a harness criterion's numbers come from: a record the harness itself
+// wrote at seal, never anything the evaluator reports.
+export const HARNESS_SOURCES = { audio: 'the harness audio measurement (evidence/stage<N>-audio.json)' }
 
 function validateCriterionShape(criterion, where) {
-  if (criterion.scoring !== 'computed') return
+  if (criterion.scoring === 'harness') assert.ok(HARNESS_SOURCES[criterion.source], `${where} ${criterion.id} is a harness criterion with an unknown source ${criterion.source}`)
+  if (criterion.scoring !== 'computed' && criterion.scoring !== 'harness') return
   assert.ok(Array.isArray(criterion.measurements) && criterion.measurements.length, `${where} ${criterion.id} is computed and needs measurements`)
   assert.equal(sumWeight(criterion.measurements), 100, `${where} ${criterion.id} measurement weights must total 100`)
   for (const spec of criterion.measurements) {
@@ -63,7 +67,15 @@ function validateCriterionShape(criterion, where) {
     if (spec.kind === 'ratio') assert.ok(spec.denominator, `${where} ${criterion.id}.${spec.id} needs a denominator`)
     if (spec.kind === 'band') assert.equal(typeof spec.target, 'number', `${where} ${criterion.id}.${spec.id} needs a numeric target`)
     if (spec.kind === 'range') assert.ok(spec.maximum > spec.minimum, `${where} ${criterion.id}.${spec.id} needs maximum > minimum`)
+    if (spec.kind === 'atMost') assert.ok(spec.zero > spec.target, `${where} ${criterion.id}.${spec.id} needs zero > target`)
+    if (spec.kind === 'atLeast') assert.ok(spec.zero < spec.target, `${where} ${criterion.id}.${spec.id} needs zero < target`)
   }
+}
+
+// Harness criteria are scored from the harness's own record, so the evaluator
+// neither sees them in its template nor submits them.
+export function evaluatorCriteria(criteria) {
+  return criteria.filter((criterion) => criterion.scoring !== 'harness')
 }
 
 // The model an assessment must have been produced by. Recorded in the rubric
@@ -108,14 +120,14 @@ export function createAssessmentTemplate(rubric, runId, stageNumber, { includeRu
     summary: '',
     categories: stage.categories.map((category) => ({
       id: category.id,
-      criteria: category.criteria.map(blankCriterion),
+      criteria: evaluatorCriteria(category.criteria).map(blankCriterion),
     })),
     issues: [],
   }
   if (includeRunAxis && rubric.runAxis) {
     template[rubric.runAxis.category.id] = {
       scoredAgainst: `stage${stageNumber}`,
-      criteria: rubric.runAxis.category.criteria.map(blankCriterion),
+      criteria: evaluatorCriteria(rubric.runAxis.category.criteria).map(blankCriterion),
     }
   }
   return template
@@ -150,7 +162,33 @@ export function measurementScore(spec, values) {
     return clampScore(100 * (value / denominator) ** (spec.curve ?? 1))
   }
   if (spec.kind === 'penaltyCount') return clampScore(100 - value * (spec.penaltyEach ?? 25))
+  // Full credit at or below `target`, falling linearly to nothing at `zero`.
+  if (spec.kind === 'atMost') return value <= spec.target ? 100 : clampScore(100 * (spec.zero - value) / (spec.zero - spec.target))
+  // Full credit at or above `target`, falling linearly to nothing at `zero`.
+  if (spec.kind === 'atLeast') return value >= spec.target ? 100 : clampScore(100 * (value - spec.zero) / (spec.target - spec.zero))
   throw new Error(`Unknown measurement kind: ${spec.kind}`)
+}
+
+// A harness criterion, from the record the harness wrote at seal. Unlike a
+// computed criterion, nothing is re-normalised away: a measurement that could
+// not be taken scores zero, because the harness always tries to take it and
+// "could not" means the build gave it nothing to measure (no MIDI listener,
+// no sound, a note that never sounded). A record that failed outright scores
+// zero throughout, and says why.
+export function scoreHarnessCriterion(criterion, harness) {
+  const record = harness?.[criterion.source] ?? null
+  if (!record) throw new Error(`${criterion.id} is scored from ${HARNESS_SOURCES[criterion.source]}, and the sealed artifact has none. It is written at seal; a run sealed before it existed is scored under the rubric it was created with.`)
+  const measured = record.status === 'measured'
+  const values = measured ? (record.scores ?? {}) : {}
+  const measurements = criterion.measurements.map((spec) => {
+    const score = measured ? measurementScore(spec, values) : null
+    return { id: spec.id, label: spec.label, weight: spec.weight, value: values[spec.id] ?? null, ...(spec.kind === 'ratio' ? { of: values[spec.denominator] ?? null } : {}), score: round(score ?? 0), ...(score === null ? { missing: true } : {}) }
+  })
+  const score = round(measurements.reduce((total, entry) => total + (entry.score * entry.weight) / 100, 0))
+  const evidence = measured
+    ? measurements.map((entry) => `${entry.id} = ${entry.value === null ? 'not measurable' : `${entry.value}${entry.of !== undefined && entry.of !== null ? ` of ${entry.of}` : ''}`} → ${entry.score}${entry.missing ? ' (could not be measured: scored 0)' : ''}`)
+    : [`The harness measurement failed (${record.failure?.kind ?? 'unknown'}): ${record.failure?.detail ?? 'no detail'}. Every measurement scores 0.`]
+  return { score, measurements, evidence, plan: record.plan ?? null, status: record.status }
 }
 
 function scoreComputedCriterion(criterion, submitted) {
@@ -240,8 +278,10 @@ export function validateAssessment(rubric, assessment, options = {}) {
   return assessment
 }
 
-function validateCriteria(rubric, defined, submittedList, where) {
-  const submitted = indexById(submittedList, 'criterion')
+function validateCriteria(rubric, allDefined, submittedList, where) {
+  const defined = evaluatorCriteria(allDefined)
+  // A harness criterion the evaluator filled in anyway is ignored, not trusted.
+  const submitted = indexById((submittedList ?? []).filter((entry) => !allDefined.some((criterion) => criterion.id === entry.id && criterion.scoring === 'harness')), 'criterion')
   assert.equal(submitted.size, defined.length, `${where} must include every criterion`)
   for (const criterion of defined) {
     const entry = submitted.get(criterion.id)
@@ -268,10 +308,14 @@ function validateCriteria(rubric, defined, submittedList, where) {
 
 // Score one axis (a phase category, or the run-level panel axis) from its
 // definition plus what the evaluator submitted.
-function scoreAxis(rubric, defined, submittedList) {
+function scoreAxis(rubric, defined, submittedList, harness = null) {
   const submitted = indexById(submittedList, 'criterion')
   const criteria = defined.map((criterion) => {
     const entry = submitted.get(criterion.id)
+    if (criterion.scoring === 'harness') {
+      const { score, measurements, evidence, plan, status } = scoreHarnessCriterion(criterion, harness)
+      return { id: criterion.id, label: criterion.label, weight: criterion.weight, scoring: 'harness', source: criterion.source, score, measurements, evidence, plan, status }
+    }
     if (criterion.scoring === 'computed') {
       const { score, measurements } = scoreComputedCriterion(criterion, entry)
       return { id: criterion.id, label: criterion.label, weight: criterion.weight, scoring: 'computed', score, measurements, evidence: entry.evidence }
@@ -299,12 +343,12 @@ function evaluateHardGate(gate, criteria) {
   return { tripped, scoreCap: tripped.length ? gate.scoreCap : null }
 }
 
-export function scoreRunAxis(rubric, assessment) {
+export function scoreRunAxis(rubric, assessment, harness = null) {
   const runAxis = rubric.runAxis
   if (!runAxis) return null
   const block = assessment[runAxis.category.id]
   if (!block) return null
-  const { score, criteria } = scoreAxis(rubric, runAxis.category.criteria, block.criteria)
+  const { score, criteria } = scoreAxis(rubric, runAxis.category.criteria, block.criteria, harness)
   const { tripped, scoreCap } = evaluateHardGate(runAxis.hardGate, criteria)
   return {
     id: runAxis.category.id,
@@ -324,7 +368,7 @@ export function scoreAssessment(rubric, assessment, technicalChecks = [], option
   const submittedCategories = indexById(assessment.categories, 'category')
 
   const categories = stage.categories.map((category) => {
-    const { score, criteria } = scoreAxis(rubric, category.criteria, submittedCategories.get(category.id).criteria)
+    const { score, criteria } = scoreAxis(rubric, category.criteria, submittedCategories.get(category.id).criteria, options.harness ?? null)
     return {
       id: category.id,
       label: category.label,
@@ -362,7 +406,7 @@ export function scoreAssessment(rubric, assessment, technicalChecks = [], option
     score,
     rawScore,
     categories,
-    runAxis: scoreRunAxis(rubric, assessment),
+    runAxis: scoreRunAxis(rubric, assessment, options.harness ?? null),
     technicalGate: {
       passed: failedChecks.length === 0,
       scoreCap,
@@ -396,7 +440,7 @@ export function mergeAssessments(rubric, assessments, options = {}) {
   // Judged criteria median their ratings; computed criteria median each
   // reported measurement, so a panel damps measurement-method spread the same
   // way it damps judgment spread.
-  const mergeCriteria = (defined, pick) => defined.map((criterion) => {
+  const mergeCriteria = (defined, pick) => evaluatorCriteria(defined).map((criterion) => {
     const evidence = []
     const submitted = assessments.map((assessment) => {
       const entry = pick(assessment, criterion.id)

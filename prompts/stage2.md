@@ -12,7 +12,7 @@ Two sections come alive this phase: **Piano** and **Layer Effects**, exactly as 
 
 **Piano section (piano spec):**
 
-- Six selectable types with at least one model each. Grand, Upright, and Electric are bundled, recorded, redistributable sample sets with enough root notes and velocity layers to avoid obvious pitch-shifting; Clav, Digital, and Misc may be honest synthesis.
+- Six selectable types with at least one model each. Grand, Upright, and Electric are bundled, recorded, redistributable sample sets with enough root notes to avoid obvious pitch-shifting, and velocity layers where the pack has them (a source recorded at one dynamic, such as the Rhodes, takes its velocity response from gain and filtering); Clav, Digital, and Misc may be honest synthesis. The recordings come from the sample pack in `inputs/samples/` and nowhere else: they are raw, so choosing roots and dynamics, trimming, levelling, and encoding them for the browser is your work (read `inputs/samples/README.md` first).
 - Two layers with enable, focus, level, octave shift, SUSTPED/PSTICK toggles, and correct per-layer voice ownership.
 - KB Touch (3 curves), Dyn Comp (Off/1/2/3), Timbre (per type family), Unison (Off/1/2/3), Soft Release, String Res.
 - Sustain from UI, keyboard, and MIDI CC64; asset failure enters a labeled playable fallback.
@@ -27,7 +27,7 @@ Skip everything the specs list under `excluded` — those controls stay decorati
 
 ## Order of work
 
-1. Update `IMPLEMENTATION_PLAN.md` citing all three assigned spec filenames with the Phase 2 `Hard gates` checklist, sample provenance plan, and a graph diagram.
+1. Update `IMPLEMENTATION_PLAN.md` citing all three assigned spec filenames with the Phase 2 `Hard gates` checklist pasted from `inputs/hard-gates.md` word for word, a sample provenance plan, and a graph diagram.
 2. Refactor the Phase 1 voice into the layer/bus/master architecture without changing input behavior.
 3. Piano types, two-layer state, and performance controls.
 4. Effect units in signal order, then focus/group/global routing and panel bindings.
@@ -35,4 +35,4 @@ Skip everything the specs list under `excluded` — those controls stay decorati
 
 ## Evidence
 
-Preserve every Phase 1 test and feature mapping; add all Phase 2 IDs from `TASK.md`. Tests must cross the audio boundary: instrument distinctions, control changes, pedal behavior, layer ownership, effect processing/bypass/order, one context, and cleanup. Update `IMPLEMENTATION_DETAILS.json` with the full sample library and licenses. Use the parent capture harness for canonical Phase 2 evidence and run all four pnpm gates.
+Preserve every Phase 1 test and feature mapping; add all Phase 2 IDs from `TASK.md`. Tests must cross the audio boundary: instrument distinctions, control changes, pedal behavior, layer ownership, effect processing/bypass/order, one context, and cleanup. Update `IMPLEMENTATION_DETAILS.json`: declare every bundled audio file under `audio.files` (the pack recording it was cut from, or that it is generated) and credit each pack source you used under `audio.sampleSources`. Use the capture harness in `inputs/harness/` for canonical Phase 2 evidence and run all four pnpm gates.

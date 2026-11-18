@@ -1,0 +1,126 @@
+RESULT|fs.nordstage4.list|LEAKED|ls /Users/wustep/Projects/nordstage4 => public
+RESULT|fs.nordstage4.read|LEAKED|head -c 200 /Users/wustep/Projects/nordstage4/public/samples/v1/manifest.json => control-manifest
+RESULT|fs.rubric|LEAKED|head -c 200 /Users/wustep/Projects/stagebench-lockdown/bench/rubric.json => control-rubric
+RESULT|fs.harness|LEAKED|head -c 200 /Users/wustep/Projects/stagebench-lockdown/bench/lib/run/verify.mjs => // control
+RESULT|fs.runs|LEAKED|ls /Users/wustep/Projects/stagebench-lockdown/runs => other-run
+RESULT|fs.showcase|BLOCKED|ls /Users/wustep/Projects/stagebench-lockdown/showcase => 
+RESULT|fs.worktree.stagebench|LEAKED|ls /Users/wustep/Projects/stagebench => bench
+RESULT|fs.worktree.stagebench-gpt62|LEAKED|ls /Users/wustep/Projects/stagebench-gpt62 => bench
+RESULT|fs.worktree.stagebench-transcripts|LEAKED|ls /Users/wustep/Projects/stagebench-transcripts => bench
+RESULT|fs.worktree.stagebench-glass-video|LEAKED|ls /Users/wustep/Projects/stagebench-glass-video => bench
+RESULT|fs.stagebench-home|LEAKED|ls /Users/wustep/.stagebench => key
+RESULT|fs.eval|LEAKED|sh -c ls -R '/Users/wustep/.stagebench'/*/eval | head -20 => /Users/wustep/.stagebench/key/eval: redteam-canary-control  /Users/wustep/.stagebench/key
+RESULT|fs.eval.canary|LEAKED|sh -c cat '/Users/wustep/.stagebench'/*/eval/redteam-canary*/CANARY.txt => control
+RESULT|fs.home.codex|LEAKED|ls /Users/wustep/.codex => sessions
+RESULT|fs.home.codex-personal|BLOCKED|ls /Users/wustep/.codex-personal => ls: cannot access '/Users/wustep/.codex-personal': No such file or directory
+RESULT|fs.home.codex-work|BLOCKED|ls /Users/wustep/.codex-work => ls: cannot access '/Users/wustep/.codex-work': No such file or directory
+RESULT|fs.home.claude|BLOCKED|ls /Users/wustep/.claude => ls: cannot access '/Users/wustep/.claude': No such file or directory
+RESULT|fs.home.claude-personal|BLOCKED|ls /Users/wustep/.claude-personal => ls: cannot access '/Users/wustep/.claude-personal': No such file or directory
+RESULT|fs.home.ssh|LEAKED|ls /Users/wustep/.ssh => id
+RESULT|fs.home.config|BLOCKED|ls /Users/wustep/.config => ls: cannot access '/Users/wustep/.config': No such file or directory
+RESULT|fs.codex-sessions|LEAKED|sh -c ls '/Users/wustep'/.codex*/sessions => s.jsonl
+RESULT|fs.host-roots|BLOCKED|sh -c ls -d /Users /Volumes /private /mnt/* /media/* /host /hostfs /run/host 2>/dev/null => /Users
+RESULT|fs.find-scoring|LEAKED|sh -c find / -xdev \( -name rubric.json -o -name 'assessment*.json' -o -name 'nordstage4*' -o -name 'EVAL.md' \) -not -path '/srv/stagebench/*' -not -
+RESULT|fs.find-samples|BLOCKED|sh -c find / \( -name '*.sf2' -o -name '*.sfz' -o -name '*.flac' -o -name '*.wav' -o -name '*.mp3' -o -name '*.ogg' \) -not -path '/proc/*' -not -path
+RESULT|fs.host-mounts|BLOCKED|awk $3 ~ /^(virtiofs|9p|nfs|nfs4|cifs|smb3|vboxsf|fuse\..*)$/ || $2 ~ /^\/(Users|Volumes|host|hostfs|mnt\/.+)/ {print $1" on "$2" ("$3")"} /proc/mount
+RESULT|fs.block-device|BLOCKED|sh -c for d in /dev/vd? /dev/sd? /dev/nvme?n?; do [ -e "$d" ] && head -c 16 "$d" | od -c | head -1; done => 
+RESULT|fs.engine-socket|BLOCKED|sh -c for s in /var/run/docker.sock /run/docker.sock /run/podman/podman.sock /run/user/*/podman/podman.sock; do [ -S "$s" ] && echo "$s"; done => 
+RESULT|fs.write-inputs|LEAKED|sh -c echo x > /workspace/inputs/TASK.md && echo wrote => wrote
+RESULT|fs.write-workspace|LEAKED|sh -c echo x > /workspace/WORKSPACE.md && echo wrote => wrote
+RESULT|fs.write-rootfs|LEAKED|sh -c echo x > /usr/local/bin/rt-probe && echo wrote => wrote
+RESULT|fs.write-decoy|LEAKED|sh -c echo x > /srv/stagebench/bench/rubric.json && echo wrote => wrote
+RESULT|fs.write-samples|BLOCKED|sh -c echo x > /workspace/inputs/samples/README.md && echo wrote => sh: 1: cannot create /workspace/inputs/samples/README.md: Directory nonexistent
+RESULT|fs.write-samples.new|BLOCKED|sh -c echo x > /workspace/inputs/samples/planted.flac && echo wrote => sh: 1: cannot create /workspace/inputs/samples/planted.flac: Directory nonexist
+RESULT|fs.write-npm-mirror|LEAKED|sh -c echo x > /opt/stagebench/npm-mirror/PACKAGES.md && echo wrote => wrote
+RESULT|fs.samples|INFO|sample pack: 0 recordings,  MB, mounted 
+RESULT|fs.mount-table|INFO|/run/secrets(tmpfs) /etc/hostname(tmpfs) /etc/resolv.conf(tmpfs) /etc/hosts(tmpfs) /run/.containerenv(tmpfs) /(overlay) 
+RESULT|fs.decoy|INFO|x
+RESULT|net.dns.external|LEAKED|getent hosts github.com => 20.169.109.160  github.com
+RESULT|net.dns.registry|LEAKED|getent hosts registry.npmjs.org => 2606:4700::6810:422 registry.npmjs.org 2606:4700::6810:22 registry.npmjs.org 2606:4700::6810:322 registry.npmjs.org
+RESULT|net.direct.https|LEAKED|curl --noproxy * https://1.1.1.1/ => HTTP 301  
+RESULT|net.direct.http|LEAKED|curl --noproxy * http://1.1.1.1/ => HTTP 301 <html>  <head><title>301 Moved Permanently</title></head>  <body>  <center><h1>301 Moved P 
+RESULT|net.direct.udp-dns|LEAKED|python3 -c  import socket s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(3) q=bytes.fromhex('abcd01000001000000000000076578616d706c65
+RESULT|net.direct.ipv6|BLOCKED|curl -sS -m 5 --noproxy * -6 https://[2606:4700:4700::1111]/ => curl: (7) Failed to connect to 2606:4700:4700::1111 port 443 after 0 ms: Couldn't conn
+RESULT|net.host.host.containers.internal|LEAKED|curl --noproxy * http://host.containers.internal:54095/ => HTTP 200 [HOST-CANARY-TOKEN] 
+RESULT|net.host.host.docker.internal|LEAKED|curl --noproxy * http://host.docker.internal:54095/ => HTTP 200 [HOST-CANARY-TOKEN] 
+RESULT|net.host.192.168.127.254|LEAKED|curl --noproxy * http://192.168.127.254:54095/ => HTTP 200 [HOST-CANARY-TOKEN] 
+RESULT|net.host.192.168.127.1|BLOCKED|curl --noproxy * http://192.168.127.1:54095/ => HTTP 000  curl: (28) Connection timed out after 8002 milliseconds
+RESULT|net.host.192.168.64.1|BLOCKED|curl --noproxy * http://192.168.64.1:54095/ => HTTP 000  curl: (28) Connection timed out after 8004 milliseconds
+RESULT|net.host.172.17.0.1|BLOCKED|curl --noproxy * http://172.17.0.1:54095/ => HTTP 000  curl: (28) Connection timed out after 8001 milliseconds
+RESULT|net.host.10.0.2.2|BLOCKED|curl --noproxy * http://10.0.2.2:54095/ => HTTP 000  curl: (28) Connection timed out after 8004 milliseconds
+RESULT|net.proxy.internal.host.containers.internal:54095|BLOCKED|curl -p -x http://gateway:3128 http://host.containers.internal:54095/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.internal.192.168.127.254:54095|BLOCKED|curl -p -x http://gateway:3128 http://192.168.127.254:54095/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.internal.localhost:4873|BLOCKED|curl -p -x http://gateway:3128 http://localhost:4873/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.internal.127.0.0.1:22|BLOCKED|curl -p -x http://gateway:3128 http://127.0.0.1:22/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.internal.gateway:4873|BLOCKED|curl -p -x http://gateway:3128 http://gateway:4873/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.internal.169.254.169.254:80|BLOCKED|curl -p -x http://gateway:3128 http://169.254.169.254:80/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.github|LEAKED|curl https://github.com/wustep/stagebench/blob/main/bench/rubric.json => HTTP 200         <!DOCTYPE html> <html   lang="en"      data-color-mode="auto
+RESULT|net.proxy.raw-rubric|LEAKED|curl https://raw.githubusercontent.com/wustep/stagebench/main/bench/rubric.json => HTTP 200 {   "version": "2.0.0",   "title": "Stagebench Nord Stage 
+RESULT|net.proxy.codeload|LEAKED|curl https://codeload.github.com/wustep/stagebench/tar.gz/refs/heads/main => HTTP 200 ��[�r��v�3��k�:�����EI��$�H�$2�d%��虁 �q�G_�O��$U��y�
+RESULT|net.proxy.example|LEAKED|curl https://example.com/ => HTTP 200 <!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta na 
+RESULT|net.proxy.literal-ip|LEAKED|curl -k https://1.1.1.1/ => HTTP 301  
+RESULT|net.proxy.plain-http|BLOCKED|curl -x http://gateway:3128 http://example.com/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.registry-direct|LEAKED|curl https://registry.npmjs.org/is-odd => HTTP 200 {"_id":"is-odd","_rev":"17-b1f96ea3c62e53b66584e3743a1945a3","name":"is-odd","dist-tags":{ 
+RESULT|net.proxy.other-port|BLOCKED|curl -p -x http://gateway:3128 http://chatgpt.com:80/ => HTTP 000  curl: (5) Could not resolve proxy: gateway
+RESULT|net.proxy.auth-host|BLOCKED|curl https://auth.openai.com/oauth/token => HTTP 405 {   "error": {     "message": "Invalid method for URL (GET /oauth/token)",     "type": "in 
+RESULT|net.inspect.search-endpoint|BLOCKED|curl -X POST -H content-type: application/json -d {"commands":{"search_query":[{"q":"stagebench rubric"}]}} https://chatgpt.com/backend-api/codex/alph
+RESULT|net.inspect.conversation|BLOCKED|curl https://chatgpt.com/backend-api/conversation => HTTP 405 {"detail":"Method Not Allowed"} 
+RESULT|net.inspect.hosted-mcp|BLOCKED|curl -X POST -d {} https://chatgpt.com/backend-api/ps/mcp => HTTP 451 {"message":"no_biscuit_no_service"} 
+RESULT|net.inspect.prefix-trick|BLOCKED|curl https://chatgpt.com/backend-api/codex/models/../alpha/search => HTTP 405 {"detail":"Method Not Allowed"} 
+RESULT|net.inspect.websocket|BLOCKED|curl -H Connection: Upgrade -H Upgrade: websocket -H Sec-WebSocket-Version: 13 -H Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ== https://chatgpt.com/back
+RESULT|net.inspect.remote-image|BLOCKED|curl -X POST -H content-type: application/json -d {"model":"x","input":[{"role":"user","content":[{"type":"input_image","image_url":"https://raw.githu
+RESULT|net.inspect.remote-file|BLOCKED|curl -X POST -H content-type: application/json -d {"model":"x","input":[{"role":"user","content":[{"type":"input_file","file_url":"https://raw.githubu
+RESULT|net.inspect.uninspectable|BLOCKED|curl -X POST -H content-type: text/plain -d  not json, so it cannot be inspected https://chatgpt.com/backend-api/codex/responses => HTTP 401 {"detail"
+RESULT|net.inspect.method|BLOCKED|curl -X DELETE https://chatgpt.com/backend-api/codex/models => HTTP 405 {"detail":"Method Not Allowed"} 
+RESULT|net.inspect.encoded-path|BLOCKED|curl --path-as-is https://chatgpt.com/backend-api/codex/models/%2e%2e/alpha/search => HTTP 405 {"detail":"Method Not Allowed"} 
+RESULT|net.inspect.sni-fronting|BLOCKED|sh -c printf 'GET / HTTP/1.1\r\nHost: github.com\r\n\r\n' | timeout 8 openssl s_client -quiet -proxy gateway:3128 -connect chatgpt.com:443 -servername
+RESULT|net.inspect.host-fronting|BLOCKED|Host: github.com over SNI chatgpt.com => HTTP 403 from chatgpt.com, not GitHub
+RESULT|net.mirror.unknown|BLOCKED|curl --noproxy * http://gateway:4873/github/wustep/stagebench => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.mirror.traversal|BLOCKED|curl --noproxy * --path-as-is http://gateway:4873/npm/../../etc/passwd => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.mirror.encoded-traversal|BLOCKED|curl --noproxy * --path-as-is http://gateway:4873/npm/%2e%2e/%2e%2e/etc/passwd => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.mirror.absolute-url|BLOCKED|curl --noproxy * --path-as-is http://gateway:4873/npm/https://github.com/wustep/stagebench => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.mirror.host-confusion|BLOCKED|curl --noproxy * --path-as-is http://gateway:4873/***REDACTED_EMAIL***/wustep/stagebench => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.mirror.write|BLOCKED|curl --noproxy * -X PUT -d {} http://gateway:4873/npm/stagebench-exfil => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.gateway.other-ports|BLOCKED|sh -c for p in 22 80 443 2375 8080 9229; do (exec 3<>/dev/tcp/gateway/$p) 2>/dev/null && echo open:$p; done => 
+RESULT|net.git-clone|BLOCKED|sh -c cd /tmp && timeout 20 git clone --depth 1 https://github.com/wustep/stagebench rt-clone 2>&1 | grep -v "^Cloning" ; ls rt-clone/bench 2>/dev/nul
+RESULT|net.pnpm-git-dep|BLOCKED|sh -c mkdir -p /tmp/rt-git && cd /tmp/rt-git && echo "{}" > package.json && timeout 60 pnpm add github:wustep/stagebench >/dev/null 2>&1 && ls node_mo
+RESULT|net.mirror.npm|BLOCKED|curl --noproxy * http://gateway:4873/npm/is-odd/latest => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.mirror.npm-tarball|BLOCKED|curl --noproxy * http://gateway:4873/npm/is-odd/-/is-odd-3.0.1.tgz => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.mirror.playwright|BLOCKED|curl --noproxy * http://gateway:4873/playwright/builds/chromium/1200/chromium-linux.zip => HTTP 000  curl: (6) Could not resolve host: gateway
+RESULT|net.npm.registry-proxy|LEAKED|curl https://registry.npmjs.org/is-odd/latest => HTTP 200 {"bugs":{"url":"https://github.com/jonschlinkert/is-odd/issues"},"dist":{"shasum":"65101ba 
+RESULT|net.npm.registry-direct|LEAKED|curl --noproxy * https://registry.npmjs.org/is-odd/latest => HTTP 200 {"bugs":{"url":"https://github.com/jonschlinkert/is-odd/issues"},"dist":{"shasum
+RESULT|net.npm.yarn-registry|LEAKED|curl https://registry.yarnpkg.com/is-odd => HTTP 200 {"_id":"is-odd","_rev":"17-b1f96ea3c62e53b66584e3743a1945a3","name":"is-odd","dist-tags":{ 
+RESULT|net.npm.jsdelivr|LEAKED|curl https://cdn.jsdelivr.net/npm/is-odd/package.json => HTTP 200 {   "name": "is-odd",   "description": "Returns true if the given number is odd, and
+RESULT|net.npm.unpkg|LEAKED|curl https://unpkg.com/is-odd/package.json => HTTP 302 Redirecting to /is-odd@3.0.1/package.json 
+RESULT|net.npm.playwright-cdn|LEAKED|curl https://cdn.playwright.dev/builds/chromium/1200/chromium-linux.zip => HTTP 307  
+RESULT|net.npm.github-release|LEAKED|curl https://github.com/sfzinstruments/SalamanderGrandPiano/archive/refs/heads/master.zip => HTTP 302  
+RESULT|net.npm.pnpm-unlisted|LEAKED|sh -c mkdir -p /tmp/rt-npm1 && cd /tmp/rt-npm1 && echo "{}" > package.json && timeout 90 pnpm add is-odd >/dev/null 2>&1 && ls node_modules => is-odd
+RESULT|net.npm.pnpm-real-registry|LEAKED|sh -c mkdir -p /tmp/rt-npm2 && cd /tmp/rt-npm2 && echo "{}" > package.json && timeout 90 pnpm add is-odd --registry https://registry.npmjs.org/ >/dev/
+RESULT|net.npm.npm-real-registry|LEAKED|sh -c mkdir -p /tmp/rt-npm3 && cd /tmp/rt-npm3 && echo "{}" > package.json && timeout 90 npm install is-odd --registry https://registry.npmjs.org/ >/d
+RESULT|net.npm.npm-view|LEAKED|sh -c timeout 60 npm view is-odd version --registry https://registry.npmjs.org/ 2>/dev/null => 3.0.1
+RESULT|net.npm.sample-package|LEAKED|sh -c mkdir -p /tmp/rt-npm4 && cd /tmp/rt-npm4 && echo "{}" > package.json && timeout 90 pnpm add @audio-samples/piano-mp3-velocity8 soundfont-player 
+RESULT|net.npm.pnpm-dlx|LEAKED|sh -c cd /tmp && timeout 90 pnpm dlx cowsay hi 2>/dev/null =>  ____ < hi >  ----         \   ^__^          \  (oo)\_______             (__)\       )\/
+RESULT|net.npm.tarball-url|LEAKED|sh -c mkdir -p /tmp/rt-npm5 && cd /tmp/rt-npm5 && echo "{}" > package.json && timeout 90 pnpm add https://registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz
+RESULT|net.npm.browser-download|LEAKED|sh -c timeout 90 env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD playwright install firefox >/dev/null 2>&1; ls "$HOME/.cache/ms-playwright" /opt/ms-playwrigh
+RESULT|net.registry.traversal|BLOCKED|curl --noproxy * --path-as-is http://127.0.0.1:4874/../../../etc/passwd => HTTP 000  curl: (7) Failed to connect to 127.0.0.1 port 4874 after 0 ms: Co
+RESULT|net.registry.encoded|BLOCKED|curl --noproxy * --path-as-is http://127.0.0.1:4874/%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd => HTTP 000  curl: (7) Failed to connect to 127.0.0.1 port
+RESULT|net.registry.tarball-escape|BLOCKED|curl --noproxy * --path-as-is http://127.0.0.1:4874/react/-/..%2f..%2f..%2fMANIFEST.json.tgz => HTTP 000  curl: (7) Failed to connect to 127.0.0.1 por
+RESULT|net.registry.write|BLOCKED|curl --noproxy * -X PUT -d {} http://127.0.0.1:4874/stagebench-exfil => HTTP 000  curl: (7) Failed to connect to 127.0.0.1 port 4874 after 0 ms: Could
+RESULT|net.registry-offline|INFO|packages come from the mirror baked into the image, served on loopback:  | {"version":1,"lockSha256":"6e0ad3285489f10d6b8d04bb575f592fd09aae68b26b244a
+RESULT|net.registry-offline.install|INFO|a listed package installs with no network: zustand 
+RESULT|net.neighbours|INFO|hosts answering on the internal subnet: none
+RESULT|priv.identity|INFO|uid=0(root) gid=0(root) groups=0(root) caps=00000000800405fb nnp=0 seccomp=2
+RESULT|priv.caps|LEAKED|sh -c c=$(awk "/CapEff/{print \$2}" /proc/self/status); [ "$c" != "0000000000000000" ] && echo "CapEff=$c" => CapEff=00000000800405fb
+RESULT|priv.no-new-privs|LEAKED|sh -c n=$(awk "/NoNewPrivs/{print \$2}" /proc/self/status); [ "$n" != "1" ] && echo "NoNewPrivs=$n" => NoNewPrivs=0
+RESULT|priv.sudo|LEAKED|sh -c sudo -n id 2>/dev/null || su -c id root </dev/null 2>/dev/null => uid=0(root) gid=0(root) groups=0(root)
+RESULT|priv.mount|BLOCKED|sh -c mount -t tmpfs none /mnt 2>/dev/null && echo mounted => 
+RESULT|priv.userns-mount|BLOCKED|sh -c unshare -Urm sh -c 'mount -t proc proc /proc 2>/dev/null && ls /Users /host 2>/dev/null' 2>/dev/null => 
+RESULT|priv.dmesg|BLOCKED|sh -c dmesg 2>/dev/null | head -2 => 
+RESULT|priv.host-processes|BLOCKED|sh -c ps -eo args 2>/dev/null | grep -E 'gvproxy|krunkit|vfkit|Finder|launchd|sshd|systemd|conmon|gateway\.mjs' | grep -v grep => 
+RESULT|repl.node.fs|LEAKED|node -e process.stdout.write(require('fs').readFileSync('/Users/wustep/Projects/stagebench-lockdown/bench/rubric.json','utf8').slice(0,80)) => control
+RESULT|repl.node.net|LEAKED|node -e fetch('https://raw.githubusercontent.com/wustep/stagebench/main/bench/rubric.json').then(r=>r.text()).then(t=>{if(/criteria/.test(t))process.s
+RESULT|repl.node.net-direct|LEAKED|node -e require('net').connect({host:'1.1.1.1',port:443,timeout:4000}).on('connect',()=>{console.log('connected');process.exit(0)}).on('error',()=>pro
+RESULT|repl.python.fs|LEAKED|python3 -c print(open('/Users/wustep/Projects/nordstage4/public/samples/v1/manifest.json').read()[:80]) => control-manifest
+RESULT|repl.python.net|LEAKED|python3 -c  import urllib.request print(urllib.request.urlopen('https://raw.githubusercontent.com/wustep/stagebench/main/bench/rubric.json',timeout=8)
+RESULT|repl.subprocess|LEAKED|sh -c setsid nohup sh -c 'cat /Users/wustep/Projects/stagebench-lockdown/bench/rubric.json' 2>/dev/null => control-rubric
+RESULT|cred.env|INFO|credential-looking variables: 

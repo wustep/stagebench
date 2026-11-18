@@ -1,0 +1,49 @@
+#!/bin/sh
+# Launch Codex for a StageBench candidate with workspace-only filesystem
+# access and MCP servers disabled. Usage:
+#
+#   scripts/bench-candidate-codex -C <workspace> [codex args / prompt]
+#
+# Do not add --sandbox or --dangerously-bypass-approvals-and-sandbox: those
+# drop the permission profile and restore full-disk reads.
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+profile_src="$repo_root/bench/codex-candidate.config.toml"
+
+if [ ! -f "$profile_src" ]; then
+  echo "bench-candidate-codex: missing $profile_src" >&2
+  exit 1
+fi
+
+# Match codex-auto / codexp: personal home unless an explicit CODEX_HOME is
+# already set (for example by a test).
+if [ -z "${CODEX_HOME:-}" ]; then
+  if command -v agent-profile >/dev/null 2>&1 && [ "$(agent-profile)" = work ]; then
+    CODEX_HOME="$HOME/.codex-work"
+  else
+    CODEX_HOME="$HOME/.codex-personal"
+  fi
+fi
+export CODEX_HOME
+mkdir -p "$CODEX_HOME"
+ln -sfn "$profile_src" "$CODEX_HOME/stagebench-candidate.config.toml"
+
+# Prefer the repo-aware wrapper so the personal/work account follows the repo.
+if command -v codex-auto >/dev/null 2>&1; then
+  moniker=codex-auto
+else
+  moniker=codex
+fi
+
+# MCP servers in the user config execute outside the sandbox. Disable the
+# ones the personal config ships with; unknown names are harmless.
+exec "$moniker" -p stagebench-candidate \
+  -c 'mcp_servers.playwright.enabled=false' \
+  -c 'mcp_servers.node_repl.enabled=false' \
+  -c 'mcp_servers.chrome-devtools.enabled=false' \
+  -c 'mcp_servers.computer-use.enabled=false' \
+  -c 'mcp_servers.notion.enabled=false' \
+  -c 'mcp_servers.notion-dev-write.enabled=false' \
+  "$@"
