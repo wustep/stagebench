@@ -19,7 +19,9 @@ import {
   blindArtifactEvidence, featureExecution, featureExecutionEvidence, findAgentInstructionFiles, findProducerNames, verifyPhase,
 } from '../bench/lib/run/verify.mjs'
 import { hardGatesDocument, startPhase } from '../bench/lib/run/workspace.mjs'
-import { checkSamplePack, loadSamplePack, materializeSamplePack, upstreamUrl } from '../bench/lib/sample-pack.mjs'
+import {
+  FLAC_PCM, checkSamplePack, fetchSamplePack, flacAvailable, loadSamplePack, materializeSamplePack, storeRecording, storedName, upstreamUrl, wavLayout,
+} from '../bench/lib/sample-pack.mjs'
 import { blindRunCode, hashTree, isStrictProtocol, protocolMajor, readJson, sha256, workspaceRoot, writeJson } from '../bench/lib/shared.mjs'
 import { normalizeConfig, startGateway } from '../bench/lockdown/image/gateway.mjs'
 import {
@@ -355,6 +357,115 @@ test('a fetched pack is checked against its manifest, and a workspace gets it wh
   fs.rmSync(victim)
   assert.match((await checkSamplePack(root)).problems.join(), /missing/)
   assert.throws(() => materializeSamplePack(root, path.join(scratch, 'partial')), /incomplete.*pnpm bench fetch/)
+})
+
+// A RIFF/WAVE file shaped like real ones: a 16- or 18-byte fmt chunk, and
+// sometimes chunks after the samples (tags, loop points).
+function fixtureWav({ channels = 2, bits = 16, frames = 4410, seed = 1, format = 1, fmtExtra = false, after = [] } = {}) {
+  const u32 = (value) => { const buffer = Buffer.alloc(4); buffer.writeUInt32LE(value); return buffer }
+  const align = channels * bits / 8
+  const pcm = Buffer.alloc(frames * align)
+  let state = seed
+  for (let frame = 0; frame < frames; frame += 1) {
+    for (let channel = 0; channel < channels; channel += 1) {
+      state = (state * 1103515245 + 12345) & 0x7fffffff
+      const value = Math.round(Math.sin(frame * 0.05 * (channel + 1)) * (bits === 24 ? 3_000_000 : 12_000)) + ((state >> 8) % 64) - 32
+      if (bits === 24) pcm.writeIntLE(value, frame * align + channel * 3, 3)
+      else if (bits === 16) pcm.writeInt16LE(value, frame * align + channel * 2)
+      else pcm.writeUInt8(value & 0xff, frame * align + channel)
+    }
+  }
+  const fmt = Buffer.alloc(fmtExtra ? 18 : 16)
+  fmt.writeUInt16LE(format, 0); fmt.writeUInt16LE(channels, 2); fmt.writeUInt32LE(44100, 4); fmt.writeUInt32LE(44100 * align, 8); fmt.writeUInt16LE(align, 12); fmt.writeUInt16LE(bits, 14)
+  const chunk = (id, body) => Buffer.concat([Buffer.from(id, 'latin1'), u32(body.length), body, Buffer.alloc(body.length & 1)])
+  const body = Buffer.concat([Buffer.from('WAVE'), chunk('fmt ', fmt), chunk('data', pcm), ...after.map(([id, content]) => chunk(id, Buffer.from(content)))])
+  return Buffer.concat([Buffer.from('RIFF'), u32(body.length), body])
+}
+
+test('only integer PCM WAV at 16 or 24 bits is split for storage; everything else is kept as published', () => {
+  const layout = wavLayout(fixtureWav({ fmtExtra: true, after: [['smpl', Buffer.alloc(60, 1)]] }))
+  assert.deepEqual([layout.head.length, layout.pcm.length, layout.tail.length, layout.channels, layout.bitsPerSample, layout.sampleRate], [46, 4410 * 4, 68, 2, 16, 44100])
+  assert.equal(wavLayout(fixtureWav({ bits: 8, channels: 1 })), null, '8-bit PCM is unsigned; not split')
+  assert.equal(wavLayout(fixtureWav({ format: 3 })), null, 'float is not integer PCM')
+  assert.equal(wavLayout(Buffer.concat([Buffer.from('fLaC'), Buffer.alloc(100)])), null)
+})
+
+test('a WAV recording is stored as FLAC-coded samples, fetched that way, and rebuilt byte for byte wherever it is used', async (t) => {
+  if (!flacAvailable()) return t.skip('needs the flac command')
+  const root = fixtureRoot()
+  const packDir = path.join(root, 'sample-pack')
+  const filesDir = path.join(packDir, 'files')
+  const manifest = readJson(path.join(packDir, 'manifest.json'))
+  const organ = { id: 'fixture-organ', name: 'Fixture Organ', role: 'Organ', license: 'CC0-1.0', directory: 'organ/fixture-organ', repository: 'example/fixture-organ', commit: 'c'.repeat(40) }
+  const published = {
+    'Loud/C3.wav': fixtureWav({ fmtExtra: true, seed: 3 }),
+    'Quiet/C3.wav': fixtureWav({ channels: 1, bits: 24, seed: 4, after: [['LIST', 'INFOISFT\u0004\u0000\u0000\u0000test'], ['smpl', Buffer.alloc(60, 7)]] }),
+  }
+  const entries = Object.entries(published).map(([upstreamPath, buffer]) => {
+    const layout = wavLayout(buffer)
+    return { path: `${organ.directory}/${upstreamPath}`, source: organ.id, upstreamPath, bytes: buffer.length, sha256: sha256(buffer), stored: { codec: FLAC_PCM, head: layout.head.toString('base64'), tail: layout.tail.toString('base64') } }
+  })
+  manifest.files.push(...entries)
+  manifest.sources.push({ ...organ, attribution: 'Fixture Organ, CC0-1.0', files: entries.length })
+  writeJson(path.join(packDir, 'manifest.json'), manifest)
+
+  // fetch, from a stand-in for the pinned upstream.
+  const served = new Map(Object.entries(published).map(([upstreamPath, buffer]) => [upstreamUrl(organ, upstreamPath), buffer]))
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async (url) => served.has(String(url)) ? new Response(served.get(String(url))) : new Response('not found', { status: 404 })
+  const fetchPack = () => fetchSamplePack(root, { log: () => {} })
+  try {
+    const fetched = await fetchPack()
+    assert.deepEqual([fetched.downloaded, fetched.compressed, fetched.failed], [2, 2, []], 'the fixture FLACs are already there; the WAVs are downloaded and stored')
+    for (const entry of entries) {
+      const stored = fs.readFileSync(path.join(filesDir, storedName(entry)))
+      assert.equal(stored.toString('latin1', 0, 4), 'fLaC')
+      assert.ok(stored.length < entry.bytes, 'the stored form is smaller')
+      assert.equal(fs.existsSync(path.join(filesDir, entry.path)), false, 'one form of a file is kept')
+    }
+    let state = await checkSamplePack(root)
+    assert.deepEqual([state.problems, state.uncompressed], [[], 0])
+
+    // materialize gives the candidate the published bytes.
+    const destination = path.join(scratch, 'materialized-wav')
+    const record = materializeSamplePack(root, destination)
+    assert.equal(record.rebuilt, 2)
+    for (const entry of entries) assert.ok(fs.readFileSync(path.join(destination, entry.path)).equals(published[entry.upstreamPath]), entry.path)
+
+    // A damaged stored form is found by the deep check, refused by materialize, and replaced by fetch.
+    const victim = path.join(filesDir, storedName(entries[0]))
+    const damaged = fs.readFileSync(victim)
+    damaged[damaged.length - 40] ^= 0xff
+    fs.writeFileSync(victim, damaged)
+    assert.match((await checkSamplePack(root)).problems.join(), /Loud\/C3\.wav: /)
+    assert.deepEqual((await checkSamplePack(root, { deep: false })).problems, [], 'the quick check only sees that it is there')
+    assert.throws(() => materializeSamplePack(root, path.join(scratch, 'materialized-damaged')), /flac|does not rebuild/)
+    assert.deepEqual([(await fetchPack()).downloaded, (await checkSamplePack(root)).problems], [1, []])
+
+    // A machine without flac keeps the published WAV; it is valid, and the next fetch with flac compresses it without downloading.
+    const second = entries[1]
+    fs.rmSync(path.join(filesDir, storedName(second)))
+    fs.writeFileSync(path.join(filesDir, second.path), published[second.upstreamPath])
+    state = await checkSamplePack(root)
+    assert.deepEqual([state.problems, state.uncompressed], [[], 1])
+    const plain = path.join(scratch, 'materialized-plain')
+    assert.equal(materializeSamplePack(root, plain).rebuilt, 1, 'the WAV kept as published is copied; the other is rebuilt')
+    assert.ok(fs.readFileSync(path.join(plain, second.path)).equals(published[second.upstreamPath]))
+    const compressed = await fetchPack()
+    assert.deepEqual([compressed.downloaded, compressed.compressed], [0, 1])
+    assert.equal(fs.existsSync(path.join(filesDir, second.path)), false)
+    state = await checkSamplePack(root)
+    assert.deepEqual([state.problems, state.uncompressed], [[], 0])
+
+    // Only what the manifest names may be there, in either form.
+    fs.writeFileSync(path.join(filesDir, 'organ/fixture-organ/planted.wav.flac'), 'x')
+    assert.match((await checkSamplePack(root)).problems.join(), /planted\.wav\.flac: not in the manifest/)
+  } finally {
+    globalThis.fetch = realFetch
+  }
+  // The stored form must come from the file the manifest describes.
+  const other = fixtureWav({ fmtExtra: false, seed: 3 })
+  await assert.rejects(storeRecording(entries[0], other), /does not have the layout the manifest records/)
 })
 
 // --- where every bundled sample comes from ---------------------------------------

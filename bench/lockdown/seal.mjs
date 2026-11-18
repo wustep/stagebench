@@ -2,7 +2,9 @@
 // gates, its canonical capture, and its sample check back inside one, and
 // write down what the boundary observed.
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
+import { materializeSamplePack } from '../lib/sample-pack.mjs'
 import { workspaceRoot, writeJson } from '../lib/shared.mjs'
 import { captureHarnessSource } from '../lib/run/workspace.mjs'
 import { detectRuntime } from './runtime.mjs'
@@ -59,16 +61,27 @@ export function captureLocked(root, { id, phase, stageDir, onOutput }) {
 // The acoustic half of the sample check, wherever it can run: in a box when an
 // engine answers, otherwise with this machine's ffmpeg. Returns null when
 // neither is available, and the caller records that the check did not run.
-export async function matchSamples(root, { stageDir, packDir, packFilesDir, packDigest, entries, onOutput }) {
+export async function matchSamples(root, { stageDir, packDir, packDigest, entries, onOutput }) {
   if (entries.length === 0) return { threshold: null, results: [], where: 'none needed' }
   const script = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'run', 'sample-match.mjs'), 'utf8')
-  if (detectRuntime() && fs.existsSync(path.join(packDir, 'MANIFEST.json'))) {
+  const materialized = fs.existsSync(path.join(packDir, 'MANIFEST.json'))
+  if (detectRuntime() && materialized) {
     return { ...(await runSampleMatchInBox(root, { stageDir, packDir, packDigest, entries, script, onOutput })), where: 'lockdown' }
   }
   const { spawnSync } = await import('node:child_process')
   if (spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).status !== 0) return null
   const { matchEntries } = await import('../lib/run/sample-match.mjs')
-  return { ...matchEntries({ stage: stageDir, pack: packFilesDir, entries }), where: 'host' }
+  // Match against the published recordings, as the candidate was given them:
+  // the phase's own copy, or a fresh one (the operator's store keeps WAV
+  // recordings compressed, under another name).
+  if (materialized) return { ...matchEntries({ stage: stageDir, pack: packDir, entries }), where: 'host' }
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'stagebench-pack-'))
+  try {
+    materializeSamplePack(root, temporary)
+    return { ...matchEntries({ stage: stageDir, pack: temporary, entries }), where: 'host' }
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true })
+  }
 }
 
 // Reasons a locked phase must not be sealed, however its gates went. The

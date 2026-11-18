@@ -42,7 +42,7 @@ import {
 } from './lib/run/verify.mjs'
 import { appendLedger, readLedger, sealedEntry, treeDifference, verifySealedRun } from './lib/run/ledger.mjs'
 import { applyMatchResults, checkSampleProvenance, sampleProvenanceEvidence } from './lib/run/sample-provenance.mjs'
-import { checkSamplePack, fetchSamplePack, loadSamplePack, samplePackFilesDir } from './lib/sample-pack.mjs'
+import { checkSamplePack, fetchSamplePack, loadSamplePack } from './lib/sample-pack.mjs'
 import { captureEvidence, serveDirectory } from './lib/run/capture.mjs'
 import { generateThumbnails } from './lib/run/thumbnail.mjs'
 import { collectImplementationDetails } from './lib/implementation-details.mjs'
@@ -247,7 +247,7 @@ async function sealPhase(root, run, stage, { options, lockdown, locked }) {
     sampleReport = checkSampleProvenance({ stageDir, details, pack: given ? pack : null })
     if (sampleReport.problems.length === 0 && sampleReport.toMatch.length > 0) {
       const match = await lockdown.matchSamples(root, {
-        stageDir, packDir: path.join(workspace, 'inputs', 'samples'), packFilesDir: samplePackFilesDir(root), packDigest: pack.digest, entries: sampleReport.toMatch, onOutput: progress,
+        stageDir, packDir: path.join(workspace, 'inputs', 'samples'), packDigest: pack.digest, entries: sampleReport.toMatch, onOutput: progress,
       })
       if (match) {
         applyMatchResults(sampleReport, match)
@@ -967,11 +967,18 @@ try {
       result = options['samples-only'] === 'true' ? { downloaded: 0, failed: 0 } : await fetchReference(root, { force: options.force === 'true', timeout: options.timeout, photosOnly: options['photos-only'] === 'true' })
       if (options['photos-only'] !== 'true' && loadSamplePack(root)) {
         // The sample pack: each file from its pinned upstream commit, checked
-        // against the sha256 in sample-pack/manifest.json.
+        // against the sha256 in sample-pack/manifest.json, and kept in its
+        // stored form (WAV recordings as FLAC-coded samples).
         console.error('→ sample pack')
         const samples = await fetchSamplePack(root, { force: options.force === 'true' })
         const state = await checkSamplePack(root, { deep: true })
-        result.samplePack = { id: samples.id, version: samples.version, files: samples.files, downloaded: samples.downloaded, megabytesDownloaded: Number((samples.downloadedBytes / 1024 / 1024).toFixed(1)), verified: state.present, problems: [...samples.failed, ...state.problems].slice(0, 10) }
+        const megabytes = (value) => Number((value / 1024 / 1024).toFixed(1))
+        result.samplePack = {
+          id: samples.id, version: samples.version, files: samples.files, downloaded: samples.downloaded, megabytesDownloaded: megabytes(samples.downloadedBytes),
+          megabytesPublished: megabytes(state.pack.manifest.totals.bytes), megabytesStored: megabytes(state.storedBytes ?? 0),
+          ...(state.uncompressed ? { keptUncompressed: state.uncompressed, note: 'flac was not found, so these WAV recordings are kept as published; install flac and fetch again to store them compressed' } : {}),
+          verified: state.present, problems: [...samples.failed, ...state.problems].slice(0, 10),
+        }
         if (!state.present) result.failed += 1
       }
       if (result.failed > 0) process.exitCode = 1
