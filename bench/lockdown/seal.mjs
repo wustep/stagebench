@@ -182,6 +182,11 @@ export function attestation(root, id, phase, exported, gates, extras = {}) {
       auth: launch.auth,
       credentialInBox: Boolean(launch.credentialInBox),
       model: launch.model,
+      // Recorded only for a harness with an image of its own (omp), and for
+      // one that translates the model and effort into its own flags.
+      ...(launch.image ? { image: launch.image } : {}),
+      ...(launch.harnessSettings ? { harnessSettings: launch.harnessSettings } : {}),
+      ...(launch.pinnedModels ? { pinnedModels: launch.pinnedModels } : {}),
       interactive: launch.interactive,
       mcpServers: launch.mcpServers ?? [],
       startedAt: launch.startedAt,

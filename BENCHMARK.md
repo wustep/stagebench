@@ -39,7 +39,7 @@ Then a run is:
 ```sh
 pnpm bench new --model <id> --target <1|2|3> [--variant stage-4-73]
 pnpm bench start <run-id>     # per phase: creates the implementation workspace
-pnpm bench agent <run-id> --harness <codex|claude|custom>   # per phase: runs the implementation agent inside the lockdown, offline
+pnpm bench agent <run-id> --harness <codex|claude|omp|custom>   # per phase: runs the implementation agent inside the lockdown, offline
 pnpm bench seal <run-id>      # per phase: export + gates + capture + sample check + verify + transcripts + seal
 pnpm bench score <run-id>     # per phase: builds the blind evaluator workspace
 pnpm bench evaluator <run-id> --harness claude              # per phase: runs the evaluator inside a lockdown box

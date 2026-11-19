@@ -1,4 +1,4 @@
-# Stagebench lockdown images. One file, two targets (and one build stage):
+# Stagebench lockdown images. One file, three targets (and one build stage):
 #
 #   gateway    the egress gateway (bench/lockdown/image/gateway.mjs) — the only
 #              container with a route to the internet.
@@ -8,8 +8,11 @@
 #              subprocesses, the evaluator, canonical capture, and the
 #              seal/score gates all run in. It carries the mirror and Chromium,
 #              so nothing has to be fetched once a run starts.
+#   candidate-omp  the candidate box plus Bun and the Oh My Pi CLI (`omp`), for
+#              `--harness omp`. Its own target, layered on `candidate`, so the
+#              box every other harness runs in is unchanged by it.
 #
-# Build both with `pnpm bench lockdown-setup`. Tags are content-addressed from
+# Build them with `pnpm bench lockdown-setup`. Tags are content-addressed from
 # this directory, so an image digest in a run record names an exact toolchain.
 ARG NODE_IMAGE=docker.io/library/node:24-bookworm-slim
 
@@ -91,3 +94,27 @@ ENV HOME=/home/candidate \
 WORKDIR /workspace
 ENTRYPOINT ["/opt/stagebench/entrypoint.sh"]
 CMD ["bash"]
+
+# ---------------------------------------------------------------------------
+# Oh My Pi (`omp`) runs on Bun, which no other harness needs, so it gets a
+# target of its own on top of `candidate`: the codex/claude box above is
+# byte-for-byte what it was, and the gates, capture, and sample check keep
+# running on it. Only an omp launch's agent box uses this one.
+#
+# Both land under /usr/local (root-owned, read-only at run time), not under the
+# candidate's npm prefix: the home directory is a session volume mounted over
+# /home/candidate, so anything installed there would not be in the box.
+FROM candidate AS candidate-omp
+ARG BUN_VERSION=1.4.4
+ARG OMP_VERSION=19.0.0
+USER root
+# The version check runs with a throwaway HOME, so the image's own home
+# directory gets nothing from it.
+RUN npm install -g --prefix /usr/local \
+    bun@${BUN_VERSION} \
+    @oh-my-pi/pi-coding-agent@${OMP_VERSION} \
+  && npm cache clean --force \
+  && test "$(bun --version)" = "${BUN_VERSION}" \
+  && HOME=/tmp/omp-build omp --version \
+  && rm -rf /tmp/omp-build /root/.npm /root/.bun
+USER candidate

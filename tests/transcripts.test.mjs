@@ -311,7 +311,7 @@ test('a seal with no transcripts warns loudly, records the gap, and does not thr
     assert.match(warnings[0], /pnpm bench transcripts .* --phase 1 --transcripts/)
     const manifest = readJson(path.join(root, 'runs', id, 'transcripts', 'manifest.json'))
     assert.equal(manifest.candidate['1'].status, 'missing')
-    assert.match(manifest.candidate['1'].reason, /No Codex, Claude Code, or Cursor session/)
+    assert.match(manifest.candidate['1'].reason, /No Codex, Claude Code, Cursor, or omp session/)
     assert.equal(loadRun(root, id).stages[0].status, 'complete', 'the phase is sealed regardless')
     assert.equal(hashTree(stageDir).digest, digest)
 

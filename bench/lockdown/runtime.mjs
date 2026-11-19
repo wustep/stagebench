@@ -158,12 +158,18 @@ export function imageContextDigest(directory = IMAGE_DIR) {
   return hash.digest('hex')
 }
 
+// Containerfile targets, and the key each one's tag is found under. The first
+// two are every session's; `candidate-omp` is built only for an omp launch.
+export const IMAGE_TARGETS = Object.freeze({ gateway: 'gateway', candidate: 'candidate', 'candidate-omp': 'candidateOmp' })
+export const DEFAULT_IMAGE_TARGETS = Object.freeze(['gateway', 'candidate'])
+
 export function imageTags(directory = IMAGE_DIR, env = process.env) {
   const digest = imageContextDigest(directory).slice(0, 12)
   return {
     digest,
     candidate: env.STAGEBENCH_LOCKDOWN_CANDIDATE_IMAGE || `stagebench-lockdown-candidate:${digest}`,
     gateway: env.STAGEBENCH_LOCKDOWN_GATEWAY_IMAGE || `stagebench-lockdown-gateway:${digest}`,
+    candidateOmp: env.STAGEBENCH_LOCKDOWN_CANDIDATE_OMP_IMAGE || `stagebench-lockdown-candidate-omp:${digest}`,
   }
 }
 
@@ -172,22 +178,25 @@ function imageId(runtime, tag) {
   return result.status === 0 ? result.stdout.trim() : null
 }
 
-// Build whichever image is missing. `onOutput` receives build progress.
-export async function ensureImages(runtime, { onOutput, rebuild = false, buildArgs = {} } = {}) {
+// Build whichever of `targets` is missing. `onOutput` receives build progress.
+// The result is keyed as imageTags() is (`candidate-omp` under `candidateOmp`).
+export async function ensureImages(runtime, { onOutput, rebuild = false, buildArgs = {}, targets = DEFAULT_IMAGE_TARGETS } = {}) {
   const tags = imageTags()
   const images = {}
-  for (const target of ['gateway', 'candidate']) {
-    let id = rebuild ? null : imageId(runtime, tags[target])
+  for (const target of targets) {
+    const key = IMAGE_TARGETS[target]
+    if (!key) throw new Error(`Unknown lockdown image target "${target}" (known: ${Object.keys(IMAGE_TARGETS).join(', ')})`)
+    let id = rebuild ? null : imageId(runtime, tags[key])
     if (!id) {
-      onOutput?.(`→ building ${tags[target]} (first build downloads Chromium and the harness CLIs; expect a few minutes)\n`)
-      const args = ['build', '--target', target, '-t', tags[target], '-f', path.join(IMAGE_DIR, 'Containerfile')]
-      for (const [key, value] of Object.entries(buildArgs)) args.push('--build-arg', `${key}=${value}`)
+      onOutput?.(`→ building ${tags[key]} (first build downloads Chromium and the harness CLIs; expect a few minutes)\n`)
+      const args = ['build', '--target', target, '-t', tags[key], '-f', path.join(IMAGE_DIR, 'Containerfile')]
+      for (const [name, value] of Object.entries(buildArgs)) args.push('--build-arg', `${name}=${value}`)
       args.push(IMAGE_DIR)
       const built = await engineStream(runtime, args, { onOutput, timeout: 45 * 60_000 })
-      if (built.status !== 0) throw new Error(`Building ${tags[target]} failed:\n${built.output.slice(-3000)}`)
-      id = imageId(runtime, tags[target])
+      if (built.status !== 0) throw new Error(`Building ${tags[key]} failed:\n${built.output.slice(-3000)}`)
+      id = imageId(runtime, tags[key])
     }
-    images[target] = { tag: tags[target], id }
+    images[key] = { tag: tags[key], id }
   }
   return images
 }

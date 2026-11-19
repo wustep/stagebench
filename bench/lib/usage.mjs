@@ -38,31 +38,49 @@ export function normalizeUsage(usage) {
     const writes = number(usage.cache_creation_input_tokens)
     const hour = number(usage.cache_creation?.ephemeral_1h_input_tokens)
     const uncached = number(usage.input_tokens)
+    // Anthropic counts thinking as output and reports no split; a gateway
+    // speaking this wire for another vendor's model may.
+    const split = reportedReasoning(usage)
     return {
       inputTokens: uncached + cached + writes,
       uncachedInputTokens: uncached,
       cachedInputTokens: cached,
       cacheWriteTokens: writes,
       cacheWrite1hTokens: Math.min(hour, writes),
-      outputTokens: number(usage.output_tokens),
-      reasoningTokens: null,
+      outputTokens: outputWithReasoning(usage, uncached, number(usage.output_tokens), split),
+      reasoningTokens: split,
     }
   }
   // OpenAI Responses (input_tokens) or Chat Completions (prompt_tokens):
   // input includes the cached part.
   const input = number(usage.input_tokens ?? usage.prompt_tokens)
   const details = usage.input_tokens_details ?? usage.prompt_tokens_details ?? {}
-  const outputDetails = usage.output_tokens_details ?? usage.completion_tokens_details ?? null
   const cached = Math.min(number(details.cached_tokens), input)
+  const reasoning = reportedReasoning(usage)
   return {
     inputTokens: input,
     uncachedInputTokens: input - cached,
     cachedInputTokens: cached,
     cacheWriteTokens: 0,
     cacheWrite1hTokens: 0,
-    outputTokens: number(usage.output_tokens ?? usage.completion_tokens),
-    reasoningTokens: outputDetails && typeof outputDetails.reasoning_tokens === 'number' ? outputDetails.reasoning_tokens : null,
+    outputTokens: outputWithReasoning(usage, input, number(usage.output_tokens ?? usage.completion_tokens), reasoning),
+    reasoningTokens: reasoning,
   }
+}
+
+// The reasoning part of the output, where the response says (null if it does not).
+function reportedReasoning(usage) {
+  const value = usage.output_tokens_details?.reasoning_tokens ?? usage.completion_tokens_details?.reasoning_tokens ?? usage.reasoning_tokens
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+// Output counts reasoning in every API the harnesses use, and the budget is
+// "generated tokens, reasoning included". A provider that reports reasoning
+// beside its output count instead shows it in its own total (input + output +
+// reasoning); then the two are added, as the gateway does for the budget.
+function outputWithReasoning(usage, input, output, reasoning) {
+  if (reasoning > 0 && typeof usage.total_tokens === 'number' && usage.total_tokens === input + output + reasoning) return output + reasoning
+  return output
 }
 
 // The price entry for a model id: exact, then through the alias list, then
@@ -84,7 +102,14 @@ export function responseCost(price, normalized) {
   const long = price.longContext && normalized.inputTokens > price.longContext.aboveInputTokens ? price.longContext : null
   const rate = (key) => (long && long[key] !== undefined ? long[key] : price[key]) ?? 0
   let micro
-  if (price.provider === 'anthropic') {
+  if (price.provider === 'vercel-ai-gateway') {
+    // Vercel AI Gateway bills what it reports: uncached input, cache reads,
+    // cache writes (at the input rate unless the model lists its own), output.
+    micro = normalized.uncachedInputTokens * rate('input')
+      + normalized.cachedInputTokens * rate('cachedInput')
+      + normalized.cacheWriteTokens * (price.cacheWrite !== undefined ? rate('cacheWrite') : rate('input'))
+      + normalized.outputTokens * rate('output')
+  } else if (price.provider === 'anthropic') {
     const hour = normalized.cacheWrite1hTokens
     micro = normalized.uncachedInputTokens * rate('input')
       + normalized.cachedInputTokens * rate('cacheRead')
@@ -126,6 +151,7 @@ export function summarizeUsage(events, prices = null) {
   const byModel = {}
   const totals = emptyTotals()
   const efforts = {}
+  const thinkingBudgets = {}
   const responseModels = {}
   const requestIds = []
   const unpriced = new Set()
@@ -140,6 +166,13 @@ export function summarizeUsage(events, prices = null) {
         totals.requests += 1
         const key = `${entry.model}:${entry.effort ?? 'unspecified'}`
         efforts[key] = (efforts[key] ?? 0) + 1
+        // A request that asks for a thinking budget in tokens rather than an
+        // effort (omp on Vercel AI Gateway's Gemini): its "unspecified" effort
+        // is reported with the budget it did ask for.
+        if (typeof entry.thinkingBudget === 'number') {
+          const budgetKey = `${entry.model}:${entry.thinkingBudget}`
+          thinkingBudgets[budgetKey] = (thinkingBudgets[budgetKey] ?? 0) + 1
+        }
       }
     } else if (entry.kind === 'inspect.deny' && entry.budget) {
       budgetDenied += 1
@@ -180,6 +213,7 @@ export function summarizeUsage(events, prices = null) {
     incompleteResponses: incomplete,
     byModel,
     efforts,
+    ...(Object.keys(thinkingBudgets).length > 0 ? { thinkingBudgets } : {}),
     responseModels,
     requestIds: { count: requestIds.length, first: requestIds[0] ?? null, last: requestIds.at(-1) ?? null, sha256: requestIds.length ? sha256(requestIds.join('\n')) : null },
     budget: { denied: budgetDenied, exhausted: budgetExhausted },

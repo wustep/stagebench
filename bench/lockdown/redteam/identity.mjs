@@ -63,9 +63,11 @@ export function parseSections(output) {
 }
 
 // Where the model's id is allowed to appear: the harness's own config and
-// command line (the CLI sends it with every request). Nowhere else.
+// command line (the CLI sends it with every request). Nowhere else. omp's are
+// its settings (every model role is the run's model) and its model list (the
+// run's model, declared because omp's bundled catalog may not have it).
 export function isHarnessSurface(section) {
-  return /^file:.*\/\.codex\/config\.toml$/.test(section) || section === 'harness-command'
+  return /^file:.*\/\.codex\/config\.toml$/.test(section) || /^file:.*\/\.omp\/agent\/(config|models)\.yml$/.test(section) || section === 'harness-command'
 }
 
 // Every place an identifier shows up, in any punctuation, split into what the
@@ -94,8 +96,8 @@ export function findIdentityLeaks(sections, identifiers) {
 // What can never be hidden from a candidate, whatever the launcher does.
 export const UNHIDEABLE = [
   'The model knows its own identity from its training and from the system prompt its harness sends: Codex opens with "You are Codex, an agent based on GPT-6" and lists the current model among its subagent model overrides; Claude Code tells the model its name and model id in its system prompt. Changing that means changing the harness, which is the unit under test.',
-  'The harness has to send the model id with every request, so it is in the harness\'s configuration (Codex: model in ~/.codex/config.toml) or on its command line (Claude Code: --model), both readable from inside the box.',
-  'The harness\'s own session files (~/.codex/sessions, ~/.claude/projects) record the model for every turn, and the provider names the model in every response.',
+  'The harness has to send the model id with every request, so it is in the harness\'s configuration (Codex: model in ~/.codex/config.toml; omp: ~/.omp/agent/config.yml and models.yml) or on its command line (Claude Code and omp: --model), all readable from inside the box.',
+  'The harness\'s own session files (~/.codex/sessions, ~/.claude/projects, ~/.omp/agent/sessions) record the model for every turn, and the provider names the model in every response.',
 ]
 
 const MINIMAL_CHECKOUT = [
@@ -139,7 +141,7 @@ export async function runIdentityProbe(root, { runtime, onOutput } = {}) {
     for (const [harness, adapter] of Object.entries(HARNESSES).filter(([name]) => name !== 'custom')) {
       // The home a launch of this harness would write: its config, the pinned
       // effort, the run's model, and auth stand-ins (no real credential).
-      const fakeEnv = { STAGEBENCH_OPENAI_API_KEY: `sk-proj-${crypto.randomBytes(24).toString('hex')}`, STAGEBENCH_ANTHROPIC_API_KEY: `sk-ant-api03-${crypto.randomBytes(24).toString('hex')}` }
+      const fakeEnv = { STAGEBENCH_OPENAI_API_KEY: `sk-proj-${crypto.randomBytes(24).toString('hex')}`, STAGEBENCH_ANTHROPIC_API_KEY: `sk-ant-api03-${crypto.randomBytes(24).toString('hex')}`, STAGEBENCH_AI_GATEWAY_API_KEY: `vck_${crypto.randomBytes(24).toString('hex')}` }
       const auth = resolveAuth(adapter, fakeEnv, { auth: 'api-key' })
       const context = { prompt: CANDIDATE_MESSAGES.initial.text({ workspace: '/workspace' }), interactive: false, resume: false, model, effort: 'high', extraArgs: [], mcpServers: {} }
       writeIntoVolume(opened.runtime, { image: opened.images.candidate.tag, volume: names.home, files: [...adapter.files(context), ...auth.files] })

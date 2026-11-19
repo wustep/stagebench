@@ -564,7 +564,7 @@ export function statusSummary(run) {
   const implement = stage.patchOf
     ? `apply the operator patch in the workspace's candidate/, then pnpm bench seal ${run.id}`
     : run.isolation === 'lockdown'
-      ? `pnpm bench agent ${run.id} --harness <codex|claude|custom>, then pnpm bench seal ${run.id}`
+      ? `pnpm bench agent ${run.id} --harness <codex|claude|omp|custom>, then pnpm bench seal ${run.id}`
       : `implement in the workspace, then pnpm bench seal ${run.id}`
   const next = stage.status === 'queued' ? `pnpm bench start ${run.id}` : implement
   return { id: run.id, status: run.status, isolation: run.isolation ?? 'none', phase: stage.number, phaseStatus: stage.status, next }

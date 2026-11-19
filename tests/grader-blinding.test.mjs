@@ -197,7 +197,7 @@ test('every committed seal record, blinded, names no model and no run', () => {
   const { names, vendors } = knownIdentities(sourceRoot, { id: 'unused' })
   // The two runs the audit found the leak in are among the names it knows.
   for (const name of ['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6-2-astra-p3', 'GPT 6.2 Sol High', 'claude-opus-5-5', 'claude-haiku-4-5-20251001']) assert.ok(names.includes(name), name)
-  assert.deepEqual(vendors, ['anthropic', 'openai'])
+  assert.deepEqual(vendors, ['anthropic', 'openai', 'vercel-ai-gateway'])
   const patterns = names.map(namePattern).filter(Boolean)
   let checked = 0
   for (const id of fs.readdirSync(path.join(sourceRoot, 'runs'))) {
