@@ -1,0 +1,245 @@
+{
+  "rubricVersion": "3.0.0",
+  "runId": "gemini-neon-high-p3",
+  "stage": 1,
+  "evaluator": "Stagebench blind evaluator (Phase 1, run-afaf76913be2)",
+  "evaluatorModel": "claude-opus-5",
+  "evaluatedAt": "2026-11-19T04:00:00Z",
+  "summary": "A strong, honest Phase 1. Geometry is essentially exact at 1440x900: deck/keybed 0.54000/0.45997, width fraction 0.94000, aspect 3.09514, worst section-fraction deviation 0.000012, 73/43/30 keys all inside the keybed, black-key height 0.60994, and all five reference colours within deltaE 0.36. All 33 section landmarks render in their own sections, all 146 panel controls (and all 73 keys) pass a 5x5 elementFromPoint hit-test, and no forbiddenDetection rule fires. Source honesty is excellent: blocking /samples/ flips the build to 3 oscillators / 0 buffer sources with the status 'harmonic synthesis fallback active' and the OLED reading 'Synth Fallback', exactly as declared; unblocked, three pointer notes produce 3 AudioBufferSourceNodes with 5.5/4.6/3.6 s buffers matching the declared trims. Inputs, lifecycle and the 32-voice deterministic stealing all behave; zero console errors across a full interaction pass. The weaknesses are surface detail: many buttons are blank rectangles, effect-type LED clusters carry no printed type names, the Synth OLED stays static while its own encoders move, control density is visibly thinner than the photograph, and that shortfall is not declared.",
+  "categories": [
+    {
+      "id": "sound",
+      "criteria": [
+        {
+          "id": "sourceHonesty",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Exercised, not read: instrumenting AudioContext.prototype in the served build/ and playing MIDI 40/60/84 by pointer produced 3 createBufferSource calls and 0 createOscillator calls, with buffer durations 5.5 s / 4.6 s / 3.6 s (stereo, 44100 Hz) — exactly the three per-register trim lengths IMPLEMENTATION_DETAILS.json declares (5.5 s for D#1–C3, 4.6 s for D#3–C5, 3.6 s for D#5–F#7). The page fetched 78 distinct .ogg files, matching the declared 78.",
+            "The declared fallback is real and truthfully labelled: aborting every **/samples/** request made the build report 'Recorded samples unavailable (Failed to fetch); harmonic synthesis fallback active' in the status pill and 'Synth Fallback' on the program OLED, and the same pointer note then produced 0 buffer sources and 3 oscillators — the triangle+2-sine voice described in audio.generatedSources[0] (src/audio/pianoVoice.ts:223 triggerFallbackSynthVoice).",
+            "Source agrees with the declaration: src/audio/pianoSamples.ts computePlaybackRate() applies per-region tuneCents over nearest-root playbackRate retuning, and velocityToLayerAndGain() maps velocity onto the v3/v10/v16 layers plus a gain curve — the 'equal-temperament retuning via playbackRate, velocity-sensitive gain curve' that is claimed.",
+            "inputs/verification.json sampleProvenance: 78 bundled files, 78 declared, 78 from salamander-grand-v3 (CC-BY-3.0), 0 generated, 78/78 matching the recording they name (lowest similarity 0.9155). ffprobe on build/samples/grand/C4-v10.ogg confirms vorbis / 44100 Hz / 2 ch / 4.600 s, and a Goertzel scan of its first second shows a full recorded-piano partial series (261.6 Hz at 145.4 dB, 523.2 at 149.4, 784.9 at 124.0, 1046.5 at 120.9) rather than a synthesized tone."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playability",
+      "criteria": [
+        {
+          "id": "inputCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Pointer: mouse-down at 80% of the height of [data-key-midi=\"60\"] in the served build drove the footer to 'Voices: 1/32' with aria-pressed=true and the .is-pressed class; mouse-up returned it to 'Voices: 0/32' and aria-pressed=false. Strike height sets velocity (src/components/Keybed.tsx:17 estimatePointerVelocity, 62..118) — a fallback-mode strike reported 'NOTE C4 VEL 107' on the OLED.",
+            "Computer keyboard: holding 'a' with no element focused gave 'Voices: 1/32' and lit key MIDI 60; release returned to 0/32. Space drove the OLED line to 'SUST ON' and the footer toggle to ON; a note played and released under Space showed class is-sustained and survived until Space-up. Focused-key operation also works: Enter on [data-key-midi=\"67\"] gave 'Voices: 1/32' and 'NOTE G4 VEL 100'.",
+            "Independent multi-touch: dispatching 40 distinct pointerIds across 40 keys held 40 keys pressed simultaneously and allocated 32 voices; src/tests/keybedAndInputs.test.tsx covers pointerCancel without cross-releasing other pointers.",
+            "Web MIDI on load with no enable gesture: artifact/evidence/stage1-audio.json environment.midi = {requested: 1, listeners: 1}, notesSounding 19/19, sustainChecksPassed 2/2, latency 5.2 ms. In my Chromium (permission denied) the build degrades visibly rather than silently — the footer reads 'Web MIDI permission denied' (src/audio/midiController.ts)."
+          ]
+        },
+        {
+          "id": "voiceLifecycle",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Deterministic stealing, measured: pressing 40 keys at once in the served build settled at exactly 'Voices: 32/32'. src/audio/noteLifecycle.ts:203 stealOneVoice() ranks victims releasing(0) < sustained(1) < held(2) and breaks ties on startedOrder, so the victim is a pure function of state, not of Map iteration luck.",
+            "All-notes-off paths verified live: clicking #all-notes-off-btn with 32 voices up returned 'Voices: 0/32' and cleared every .is-pressed key; dispatching window 'blur' while a computer key was held took 'Voices: 1/32' to 'Voices: 0/32'. document visibilitychange is wired to the same allNotesOff (src/App.tsx:203).",
+            "MIDI disconnect and unmount: the MidiController onPortDisconnect callback calls lifecycle.releaseSourcesByPrefix(portPrefix) (src/App.tsx:125) so only that port's voices die, and the effect cleanup calls lifecycle.allNotesOff() plus backend.dispose() on unmount (src/App.tsx:141). src/App.test.tsx and src/tests/pianoEngine.test.ts assert both, including node-count return to baseline.",
+            "Re-strike hygiene: noteOn damps an existing non-releasing voice on the same pitch before allocating (noteLifecycle.ts:81), and the harness measured releasesClean 3/3 with clicks 0 and no clickAtOff on any release segment (evidence/stage1-audio.json)."
+          ]
+        },
+        {
+          "id": "controlBoundary",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "Every panel control moves and reports state. Measured in the served build: #perf-master-level 75 -> 86 under five ArrowUp presses with the rotor transform tracking it (rotate(67.5deg) -> rotate(97.2deg)); #organ-drawbar-1 7 -> 8 with handle top 54.75% -> 62% and lit LEDs 7 -> 8; #piano-layer-a-fader 92 -> 80 with cap bottom 77.6% -> 68% and ladder segments 9 -> 8; #fx-delay-tempo 26 -> 34 under a pointer drag. All 146 controls expose role/aria-label/aria-valuenow/aria-valuetext or aria-pressed, are tabbable, and show a 2px solid focus ring (--ns4-focus, styles.css:390).",
+            "The inert boundary is stated on the instrument itself rather than implied: the program OLED's last line reads 'PANEL: DECORATIVE', the synth OLED reads 'Decorative / AUDIO IN PHASE 3', and the Credits panel spells out that panel controls 'do not yet alter audio or system state'. Driving panel controls creates no audio nodes (confirmed with the AudioContext instrumentation above), so nothing fakes success.",
+            "A full interaction pass over all six sections — knobs, drawbars, faders, option buttons, section-on toggles, keybed, sustain, panic — logged 0 console errors and 0 page errors.",
+            "Minor: a click without drag on a knob steps the value by +2 (PanelControls.tsx:109), which a real detented knob would not do; and SUSTPED/PSTICK (Organ) and SUST/PSTK (Piano) appear only as silkscreen next to the layer buttons, with no operable control or state LED of their own."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "criteria": [
+        {
+          "id": "panelControlCoverage",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Every category the Phase 1 contract names is present and identifiable in the served build: six ordered sections, 146 uniquely-ID'd controls (performance 7, organ 24, piano 14, program 28, synth 40, effects 33), nine drawbars with footage legends 16'–1', seven level faders with LED ladders, pitch stick and modulation wheel, and exactly two primary OLED locations (#program-oled in program, #synth-oled in synth; no displayElement renders in performance, organ, piano or effects).",
+            "All 33 sectionLandmarks entries render inside their own section (counted by querying each .ns4-section subtree) — including the organ's nine drawbars with 8-segment red ladders, the piano's six-LED PIANO SELECT grid plus MODEL/LIST encoder, the program band's dial + eight PROGRAM buttons + PAGE + LIVE/SCENE II + STORE/SPLIT + three morph-assign buttons, and the effects band's two visibly divided groups.",
+            "Density falls short of the variant photograph. Controls visible in reference/nord-stage-4-73.jpg that have no operable counterpart include the effects band's ALL FX OFF and the per-unit GROUP buttons, the synth band's MENU / PATTERN / GROUP / KB SYNC / EXCLUDE buttons, and the program band's STORE AS, PRESET NAME, NUM PAD, PEDAL, SET KEY and PEDAL TAP. The artifact's program band also carries noticeably more empty red area above and below the OLED than the tightly packed reference.",
+            "Related: the Organ and Piano SUSTPED/PSTICK functions, which the photograph shows as LED-indicated shift functions of the layer buttons, exist only as printed legends (OrganSection.tsx:67,81; PianoSection.tsx:59,72) with no LED of their own."
+          ]
+        },
+        {
+          "id": "pianoFeatureCoverage",
+          "scoring": "judged",
+          "rating": 4,
+          "evidence": [
+            "All four Phase 1 piano feature IDs are exercisable in the running build, not just in tests. piano.basic-note-lifecycle: note on/off, overlap, re-strike and all-notes-off all drive the live voice counter. piano.basic-inputs: pointer, 40-pointer multi-touch, mapped computer keyboard with repeat suppression, Space/CC64 sustain, and denied-MIDI status all verified above. piano.basic-sustain-polyphony: 32/32 voice ceiling with ranked stealing. piano.basic-status-cleanup: ready, fallback and error states each reachable and truthful.",
+            "Status truthfulness proven by forcing the branches: normal load reports 'Salamander Grand V3 ready (78/78 samples)'; aborting the sample requests reports 'Recorded samples unavailable (Failed to fetch); harmonic synthesis fallback active' and the OLED model line switches from 'Salamander Grand' to 'Synth Fallback' while the keybed stays playable.",
+            "The harness record (artifact/evidence/stage1-audio.json) confirms the voice itself: notesSounding 19/19, tuningErrorCents 4.5, velocityRisingSteps 7/7 over an 18.79 dB range, releasesClean 3/3, clicks 0, sustainChecksPassed 2/2, latency 5.2 ms, chordTonesHeard 10/10, clippedMs 0, extraAudioContexts 0.",
+            "tests/feature-matrix.json maps all 11 required IDs to five real test files that the seal executed (inputs/verification.json: 'feature tests executed', 5 files ran), including an OfflineAudioContext PCM render in src/tests/pianoEngine.test.ts (renderPianoSequencePcm) that checks velocity amplitude ordering, sustain duration and 10-note chord headroom rather than fake-only state."
+          ]
+        },
+        {
+          "id": "declaredGapAccuracy",
+          "scoring": "judged",
+          "rating": 3,
+          "evidence": [
+            "Every behavioural declaration checks out. 'All panel controls remain truthfully decorative' — confirmed: driving controls in all six sections created no audio nodes. 'A truthfully labeled live harmonic-synthesis fallback when samples are loading or unavailable' — confirmed by forcing the failure (0 buffer sources, 3 oscillators, labelled in both the status pill and the OLED). '78 bundled audio files ... verbatim trimmed and re-encoded cuts' — confirmed by the seal (78/78 matched, lowest 0.9155) and by the 5.5/4.6/3.6 s buffer durations observed at playback.",
+            "The declared known deviation in evidence/stage1-visual-audit.md — 'ultra-small secondary shift sub-legends ... are simplified to their primary printed legends ... while retaining full descriptive text in accessible aria-labels' — is exactly what I found: #program-btn-1..8 carry no SYSTEM/SOUND/ORGANIZE/AUX KB/OUTPUT/PEDAL/MIDI/EXTERN silkscreen but their aria-labels do ('Program 1 (System)' …).",
+            "What is not declared is the control-inventory shortfall. The visual audit's section-by-section walkthrough enumerates what is present (e.g. 'Left red FX FOCUS strip (ORGAN, PIANO, SYNTH, SHIFT)') without noting that the photograph's ALL FX OFF and per-unit GROUP buttons, the synth MENU/PATTERN/GROUP buttons, and the program STORE AS / PRESET NAME / NUM PAD / PEDAL / SET KEY / PEDAL TAP controls are absent entirely. These are missing and undeclared.",
+            "Likewise undeclared: the Synth OLED is static text while its own three encoders, MODE and filter-type controls change state (driving #synth-enc-wave to 95% and cycling #synth-mode to EXTERN left the display reading 'SYNTH · PHASE 1 / Decorative / AUDIO IN PHASE 3' unchanged). Honest in substance, but not listed as a gap."
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Many panel buttons render as blank caps with no silkscreen legend",
+      "detail": "Across the Synth (LFO, OSCILLATORS, FILTER, AMP, VIBRATO, ARPEGGIATOR), Layer Effects (delay type, ping-pong/filter, comp on, reverb tone/type) and Program (PRESET LIBRARY trio, PROGRAM 1–8) bands, a large share of buttons are empty rounded rectangles. In reference/nord-stage-4-73.jpg every one of these carries printed text (WAVEFORM, PITCH/SMP, ENV TO PITCH, ENVELOPE, VELOCITY, TYPE, GROUP, MST CLK, ORGAN/PIANO/SYNTH, SYSTEM/SOUND/…). The names survive only in aria-labels, so a sighted player reading the panel cannot identify them."
+    },
+    {
+      "severity": "minor",
+      "criterion": "typographyDetail",
+      "title": "Effect-type and option LED clusters carry no printed type names",
+      "detail": "MOD 1, MOD 2, AMP SIM/EQ and REVERB each render a 2x3 dot grid of type LEDs with no legend beside the dots, so the selected type is unreadable from the panel — #fx-mod1-type cycles to 'PUMP' and #fx-reverb-type to 'CATH' in their aria-labels, but nothing on the surface says so. The reference prints the type names next to each LED. Knobs also lack the numbered 0–10 tick scales that the reference prints around nearly every knob."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelState",
+      "title": "Synth OLED is static while its own encoders and selectors change state",
+      "detail": "#synth-oled reads 'SYNTH · PHASE 1 / Decorative / AUDIO IN PHASE 3' and never changes. Driving #synth-enc-wave to aria-valuetext 95%, cycling #synth-mode to EXTERN and #synth-filter-type all left it byte-identical. The program OLED by contrast reads fully live values (P1:01, SUST ON/OFF, model name, NOTE C4 VEL 96). One of the two primary displays therefore never reflects the presentation state of the controls sitting directly under it, which the reference display does."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelControlCoverage",
+      "title": "Panel control inventory is visibly thinner than the variant photograph",
+      "detail": "146 panel controls render. Reference controls with no operable counterpart include ALL FX OFF and the per-unit GROUP buttons in Layer Effects; MENU, PATTERN, GROUP, KB SYNC and EXCLUDE in Synth; STORE AS, PRESET NAME, NUM PAD, PEDAL, SET KEY and PEDAL TAP in Program; and SUSTPED/PSTICK in Organ and Piano, which appear only as silkscreen with no control or LED. The program band also shows more empty red area above and below its OLED than the packed reference."
+    },
+    {
+      "severity": "minor",
+      "criterion": "declaredGapAccuracy",
+      "title": "The control-inventory shortfall is not declared",
+      "detail": "evidence/stage1-visual-audit.md declares the micro-silkscreen simplification and the section-fraction choice under 'Known Deviations', and its landmark walkthrough enumerates what is present section by section, but it never states that the controls listed in the issue above are absent. Behavioural declarations in IMPLEMENTATION_DETAILS.json are all accurate; it is the surface inventory that is understated."
+    },
+    {
+      "severity": "minor",
+      "criterion": "narrowRetention",
+      "title": "At 390x844 only about a third of the instrument is visible at a time",
+      "detail": "The chassis renders 1180 px wide inside .ns4-stage-scroller (scrollWidth 1200, clientWidth 390, overflow-x auto), so five of the six sections require horizontal scrolling and there is no scaled overview. Geometry and legibility are fully preserved (deck fraction 0.5400, aspect 3.0952, 73/73 keys inside the keybed, no document overflow, 0 console errors), but roughly 430 px of viewport below the status bar sits empty rather than being used to show more of the instrument."
+    },
+    {
+      "severity": "minor",
+      "criterion": "panelControlCoverage",
+      "title": "Ninth drawbar top legend reads '2 2/3' instead of a distinct rank name",
+      "detail": "The organ drawbar top legends read BASS16, STR16, FLUTE8, OBOE8, TRMP8, STR8, FLUTE4, STR4, '2 2/3'. The ninth duplicates a footage value rather than naming a rank, where the other eight all name one; the footage row underneath already reads 16' 5⅓' 8' 4' 2⅔' 2' 1⅗' 1⅓' 1' correctly."
+    }
+  ],
+  "panelFidelity": {
+    "scoredAgainst": "stage1",
+    "criteria": [
+      {
+        "id": "chassisGeometry",
+        "scoring": "computed",
+        "measurements": {
+          "deckFraction": 0.54,
+          "keybedFraction": 0.45997,
+          "widthFraction": 0.94,
+          "aspectRatio": 3.09514,
+          "sectionFractionMaxDeviation": 0.000012
+        },
+        "evidence": [
+          "Measured in the served build/ at 1440x900, unscrolled, deviceScaleFactor 1, via getBoundingClientRect. [data-component=\"instrument-chassis\"] = x 43.203, y 202.328, w 1353.594, h 437.328. deckFraction = 236.156 / 437.328 = 0.54000 (target 0.54 ±0.025); keybedFraction = 201.156 / 437.328 = 0.45997 (target 0.46 ±0.025); widthFraction = 1353.594 / 1440 = 0.94000 (range 0.88–0.97); aspectRatio = 1353.594 / 437.328 = 3.09514 (target 3.0951 ±0.06).",
+          "Six .ns4-section widths against a deck-section span of 1290.734 px, in order: performance 180.688 = 0.139988 (spec 0.14), organ 258.141 = 0.199995 (0.20), piano 109.703 = 0.084993 (0.085), program 161.328 = 0.124989 (0.125), synth 322.672 = 0.249991 (0.25), effects 258.141 = 0.199995 (0.20). Worst deviation 0.000012, well inside the 0.012 tolerance; the sections tile contiguously with no gaps.",
+          "No vertical scroll at desktop: document scrollHeight 900 = clientHeight 900, scrollWidth 1440 = clientWidth 1440, and no marketing hero renders above the instrument."
+        ]
+      },
+      {
+        "id": "hardwareInventory",
+        "scoring": "computed",
+        "measurements": {
+          "requiredLandmarksPresent": 33,
+          "requiredLandmarksTotal": 33,
+          "controlsReachable": 146,
+          "controlsTotal": 146,
+          "forbiddenPresent": 0
+        },
+        "evidence": [
+          "Presence counted by querying each .ns4-section subtree for the 33 sectionLandmarks entries (performance 5, organ 4, piano 5, program 7, synth 6, effects 6); all 33 render inside their own section. Examples: organ nine drawbars #organ-drawbar-1..9 plus 10-segment green fader ladders and 8-segment red drawbar ladders; program #program-oled, #program-dial, #program-btn-1..8, #program-page-prev/next, #program-live-mode, #program-layer-scene, #program-store, #program-split, #program-morph-wheel/at/ctrlped; synth #synth-oled plus A/B/C faders, osc/filter/envelope/LFO/arp controls.",
+          "Reachability measured, not inferred: for each of the 146 [data-control-id] elements I hit-tested a 5x5 grid across its border box with document.elementFromPoint at 1440x900 with the page unscrolled, counting a control reachable only when a grid point resolved to it or a descendant. 146/146 passed, 0 buried. The same method over the 73 keys gave 73/73, so 219/219 interactive elements are operable; no framework click helper was used.",
+          "forbiddenPresent = 0, each descriptor evaluated with its forbiddenDetection rule. OLED display (performance, effects): 0 displayElements in either section. wide OLED display (organ, piano): 0 displayElements. wide display spanning the section (synth): widest displayElement is #synth-oled at 82.4 px = 0.255 of the 322.7 px section, under 0.5. multiple primary displays (program): largest displayElement #program-oled area 4957 px²; the next largest is 687 px², under the 0.5x threshold of 2478.5, so exactly one primary. generic equal-width control grid (organ): 11 drawbar-like controls at >=3x taller than wide are present, so the rule cannot fire. drawbar bank (piano): only 2 controls are >=3x taller than wide, below the 6 required. uniform repeated knob matrix (synth): 22 controls share widths and heights within 5% of their medians, but their centres do not form a regular grid (row pitches 3.7, 53, 26.1, 4.8, 21.1, 15.7, 36.7 px; column pitches equally irregular). single undifferentiated control grid (effects): 0 controls fall within 5% of both medians, and the band has 21 distinct rows split by a vertical divider into two groups. full dark inset plate (performance): no element with an opaque fill at or below the luminance of panelBlueGray covers even 0.5 of the band, let alone 0.8.",
+          "No disagreement found between sectionLandmarks and reference/nord-stage-4-73.jpg. The spec's own note about the Rotary Speaker block holds: it sits on exposed red chassis below MASTER LEVEL and spans x 0.098–0.137 of the instrument width in the render, against the roughly 0.10–0.13 the note measures from the photograph."
+        ]
+      },
+      {
+        "id": "keybedFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "keysInsideKeybed": 73,
+          "keyCount": 73,
+          "whiteKeys": 43,
+          "blackKeys": 30,
+          "blackKeyHeightFraction": 0.60994
+        },
+        "evidence": [
+          "Measured at 1440x900 in the served build: [data-component=\"keybed\"] = x 71.625, y 438.484, w 1296.734, h 194.156. 73 [data-key-midi] elements, 43 with data-key-color=white and 30 black, spanning MIDI 28 (E1) to MIDI 100 (E7). Every one of the 73 key boxes falls inside the keybed box within 0.5 px, so keysInsideKeybed = 73/73.",
+          "Black-key height fraction = 115.984 / 190.156 = 0.60994 against a target of 0.61 ±0.03 (every white key measures 190.156 px and every black key 115.984 px — min and max identical). Black/white width ratio 18.625 / 30.063 = 0.6195. Pressed state is real: pointer-down on [data-key-midi=\"60\"] set aria-pressed=true and class is-pressed, and a sustained note showed class is-sustained distinct from is-pressed.",
+          "The keybed survives the narrow profile: at 390x844 all 73 keys still fall inside the keybed bounds."
+        ]
+      },
+      {
+        "id": "colorFidelity",
+        "scoring": "computed",
+        "measurements": {
+          "referenceColorsMatched": 5,
+          "referenceColorsTotal": 5
+        },
+        "evidence": [
+          "Sampled a 1440x900 PNG screenshot of the served build, decoded it, and kept every distinct RGB occupying at least 200 px as a rendered surface (535 such surfaces out of 14503 distinct colours), then took the minimum CIE76 deltaE to each referenceColors entry: chassisMid #851a25 -> #851a25 deltaE 0.00 (1898 px); chassisDark #5a0c13 -> #5a0d13 deltaE 0.36 (648 px); panelBlueGray #3c424d -> #3c424d deltaE 0.00 (8187 px); keyBlack #0b0b0b -> #0b0b0b deltaE 0.00 (1123 px); keyWhite #dcdcdc -> #dcdcdc deltaE 0.00 (299 px).",
+          "All five are inside the deltaE 12 threshold by a wide margin, so referenceColorsMatched = 5/5. Each match is a genuine surface rather than an antialiasing fringe — the blue-gray inset plates alone account for 8187 px at the exact reference value."
+        ]
+      },
+      {
+        "id": "typographyDetail",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "Materials and display treatment are convincing at rendered size. Captured at deviceScaleFactor 3, the organ band shows nine drawbars with the authentic Hammond cap alternation (16' dark, 5⅓' dark, 8' white, 4' white, 2⅔' dark, 2' white, 1⅗' dark, 1⅓' dark, 1' white), per-drawbar numbered 1–8 red LED ladders and footage legends, and 10-segment green ladders beside the layer faders. Surfaces are differentiated: red chassis gradient, #3c424d inset plates with red perimeters, lighter slate sub-module fills in the Synth and Effects bands, a wooden pitch stick and a ribbed metal mod wheel, plus the vertical 'HANDMADE IN SWEDEN BY CLAVIA DMI AB' edge silkscreen.",
+          "OLED treatment reads correctly: #program-oled renders a dark fill with a cyan header row, a bright model line, a divider rule and dimmed sub-lines ('P1:01 / SUST OFF / Salamander Grand / 73 KEYS E1 - E7 / PANEL: DECORATIVE'), at 95.3 x 52.0 px. Legends that exist are legible at 1440x900 — Barlow Condensed throughout, down to 5 px micro-legends such as CLOSE MIC, STOP MODE, SLOW / FAST.",
+          "The simplification a knowledgeable player would notice is legend coverage. A large share of buttons render as blank caps: in Synth, the LFO waveform, both OSCILLATORS buttons, both FILTER buttons, AMP ENV, VIBRATO menu and the arpeggiator menu button carry no printed text, where the reference prints WAVEFORM, PITCH/SMP, ENV TO PITCH, ENVELOPE, TYPE, VELOCITY, MENU on each. The effect-type LED clusters in MOD 1, MOD 2, AMP SIM/EQ and REVERB have no type names beside the dots, so the selection is unreadable from the surface. Knobs lack the numbered 0–10 tick scales the reference prints around nearly every knob.",
+          "Abbreviations compress further than the reference where sections are narrow (the piano band is only 109.7 px wide): EL/CLV/UP/DIG/GR/MSC for ELECTRIC/CLAV/UPRIGHT/DIGITAL/GRAND/MISC, ACOUST for ACOUSTICS, BRT/MID/SFT for BRIGHT/MID/SOFT, WHL/A.T./PED for WHEEL/A.T./CTRLPED, and SPLIT/CLK/TRN as a compressed pill row rather than the reference's three separate labelled plates. The piano TIMBRE ladder also shows 3 LEDs where the reference prints DYNO 1 and DYNO 2 as well."
+        ]
+      },
+      {
+        "id": "panelState",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "Control positions track their parameters, measured by driving each control type in the served build: #perf-master-level 75 -> 86 moved the rotor transform rotate(67.5deg) -> rotate(97.2deg); #organ-drawbar-1 7 -> 8 moved the handle top 54.75% -> 62% and lit 7 -> 8 segments; #piano-layer-a-fader 92 -> 80 moved the cap bottom 77.6% -> 68% and lit 9 -> 8 ladder segments; #perf-mod-wheel 30 shifted its background-position-y to 12px.",
+          "LEDs follow the active layer and section, measured by reading the lit/unlit pattern of every .ns4-led in a section before and after each click: #organ-layer-b-on true -> false flipped exactly one LED (011101100001000100010110 -> 011001100001000100010110); #organ-section-on flipped exactly one more; #fx-focus-piano false -> true lit one LED in the effects band; #organ-vib-type cycled C3 -> V1 -> C1 moving the lit LED within its six-LED cluster; #piano-type-select cycled GRAND -> UPRIGHT -> ELECTRIC with the red LED moving across the PIANO SELECT grid.",
+          "The program display reads live values: it shows SUST OFF / SUST ON tracking the pedal from Space, the footer toggle and CC64; the model line reads 'Salamander Grand' when samples are loaded and 'Synth Fallback' when they are not; and the third line reports the most recent note as 'NOTE C4 VEL 96' / 'NOTE G4 VEL 100'. The footer tracks live voice count (Voices: 32/32 under a 40-key press) and sample-load progress.",
+          "Shortfall: the other primary display is inert. #synth-oled reads 'SYNTH · PHASE 1 / Decorative / AUDIO IN PHASE 3' and did not change when I drove #synth-enc-wave to 95%, cycled #synth-mode to EXTERN, or cycled #synth-filter-type — all of which sit directly beneath it and all of which do change state. The reference display at that position reads its section's live parameters."
+        ]
+      },
+      {
+        "id": "narrowRetention",
+        "scoring": "judged",
+        "rating": 3,
+        "evidence": [
+          "At 390x844 (deviceScaleFactor 2, hasTouch) nothing collapses or clips. Measured: chassis 1180 x 381.2 px with aspect 3.0952 and deckFraction 0.5400 — identical proportions to desktop; all 73 keys still inside the keybed; all 146 controls still present with none under 6 px in either dimension; document scrollWidth 390 = clientWidth, so no page-level overflow; the status bar wraps to three rows inside 390 px; 0 console errors and 0 page errors.",
+          "The cost is coverage. The chassis lives inside .ns4-stage-scroller with scrollWidth 1200 against clientWidth 390 and overflow-x: auto, so only about a third of the instrument is on screen at once — at the default scroll position just the performance band and part of the organ band, with the piano, program, synth and effects sections reachable only by horizontal scrolling. 28 of 146 controls fall inside the viewport unscrolled.",
+          "The layout also leaves the lower viewport empty: the instrument plus status bar occupy roughly the top 410 px of 844, and the remaining ~430 px is blank background rather than being used for a scaled overview or a second row. The artifact's own evidence/stage1-narrow.png shows the same framing, so this is the intended behaviour rather than a capture artifact."
+        ]
+      }
+    ]
+  }
+}
