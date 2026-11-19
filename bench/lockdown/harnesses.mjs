@@ -440,11 +440,20 @@ const omp = {
     // omp requires a provider that declares models to name its endpoint and
     // its key; `apiKey` is the name of the variable that holds it (here the
     // placeholder), never a key.
+    // `auth: apiKey` says that key is a plain API key. Left unset, omp 19
+    // treats every declared `anthropic-messages` model as a Claude Code OAuth
+    // login: it opens the system prompt with a Claude Code billing header and
+    // "You are Claude Code, Anthropic's official CLI for Claude.", prefixes
+    // every tool name with `_`, and asks for `/v1/messages?beta=true`. That is
+    // for Anthropic's own subscription endpoint, never for a gateway model
+    // such as Gemini, and it also broke prompt caching (the header changes
+    // every turn).
     const models = {
       providers: {
         [OMP_PROVIDER]: {
           baseUrl: `https://${AI_GATEWAY_HOST}`,
           apiKey: 'AI_GATEWAY_API_KEY',
+          auth: 'apiKey',
           api: 'anthropic-messages',
           models: [{
             id: model.slug,

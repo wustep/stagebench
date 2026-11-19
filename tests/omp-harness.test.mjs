@@ -117,7 +117,7 @@ test('the box home says: no web search, no MCP, no extensions, no updates, every
   assert.doesNotMatch(config, /enabledProviders/, 'that setting is about foreign config directories, not model providers')
   assert.match(config, /\ndefaultThinkingLevel: "high"\n/)
   const models = files['.omp/agent/models.yml']
-  assert.match(models, /\nproviders:\n  vercel-ai-gateway:\n    baseUrl: "https:\/\/ai-gateway\.vercel\.sh"\n    apiKey: "AI_GATEWAY_API_KEY"\n    api: "anthropic-messages"\n    models:\n      - id: "google\/gemini-4-neon"\n        api: "anthropic-messages"\n/)
+  assert.match(models, /\nproviders:\n  vercel-ai-gateway:\n    baseUrl: "https:\/\/ai-gateway\.vercel\.sh"\n    apiKey: "AI_GATEWAY_API_KEY"\n    auth: "apiKey"\n    api: "anthropic-messages"\n    models:\n      - id: "google\/gemini-4-neon"\n        api: "anthropic-messages"\n/)
   assert.match(models, /contextWindow: 1000000\n        maxTokens: 1000000\n/)
   assert.match(models, /thinking:\n          mode: "budget"\n/)
   // No credential, real or placeholder, is ever written into a file: the key
@@ -132,6 +132,18 @@ test('the box home says: no web search, no MCP, no extensions, no updates, every
   assert.equal(isHarnessSurface('file:/home/candidate/.omp/agent/models.yml'), true)
   assert.equal(isHarnessSurface('file:/home/candidate/.omp/agent/sessions/x.jsonl'), false)
   assert.equal(isHarnessSurface('file:/workspace/candidate/.omp/agent/config.yml.bak'), false)
+})
+
+// omp 19 decides whether a declared provider's key is a Claude Code OAuth
+// login from its `auth` setting; unset, every `anthropic-messages` model counts
+// as one, and its requests open with a Claude Code billing header and identity
+// line and rename every tool `_<name>`. A gateway key is a plain API key.
+test('omp is told the gateway key is an API key, so it never dresses a gateway model up as Claude Code', () => {
+  const models = HARNESSES.omp.files({ model: MODEL, effort: 'high' }).find((file) => file.path === '.omp/agent/models.yml').content
+  assert.match(models, /\n  vercel-ai-gateway:\n(    .*\n)*    auth: "apiKey"\n/)
+  assert.doesNotMatch(models, /auth: "oauth"/)
+  assert.equal(models.includes('sk-ant-oat'), false, 'nothing that omp would read as an Anthropic OAuth token')
+  assert.equal(placeholderFor('vck_x').includes('sk-ant-oat'), false)
 })
 
 test('generated YAML quotes every string, so no value can change the document', () => {
