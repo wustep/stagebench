@@ -1,0 +1,1126 @@
+{
+  "$schema": "https://stagebench.local/schemas/implementation-details.schema.json",
+  "version": 1,
+  "phase": 3,
+  "audio": {
+    "strategy": "Single AudioContext architecture unifying Organ (Layers A/B sharing one Organ FX chain + dedicated Rotary routing), Piano (Layers A/B with Timbre EQ, model voicing, and independent/grouped FX chains), and Synth (Layers A/B/C with independent/grouped FX chains and deterministic Arpeggiator/Gate). Every layer traverses the exact ordered Layer Effects chain (Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ -> Compressor -> Reverb) -> [Direct | Shared Rotary Speaker with morphable speed] -> Layer level -> Master Bus -> Master Level Gain -> Soft-Knee Limiter -> Brickwall Safety Clipper -> single Destination. Grand (78 stereo OGG), Upright (52 stereo OGG), Rhodes Mk I (15 mono OGG), and Wurlitzer EP200 (25 mono OGG) are bundled recorded cuts from inputs/samples/ (170 files total). Organ engines (B3/B3 Bass, Vox, Farf, Pipe 1/Pipe 2), Synth engine (Pure/Sync/Multi/Super/FM-H), Clav/Digital/Misc piano types, sympathetic string resonance, reverb impulse responses, and the labeled sample-failure fallback are live/generated Web Audio synthesis.",
+    "generatedSources": [
+      {
+        "id": "clav-synth-voice",
+        "name": "Clavinet D6 & Harpsichord 8' Live Synthesis",
+        "type": "live-web-audio-synthesis",
+        "description": "Live Web Audio sawtooth/square harmonic plucked synthesis with resonant pickup highpass/peaking EQ and decaying lowpass envelope; Soft Release disabled per manual p. 25."
+      },
+      {
+        "id": "digital-fm-voice",
+        "name": "DX E.Piano & FM Bell Grand Live Synthesis",
+        "type": "live-web-audio-synthesis",
+        "description": "Live Web Audio 2-operator FM synthesis (carrier + frequency-modulated sine modulator with velocity-scaled modulation index and fast bell decay + warm body harmonic)."
+      },
+      {
+        "id": "misc-mallet-voice",
+        "name": "Concert Marimba & Warm Vibraphone Live Synthesis",
+        "type": "live-web-audio-synthesis",
+        "description": "Live Web Audio bar synthesis combining fundamental sine, 4th/3.98x harmonic overtone decay, and 5.5 Hz motor fan amplitude modulation on Vibraphone."
+      },
+      {
+        "id": "sympathetic-string-resonance",
+        "name": "Simulated Sympathetic String Resonance",
+        "type": "live-web-audio-synthesis",
+        "description": "Live Web Audio sympathetic overtone resonance activated when String Res is enabled and sustain pedal or companion notes are held."
+      },
+      {
+        "id": "procedural-reverb-irs",
+        "name": "Procedural Stereo Reverb Impulse Responses (Booth/Room/Spring/Stage/Hall/Cathedral)",
+        "type": "generated-in-memory-buffer",
+        "description": "Deterministic seeded PRNG exponentially decaying filtered stereo AudioBuffers (plus dispersive metallic chirp for Spring) generated in memory per AudioContext in src/audio/effectUnits.ts."
+      },
+      {
+        "id": "synth-piano-fallback",
+        "name": "Harmonic Piano Synthesis Fallback",
+        "type": "live-web-audio-synthesis",
+        "description": "Live Web Audio additive/filtered triangle+sine harmonic voice used only while recorded samples are loading or if sample fetching/decoding fails. Truthfully labeled as fallback in UI status and Program OLED."
+      },
+      {
+        "id": "organ-engines-live",
+        "name": "Organ Engines (B3, B3 Bass, Vox Continental, Farfisa Compact, Pipe 1, Pipe 2)",
+        "type": "live-web-audio-synthesis",
+        "description": "Live Web Audio multi-partial PeriodicWave & formant-EQ synthesis in src/audio/organVoice.ts: 9-drawbar tonewheel B3 with foldback, single-triggered 2nd/3rd percussion, and filtered-noise key click; B3 Bass (16'/8'); Vox Continental (7 transistor partials + flute/reed mix drawbars); Farfisa Compact (9 on/off register switches >=5/8 with nasal formant EQ); Pipe 1 & Pipe 2 (9 pipe ranks 16'-1' with wind-chiff onset and rank detuning); plus per-layer Vibrato/Chorus (V1-V3, C1-C3)."
+      },
+      {
+        "id": "synth-engine-live",
+        "name": "3-Layer Analog & FM-H Synth Engine with Deterministic Arpeggiator/Gate",
+        "type": "live-web-audio-synthesis",
+        "description": "Live Web Audio synthesis in src/audio/synthVoice.ts and src/audio/arpeggiator.ts supporting Pure (Sine, Triangle, Saw, Square, Pulse 33, Pulse 10, White Noise), Sync (Sync Saw, Sync Square), Multi (Multi Saw, Multi Saw 8ve), Super (Super Saw, Super Square), and FM-H (FM 2-op Algorithm A) with category-correct Osc Ctrl, LP12/LP24/LP M/HP/BP/LP+HP filters with tracking/resonance/drive, Osc/Filter/Amp envelopes, 5-waveform Master-Clock-syncable LFO (incl. Sample & Hold), Poly/Mono/Legato/Priority/Glide/Unison/Vibrato, and deterministic Arpeggiator/Gate."
+      }
+    ],
+    "sampleSources": [
+      {
+        "id": "salamander-grand-v3",
+        "name": "Salamander Grand Piano V3",
+        "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/grand/salamander-grand-v3/ (upstream: https://github.com/sfzinstruments/SalamanderGrandPiano at 3382bf9496bb)",
+        "license": "CC-BY-3.0",
+        "attribution": "Salamander Grand Piano V3 by Alexander Holm, licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Source: https://archive.org/details/SalamanderGrandPianoV3"
+      },
+      {
+        "id": "upright-piano-kw",
+        "name": "Upright Piano KW",
+        "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/upright/upright-piano-kw/ (upstream: https://github.com/freepats/upright-piano-KW at 570f6c60ed2e)",
+        "license": "CC0-1.0",
+        "attribution": "Upright Piano KW by Gonzalo and Roberto, FreePats project, CC0 1.0 (public domain dedication). Source: https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html"
+      },
+      {
+        "id": "learman-rhodes-gm",
+        "name": "Rhodes Mark I, GM version (Discord SFZ GM Bank)",
+        "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/electric/learman-rhodes-gm/ (upstream: https://github.com/sfzinstruments/Discord-SFZ-GM-Bank at 7a9c478fe331)",
+        "license": "CC0-1.0",
+        "attribution": "Rhodes Mark I samples (jRhodes GM version) by Jeff Learman, CC0 1.0 (public domain dedication). Source: https://github.com/sfzinstruments/Discord-SFZ-GM-Bank"
+      },
+      {
+        "id": "greg-sullivan-e-pianos",
+        "name": "Greg Sullivan's E-Pianos",
+        "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/electric/greg-sullivan-e-pianos/ (upstream: https://github.com/sfzinstruments/GregSullivan.E-Pianos at 8c3e581acda3)",
+        "license": "CC-BY-3.0",
+        "attribution": "Wurlitzer EP200, Hohner Pianet T, and Yamaha CP80 samples by Greg Sullivan (http://www.sullivang.net/), licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Source: https://github.com/sfzinstruments/GregSullivan.E-Pianos"
+      }
+    ],
+    "files": [
+      {
+        "path": "public/samples/grand/Ds1-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#1v3.flac",
+        "processing": "trimmed 21.4 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds1-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#1v10.flac",
+        "processing": "trimmed 22.0 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds1-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#1v16.flac",
+        "processing": "trimmed 25.5 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs1-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#1v3.flac",
+        "processing": "trimmed 22.2 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs1-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#1v10.flac",
+        "processing": "trimmed 19.0 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs1-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#1v16.flac",
+        "processing": "trimmed 21.6 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A1-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A1v3.flac",
+        "processing": "trimmed 8.0 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A1-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A1v10.flac",
+        "processing": "trimmed 14.6 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A1-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A1v16.flac",
+        "processing": "trimmed 12.6 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C2-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C2v3.flac",
+        "processing": "trimmed 14.2 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C2-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C2v10.flac",
+        "processing": "trimmed 14.9 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C2-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C2v16.flac",
+        "processing": "trimmed 15.1 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds2-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#2v3.flac",
+        "processing": "trimmed 12.3 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds2-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#2v10.flac",
+        "processing": "trimmed 11.8 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds2-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#2v16.flac",
+        "processing": "trimmed 14.4 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs2-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#2v3.flac",
+        "processing": "trimmed 18.8 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs2-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#2v10.flac",
+        "processing": "trimmed 14.9 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs2-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#2v16.flac",
+        "processing": "trimmed 18.3 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A2-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A2v3.flac",
+        "processing": "trimmed 12.1 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A2-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A2v10.flac",
+        "processing": "trimmed 12.1 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A2-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A2v16.flac",
+        "processing": "trimmed 17.1 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C3-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C3v3.flac",
+        "processing": "trimmed 19.0 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C3-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C3v10.flac",
+        "processing": "trimmed 14.1 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C3-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C3v16.flac",
+        "processing": "trimmed 17.5 ms lead-in, 5.5 s length, 1.5 ms fade-in, 0.75 s fade-out from 4.75 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds3-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#3v3.flac",
+        "processing": "trimmed 14.4 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds3-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#3v10.flac",
+        "processing": "trimmed 11.0 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds3-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#3v16.flac",
+        "processing": "trimmed 16.1 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs3-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#3v3.flac",
+        "processing": "trimmed 11.5 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs3-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#3v10.flac",
+        "processing": "trimmed 11.7 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs3-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#3v16.flac",
+        "processing": "trimmed 16.3 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A3-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A3v3.flac",
+        "processing": "trimmed 10.4 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A3-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A3v10.flac",
+        "processing": "trimmed 11.8 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A3-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A3v16.flac",
+        "processing": "trimmed 15.5 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C4-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C4v3.flac",
+        "processing": "trimmed 12.1 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C4-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C4v10.flac",
+        "processing": "trimmed 15.1 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C4-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C4v16.flac",
+        "processing": "trimmed 13.1 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds4-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#4v3.flac",
+        "processing": "trimmed 10.9 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds4-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#4v10.flac",
+        "processing": "trimmed 12.0 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds4-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#4v16.flac",
+        "processing": "trimmed 12.4 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs4-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#4v3.flac",
+        "processing": "trimmed 11.7 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs4-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#4v10.flac",
+        "processing": "trimmed 9.9 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs4-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#4v16.flac",
+        "processing": "trimmed 10.5 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A4-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A4v3.flac",
+        "processing": "trimmed 10.0 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A4-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A4v10.flac",
+        "processing": "trimmed 10.4 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A4-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A4v16.flac",
+        "processing": "trimmed 11.8 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C5-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C5v3.flac",
+        "processing": "trimmed 10.6 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C5-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C5v10.flac",
+        "processing": "trimmed 12.6 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C5-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C5v16.flac",
+        "processing": "trimmed 13.0 ms lead-in, 4.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 3.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds5-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#5v3.flac",
+        "processing": "trimmed 10.0 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds5-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#5v10.flac",
+        "processing": "trimmed 12.2 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds5-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#5v16.flac",
+        "processing": "trimmed 12.7 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs5-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#5v3.flac",
+        "processing": "trimmed 11.7 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs5-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#5v10.flac",
+        "processing": "trimmed 12.2 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs5-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#5v16.flac",
+        "processing": "trimmed 12.4 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A5-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A5v3.flac",
+        "processing": "trimmed 11.4 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A5-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A5v10.flac",
+        "processing": "trimmed 10.4 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A5-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A5v16.flac",
+        "processing": "trimmed 29.7 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C6-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C6v3.flac",
+        "processing": "trimmed 26.4 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C6-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C6v10.flac",
+        "processing": "trimmed 9.3 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C6-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C6v16.flac",
+        "processing": "trimmed 11.0 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds6-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#6v3.flac",
+        "processing": "trimmed 11.2 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds6-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#6v10.flac",
+        "processing": "trimmed 9.0 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds6-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#6v16.flac",
+        "processing": "trimmed 10.9 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs6-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#6v3.flac",
+        "processing": "trimmed 12.4 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs6-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#6v10.flac",
+        "processing": "trimmed 14.1 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs6-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#6v16.flac",
+        "processing": "trimmed 10.9 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A6-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A6v3.flac",
+        "processing": "trimmed 11.5 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A6-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A6v10.flac",
+        "processing": "trimmed 9.4 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/A6-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/A6v16.flac",
+        "processing": "trimmed 11.2 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C7-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C7v3.flac",
+        "processing": "trimmed 12.6 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C7-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C7v10.flac",
+        "processing": "trimmed 10.8 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/C7-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/C7v16.flac",
+        "processing": "trimmed 9.5 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds7-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#7v3.flac",
+        "processing": "trimmed 11.9 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds7-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#7v10.flac",
+        "processing": "trimmed 14.0 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Ds7-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/D#7v16.flac",
+        "processing": "trimmed 8.9 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs7-v3.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#7v3.flac",
+        "processing": "trimmed 11.2 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs7-v10.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#7v10.flac",
+        "processing": "trimmed 10.3 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/grand/Fs7-v16.ogg",
+        "origin": "pack",
+        "packFile": "grand/salamander-grand-v3/Samples/F#7v16.flac",
+        "processing": "trimmed 14.1 ms lead-in, 3.6 s length, 1.5 ms fade-in, 0.75 s fade-out from 2.85 s, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds1-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#1vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs1-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#1vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A1-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A1vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C2-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C2vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds2-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#2vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs2-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#2vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A2-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A2vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C3-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C3vL.flac",
+        "processing": "onset-trimmed lead-in, 4.82 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds3-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#3vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs3-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#3vL.flac",
+        "processing": "onset-trimmed lead-in, 4.85 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A3-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A3vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C4-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C4vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds4-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#4vL.flac",
+        "processing": "onset-trimmed lead-in, 4.19 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs4-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#4vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A4-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A4vL.flac",
+        "processing": "onset-trimmed lead-in, 2.14 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C5-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C5vL.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds5-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#5vL.flac",
+        "processing": "onset-trimmed lead-in, 2.84 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs5-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#5vL.flac",
+        "processing": "onset-trimmed lead-in, 1.90 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A5-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A5vL.flac",
+        "processing": "onset-trimmed lead-in, 1.60 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C6-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C6vL.flac",
+        "processing": "onset-trimmed lead-in, 2.21 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds6-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#6vL.flac",
+        "processing": "onset-trimmed lead-in, 1.07 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs6-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#6vL.flac",
+        "processing": "onset-trimmed lead-in, 1.09 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A6-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A6vL.flac",
+        "processing": "onset-trimmed lead-in, 0.81 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C7-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C7vL.flac",
+        "processing": "onset-trimmed lead-in, 0.63 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds7-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#7vL.flac",
+        "processing": "onset-trimmed lead-in, 0.79 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs7-vL.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#7vL.flac",
+        "processing": "onset-trimmed lead-in, 0.60 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds1-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#1vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs1-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#1vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A1-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A1vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C2-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C2vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds2-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#2vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs2-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#2vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/B2-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/B2vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C3-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C3vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds3-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#3vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs3-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#3vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A3-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A3vH.flac",
+        "processing": "onset-trimmed lead-in, 4.24 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/B3-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/B3vH.flac",
+        "processing": "onset-trimmed lead-in, 5.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds4-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#4vH.flac",
+        "processing": "onset-trimmed lead-in, 4.93 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs4-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#4vH.flac",
+        "processing": "onset-trimmed lead-in, 4.20 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A4-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A4vH.flac",
+        "processing": "onset-trimmed lead-in, 2.96 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C5-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C5vH.flac",
+        "processing": "onset-trimmed lead-in, 3.47 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds5-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#5vH.flac",
+        "processing": "onset-trimmed lead-in, 3.16 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs5-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#5vH.flac",
+        "processing": "onset-trimmed lead-in, 1.97 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A5-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A5vH.flac",
+        "processing": "onset-trimmed lead-in, 2.84 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C6-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C6vH.flac",
+        "processing": "onset-trimmed lead-in, 2.21 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds6-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#6vH.flac",
+        "processing": "onset-trimmed lead-in, 1.84 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs6-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#6vH.flac",
+        "processing": "onset-trimmed lead-in, 1.26 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/A6-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/A6vH.flac",
+        "processing": "onset-trimmed lead-in, 1.25 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/C7-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/C7vH.flac",
+        "processing": "onset-trimmed lead-in, 1.79 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Ds7-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/D#7vH.flac",
+        "processing": "onset-trimmed lead-in, 0.71 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/upright/Fs7-vH.ogg",
+        "origin": "pack",
+        "packFile": "upright/upright-piano-kw/samples/F#7vH.flac",
+        "processing": "onset-trimmed lead-in, 0.67 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz stereo, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/F1.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_029__F1_3.wav",
+        "processing": "onset-trimmed lead-in, 5.22 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/B1.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_035__B1_3.wav",
+        "processing": "onset-trimmed lead-in, 4.60 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/E2.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_040__E2_3.wav",
+        "processing": "onset-trimmed lead-in, 5.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/A2.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_045__A2_3.wav",
+        "processing": "onset-trimmed lead-in, 5.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/D3.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_050__D3_3.wav",
+        "processing": "onset-trimmed lead-in, 5.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/G3.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_055__G3_3.wav",
+        "processing": "onset-trimmed lead-in, 5.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/B3.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_059__B3_3.wav",
+        "processing": "onset-trimmed lead-in, 5.10 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/D4.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_062__D4_3.wav",
+        "processing": "onset-trimmed lead-in, 5.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/F4.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_065__F4_3.wav",
+        "processing": "onset-trimmed lead-in, 5.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/B4.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_071__B4_4.wav",
+        "processing": "onset-trimmed lead-in, 4.70 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/E5.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_076__E5_4.wav",
+        "processing": "onset-trimmed lead-in, 3.21 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/A5.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_081__A5_4.wav",
+        "processing": "onset-trimmed lead-in, 4.00 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/D6.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_086__D6_4.wav",
+        "processing": "onset-trimmed lead-in, 3.69 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/G6.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_091__G6_4.wav",
+        "processing": "onset-trimmed lead-in, 1.60 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/rhodes/C7.ogg",
+        "origin": "pack",
+        "packFile": "electric/learman-rhodes-gm/Discord GM/Melodic/005-Electric Piano 1/A_096__C7_4.wav",
+        "processing": "onset-trimmed lead-in, 0.69 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/A1-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/a1mp.flac",
+        "processing": "onset-trimmed lead-in, 2.80 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/E2-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/e2mp.flac",
+        "processing": "onset-trimmed lead-in, 2.20 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/A2-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/a2mp.flac",
+        "processing": "onset-trimmed lead-in, 2.35 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Ds3-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/eb3mp.flac",
+        "processing": "onset-trimmed lead-in, 2.17 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Gs3-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/ab3mp.flac",
+        "processing": "onset-trimmed lead-in, 2.65 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Cs4-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/db4mp.flac",
+        "processing": "onset-trimmed lead-in, 2.07 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Fs4-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/gb4mp.flac",
+        "processing": "onset-trimmed lead-in, 1.48 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/B4-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/b4mp.flac",
+        "processing": "onset-trimmed lead-in, 0.78 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Cs5-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/db5mp.flac",
+        "processing": "onset-trimmed lead-in, 1.05 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/G5-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/g5mp.flac",
+        "processing": "onset-trimmed lead-in, 0.66 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Cs6-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/db6mp.flac",
+        "processing": "onset-trimmed lead-in, 1.24 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Gs6-mp.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/ab6mp.flac",
+        "processing": "onset-trimmed lead-in, 0.83 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/A1-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/a1ff.flac",
+        "processing": "onset-trimmed lead-in, 4.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/C2-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/c2ff.flac",
+        "processing": "onset-trimmed lead-in, 4.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/F2-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/f2ff.flac",
+        "processing": "onset-trimmed lead-in, 4.50 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/B2-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/b2ff.flac",
+        "processing": "onset-trimmed lead-in, 3.85 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/E3-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/e3ff.flac",
+        "processing": "onset-trimmed lead-in, 2.92 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Gs3-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/ab3ff.flac",
+        "processing": "onset-trimmed lead-in, 3.20 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Cs4-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/db4ff.flac",
+        "processing": "onset-trimmed lead-in, 2.87 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/E4-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/e4ff.flac",
+        "processing": "onset-trimmed lead-in, 2.55 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/G4-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/g4ff.flac",
+        "processing": "onset-trimmed lead-in, 1.77 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Cs5-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/db5ff.flac",
+        "processing": "onset-trimmed lead-in, 1.52 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/G5-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/g5ff.flac",
+        "processing": "onset-trimmed lead-in, 0.82 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Cs6-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/db6f.flac",
+        "processing": "onset-trimmed lead-in, 1.09 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      },
+      {
+        "path": "public/samples/electric/wurli/Gs6-ff.ogg",
+        "origin": "pack",
+        "packFile": "electric/greg-sullivan-e-pianos/Wurlitzer EP200/Samples/ab6f.flac",
+        "processing": "onset-trimmed lead-in, 1.05 s length, 1.5 ms fade-in, smooth tail fade-out, 44.1 kHz mono, Ogg Vorbis q4"
+      }
+    ],
+    "notes": [
+      "All 170 bundled audio files under public/samples/ (78 Grand, 52 Upright, 15 Rhodes Mk I, 25 Wurlitzer EP200) are verbatim onset-trimmed, faded, and Ogg Vorbis q4 re-encoded cuts from inputs/samples/ with no pitch-shifting, time-stretching, or layering baked into the files.",
+      "Fine tuning offsets from upstream SFZ/Data metadata are applied at runtime via AudioBufferSourceNode.playbackRate for accurate A440 equal temperament.",
+      "Rhodes Mk I is recorded at a single dynamic per note in the pack; velocity dynamics are shaped at runtime via gain and dynamic lowpass filtering.",
+      "Phase 3 connects Organ (2 layers, 6 models, 9 drawbars, percussion, key click, V/C, shared FX chain & Rotary), Piano (2 layers, 6 types), Synth (3 layers, 14 required waveforms across Pure/Sync/Multi/Super/FM-H, filters, 3 envelopes, LFO, voice modes, deterministic Arp/Gate), Layer Effects (6 chains + Rotary + Group/Global/Bypass), and Programs (32 slots, 12 factory programs, 8 auto-storing Live slots, Store/Store As, List View, Undo, Splits/Zones/Crossfades, Scenes I/II, Wheel & Control Pedal morphs, Master Clock, Transpose ±6, Panic) on one shared AudioContext."
+    ]
+  },
+  "unsupported": [
+    "program-morph-at: Aftertouch as a morph source (browser keyboards have no aftertouch; excluded per nord-stage-4.programs.json)",
+    "program-preset-organ / program-preset-piano / program-preset-synth: Per-section preset library (cut benchmark-wide)",
+    "program-section-edit / program-mon-copy: Section Edit, Layer Init, Monitor, Copy/Paste/Swap, Num Pad mode (excluded per nord-stage-4.programs.json)",
+    "program-btn-1..8 Shift menus: System, Sound, Organize, Aux KB, Output, Pedal, MIDI, Extern menus, banks beyond 1, external MIDI clock sync, memory protection (excluded per nord-stage-4.programs.json)",
+    "organ-preset: Preset/Drawbar Live modes & drawbar sync, Organ Swell pedal, tonewheel wear modes, trigger point (excluded per nord-stage-4.organ.json)",
+    "synth-mode Samples & Extern modes, MIDI-out, Arp pattern editor/zig-zag/accent/pan, Filter/LFO/Arp Group modes (excluded per nord-stage-4.synth.json)",
+    "Piano pedal noise, half-pedaling, Triple Pedal hardware modeling, Piano size classes, INFO view (excluded per nord-stage-4.piano.json)",
+    "FX per-type Variations, Reverb Chorale, Delay feedback-loop FX/Analog mode, Mod 1 pedal modes, Rotary close mic/stop angle (excluded per nord-stage-4.effects.json)"
+  ]
+}
