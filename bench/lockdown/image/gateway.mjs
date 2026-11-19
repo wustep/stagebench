@@ -335,6 +335,18 @@ function applyAiGatewayPolicy(body, report) {
       report.modified = true
     }
   }
+  // Prompt caching. A harness speaking this wire (omp) sends no cache switch,
+  // so every turn re-bills the whole context at the full input rate. The
+  // gateway turns caching on when it is not set. It changes only what a
+  // request costs, never what the model sees or answers, and an explicit
+  // choice by the harness is left as it is.
+  const options = body.providerOptions ?? body.provider_options
+  if (options?.gateway?.caching === undefined) {
+    const key = body.provider_options !== undefined && body.providerOptions === undefined ? 'provider_options' : 'providerOptions'
+    body[key] = { ...(body[key] ?? {}), gateway: { ...(body[key]?.gateway ?? {}), caching: 'auto' } }
+    report.cachingDefaulted = true
+    report.modified = true
+  }
 }
 
 // Generated tokens in one response's usage, reasoning included, whichever

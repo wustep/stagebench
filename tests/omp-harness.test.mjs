@@ -177,7 +177,7 @@ test('the AI Gateway is pinned to the run model: another model, or none, is refu
   const fallback = post({ model: MODEL, messages: [], models: ['anthropic/claude-opus-5'], providerOptions: { gateway: { models: ['openai/gpt-6.2-sol'], order: ['vertex'] } } })
   assert.equal(fallback.allow, true)
   assert.equal(fallback.body.models, undefined)
-  assert.deepEqual(fallback.body.providerOptions, { gateway: { order: ['vertex'] } })
+  assert.deepEqual(fallback.body.providerOptions, { gateway: { order: ['vertex'], caching: 'auto' } })
   assert.deepEqual(fallback.stripped.sort(), ['models', 'providerOptions.gateway.models'])
 })
 
@@ -223,11 +223,11 @@ test('hosted tools and search switches are stripped from omp’s Anthropic-wire 
   assert.equal(requestedThinkingBudget(verdict.body), 16384)
   assert.equal(requestedEffort(verdict.body), null, 'a budget is not an effort string')
   // A request with nothing to strip goes out as it came.
-  const clean = applyModelPolicy(ompRule(), rule, { method: 'POST', urlPath: '/v1/messages', body: { model: MODEL, messages: [], providerOptions: { gateway: { order: ['vertex'] } } } })
+  const clean = applyModelPolicy(ompRule(), rule, { method: 'POST', urlPath: '/v1/messages', body: { model: MODEL, messages: [], providerOptions: { gateway: { order: ['vertex'], caching: 'auto' } } } })
   assert.equal(clean.modified, false)
   assert.deepEqual(clean.stripped, [])
   // Junk where an options object belongs is removed, not forwarded.
-  assert.equal(applyModelPolicy(ompRule(), rule, { method: 'POST', urlPath: '/v1/messages', body: { model: MODEL, providerOptions: 'enable-everything' } }).body.providerOptions, undefined)
+  assert.deepEqual(applyModelPolicy(ompRule(), rule, { method: 'POST', urlPath: '/v1/messages', body: { model: MODEL, providerOptions: 'enable-everything' } }).body.providerOptions, { gateway: { caching: 'auto' } })
   // Chat Completions shapes are covered the same way, should omp ever use them here.
   const chat = applyModelPolicy(ompRule(), rule, {
     method: 'POST', urlPath: '/v1/messages', body: {
@@ -564,4 +564,16 @@ test('the running gateway, configured as an omp launch configures it, refuses wh
   assert.deepEqual(startEntry.models, [MODEL])
   assert.deepEqual(startEntry.egress, [{ host: 'ai-gateway.vercel.sh', port: 443, mode: 'inspect', api: 'vercel-ai-gateway', paths: OMP_AI_GATEWAY_PATHS.map((pattern) => new RegExp(pattern).source) }])
   assert.deepEqual(startEntry.secrets, [{ hosts: ['ai-gateway.vercel.sh'] }])
+})
+
+test('the gateway turns AI Gateway prompt caching on when the harness leaves it unset, and keeps an explicit choice', () => {
+  const [rule] = ompRule().egress
+  const bare = applyModelPolicy(ompRule(), rule, { method: 'POST', urlPath: '/v1/messages', body: { model: MODEL, messages: [{ role: 'user', content: 'hi' }] } })
+  assert.equal(bare.allow, true)
+  assert.equal(bare.modified, true)
+  assert.deepEqual(bare.body.providerOptions, { gateway: { caching: 'auto' } })
+  assert.deepEqual(bare.body.messages, [{ role: 'user', content: 'hi' }], 'what the model sees is untouched')
+  const off = applyModelPolicy(ompRule(), rule, { method: 'POST', urlPath: '/v1/messages', body: { model: MODEL, messages: [], providerOptions: { gateway: { caching: 'off' } } } })
+  assert.deepEqual(off.body.providerOptions, { gateway: { caching: 'off' } })
+  assert.equal(off.modified, false)
 })
