@@ -2,7 +2,7 @@
 // can be boxed, and say plainly what the boundary looks like.
 import os from 'node:os'
 import { spawnSync } from 'node:child_process'
-import { EGRESS_NETWORK, PODMAN_MACHINE, detectRuntime, engine, ensureImages, hostExposure } from './runtime.mjs'
+import { DEFAULT_IMAGE_TARGETS, EGRESS_NETWORK, PODMAN_MACHINE, detectRuntime, engine, ensureImages, hostExposure } from './runtime.mjs'
 import { offlineToolchain } from './session.mjs'
 
 function podman(args, options = {}) {
@@ -75,7 +75,16 @@ function offlineSelfTest(runtime, image) {
   return `works: with no network, packages install from the image's mirror and ${(/chromium [\d.]+/.exec(result.stdout) ?? ['Chromium'])[0]} launches; an unlisted package does not install`
 }
 
-export async function setupLockdown({ rebuild = false, onOutput, env = process.env } = {}) {
+// The omp image (Bun and the pinned omp on top of the candidate box) runs the
+// CLI it carries, with no network: a version, and nothing else.
+function ompSelfTest(runtime, image) {
+  const result = engine(runtime, ['run', '--rm', '--network', 'none', '--cap-drop=ALL', '--security-opt', 'no-new-privileges', '--read-only', '--tmpfs', '/tmp:rw,exec,size=256m,mode=1777',
+    '--user', 'candidate', '-v', '/home/candidate', '--entrypoint', 'sh', image, '-c', 'echo "bun $(bun --version)"; omp --version'], { timeout: 120_000 })
+  if (result.status !== 0) return `BROKEN: ${String(result.stderr || result.stdout).trim().slice(-300)}`
+  return result.stdout.trim().split('\n').filter(Boolean).join('; ')
+}
+
+export async function setupLockdown({ rebuild = false, omp = false, onOutput, env = process.env } = {}) {
   let runtime = detectRuntime(env)
   let machine = null
   if (!runtime || (runtime.kind === 'podman' && !runtime.prefix.includes(PODMAN_MACHINE) && !runtime.explicit)) {
@@ -85,7 +94,7 @@ export async function setupLockdown({ rebuild = false, onOutput, env = process.e
   if (!runtime) {
     throw new Error('No container runtime found. Install Podman (`brew install podman` on macOS, your package manager on Linux) and run this again, or set STAGEBENCH_CONTAINER_RUNTIME to a Docker-compatible engine.')
   }
-  const images = await ensureImages(runtime, { onOutput, rebuild })
+  const images = await ensureImages(runtime, { onOutput, rebuild, targets: omp ? [...DEFAULT_IMAGE_TARGETS, 'candidate-omp'] : DEFAULT_IMAGE_TARGETS })
   if (engine(runtime, ['network', 'inspect', EGRESS_NETWORK]).status !== 0) engine(runtime, ['network', 'create', '--label', 'stagebench.lockdown=1', EGRESS_NETWORK], { check: true })
   return {
     runtime: `${runtime.bin} ${runtime.prefix.join(' ')}`.trim(),
@@ -95,6 +104,7 @@ export async function setupLockdown({ rebuild = false, onOutput, env = process.e
     hostDirectoriesVisibleToVm: (({ state, detail }) => `${state}: ${detail}`)(hostExposure(runtime)),
     internalNetworkEgress: egressSelfTest(runtime, images.candidate.tag),
     offlineToolchain: { ...offlineToolchain(), selfTest: offlineSelfTest(runtime, images.candidate.tag) },
+    ...(images.candidateOmp ? { omp: ompSelfTest(runtime, images.candidateOmp.tag) } : {}),
     next: 'pnpm bench fetch   (manual, photos, sample pack), pnpm bench redteam   (attack the boundary), then pnpm bench new --model <id> --target <1|2|3>',
   }
 }

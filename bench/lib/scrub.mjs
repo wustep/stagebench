@@ -25,6 +25,7 @@ const TOKEN_RULES = [
   ['NPM_TOKEN', /(?<![A-Za-z0-9])npm_[A-Za-z0-9]{36}(?![A-Za-z0-9])/g],
   ['HF_TOKEN', /(?<![A-Za-z0-9])hf_[A-Za-z0-9]{30,}/g],
   ['VERCEL_TOKEN', /(?<![A-Za-z0-9])vercel_[A-Za-z0-9_-]{20,}/g],
+  ['AI_GATEWAY_KEY', /(?<![A-Za-z0-9])vck_[A-Za-z0-9_-]{20,}/g],
   ['JWT', /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g],
 ]
 

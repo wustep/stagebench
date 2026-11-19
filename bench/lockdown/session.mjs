@@ -298,7 +298,7 @@ export async function openSession(root, { id, phase, workspace, runtime = requir
     '',
     `The candidate tree lives in the container volume \`${names.candidate}\`, not in this directory.`,
     '',
-    `- Run the agent:     \`pnpm bench agent ${id} --harness <codex|claude|custom>\``,
+    `- Run the agent:     \`pnpm bench agent ${id} --harness <codex|claude|omp|custom>\``,
     `- Run a command:     \`pnpm bench exec ${id} --command "pnpm test"\``,
     `- Seal (exports it): \`pnpm bench seal ${id}\``,
     '',
@@ -364,14 +364,14 @@ export function sessionVolumes(session) {
 // Run one process in the session's box and stream its output. `online` puts
 // the box on the session network, where the gateway (and so the model API) is;
 // without it the box has no network at all.
-export async function runInBox(runtime, session, images, { argv, env = {}, name, interactive = false, onOutput, timeout, workdir, online = true }) {
+export async function runInBox(runtime, session, images, { argv, env = {}, name, interactive = false, onOutput, timeout, workdir, online = true, image = images.candidate.tag }) {
   const names = sessionNames(session.key)
   const tty = interactive && process.stdin.isTTY && process.stdout.isTTY
   const boxName = name ?? `${session.key}-exec-${crypto.randomBytes(3).toString('hex')}`
   const args = [
     ...boxArguments(runtime, {
       name: boxName,
-      image: images.candidate.tag,
+      image,
       network: online ? names.network : 'none',
       volumes: sessionVolumes(session),
       env: boxEnvironment({ ...env, ...(tty && process.env.TERM ? { TERM: process.env.TERM } : {}) }, { gateway: online }),
@@ -509,6 +509,19 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
   const extraArgs = (String(options['harness-args'] ?? '').match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [])
     .map((word) => word.replace(/^'(.*)'$/s, '$1'))
   const context = { prompt, interactive, resume, model, effort: allowance.effort ?? null, command: options.command ?? null, extraArgs, mcpServers: options.mcpServers ?? {} }
+  // The box the harness runs in: the candidate image, unless the adapter needs
+  // a runtime only it uses (omp's Bun), which has a target of its own built on
+  // top of it. Everything else in the session (helpers, gates, capture) stays
+  // on the candidate image.
+  const agentImage = adapter.image
+    ? Object.values(await ensureImages(runtime, { onOutput, targets: [adapter.image] }))[0]
+    : images.candidate
+  // Model pinning is the operator's call (--pin-models), except for an
+  // adapter that points every one of its roles at the run's model and so
+  // knows the whole allowed set.
+  const pinned = options['pin-models']
+    ? String(options['pin-models']).split(',').map((value) => value.trim()).filter(Boolean)
+    : adapter.pinModels?.(context) ?? null
 
   await startGateway(runtime, session, images, {
     dns: env.STAGEBENCH_GATEWAY_DNS ? env.STAGEBENCH_GATEWAY_DNS.split(',') : undefined,
@@ -516,8 +529,9 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
     // No mirrors: the gateway's only door is this harness's model API.
     mirrors: SESSION_MIRRORS,
     // Pinning is opt-in: harnesses call auxiliary models (titles, compaction)
-    // that differ by vendor, so the operator states the allowed set.
-    models: options['pin-models'] ? String(options['pin-models']).split(',').map((value) => value.trim()).filter(Boolean) : null,
+    // that differ by vendor, so the operator states the allowed set (or the
+    // adapter does, when it has pointed every role at the run's model).
+    models: pinned,
     secrets: auth.gatewaySecrets,
     bodyLog: options['body-log'] ?? 'full',
     // The gateway refuses model turns once this many more tokens are generated.
@@ -543,6 +557,11 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
     credentialInBox: auth.gatewaySecrets.length === 0 && auth.leakCheck.length > 0,
     model,
     effort: allowance.effort ?? null,
+    // For an adapter with its own image, the exact image the agent ran in;
+    // and what the adapter made of the model and effort on its command line.
+    ...(adapter.image ? { image: { target: adapter.image, tag: agentImage.tag, id: agentImage.id } } : {}),
+    ...(adapter.describeLaunch ? { harnessSettings: adapter.describeLaunch(context) } : {}),
+    ...(adapter.pinModels && !options['pin-models'] ? { pinnedModels: pinned } : {}),
     // What this launch was allowed, and anything about it that departs from
     // the pinned budget (which makes the phase unofficial).
     ...(allowance.budgeted ? { budget: { timeoutMs: allowance.timeoutMs ?? null, timeoutIsBudget: Boolean(allowance.timeoutIsBudget), outputTokensLeft: allowance.outputTokensLeft } } : {}),
@@ -558,7 +577,7 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
     startedAt: new Date().toISOString(),
   }
   if (adapter.binary) {
-    const version = engine(runtime, ['run', '--rm', '--network', 'none', '--entrypoint', adapter.binary, images.candidate.tag, '--version'])
+    const version = engine(runtime, ['run', '--rm', '--network', 'none', '--entrypoint', adapter.binary, agentImage.tag, '--version'])
     launch.harnessVersion = version.status === 0 ? version.stdout.trim().split('\n').at(-1) : null
   }
   const logFile = path.join(stateDir, `launch-${launch.index}.log`)
@@ -571,6 +590,7 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
       argv,
       env: { ...adapter.env, ...auth.env },
       name: names.agent,
+      image: agentImage.tag,
       interactive,
       timeout: allowance.timeoutMs,
       onOutput: (text) => {
@@ -613,8 +633,11 @@ async function launchInSession(root, opened, { harness, options = {}, env = proc
 
 // Launch the candidate agent inside the box.
 export async function launchAgent(root, { id, phase, workspace, harness, options = {}, env = process.env, onOutput, messagePolicy = 'template', rules = null }) {
-  // Fail on a bad harness name or a missing credential before anything is created.
-  resolveAuth(resolveHarness(harness), env, options)
+  // Fail on a bad harness name, a missing credential, or options the adapter
+  // cannot run with, before anything is created.
+  const adapter = resolveHarness(harness)
+  resolveAuth(adapter, env, options)
+  adapter.check?.(options)
   const opened = await openSession(root, { id, phase, workspace, onOutput })
   return launchInSession(root, opened, { harness, options, env, onOutput, templates: CANDIDATE_MESSAGES, messagePolicy, rules })
 }
@@ -629,7 +652,10 @@ export async function execInSession(root, { id, phase, workspace, command, onOut
 // the credential: a slice from near the end (for a JWT, signature bytes).
 export function leakNeedle(secret) {
   const value = String(secret ?? '')
-  return value.length >= 48 ? value.slice(-36, -4) : null
+  if (value.length >= 48) return value.slice(-36, -4)
+  // A shorter key (a Vercel AI Gateway key can be one) still gets a needle: 16
+  // characters of its tail recognise a copy and are not enough to use.
+  return value.length >= 32 ? value.slice(-20, -4) : null
 }
 
 function walkFiles(directory, visit, base = directory) {
@@ -1079,7 +1105,9 @@ export async function openEvalSession(root, { id, phase, workspace, slot = 1, ru
 }
 
 export async function launchEvaluator(root, { id, phase, workspace, slot = 1, harness, options = {}, env = process.env, onOutput, messagePolicy = 'template' }) {
-  resolveAuth(resolveHarness(harness), env, options)
+  const adapter = resolveHarness(harness)
+  resolveAuth(adapter, env, options)
+  adapter.check?.(options)
   const opened = await openEvalSession(root, { id, phase, workspace, slot, onOutput })
   return launchInSession(root, opened, { harness, options, env, onOutput, templates: EVALUATOR_MESSAGES, messagePolicy })
 }

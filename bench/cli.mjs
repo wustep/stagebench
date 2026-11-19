@@ -67,10 +67,10 @@ const COMMANDS = {
   retarget: 'retarget <run-id> --to <2|3> — extend a run to a later target phase; sealed phases are untouched',
   rename: 'rename <run-id> --title "..." — update a run’s gallery title',
   start: 'start <run-id> — create the next phase workspace for the implementation agent',
-  agent: 'agent <run-id> --harness <codex|claude|custom> — run the implementation agent inside the lockdown [--model ...] [--effort ...] [--interactive] [--auth <mode>] [--pin-models a,b] [--timeout-minutes N]; rerun with --message <continue|seal-failure> to send a follow-up (fixed templates; --off-protocol-message "..." sends your own words and marks the phase)',
+  agent: 'agent <run-id> --harness <codex|claude|omp|custom> — run the implementation agent inside the lockdown [--model ...] (omp: --model <AI Gateway model>, e.g. google/gemini-4-neon) [--effort ...] [--interactive] [--auth <mode>] [--pin-models a,b] [--timeout-minutes N]; rerun with --message <continue|seal-failure> to send a follow-up (fixed templates; --off-protocol-message "..." sends your own words and marks the phase)',
   exec: 'exec <run-id> --command "..." — run a shell command in the phase\'s lockdown box (candidate/ is the working directory; no network)',
   evaluator: 'evaluator <run-id> [--phase N] --harness <claude|codex|custom> [--model ...] [--slot N] — run the evaluator inside a lockdown box whose only contents are the blind evaluator workspace, then bring its assessment back [--message <continue|review>]',
-  'lockdown-setup': 'Create the dedicated container VM if needed, build the lockdown images (offline npm mirror and Chromium included), and report what the boundary looks like [--rebuild]',
+  'lockdown-setup': 'Create the dedicated container VM if needed, build the lockdown images (offline npm mirror and Chromium included), and report what the boundary looks like [--rebuild] [--omp to also build the image --harness omp runs in (Bun and Oh My Pi); an omp launch builds it on demand otherwise]',
   redteam: 'redteam — attack the lockdown from inside and record the results [--agent <codex|claude>] [--out <dir>]',
   seal: 'seal <run-id> — export the phase from its container volume, run its gates, canonical capture, audio measurement, and sample check in a box with no network, verify, and seal it, with its agent transcripts and its gateway-derived token usage and cost [--unlocked to seal host-side work for a run that requires the lockdown; recorded as isolation none] [--as-failed to seal the phase as it stands, marked failed (an operator decision, recorded; a failing seal does this by itself once an official phase has used its seal-failure rounds or its budget)] [--cost-usd N --input-tokens N ... are recorded as operator-entered and non-official; a boxed phase\'s figures come from its gateway log] [--transcripts <file[,file...]> to add sessions auto-discovery misses]',
   fork: 'fork <run-id> --to <new-id> --reason "..." [--from-phase N] — start an operator-patched copy of a sealed run as a NEW, labelled run; sealed evidence is never edited or re-sealed in place',
@@ -159,7 +159,7 @@ async function seal(root, id, options) {
   // patch is the exception by construction — it is the operator's own edit,
   // made on this machine, and the run says so everywhere.
   if (!locked && !stage.patchOf && lockdown.requiredIsolation(run) === 'lockdown' && options.unlocked !== 'true') {
-    throw new Error(`${id} requires the lockdown, but Phase ${phase} has no lockdown session. Run the agent with: pnpm bench agent ${id} --harness <codex|claude|custom>. (To seal work done outside the box anyway — recorded as isolation "none" and footnoted in the gallery — pass --unlocked.)`)
+    throw new Error(`${id} requires the lockdown, but Phase ${phase} has no lockdown session. Run the agent with: pnpm bench agent ${id} --harness <codex|claude|omp|custom>. (To seal work done outside the box anyway — recorded as isolation "none" and footnoted in the gallery — pass --unlocked.)`)
   }
   const rules = locked ? runRules(run) : null
   const launches = locked ? (loadSession(root, id, phase)?.launches ?? []) : []
@@ -962,13 +962,13 @@ try {
       result.next = patch
         ? `This phase is an operator patch of ${patch.run} Phase ${patch.phase}: ${result.candidate} holds that sealed artifact. Apply your change there, then run pnpm bench seal ${id}`
         : result.isolation === 'lockdown'
-          ? `Run the implementation agent inside the lockdown: pnpm bench agent ${id} --harness <codex|claude|custom> [--model ...]. Then run pnpm bench seal ${id}`
+          ? `Run the implementation agent inside the lockdown: pnpm bench agent ${id} --harness <codex|claude|omp|custom> [--model ...]. Then run pnpm bench seal ${id}`
           : `Point the implementation agent at ${result.workspace}/WORKSPACE.md, then run pnpm bench seal ${id}`
     } else if (command === 'agent') {
       const run = loadRun(root, id)
       const stage = nextPhase(run)
       if (!stage || stage.status !== 'running') throw new Error(`${id} has no running phase; run pnpm bench start ${id} first`)
-      if (!options.harness) throw new Error('--harness is required (codex, claude, or custom)')
+      if (!options.harness) throw new Error('--harness is required (codex, claude, omp, or custom)')
       if (stage.patchOf) throw new Error(`Phase ${stage.number} of ${id} is an operator patch; no agent runs in it. Apply the change in the workspace and seal.`)
       const { launchAgent } = await import('./lockdown/session.mjs')
       const launched = await launchAgent(root, {
@@ -1098,7 +1098,7 @@ try {
       result = { ok: true, isolation: 'lockdown', network: 'none', command: options.command }
     } else if (command === 'lockdown-setup') {
       const { setupLockdown } = await import('./lockdown/setup.mjs')
-      result = await setupLockdown({ rebuild: options.rebuild === 'true', onOutput: (text) => process.stderr.write(text) })
+      result = await setupLockdown({ rebuild: options.rebuild === 'true', omp: options.omp === 'true', onOutput: (text) => process.stderr.write(text) })
     } else if (command === 'redteam') {
       const { runRedTeam } = await import('./lockdown/redteam/run.mjs')
       result = await runRedTeam(root, { ...options, onOutput: (text) => process.stderr.write(text) })

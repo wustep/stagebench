@@ -233,7 +233,7 @@ test('a relayed seal failure names neither the run nor the model, in any punctua
 test('nothing the launcher writes into a candidate box names the model or the run, except what the harness itself must send', () => {
   const model = 'sbprobe-1234-model'
   const id = 'sbprobe-1234-model-run'
-  const fakeEnv = { STAGEBENCH_OPENAI_API_KEY: `sk-proj-${'a'.repeat(48)}`, STAGEBENCH_ANTHROPIC_API_KEY: `sk-ant-api03-${'b'.repeat(48)}` }
+  const fakeEnv = { STAGEBENCH_OPENAI_API_KEY: `sk-proj-${'a'.repeat(48)}`, STAGEBENCH_ANTHROPIC_API_KEY: `sk-ant-api03-${'b'.repeat(48)}`, STAGEBENCH_AI_GATEWAY_API_KEY: `vck_${'c'.repeat(48)}` }
   for (const [name, adapter] of Object.entries(HARNESSES).filter(([key]) => key !== 'custom')) {
     const auth = resolveAuth(adapter, fakeEnv, { auth: 'api-key' })
     const context = { prompt: CANDIDATE_MESSAGES.initial.text({ workspace: '/workspace' }), model, effort: 'high', extraArgs: [], mcpServers: {} }

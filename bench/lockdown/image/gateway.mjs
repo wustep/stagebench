@@ -287,7 +287,70 @@ export function applyModelPolicy(config, rule, { method = 'GET', urlPath, body =
       report.modified = true
     }
   }
+  if (rule.api === 'vercel-ai-gateway') applyAiGatewayPolicy(body, report)
   return { allow: true, modified: report.modified, stripped: report.stripped.slice(0, 40), model, body }
+}
+
+// Vercel AI Gateway takes the same request bodies as the APIs it imitates
+// (Anthropic Messages, OpenAI Chat Completions and Responses), plus fields of
+// its own that reach past the one model the request names:
+//   providerOptions   per-provider switches passed upstream. Under a provider's
+//                     name they turn on hosted features (Google search
+//                     grounding and URL context, OpenAI and xAI search);
+//                     under `gateway`, `models` is a list of fallback models
+//                     and `byok` carries credentials. Only the gateway's
+//                     routing among the upstream providers of the same model
+//                     (`order`, `only`) and its cache switch are kept.
+//   models            a top-level fallback list, another way to be served by a
+//                     model other than the one named.
+//   plugins           aggregator plugins (web search among them).
+export const AI_GATEWAY_KEPT_ROUTING = ['order', 'only', 'caching']
+
+function applyAiGatewayPolicy(body, report) {
+  for (const key of ['providerOptions', 'provider_options']) {
+    const options = body[key]
+    if (options === undefined) continue
+    const routing = options !== null && typeof options === 'object' && !Array.isArray(options) && options.gateway !== null && typeof options.gateway === 'object' && !Array.isArray(options.gateway) ? options.gateway : null
+    const kept = {}
+    if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+      report.stripped.push(key)
+    } else {
+      for (const name of Object.keys(options)) if (name !== 'gateway' || !routing) report.stripped.push(`${key}.${clip(name, 40)}`)
+      if (routing) {
+        for (const [name, value] of Object.entries(routing)) {
+          if (AI_GATEWAY_KEPT_ROUTING.includes(name)) kept[name] = value
+          else report.stripped.push(`${key}.gateway.${clip(name, 40)}`)
+        }
+      }
+    }
+    const before = JSON.stringify(options)
+    if (Object.keys(kept).length > 0) body[key] = { gateway: kept }
+    else delete body[key]
+    if (JSON.stringify(body[key]) !== before) report.modified = true
+  }
+  for (const key of ['models', 'plugins']) {
+    if (body[key] !== undefined) {
+      report.stripped.push(key)
+      delete body[key]
+      report.modified = true
+    }
+  }
+}
+
+// Generated tokens in one response's usage, reasoning included, whichever
+// vocabulary the API speaks: `output_tokens` (Anthropic Messages, OpenAI
+// Responses) or `completion_tokens` (Chat Completions). Every API these
+// harnesses use counts reasoning inside that number. A provider that reports
+// it beside the output instead gives itself away by its own total
+// (input + output + reasoning), and then the two are added.
+export function generatedTokens(usage) {
+  if (!usage || typeof usage !== 'object') return 0
+  const count = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+  const output = count(usage.output_tokens ?? usage.completion_tokens)
+  const reasoning = count(usage.output_tokens_details?.reasoning_tokens ?? usage.completion_tokens_details?.reasoning_tokens ?? usage.reasoning_tokens)
+  const input = count(usage.input_tokens ?? usage.prompt_tokens)
+  if (reasoning > 0 && typeof usage.total_tokens === 'number' && usage.total_tokens === input + output + reasoning) return output + reasoning
+  return output
 }
 
 // The only headers a credential belongs in. A placeholder anywhere else is
@@ -397,6 +460,15 @@ export function extractResponseModel(text) {
 export function requestedEffort(body) {
   const effort = body?.reasoning?.effort ?? body?.output_config?.effort ?? null
   return typeof effort === 'string' ? clip(effort, 24) : null
+}
+
+// A thinking budget in tokens, where a request asks for one instead of (or as
+// well as) an effort: Anthropic Messages `thinking.budget_tokens`, which is how
+// omp asks Vercel AI Gateway's Gemini models to think. Recorded beside the
+// effort; null (and left out of the log) when the request names none.
+export function requestedThinkingBudget(body) {
+  const budget = body?.thinking?.budget_tokens
+  return typeof budget === 'number' && Number.isFinite(budget) ? budget : null
 }
 
 // ---------------------------------------------------------------------------
@@ -673,6 +745,7 @@ export function startGateway(rawConfig, { proxyPort = PROXY_PORT, mirrorPort = M
     const seq = logger.write('inspect.request', {
       host, method: request.method, path: logPath,
       model: verdict.model, effort: requestedEffort(verdict.body), bytes: outbound.length, bodySha256: outbound.length ? sha256(outbound) : null,
+      ...(requestedThinkingBudget(verdict.body) !== null ? { thinkingBudget: requestedThinkingBudget(verdict.body) } : {}),
       strippedTools: verdict.stripped, secretsSubstituted: secretsUsed,
     })
     if (config.bodyLog === 'full' && outbound.length > 0) saveBody(seq, 'request', outbound)
@@ -703,7 +776,7 @@ export function startGateway(rawConfig, { proxyPort = PROXY_PORT, mirrorPort = M
           usage = extractUsage(text)
           served = extractResponseModel(text)
         } catch { usage = null }
-        if (typeof usage?.output_tokens === 'number') outputTokensSpent += usage.output_tokens
+        outputTokensSpent += generatedTokens(usage)
         // The provider's own request id and the model id it says served the
         // request: what a pinned grader is checked against afterwards.
         const requestId = clip(String(reply.headers['request-id'] ?? reply.headers['x-request-id'] ?? ''), 120) || null

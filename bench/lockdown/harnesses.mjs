@@ -1,7 +1,11 @@
 // Per-harness adapters. The lockdown itself is harness-agnostic — a box, three
 // volumes, one gateway — so an adapter is deliberately small: where the
 // harness keeps its login, which model API host it talks to, the config that
-// makes it run unattended, and its command line. Nothing here is a security
+// makes it run unattended, and its command line. Optionally (omp uses these):
+// `image`, a Containerfile target its agent box runs in instead of the
+// candidate image; `pinModels(context)`, the models the gateway pins when the
+// operator names none; `check(options)`, run before a session is opened; and
+// `describeLaunch(context)`, kept on the launch record. Nothing here is a security
 // boundary; an adapter that got everything wrong would produce a harness that
 // cannot reach its model, not a candidate that can reach the host.
 import crypto from 'node:crypto'
@@ -16,7 +20,7 @@ export const BOX_WORKSPACE = '/workspace'
 // way to the one host it belongs to. The vendor prefix is kept so harnesses
 // that sniff the key type still pick the right auth scheme.
 export function placeholderFor(secret) {
-  const prefix = /^(sk-ant-[a-z]+\d+-|sk-proj-|sk-|xai-|key-)/.exec(secret)?.[1] ?? ''
+  const prefix = /^(sk-ant-[a-z]+\d+-|sk-proj-|sk-|xai-|key-|vck_)/.exec(secret)?.[1] ?? ''
   return `${prefix}stagebench-placeholder-${crypto.randomBytes(16).toString('hex')}`
 }
 
@@ -66,6 +70,32 @@ function firstEnv(env, names) {
 
 function tomlString(value) {
   return JSON.stringify(String(value))
+}
+
+// Block YAML for plain data (objects, arrays, strings, numbers, booleans).
+// Every string is written double-quoted, JSON-escaped, which YAML reads as the
+// same string, so nothing in a value can change the document's structure.
+export function toYaml(value, indent = '') {
+  const scalar = (entry) => (typeof entry === 'string' ? JSON.stringify(entry) : String(entry))
+  const lines = []
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (entry !== null && typeof entry === 'object') {
+        const [first, ...rest] = toYaml(entry, `${indent}  `).split('\n').filter(Boolean)
+        lines.push(`${indent}- ${first.trimStart()}`, ...rest)
+      } else {
+        lines.push(`${indent}- ${scalar(entry)}`)
+      }
+    }
+  } else {
+    for (const [key, entry] of Object.entries(value)) {
+      const name = /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key) ? key : JSON.stringify(key)
+      if (Array.isArray(entry) && entry.length === 0) lines.push(`${indent}${name}: []`)
+      else if (entry !== null && typeof entry === 'object') lines.push(`${indent}${name}:`, toYaml(entry, `${indent}  `).replace(/\n$/, ''))
+      else lines.push(`${indent}${name}: ${scalar(entry)}`)
+    }
+  }
+  return `${lines.join('\n')}\n`
 }
 
 // Exactly what the Codex CLI needs from chatgpt.com to run a turn, and nothing
@@ -276,6 +306,186 @@ const claude = {
   },
 }
 
+// Oh My Pi (`omp`, npm @oh-my-pi/pi-coding-agent) with models from Vercel AI
+// Gateway. omp 19's `vercel-ai-gateway` provider speaks the Anthropic Messages
+// wire to the gateway for every model it serves, Gemini included (all 417 rows
+// of its bundled catalog say `api: anthropic-messages`), and lists models from
+// the OpenAI-style catalog endpoint. Those two are the whole allowlist: omp
+// asks the gateway for no token counts, credits, or generation lookups.
+export const AI_GATEWAY_HOST = 'ai-gateway.vercel.sh'
+export const OMP_AI_GATEWAY_PATHS = ['^/v1/messages$', '^/v1/models$']
+export const OMP_PROVIDER = 'vercel-ai-gateway'
+export const OMP_AGENT_DIR = `${BOX_HOME}/.omp/agent`
+export const OMP_SESSIONS = '.omp/agent/sessions'
+// The thinking levels `omp --thinking` accepts.
+export const OMP_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+// omp's model roles that drive a chat model. Every one is pointed at the run's
+// model: an auxiliary call (titles, subagents, memory, the advisor) goes to the
+// model the gateway pins, rather than to a "smol" model it would refuse.
+export const OMP_CHAT_ROLES = ['default', 'smol', 'slow', 'vision', 'plan', 'commit', 'tiny', 'memory', 'task', 'advisor', 'widget']
+
+// The run's model as the gateway sees it in a request body (`google/gemini-4-neon`)
+// and as omp names it on its command line (`vercel-ai-gateway/google/gemini-4-neon`).
+// Either form is accepted for --model.
+export function ompModel(model) {
+  const raw = String(model ?? '').trim()
+  if (!raw) throw new Error('--harness omp needs the AI Gateway model it runs: --model <creator/model>, e.g. --model google/gemini-4-neon')
+  const slug = raw.startsWith(`${OMP_PROVIDER}/`) ? raw.slice(OMP_PROVIDER.length + 1) : raw
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(slug) || slug.includes('//') || slug.endsWith('/')) throw new Error(`--model ${JSON.stringify(raw)} is not an AI Gateway model id (creator/model)`)
+  return { slug, omp: `${OMP_PROVIDER}/${slug}` }
+}
+
+function ompThinking(effort) {
+  if (!effort) return null
+  if (!OMP_THINKING_LEVELS.includes(effort)) throw new Error(`omp has no thinking level "${effort}" (it takes ${OMP_THINKING_LEVELS.join(', ')})`)
+  return effort
+}
+
+const omp = {
+  label: 'Oh My Pi',
+  binary: 'omp',
+  // Its own image target (Bun and omp on top of the candidate box): see the Containerfile.
+  image: 'candidate-omp',
+  verified: true,
+  env: {
+    PI_CODING_AGENT_DIR: OMP_AGENT_DIR,
+    // Belt and braces for what config.yml also says: no grievance reports to
+    // qa.omp.sh, no title model call, no OpenTelemetry export.
+    PI_AUTO_QA: '0',
+    PI_NO_TITLE: '1',
+    OTEL_SDK_DISABLED: 'true',
+    // omp's openai-codex provider (unused here) asks registry.npmjs.org for
+    // the latest @openai/codex at start-up to claim its client version; a
+    // pinned version (the Codex CLI in the candidate image) stops the lookup.
+    PI_AI_CODEX_CLIENT_VERSION: '0.169.0',
+  },
+  transcripts: [OMP_SESSIONS],
+  // The gateway refuses any model but the run's, whether or not the operator
+  // says --pin-models: omp is pointed at that one model for every role.
+  pinModels: (context) => [ompModel(context.model).slug],
+  check(options) {
+    ompModel(options.model)
+    if (options.effort) ompThinking(options.effort)
+  },
+  // What the launch record keeps about how omp was told to run: the model as
+  // omp names it, and the thinking level the protocol's effort became.
+  describeLaunch: (context) => ({
+    model: ompModel(context.model).omp,
+    thinking: ompThinking(context.effort),
+    mode: context.interactive ? 'interactive' : 'print',
+  }),
+  authModes: [
+    {
+      id: 'api-key',
+      describe: 'Vercel AI Gateway API key, held by the gateway; the box only ever sees a placeholder',
+      detect: (env) => firstEnv(env, ['STAGEBENCH_AI_GATEWAY_API_KEY', 'AI_GATEWAY_API_KEY']),
+      build(source) {
+        const placeholder = placeholderFor(source.value)
+        return {
+          files: [],
+          // The variable omp's vercel-ai-gateway provider reads its key from.
+          env: { AI_GATEWAY_API_KEY: placeholder },
+          egress: [{ host: AI_GATEWAY_HOST, mode: 'inspect', api: 'vercel-ai-gateway', paths: OMP_AI_GATEWAY_PATHS }],
+          gatewaySecrets: [{ placeholder, value: source.value, hosts: [AI_GATEWAY_HOST] }],
+          leakCheck: [source.value],
+          source: `$${source.name}`,
+        }
+      },
+    },
+  ],
+  files(context) {
+    const model = ompModel(context.model)
+    const thinking = ompThinking(context.effort)
+    const header = [
+      '# Written by the Stagebench lockdown launcher. The container is the sandbox:',
+      '# omp runs unattended, reaches only Vercel AI Gateway through the lockdown',
+      '# gateway, and every hosted tool is stripped there whatever this file says.',
+      '',
+    ].join('\n')
+    const settings = {
+      modelRoles: Object.fromEntries(OMP_CHAT_ROLES.map((role) => [role, model.omp])),
+      ...(thinking ? { defaultThinkingLevel: thinking } : {}),
+      tools: { approvalMode: 'yolo' },
+      // Nothing that reaches past the model API: no web search (Exa, keyless,
+      // or the provider's own), no URL fetching, no GitHub API.
+      web_search: { enabled: false },
+      fetch: { enabled: false },
+      exa: { enabled: false },
+      github: { enabled: false },
+      providers: { webKeyless: false, cacheWarming: 'off' },
+      // No MCP servers, extensions, skills, or plugins: none are inherited, and
+      // none are discovered from the candidate's tree.
+      mcp: { enableProjectConfig: false },
+      extensions: [],
+      skills: { enabled: false },
+      marketplace: { autoUpdate: 'off' },
+      // No updates, telemetry, or grievance uploads.
+      startup: { checkUpdate: false, setupWizard: false },
+      update: { auto: false },
+      telemetry: { otlpExportEnabled: false },
+      dev: { autoqa: false, autoqaConsent: 'denied' },
+      // One model: a failed turn is retried on it, never on a fallback.
+      retry: { modelFallback: false },
+      recap: { enabled: false },
+      memory: { backend: 'off' },
+    }
+    // The run's model, declared for omp: a model newer than omp's bundled
+    // catalog would otherwise be found only by asking the gateway for its
+    // model list at start-up, and an undeclared one gets omp's defaults for an
+    // unknown model (128K context, 16K output), which would compact early and
+    // cut turns short. The limits and the thinking surface are the ones omp's
+    // catalog gives every Gemini 4 model on this provider, taken from the
+    // gateway's own model rows: 1M context, 1M output ceiling, and thinking as
+    // a token budget per level.
+    // omp requires a provider that declares models to name its endpoint and
+    // its key; `apiKey` is the name of the variable that holds it (here the
+    // placeholder), never a key.
+    const models = {
+      providers: {
+        [OMP_PROVIDER]: {
+          baseUrl: `https://${AI_GATEWAY_HOST}`,
+          apiKey: 'AI_GATEWAY_API_KEY',
+          api: 'anthropic-messages',
+          models: [{
+            id: model.slug,
+            api: 'anthropic-messages',
+            baseUrl: `https://${AI_GATEWAY_HOST}`,
+            reasoning: true,
+            thinking: { mode: 'budget', efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'], requiresEffort: true },
+            input: ['text', 'image'],
+            contextWindow: 1_000_000,
+            maxTokens: 1_000_000,
+          }],
+        },
+      },
+    }
+    return [
+      { path: '.omp/agent/config.yml', content: `${header}${toYaml(settings)}` },
+      { path: '.omp/agent/models.yml', content: `${header}${toYaml(models)}` },
+    ]
+  },
+  command(context) {
+    if (Object.keys(context.mcpServers ?? {}).length > 0) throw new Error('--harness omp runs with no MCP servers')
+    const model = ompModel(context.model)
+    const thinking = ompThinking(context.effort)
+    const common = [
+      '--model', model.omp,
+      ...(thinking ? ['--thinking', thinking] : []),
+      '--cwd', BOX_WORKSPACE,
+      '--approval-mode', 'yolo',
+      // Auxiliary services (judge, spotlight) stay on the run's provider; no
+      // title call; nothing loaded from outside the session.
+      '--offline', '--no-title', '--no-extensions', '--no-skills',
+      ...(context.extraArgs ?? []),
+    ]
+    // `--` ends the flags, so a message that starts with `-` or `@` is still
+    // the message and never a flag or a file to attach.
+    const message = context.prompt ? ['--', context.prompt] : []
+    if (context.interactive) return ['omp', ...common, ...(context.resume ? ['--continue'] : []), ...message]
+    return ['omp', '--print', ...common, ...(context.resume ? ['--continue'] : []), ...message]
+  },
+}
+
 // Any other CLI. The operator names the model host(s) and which environment
 // variable carries the credential; the launcher does the rest. This is how a
 // harness without a dedicated adapter (Cursor, Grok, OpenCode, …) runs in the
@@ -321,7 +531,7 @@ const custom = {
   },
 }
 
-export const HARNESSES = { codex, claude, custom }
+export const HARNESSES = { codex, claude, omp, custom }
 
 // Harnesses with no dedicated adapter yet, as starting points for
 // `--harness custom`. None of these has been run end to end; the hosts are what

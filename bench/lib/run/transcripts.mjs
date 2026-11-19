@@ -13,7 +13,8 @@
 // Sessions are found by the working directory the agent ran in (the phase
 // workspace or its candidate/ subdirectory), across the session stores of the
 // agents actually used: Codex rollouts, Claude Code projects, Cursor agent
-// transcripts. Explicit files can be added for anything discovery misses.
+// transcripts, omp (Oh My Pi) sessions. Explicit files can be added for
+// anything discovery misses (a boxed phase hands its sessions over that way).
 // Missing transcripts never fail a seal — the gap is recorded instead.
 import fs from 'node:fs'
 import os from 'node:os'
@@ -45,7 +46,8 @@ function homeRelative(file, homeDir = os.homedir()) {
 
 // The agent homes to search. $CODEX_HOME / $CLAUDE_CONFIG_DIR win, then every
 // ~/.codex* and ~/.claude* home that has a session store (the operator runs
-// separate personal/work homes), then ~/.cursor.
+// separate personal/work homes), then ~/.cursor, then omp's session stores
+// ($PI_CODING_AGENT_DIR, ~/.omp/agent, and each ~/.omp/profiles/<name>/agent).
 export function agentHomes({ env = process.env, homeDir = os.homedir() } = {}) {
   const dotHomes = (prefix) => {
     try {
@@ -64,7 +66,17 @@ export function agentHomes({ env = process.env, homeDir = os.homedir() } = {}) {
     .map((home) => path.join(home, 'projects'))
     .filter((dir) => fs.existsSync(dir))
   const cursor = unique([path.join(homeDir, '.cursor')]).filter((dir) => fs.existsSync(path.join(dir, 'projects')) || fs.existsSync(path.join(dir, 'chats')))
-  return { codex, claude, cursor }
+  const ompProfiles = (() => {
+    try {
+      return fs.readdirSync(path.join(homeDir, '.omp', 'profiles'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(homeDir, '.omp', 'profiles', entry.name, 'agent'))
+    } catch {
+      return []
+    }
+  })()
+  const omp = unique([env.PI_CODING_AGENT_DIR, path.join(homeDir, '.omp', 'agent'), ...ompProfiles])
+    .map((agent) => path.join(agent, 'sessions'))
+    .filter((dir) => fs.existsSync(dir))
+  return { codex, claude, cursor, omp }
 }
 
 // Read just the first line of a (possibly large) JSONL file.
@@ -224,6 +236,32 @@ function discoverCursor(dirs, cwds, since, until) {
   return found
 }
 
+// omp (Oh My Pi, and pi before it) keeps one directory per project under
+// <agent>/sessions/, holding `<timestamp>_<id>.jsonl` per session. The first
+// line is the session header, with the cwd. A session's subagent sessions and
+// spilled tool output live in the directory of the same name.
+function discoverOmp(dirs, cwds, since, until) {
+  const found = []
+  for (const sessions of dirs) {
+    for (const project of fs.readdirSync(sessions, { withFileTypes: true })) {
+      if (!project.isDirectory()) continue
+      const projectDir = path.join(sessions, project.name)
+      for (const entry of fs.readdirSync(projectDir)) {
+        if (!entry.endsWith('.jsonl')) continue
+        const file = path.join(projectDir, entry)
+        const stat = fs.statSync(file)
+        // Only sessions that were written to in the window are opened at all.
+        if (since && stat.mtimeMs < since - SLACK_MS) continue
+        const head = parseJson(firstLine(file))
+        if (head?.type !== 'session' || !cwdMatches(head.cwd, cwds)) continue
+        if (!inWindow(Date.parse(head.timestamp), stat.mtimeMs, since, until)) continue
+        found.push({ file, harness: 'omp', cwd: head.cwd, sidecars: listFilesRecursive(file.replace(/\.jsonl$/, '')) })
+      }
+    }
+  }
+  return found
+}
+
 // Find every agent session whose working directory is one of `cwds` and whose
 // activity overlaps [since, until] (epoch ms, either optional).
 export function discoverSessions(cwds, { homes = agentHomes(), since = null, until = null } = {}) {
@@ -232,6 +270,7 @@ export function discoverSessions(cwds, { homes = agentHomes(), since = null, unt
     ...discoverCodex(homes.codex ?? [], resolved, since, until),
     ...discoverClaude(homes.claude ?? [], resolved, since, until),
     ...discoverCursor(homes.cursor ?? [], resolved, since, until),
+    ...discoverOmp(homes.omp ?? [], resolved, since, until),
   ]
   const seen = new Set()
   return sessions.filter((session) => !seen.has(session.file) && seen.add(session.file))
@@ -242,6 +281,8 @@ export function discoverSessions(cwds, { homes = agentHomes(), since = null, unt
 export function detectHarness(file, firstRecord) {
   if (/\/agent-transcripts\//.test(toPosix(file)) || (firstRecord && 'role' in firstRecord && 'message' in firstRecord && !('type' in firstRecord))) return 'cursor'
   if (firstRecord?.type === 'session_meta' || /(^|\/)rollout-[^/]*\.jsonl$/.test(toPosix(file))) return 'codex'
+  // omp: a `session` header carrying the cwd, or a file in an omp session store.
+  if ((firstRecord?.type === 'session' && typeof firstRecord.cwd === 'string') || /(^|\/)\.omp\/(?:[^/]+\/)*sessions\//.test(toPosix(file))) return 'omp'
   if (firstRecord && ('sessionId' in firstRecord || ['user', 'assistant', 'summary', 'system', 'permission-mode', 'session-owner', 'file-history-snapshot'].includes(firstRecord.type))) return 'claude-code'
   return 'unknown'
 }
@@ -337,6 +378,30 @@ export function extractOperatorEvents(records, harness) {
       if (/^\[Request interrupted by user/.test(text)) events.push({ at: record.timestamp, kind: 'interrupt', text })
       else events.push({ at: record.timestamp, kind: 'user-message', text })
     }
+  } else if (harness === 'omp') {
+    // A user-role message is the operator's unless omp marks it as injected
+    // (`synthetic`: auto-continue, reminders). Model and thinking-level
+    // changes are policy; an aborted assistant turn is an interrupt.
+    const lastPolicy = {}
+    for (const record of records) {
+      if (record.type === 'model_change' || record.type === 'thinking_level_change') {
+        const detail = record.type === 'model_change'
+          ? { model: record.model ?? null, role: record.role ?? null }
+          : { thinkingLevel: record.thinkingLevel ?? null }
+        const key = JSON.stringify(detail)
+        if (key !== lastPolicy[record.type]) events.push({ at: record.timestamp ?? null, kind: 'policy', detail })
+        lastPolicy[record.type] = key
+        continue
+      }
+      if (record.type !== 'message') continue
+      const message = record.message ?? {}
+      if (message.role === 'user' && !message.synthetic) {
+        const text = textOf(message.content)
+        if (text) events.push({ at: record.timestamp ?? null, kind: 'user-message', text })
+      } else if (message.role === 'assistant' && message.stopReason === 'aborted') {
+        events.push({ at: record.timestamp ?? null, kind: 'interrupt', detail: { reason: typeof message.errorMessage === 'string' ? message.errorMessage.slice(0, 200) : null } })
+      }
+    }
   } else if (harness === 'cursor') {
     for (const record of records) {
       if (record.role !== 'user') continue
@@ -367,6 +432,14 @@ export function describeTranscript(file, records, { cursorHomes = [] } = {}) {
     sessionId = records.find((record) => record.sessionId)?.sessionId ?? null
     cwd = records.find((record) => record.cwd)?.cwd ?? null
     model = records.find((record) => record.type === 'assistant' && record.message?.model && record.message.model !== '<synthetic>')?.message?.model ?? null
+  } else if (harness === 'omp') {
+    const header = records.find((record) => record.type === 'session') ?? {}
+    sessionId = header.id ?? null
+    cwd = header.cwd ?? null
+    // The model that answered, else the one the session was set to.
+    model = records.find((record) => record.type === 'message' && record.message?.role === 'assistant' && typeof record.message.model === 'string')?.message.model
+      ?? records.find((record) => record.type === 'model_change' && typeof record.model === 'string')?.model
+      ?? null
   } else if (harness === 'cursor') {
     sessionId = path.basename(file).replace(/\.jsonl(?:\.zst)?$/, '')
   }
@@ -472,7 +545,7 @@ export function archiveSessions(root, id, { kind = 'candidate', phase, sessions,
       source,
       workspace: workspace ? homeRelative(workspace, homeDir) : null,
       reason: reason ?? 'No agent session was found for this phase.',
-      searched: [...(homes.codex ?? []), ...(homes.claude ?? []), ...(homes.cursor ?? [])].map((dir) => homeRelative(dir, homeDir)),
+      searched: [...(homes.codex ?? []), ...(homes.claude ?? []), ...(homes.cursor ?? []), ...(homes.omp ?? [])].map((dir) => homeRelative(dir, homeDir)),
     }
     saveManifest(root, id, manifest, now)
     return { status: 'missing', phase, kind, transcripts: [], operatorLog: null }
@@ -513,7 +586,9 @@ export function archiveSessions(root, id, { kind = 'candidate', phase, sessions,
       replaced.add(sidecarKey)
       added.push({
         file: sidecarKey,
-        role: /(^|\/)subagents\//.test(toPosix(relative)) ? 'subagent' : 'tool-result',
+        // Claude Code keeps subagents under subagents/; omp writes each one as
+        // a session file of its own in the parent's directory.
+        role: /(^|\/)subagents\//.test(toPosix(relative)) || (described.harness === 'omp' && relative.endsWith('.jsonl')) ? 'subagent' : 'tool-result',
         parent: described.sessionId,
         source: homeRelative(sidecar, homeDir),
         ...sidecarStats,
@@ -586,7 +661,7 @@ export function archivePhaseTranscripts(root, id, { kind = 'candidate', phase, w
   }
   sessions.sort((a, b) => fs.statSync(a.file).mtimeMs - fs.statSync(b.file).mtimeMs)
   const reason = workspace
-    ? `No Codex, Claude Code, or Cursor session with cwd ${homeRelative(workspace, homeDir)} (or a subdirectory) was found${since ? ` after ${new Date(since).toISOString()}` : ''}. Pass --transcripts <file[,file...]> to archive sessions stored elsewhere.`
+    ? `No Codex, Claude Code, Cursor, or omp session with cwd ${homeRelative(workspace, homeDir)} (or a subdirectory) was found${since ? ` after ${new Date(since).toISOString()}` : ''}. Pass --transcripts <file[,file...]> to archive sessions stored elsewhere.`
     : 'No transcript files were given.'
   return archiveSessions(root, id, { kind, phase, sessions, source, workspace, reason, homes, now, homeDir })
 }

@@ -1,6 +1,6 @@
 # Lockdown: a structural boundary for candidate runs
 
-Status: the candidate boundary of [protocol 3](./PROTOCOL-3.md), working on macOS (Apple silicon) with Podman. Codex runs in it end to end, offline; Claude Code is wired and verified up to authentication. Red-team results are in [LOCKDOWN-REDTEAM.md](./LOCKDOWN-REDTEAM.md).
+Status: the candidate boundary of [protocol 3](./PROTOCOL-3.md), working on macOS (Apple silicon) with Podman. Codex runs in it end to end, offline; Claude Code is wired and verified up to authentication; omp (Oh My Pi) on Vercel AI Gateway is wired and verified up to the gateway's upstream lookup, with a dummy key and no model call ([below](#omp-oh-my-pi-on-vercel-ai-gateway)). Red-team results are in [LOCKDOWN-REDTEAM.md](./LOCKDOWN-REDTEAM.md).
 
 This document is the design of the boundary. What protocol 3 builds on it — offline packages, the sample pack, what a seal enforces, operator templates, the seal ledger, boxed grading — is in [PROTOCOL-3.md](./PROTOCOL-3.md).
 
@@ -61,7 +61,7 @@ The harness does not launch candidates. `pnpm bench start` builds a workspace di
                                       └──────────────────────────────────────────────────────────┘
 ```
 
-**The box.** One container image (`bench/lockdown/image/Containerfile`) holds Node 24, pnpm, Playwright with Chromium, git, ripgrep, Python, ffmpeg, the harness CLIs at pinned versions, and the offline npm mirror with the small loopback registry that serves it (`npm-mirror.mjs`; the entrypoint starts it). The agent runs in it as uid 1000 with every capability dropped, `no-new-privileges`, a read-only root filesystem, and resource limits. The harness's own sandbox is switched off, because the container is the sandbox: this is what makes the boundary the same for every harness, and what puts MCP servers and REPLs inside it rather than beside it.
+**The box.** One container image (`bench/lockdown/image/Containerfile`) holds Node 24, pnpm, Playwright with Chromium, git, ripgrep, Python, ffmpeg, the harness CLIs at pinned versions, and the offline npm mirror with the small loopback registry that serves it (`npm-mirror.mjs`; the entrypoint starts it). The agent runs in it as uid 1000 with every capability dropped, `no-new-privileges`, a read-only root filesystem, and resource limits. The harness's own sandbox is switched off, because the container is the sandbox: this is what makes the boundary the same for every harness, and what puts MCP servers and REPLs inside it rather than beside it. One harness needs a runtime the others do not: omp runs on Bun, so it has an image target of its own (`candidate-omp`), the candidate image plus Bun and omp at pinned versions under `/usr/local`. Only an omp launch's agent box uses it; the box every other harness runs in, and every gate, capture, and check, are unchanged by it.
 
 **No bind mounts.** The workspace is copied into named volumes when the session opens and copied back out at seal, as a tar stream through a throwaway container. Nothing on the operator's disk is ever mounted, so there is no path, relative or absolute, that leads out. Once a session is open the candidate's source lives only in its volume; the host workspace holds a marker file, so there is no directory for an un-boxed agent to work in. A consequence worth having: the engine can be on another machine (`STAGEBENCH_CONTAINER_RUNTIME="podman --connection <remote>"`) with no change to anything else.
 
@@ -133,12 +133,28 @@ pnpm bench score <run-id>                              # gates rerun in a box; r
   | --- | --- | --- |
   | Codex | `STAGEBENCH_OPENAI_API_KEY` (held by the gateway) | ChatGPT login: `CODEX_HOME=~/.codex-personal`. The gateway holds the access token; the box gets unusable stand-ins. Refresh the login on the host first if it is old. |
   | Claude Code | `STAGEBENCH_ANTHROPIC_API_KEY`, or `STAGEBENCH_CLAUDE_OAUTH_TOKEN` from `claude setup-token` (held by the gateway) | — |
+  | omp (Oh My Pi) | `STAGEBENCH_AI_GATEWAY_API_KEY`, a Vercel AI Gateway key (held by the gateway) | `AI_GATEWAY_API_KEY` |
   | Anything else | `--harness custom --egress <host> --secret-env NAME=<host> --command '…'` | `--egress <host>=tunnel` for a proprietary protocol |
 
-- **Model pinning.** `--pin-models a,b` refuses any request for another model. Off by default because harnesses call auxiliary models (titles, compaction) that differ by vendor; the gateway log shows which were used.
+- **Model pinning.** `--pin-models a,b` refuses any request for another model. Off by default because harnesses call auxiliary models (titles, compaction) that differ by vendor; the gateway log shows which were used. The omp adapter is the exception: it points every one of omp's model roles at the run's model, so its gateway is pinned to that model without being asked.
 - **MCP servers.** None are inherited from your own config. One that is added to the box's harness config runs in the box.
 - **Opting out.** `--isolation none` at `new`, or `seal --unlocked` for a run created to require the lockdown. Either is recorded as `isolation: none` on the stage.
 - **Cleaning up.** `pnpm bench clean <run-id> --force` removes a session's volumes; `clean --all` removes every session this checkout created.
+
+## omp (Oh My Pi) on Vercel AI Gateway
+
+`pnpm bench agent <run-id> --harness omp --model google/gemini-4-neon` runs omp 19.0.0 (`@oh-my-pi/pi-coding-agent`, on Bun 1.4.4) against Vercel AI Gateway, with the same guarantees as the other adapters. What it does, and what was observed when it ran in the box:
+
+- **Image.** `candidate-omp`, built on demand by the first omp launch, or up front by `pnpm bench lockdown-setup --omp` (which also checks `bun --version` and `omp --version` with no network). The launch record names the exact image (`launches[].image`).
+- **Credential.** The key is read from `STAGEBENCH_AI_GATEWAY_API_KEY` (or `AI_GATEWAY_API_KEY`) and held by the gateway. The box gets a random placeholder (keeping the key's `vck_` prefix) in `AI_GATEWAY_API_KEY`, the variable omp's `vercel-ai-gateway` provider reads; the gateway puts the real key into the `Authorization` header on the way to `ai-gateway.vercel.sh` and nowhere else. A slice of the real key is searched for in the artifact and the build at seal (keys shorter than the 48 characters the other vendors' keys have now get a 16-character slice too), and `vck_` keys are scrubbed from transcripts (`AI_GATEWAY_KEY`).
+- **One host, two endpoints.** omp's `vercel-ai-gateway` provider speaks the Anthropic Messages wire for every model it serves, Gemini included (all 417 rows of its bundled catalog say `anthropic-messages`). From its source and from the box, it calls exactly `POST /v1/messages` (sometimes with `?beta=true`) and `GET /v1/models` (model discovery). Those are the allowlist; Chat Completions, Responses, token counts, credits, and generation lookups are refused.
+- **Model pin.** The gateway refuses any request whose `model` is not the run's slug (`google/gemini-4-neon`), and one that names none. Every omp model role (default, smol, slow, vision, plan, commit, tiny, memory, task, advisor, widget) is set to the run's model, retries never fall back to another model, and omp is told `--offline` (its auxiliary services stay on the run's provider) and `--no-title`.
+- **Hosted tools.** omp's own tools are Anthropic custom tools (`_read`, `_bash`, `_edit`, `_eval`, `_glob`, `_grep`, `_task`, `_wait`, `_todo`, `_write` were what it sent) and pass. Any provider-executed tool (web search, web fetch, code execution, remote MCP) is stripped as for Claude Code. On this host the gateway also knows Vercel's own fields: `providerOptions` loses everything but the gateway's routing among upstreams of the same model (`gateway.order`, `gateway.only`, `gateway.caching`), so provider switches that turn on hosted search (Google search grounding, URL context), fallback model lists (`gateway.models`), and credentials in the body (`gateway.byok`) never go upstream; a top-level `models` fallback list and `plugins` are removed too. omp sent none of these; the rules are there for the request shapes Vercel accepts.
+- **Effort.** The protocol's pinned `high` becomes `omp --thinking high` (and `defaultThinkingLevel: high`), recorded on the launch (`harnessSettings: { model, thinking, mode }`). On this wire omp asks Gemini to think with a token budget, not an effort string: `thinking: { type: enabled, budget_tokens: 16384 }` at `high`. The gateway records that as `thinkingBudget` on every request, and the usage summary tallies it (`thinkingBudgets`). The request's effort string is "unspecified", which the seal reports and does not count as a mismatch.
+- **Usage and budget.** Responses are Anthropic-shaped server-sent events: input and cache reads in `message_start`, output in `message_delta`, thinking counted inside `output_tokens`. The gateway reads them as it reads Claude's. Its budget counter now also reads `completion_tokens`, and adds a reasoning count reported beside the output when the response's own total shows it is not inside (input + output + reasoning), so "generated tokens, reasoning included" means the same thing on every wire. Cost uses `bench/prices.json` (`google/gemini-4-neon`: $3 input, $0.15 cached input, $15 output per million, Vercel's list price read 2026-11-18).
+- **Unattended, and nothing extra.** The launcher writes `~/.omp/agent/config.yml` and `models.yml` into the box home. The settings turn off web search (Exa, keyless, and provider-native), URL fetching, the GitHub tool, MCP project config, extensions, skills, marketplace and self updates, OpenTelemetry export, grievance uploads (`dev.autoqa`), cache warming, and recaps, and set approvals to `yolo`. The model list declares the run's model on the `vercel-ai-gateway` provider (`api: anthropic-messages`, 1M context and output ceiling, thinking as a budget per level: what omp's catalog gives the Gemini 4 models it already knows), because a model newer than omp's catalog would otherwise get 128K context and 16K output. The key appears there only as the name of its variable. The command line is `omp --print --model vercel-ai-gateway/<model> --thinking high --cwd /workspace --approval-mode yolo --offline --no-title --no-extensions --no-skills -- <message>`; a follow-up adds `--continue`, which resumes the same session file. MCP servers are refused for omp.
+- **What omp tries at start-up.** Each launch, before its first turn, omp tries the shared model catalog (`catalog.stencil.so`) and the model lists of six providers that need no key (`hyper.charm.land`, `api.kilo.ai`, `api.venice.ai`, `zenmux.ai`, `api.commandcode.ai`, `coding-intl.dashscope.aliyuncs.com`). The gateway refuses each (`connect.deny`) and omp carries on. A seventh, `registry.npmjs.org` (omp checking the latest `@openai/codex` for its unused openai-codex provider), is switched off with `PI_AI_CODEX_CLIENT_VERSION`.
+- **Transcripts.** omp writes one JSONL file per session under `~/.omp/agent/sessions/<project>/<timestamp>_<id>.jsonl` (the project is `--workspace--` for `/workspace`), with subagent sessions and spilled tool output in a directory of the same name. The home volume's `.omp/agent/sessions` is exported at seal, and the transcript archive recognises the format (harness `omp`: session id, cwd, the model that answered, user messages with omp's injected ones left out, model and thinking-level changes, interrupts). Sessions on the host are discovered by cwd, as for the other harnesses (`$PI_CODING_AGENT_DIR`, `~/.omp/agent`, `~/.omp/profiles/*/agent`).
 
 ## Blind grading
 
@@ -202,6 +218,7 @@ The adversary is the candidate: a capable agent that will use whatever it can re
 - **No inherited extras.** The box starts with an empty home directory: no operator skills, no MCP servers, no memory files, no session history. In the audited runs both models read the operator's global skills, and one used an operator-configured MCP REPL.
 - **Uniform telemetry.** The gateway counts requests and reads token usage from the responses of any inspected harness, independent of what the harness reports.
 - **What differs.** Harnesses whose provider API is proprietary (Cursor) need a tunnel, so hosted tools cannot be stripped and the model cannot be pinned for them. A run made that way should be marked. Refusing websockets costs Codex about seven seconds of retries at session start before it falls back to HTTPS.
+- **omp.** It runs on Bun, in its own image target on top of the same candidate image: the same Node, pnpm, Chromium, mirror, and userland, plus Bun 1.4.4 and omp 19.0.0. It reaches its models through Vercel AI Gateway rather than the model vendor's own API, on the Anthropic Messages wire, with the gateway inspecting every request as it does for the vendor APIs: exact endpoints, hosted tools and Vercel's provider switches removed, the model pinned. Its thinking is asked for as a token budget (16,384 at `high`) rather than an effort string, so the seal's effort check sees the level on the launch and the budget on every request rather than an effort per request. It is pinned to one model by default, which the other adapters are not, because it is pointed at that one model for everything.
 - **One browser.** The candidate's browser, canonical capture, and the boxed evaluator's browser are the same Linux Chromium with the same fonts, from the same image.
 
 ## Alternatives considered
@@ -252,6 +269,7 @@ Still to do on each operator machine: install an engine, `pnpm bench lockdown-se
 - **API-key and Claude-token modes have not met a live key.** They are implemented and unit-tested, and the substitution was observed on the wire with an invalid key. The ChatGPT-login mode, which now works the same way, has run real phases.
 - **Provider API drift.** The request policy strips what it knows to be hosted. A strict per-API allowlist of top-level request fields would be tighter and more brittle.
 - **Cursor, Grok, OpenCode** have presets for the generic adapter and have not been run.
+- **omp has not run a turn.** The adapter is verified up to the gateway's upstream lookup: in the box omp started, trusted the gateway's CA under Bun, sent its turns with the placeholder substituted, was pinned and refused when the pin named another model, continued its session with `--continue`, and its session file was exported and archived. There was no key to send upstream (and the smoke test's gateway could not resolve the host on purpose), so two things wait for the first real run: whether Vercel's Anthropic wire reports Gemini's thinking inside `output_tokens` (the budget assumes it does, unless the response's own total says otherwise), and whether the declared limits (1M context, 1M output ceiling) are what `google/gemini-4-neon` actually has.
 - **Docker has not been exercised.** Nothing in the design is Podman-specific any more, and the host-exposure check works the same way on both, but only Podman was installed here. Docker Desktop shares the operator's home directory with its VM, which a session refuses.
 - **Shared VM.** Sessions are isolated from each other by the container boundary only. Use one VM per run for paired runs.
 - **The gateway speaks HTTP/1.1 to the box.** A harness that requires HTTP/2 or websockets to its model would need tunnel mode.
@@ -261,7 +279,7 @@ Still to do on each operator machine: install an engine, `pnpm bench lockdown-se
 
 Measured on this machine (M-series, VM with 8 CPUs and 16 GB):
 
-- Images: 2.9 GB (candidate: Chromium and its libraries, the harness CLIs, plus the 229 MB package mirror) and 264 MB (gateway). First build takes a few minutes and is the only step that reads the npm registry.
+- Images: 2.9 GB (candidate: Chromium and its libraries, the harness CLIs, plus the 229 MB package mirror) and 264 MB (gateway). First build takes a few minutes and is the only step that reads the npm registry. The omp image adds about 430 MB (Bun and omp) on top of the candidate image, in one layer, built in under a minute once the candidate image is there.
 - The sample pack: 501 MB as published (432 MB in the operator's store, where WAV recordings are kept as FLAC-coded samples), loaded into the engine once and then shared read-only.
 - Opening a session and running a command: about 8 seconds.
 - `pnpm install` of the starter from the image's mirror, with no network: under a second.
@@ -272,7 +290,7 @@ Measured on this machine (M-series, VM with 8 CPUs and 16 GB):
 
 ```
 bench/lockdown/
-  image/Containerfile     both images, and the stage that builds the mirror
+  image/Containerfile     the images (gateway, candidate, candidate-omp), and the stage that builds the mirror
   image/gateway.mjs       the egress gateway (also imported by the tests)
   image/npm-mirror.mjs    builds the offline npm mirror at image build; serves it on loopback in the box
   image/npm-mirror.lock.json  every tarball the mirror holds, pinned by sha512
@@ -283,10 +301,11 @@ bench/lockdown/
   messages.mjs            the fixed operator message templates
   runtime.mjs             engine detection, images, tar copy in/out, export sanitizing
   session.mjs             candidate and evaluator sessions, gateway lifecycle, launches, exec, export, boxed gates, capture, sample check
-  harnesses.mjs           Codex, Claude Code, and generic adapters
+  harnesses.mjs           Codex, Claude Code, omp (Oh My Pi), and generic adapters
   seal.mjs                seal-side glue and the isolation record
   provenance.mjs          asset hashing
   setup.mjs               lockdown-setup
   redteam/                probe, prompts, MCP REPL, runner
 tests/lockdown.test.mjs   policy, the gateway over real sockets and TLS, adapters, export
+tests/omp-harness.test.mjs  the omp adapter, Vercel AI Gateway policy, usage on its wire, omp transcripts
 ```
