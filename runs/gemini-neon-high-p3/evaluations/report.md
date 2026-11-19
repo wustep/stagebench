@@ -1,9 +1,9 @@
 # Gemini 4 Neon High — Stagebench evaluation
 
 - Run: `gemini-neon-high-p3`
-- Status: in-progress
-- Aggregate: **95/100**
-- Coverage: 2/3 phases
+- Status: complete
+- Aggregate: **96/100**
+- Coverage: 3/3 phases
 
 ## Phase scores
 
@@ -11,7 +11,7 @@
 | --- | --- | ---: |
 | 1 | Complete surface and basic piano | 96 |
 | 2 | Piano library and working effects | 94 |
-| 3 | running | — |
+| 3 | Complete Stage 4 system | 100 |
 
 ## Audio provenance
 
@@ -37,6 +37,17 @@ Audio files are detected from the sealed artifact; generation methods and sample
 - Audio note: Fine tuning offsets from upstream SFZ/Data metadata are applied at runtime via AudioBufferSourceNode.playbackRate for accurate A440 equal temperament.
 - Audio note: Rhodes Mk I is recorded at a single dynamic per note in the pack; velocity dynamics are shaped at runtime via gain and dynamic lowpass filtering.
 - Audio note: Phase 2 connects Piano (Layers A/B, 6 types, models, performance/acoustic/timbre controls, SUSTPED/PSTICK), Layer Effects (Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb, Rotary via To Rotary, Focus/Group/Global/Bypass), Master Level, and Pitch Stick. Organ, Synth, and Program controls remain truthfully decorative.
+
+### Phase 3: Complete Stage 4 system
+
+- Audio strategy: Single AudioContext architecture unifying Organ (Layers A/B sharing one Organ FX chain + dedicated Rotary routing), Piano (Layers A/B with Timbre EQ, model voicing, and independent/grouped FX chains), and Synth (Layers A/B/C with independent/grouped FX chains and deterministic Arpeggiator/Gate). Every layer traverses the exact ordered Layer Effects chain (Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ -> Compressor -> Reverb) -> [Direct | Shared Rotary Speaker with morphable speed] -> Layer level -> Master Bus -> Master Level Gain -> Soft-Knee Limiter -> Brickwall Safety Clipper -> single Destination. Grand (78 stereo OGG), Upright (52 stereo OGG), Rhodes Mk I (15 mono OGG), and Wurlitzer EP200 (25 mono OGG) are bundled recorded cuts from inputs/samples/ (170 files total). Organ engines (B3/B3 Bass, Vox, Farf, Pipe 1/Pipe 2), Synth engine (Pure/Sync/Multi/Super/FM-H), Clav/Digital/Misc piano types, sympathetic string resonance, reverb impulse responses, and the labeled sample-failure fallback are live/generated Web Audio synthesis.
+- Generated sound sources: Clavinet D6 & Harpsichord 8' Live Synthesis — Live Web Audio sawtooth/square harmonic plucked synthesis with resonant pickup highpass/peaking EQ and decaying lowpass envelope; Soft Release disabled per manual p. 25.; DX E.Piano & FM Bell Grand Live Synthesis — Live Web Audio 2-operator FM synthesis (carrier + frequency-modulated sine modulator with velocity-scaled modulation index and fast bell decay + warm body harmonic).; Concert Marimba & Warm Vibraphone Live Synthesis — Live Web Audio bar synthesis combining fundamental sine, 4th/3.98x harmonic overtone decay, and 5.5 Hz motor fan amplitude modulation on Vibraphone.; Simulated Sympathetic String Resonance — Live Web Audio sympathetic overtone resonance activated when String Res is enabled and sustain pedal or companion notes are held.; Procedural Stereo Reverb Impulse Responses (Booth/Room/Spring/Stage/Hall/Cathedral) — Deterministic seeded PRNG exponentially decaying filtered stereo AudioBuffers (plus dispersive metallic chirp for Spring) generated in memory per AudioContext in src/audio/effectUnits.ts.; Harmonic Piano Synthesis Fallback — Live Web Audio additive/filtered triangle+sine harmonic voice used only while recorded samples are loading or if sample fetching/decoding fails. Truthfully labeled as fallback in UI status and Program OLED.; Organ Engines (B3, B3 Bass, Vox Continental, Farfisa Compact, Pipe 1, Pipe 2) — Live Web Audio multi-partial PeriodicWave & formant-EQ synthesis in src/audio/organVoice.ts: 9-drawbar tonewheel B3 with foldback, single-triggered 2nd/3rd percussion, and filtered-noise key click; B3 Bass (16'/8'); Vox Continental (7 transistor partials + flute/reed mix drawbars); Farfisa Compact (9 on/off register switches >=5/8 with nasal formant EQ); Pipe 1 & Pipe 2 (9 pipe ranks 16'-1' with wind-chiff onset and rank detuning); plus per-layer Vibrato/Chorus (V1-V3, C1-C3).; 3-Layer Analog & FM-H Synth Engine with Deterministic Arpeggiator/Gate — Live Web Audio synthesis in src/audio/synthVoice.ts and src/audio/arpeggiator.ts supporting Pure (Sine, Triangle, Saw, Square, Pulse 33, Pulse 10, White Noise), Sync (Sync Saw, Sync Square), Multi (Multi Saw, Multi Saw 8ve), Super (Super Saw, Super Square), and FM-H (FM 2-op Algorithm A) with category-correct Osc Ctrl, LP12/LP24/LP M/HP/BP/LP+HP filters with tracking/resonance/drive, Osc/Filter/Amp envelopes, 5-waveform Master-Clock-syncable LFO (incl. Sample & Hold), Poly/Mono/Legato/Priority/Glide/Unison/Vibrato, and deterministic Arpeggiator/Gate.
+- Recorded sample provenance: Salamander Grand Piano V3 — Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/grand/salamander-grand-v3/ (upstream: https://github.com/sfzinstruments/SalamanderGrandPiano at 3382bf9496bb) (CC-BY-3.0); Upright Piano KW — Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/upright/upright-piano-kw/ (upstream: https://github.com/freepats/upright-piano-KW at 570f6c60ed2e) (CC0-1.0); Rhodes Mark I, GM version (Discord SFZ GM Bank) — Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/electric/learman-rhodes-gm/ (upstream: https://github.com/sfzinstruments/Discord-SFZ-GM-Bank at 7a9c478fe331) (CC0-1.0); Greg Sullivan's E-Pianos — Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/electric/greg-sullivan-e-pianos/ (upstream: https://github.com/sfzinstruments/GregSullivan.E-Pianos at 8c3e581acda3) (CC-BY-3.0)
+- Bundled audio: 170 files (6.2 MB)
+- Audio note: All 170 bundled audio files under public/samples/ (78 Grand, 52 Upright, 15 Rhodes Mk I, 25 Wurlitzer EP200) are verbatim onset-trimmed, faded, and Ogg Vorbis q4 re-encoded cuts from inputs/samples/ with no pitch-shifting, time-stretching, or layering baked into the files.
+- Audio note: Fine tuning offsets from upstream SFZ/Data metadata are applied at runtime via AudioBufferSourceNode.playbackRate for accurate A440 equal temperament.
+- Audio note: Rhodes Mk I is recorded at a single dynamic per note in the pack; velocity dynamics are shaped at runtime via gain and dynamic lowpass filtering.
+- Audio note: Phase 3 connects Organ (2 layers, 6 models, 9 drawbars, percussion, key click, V/C, shared FX chain & Rotary), Piano (2 layers, 6 types), Synth (3 layers, 14 required waveforms across Pure/Sync/Multi/Super/FM-H, filters, 3 envelopes, LFO, voice modes, deterministic Arp/Gate), Layer Effects (6 chains + Rotary + Group/Global/Bypass), and Programs (32 slots, 12 factory programs, 8 auto-storing Live slots, Store/Store As, List View, Undo, Splits/Zones/Crossfades, Scenes I/II, Wheel & Control Pedal morphs, Master Clock, Transpose ±6, Panic) on one shared AudioContext.
 
 ## Phase 1: Complete surface and basic piano
 
@@ -88,6 +99,31 @@ A strong Phase 2 artifact. Panel geometry is essentially exact at 1440x900 (deck
 - **minor** — At 390x844 only about a third of the instrument is visible at a time: The chassis keeps its full 1180 px CSS width inside a 390 px horizontal scroller (scrollWidth 1200, clientWidth 390), so nothing collapses or clips and every control stays full size and operable, but the instrument can never be seen whole and roughly half the viewport height (below y=560 of 844) is empty background. A fit-to-width view, or a scaled overview alongside the scroller, would keep the instrument recognisable as one object.
 - **minor** — Panel legend and accessible name disagree on the rotary CLOSE MIC button: In the performance band the silkscreen legends read DRIVE / CLOSE MIC / STOP MODE / SLOW - FAST / MORPH, but the buttons underneath carry the accessible names 'Rotary Drive On', 'Rotary Stop Mode' and 'Rotary Speed Slow Fast'. The button sitting under CLOSE MIC is named Rotary Drive On, so a screen-reader user and a sighted user are told different things about the same control. Rotary close mic is an excluded feature, so nothing functional is claimed falsely - this is a labelling mismatch only.
 - **minor** — Second Grand and Upright models are the same recording re-voiced, undisclosed: src/model/instrumentState.ts:56-80 defines 'Studio Grand 2' as the salamander grand bank with brightnessOffsetDb 4.5 and 'Felt Upright' as the Kawai bank with lowpassHz 1850, both declared sourceKind 'recorded'. Measured, 'Felt Upright' drops the centroid from 1227 Hz to 783 Hz, so it is a real tonal variant - but presenting it as a distinct model without noting in IMPLEMENTATION_DETAILS.json that it is the same recording slightly overstates the library. Only one model per type is required, so this costs nothing against the contract.
+
+### Technical gate
+
+Passed.
+
+## Phase 3: Complete Stage 4 system
+
+**100/100**
+
+A complete, genuinely deep Stage 4. Measured against the published build/ at 1440x900, chassis geometry is essentially exact (deck 0.5400, keybed 0.4600, width 0.9400, aspect 3.0951, worst section deviation 1e-5), the keybed is 73/43/30 with black-key height 0.6099 and all 73 keys inside it, all 5 reference colours match within deltaE 0.36, all 33 section landmarks render in their own sections and all 152 deck controls are pointer-reachable by 5x5 hit test, with no forbidden descriptor satisfied. Audio tapped at the destination of the one AudioContext shows three real engines (sampled grand; additive B3/Vox/Farf/Pipe with measurably different partial sets; saw/sync/multi/super/FM oscillators), all routed through the same ordered effect chain into master gain -> limiter -> one destination. Programs, Store/Store As, Live slots, splits, scenes, morphs, transpose (+5 st measured) and Panic all behave. Deductions are cosmetic: effect- and filter-type silkscreen legends are missing, letter-spacing splits words in legends, a modal OLED editor survives a program change, and at 390x844 only a third of the instrument is visible at a time.
+
+### Axis scores
+
+| Axis | Weight | Score |
+| --- | ---: | ---: |
+| Sound | 45% | 100 |
+| Playability & control | 20% | 100 |
+| Feature completeness | 35% | 100 |
+
+### Priority issues
+
+- **minor** — Effect and synth selector type names are not silkscreened: Mod 1, Mod 2, Amp Sim/EQ, Delay and Reverb type selectors render only a 2x3 LED dot matrix with no printed type names; the only text in the Mod 1 group is 'RATE' and 'AMT' (verified by reading the group's textContent in the rendered DOM). The reference photograph prints A-PAN/TREM/RM/A-WAH/WAH/PUMP, CHOR/FLANG/PHAS/VIBE/ENS/SPIN, the amp types and the reverb types next to those LEDs. The synth filter types are likewise only shown as a changing heading ('FILTER - LP24') rather than the printed LP12/LP24/HP/BP list. The value is exposed to assistive tech via aria-label, but a sighted player cannot read which type an LED means.
+- **minor** — Letter-spacing splits words inside panel legends: At the rendered size the condensed legend face plus tracking breaks words visibly: 'SEC TIO N' (every section header), 'RA TE', 'AM T', 'M ODEL', 'UN ISON', 'FR EQ', 'TR EB', 'COA R'. Visible in a 3x device-scale capture of the effects and piano sections; it reads as a typesetting fault rather than silkscreen.
+- **minor** — Modal OLED editors survive a program change: With the Split editor open (Shift+Split, display 'SPLIT MID / C4 / XFADE: OFF'), pressing a program button loads the new program but leaves the display in the editor; the Program OLED still read the split editor while program 1.2's state was active, and only Shift/Exit returned it to the program view (which then correctly showed 1.4). Reproduced twice. Outside modal editors the display tracks program, layer, live note and velocity, BPM and master level correctly.
+- **minor** — At 390x844 only a third of the instrument is visible at once: The narrow layout keeps the chassis at 1180 x 381 CSS px inside a horizontally scrolling container (scrollWidth 1200, clientWidth 390), so visibleFraction is 0.325 and the keybed and the right-hand sections require horizontal scrolling. Nothing is clipped or collapsed and all 55 controls inside the viewport are pointer-reachable, but roughly 450 px of the 844 px viewport below the instrument is empty background that could have carried a scaled or wrapped layout.
 
 ### Technical gate
 

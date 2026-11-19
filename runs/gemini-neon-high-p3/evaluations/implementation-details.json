@@ -1,7 +1,7 @@
 {
   "version": 1,
   "runId": "gemini-neon-high-p3",
-  "generatedAt": "2026-11-19T04:58:35.826Z",
+  "generatedAt": "2026-11-19T06:42:10.807Z",
   "description": "Generated from phase package manifests, detected audio assets, and benchmark-authored audio provenance.",
   "phases": [
     {
@@ -1263,6 +1263,861 @@
           "Fine tuning offsets from upstream SFZ/Data metadata are applied at runtime via AudioBufferSourceNode.playbackRate for accurate A440 equal temperament.",
           "Rhodes Mk I is recorded at a single dynamic per note in the pack; velocity dynamics are shaped at runtime via gain and dynamic lowpass filtering.",
           "Phase 2 connects Piano (Layers A/B, 6 types, models, performance/acoustic/timbre controls, SUSTPED/PSTICK), Layer Effects (Mod 1, Mod 2, Delay, Amp Sim/EQ, Compressor, Reverb, Rotary via To Rotary, Focus/Group/Global/Bypass), Master Level, and Pitch Stick. Organ, Synth, and Program controls remain truthfully decorative."
+        ]
+      }
+    },
+    {
+      "phase": 3,
+      "phaseName": "Complete Stage 4 system",
+      "status": "complete",
+      "artifactPath": "runs/gemini-neon-high-p3/stage3",
+      "libraries": {
+        "application": [
+          {
+            "name": "@fontsource/barlow-condensed",
+            "version": "^5.3.0"
+          },
+          {
+            "name": "@fontsource/inter",
+            "version": "^5.3.0"
+          },
+          {
+            "name": "@fontsource/jetbrains-mono",
+            "version": "^5.3.0"
+          },
+          {
+            "name": "@vitejs/plugin-react",
+            "version": "^6.0.2"
+          },
+          {
+            "name": "react",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "react-dom",
+            "version": "^19.2.7"
+          },
+          {
+            "name": "typescript",
+            "version": "~6.0.2"
+          },
+          {
+            "name": "vite",
+            "version": "^8.1.0"
+          }
+        ],
+        "development": [
+          {
+            "name": "@testing-library/jest-dom",
+            "version": "^6.9.1"
+          },
+          {
+            "name": "@testing-library/react",
+            "version": "^16.3.2"
+          },
+          {
+            "name": "@types/node",
+            "version": "^24.13.2"
+          },
+          {
+            "name": "@types/react",
+            "version": "^19.2.17"
+          },
+          {
+            "name": "@types/react-dom",
+            "version": "^19.2.3"
+          },
+          {
+            "name": "jsdom",
+            "version": "^28.0.0"
+          },
+          {
+            "name": "node-web-audio-api",
+            "version": "^2.2.0"
+          },
+          {
+            "name": "oxlint",
+            "version": "^1.69.0"
+          },
+          {
+            "name": "playwright",
+            "version": "^1.64.1"
+          },
+          {
+            "name": "vitest",
+            "version": "^4.1.0"
+          }
+        ]
+      },
+      "audio": {
+        "strategy": "Single AudioContext architecture unifying Organ (Layers A/B sharing one Organ FX chain + dedicated Rotary routing), Piano (Layers A/B with Timbre EQ, model voicing, and independent/grouped FX chains), and Synth (Layers A/B/C with independent/grouped FX chains and deterministic Arpeggiator/Gate). Every layer traverses the exact ordered Layer Effects chain (Mod 1 -> Mod 2 -> Delay -> Amp Sim/EQ -> Compressor -> Reverb) -> [Direct | Shared Rotary Speaker with morphable speed] -> Layer level -> Master Bus -> Master Level Gain -> Soft-Knee Limiter -> Brickwall Safety Clipper -> single Destination. Grand (78 stereo OGG), Upright (52 stereo OGG), Rhodes Mk I (15 mono OGG), and Wurlitzer EP200 (25 mono OGG) are bundled recorded cuts from inputs/samples/ (170 files total). Organ engines (B3/B3 Bass, Vox, Farf, Pipe 1/Pipe 2), Synth engine (Pure/Sync/Multi/Super/FM-H), Clav/Digital/Misc piano types, sympathetic string resonance, reverb impulse responses, and the labeled sample-failure fallback are live/generated Web Audio synthesis.",
+        "generatedSources": [
+          {
+            "id": "clav-synth-voice",
+            "name": "Clavinet D6 & Harpsichord 8' Live Synthesis",
+            "type": "live-web-audio-synthesis",
+            "description": "Live Web Audio sawtooth/square harmonic plucked synthesis with resonant pickup highpass/peaking EQ and decaying lowpass envelope; Soft Release disabled per manual p. 25."
+          },
+          {
+            "id": "digital-fm-voice",
+            "name": "DX E.Piano & FM Bell Grand Live Synthesis",
+            "type": "live-web-audio-synthesis",
+            "description": "Live Web Audio 2-operator FM synthesis (carrier + frequency-modulated sine modulator with velocity-scaled modulation index and fast bell decay + warm body harmonic)."
+          },
+          {
+            "id": "misc-mallet-voice",
+            "name": "Concert Marimba & Warm Vibraphone Live Synthesis",
+            "type": "live-web-audio-synthesis",
+            "description": "Live Web Audio bar synthesis combining fundamental sine, 4th/3.98x harmonic overtone decay, and 5.5 Hz motor fan amplitude modulation on Vibraphone."
+          },
+          {
+            "id": "sympathetic-string-resonance",
+            "name": "Simulated Sympathetic String Resonance",
+            "type": "live-web-audio-synthesis",
+            "description": "Live Web Audio sympathetic overtone resonance activated when String Res is enabled and sustain pedal or companion notes are held."
+          },
+          {
+            "id": "procedural-reverb-irs",
+            "name": "Procedural Stereo Reverb Impulse Responses (Booth/Room/Spring/Stage/Hall/Cathedral)",
+            "type": "generated-in-memory-buffer",
+            "description": "Deterministic seeded PRNG exponentially decaying filtered stereo AudioBuffers (plus dispersive metallic chirp for Spring) generated in memory per AudioContext in src/audio/effectUnits.ts."
+          },
+          {
+            "id": "synth-piano-fallback",
+            "name": "Harmonic Piano Synthesis Fallback",
+            "type": "live-web-audio-synthesis",
+            "description": "Live Web Audio additive/filtered triangle+sine harmonic voice used only while recorded samples are loading or if sample fetching/decoding fails. Truthfully labeled as fallback in UI status and Program OLED."
+          },
+          {
+            "id": "organ-engines-live",
+            "name": "Organ Engines (B3, B3 Bass, Vox Continental, Farfisa Compact, Pipe 1, Pipe 2)",
+            "type": "live-web-audio-synthesis",
+            "description": "Live Web Audio multi-partial PeriodicWave & formant-EQ synthesis in src/audio/organVoice.ts: 9-drawbar tonewheel B3 with foldback, single-triggered 2nd/3rd percussion, and filtered-noise key click; B3 Bass (16'/8'); Vox Continental (7 transistor partials + flute/reed mix drawbars); Farfisa Compact (9 on/off register switches >=5/8 with nasal formant EQ); Pipe 1 & Pipe 2 (9 pipe ranks 16'-1' with wind-chiff onset and rank detuning); plus per-layer Vibrato/Chorus (V1-V3, C1-C3)."
+          },
+          {
+            "id": "synth-engine-live",
+            "name": "3-Layer Analog & FM-H Synth Engine with Deterministic Arpeggiator/Gate",
+            "type": "live-web-audio-synthesis",
+            "description": "Live Web Audio synthesis in src/audio/synthVoice.ts and src/audio/arpeggiator.ts supporting Pure (Sine, Triangle, Saw, Square, Pulse 33, Pulse 10, White Noise), Sync (Sync Saw, Sync Square), Multi (Multi Saw, Multi Saw 8ve), Super (Super Saw, Super Square), and FM-H (FM 2-op Algorithm A) with category-correct Osc Ctrl, LP12/LP24/LP M/HP/BP/LP+HP filters with tracking/resonance/drive, Osc/Filter/Amp envelopes, 5-waveform Master-Clock-syncable LFO (incl. Sample & Hold), Poly/Mono/Legato/Priority/Glide/Unison/Vibrato, and deterministic Arpeggiator/Gate."
+          }
+        ],
+        "sampleSources": [
+          {
+            "id": "salamander-grand-v3",
+            "name": "Salamander Grand Piano V3",
+            "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/grand/salamander-grand-v3/ (upstream: https://github.com/sfzinstruments/SalamanderGrandPiano at 3382bf9496bb)",
+            "license": "CC-BY-3.0",
+            "attribution": "Salamander Grand Piano V3 by Alexander Holm, licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Source: https://archive.org/details/SalamanderGrandPianoV3"
+          },
+          {
+            "id": "upright-piano-kw",
+            "name": "Upright Piano KW",
+            "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/upright/upright-piano-kw/ (upstream: https://github.com/freepats/upright-piano-KW at 570f6c60ed2e)",
+            "license": "CC0-1.0",
+            "attribution": "Upright Piano KW by Gonzalo and Roberto, FreePats project, CC0 1.0 (public domain dedication). Source: https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html"
+          },
+          {
+            "id": "learman-rhodes-gm",
+            "name": "Rhodes Mark I, GM version (Discord SFZ GM Bank)",
+            "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/electric/learman-rhodes-gm/ (upstream: https://github.com/sfzinstruments/Discord-SFZ-GM-Bank at 7a9c478fe331)",
+            "license": "CC0-1.0",
+            "attribution": "Rhodes Mark I samples (jRhodes GM version) by Jeff Learman, CC0 1.0 (public domain dedication). Source: https://github.com/sfzinstruments/Discord-SFZ-GM-Bank"
+          },
+          {
+            "id": "greg-sullivan-e-pianos",
+            "name": "Greg Sullivan's E-Pianos",
+            "source": "Stagebench sample pack stagebench-raw-samples@2.0.0, inputs/samples/electric/greg-sullivan-e-pianos/ (upstream: https://github.com/sfzinstruments/GregSullivan.E-Pianos at 8c3e581acda3)",
+            "license": "CC-BY-3.0",
+            "attribution": "Wurlitzer EP200, Hohner Pianet T, and Yamaha CP80 samples by Greg Sullivan (http://www.sullivang.net/), licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Source: https://github.com/sfzinstruments/GregSullivan.E-Pianos"
+          }
+        ],
+        "detectedFiles": [
+          {
+            "path": "public/samples/electric/rhodes/A2.ogg",
+            "bytes": 25720
+          },
+          {
+            "path": "public/samples/electric/rhodes/A5.ogg",
+            "bytes": 26340
+          },
+          {
+            "path": "public/samples/electric/rhodes/B1.ogg",
+            "bytes": 21489
+          },
+          {
+            "path": "public/samples/electric/rhodes/B3.ogg",
+            "bytes": 32370
+          },
+          {
+            "path": "public/samples/electric/rhodes/B4.ogg",
+            "bytes": 28389
+          },
+          {
+            "path": "public/samples/electric/rhodes/C7.ogg",
+            "bytes": 8066
+          },
+          {
+            "path": "public/samples/electric/rhodes/D3.ogg",
+            "bytes": 33039
+          },
+          {
+            "path": "public/samples/electric/rhodes/D4.ogg",
+            "bytes": 30684
+          },
+          {
+            "path": "public/samples/electric/rhodes/D6.ogg",
+            "bytes": 22995
+          },
+          {
+            "path": "public/samples/electric/rhodes/E2.ogg",
+            "bytes": 26420
+          },
+          {
+            "path": "public/samples/electric/rhodes/E5.ogg",
+            "bytes": 19905
+          },
+          {
+            "path": "public/samples/electric/rhodes/F1.ogg",
+            "bytes": 24375
+          },
+          {
+            "path": "public/samples/electric/rhodes/F4.ogg",
+            "bytes": 29274
+          },
+          {
+            "path": "public/samples/electric/rhodes/G3.ogg",
+            "bytes": 28604
+          },
+          {
+            "path": "public/samples/electric/rhodes/G6.ogg",
+            "bytes": 12577
+          },
+          {
+            "path": "public/samples/electric/wurli/A1-ff.ogg",
+            "bytes": 30107
+          },
+          {
+            "path": "public/samples/electric/wurli/A1-mp.ogg",
+            "bytes": 13470
+          },
+          {
+            "path": "public/samples/electric/wurli/A2-mp.ogg",
+            "bytes": 12731
+          },
+          {
+            "path": "public/samples/electric/wurli/B2-ff.ogg",
+            "bytes": 27542
+          },
+          {
+            "path": "public/samples/electric/wurli/B4-mp.ogg",
+            "bytes": 6511
+          },
+          {
+            "path": "public/samples/electric/wurli/C2-ff.ogg",
+            "bytes": 37983
+          },
+          {
+            "path": "public/samples/electric/wurli/Cs4-ff.ogg",
+            "bytes": 21329
+          },
+          {
+            "path": "public/samples/electric/wurli/Cs4-mp.ogg",
+            "bytes": 12465
+          },
+          {
+            "path": "public/samples/electric/wurli/Cs5-ff.ogg",
+            "bytes": 12921
+          },
+          {
+            "path": "public/samples/electric/wurli/Cs5-mp.ogg",
+            "bytes": 8036
+          },
+          {
+            "path": "public/samples/electric/wurli/Cs6-ff.ogg",
+            "bytes": 8642
+          },
+          {
+            "path": "public/samples/electric/wurli/Cs6-mp.ogg",
+            "bytes": 9094
+          },
+          {
+            "path": "public/samples/electric/wurli/Ds3-mp.ogg",
+            "bytes": 12106
+          },
+          {
+            "path": "public/samples/electric/wurli/E2-mp.ogg",
+            "bytes": 11458
+          },
+          {
+            "path": "public/samples/electric/wurli/E3-ff.ogg",
+            "bytes": 21392
+          },
+          {
+            "path": "public/samples/electric/wurli/E4-ff.ogg",
+            "bytes": 19875
+          },
+          {
+            "path": "public/samples/electric/wurli/F2-ff.ogg",
+            "bytes": 33902
+          },
+          {
+            "path": "public/samples/electric/wurli/Fs4-mp.ogg",
+            "bytes": 9418
+          },
+          {
+            "path": "public/samples/electric/wurli/G4-ff.ogg",
+            "bytes": 13733
+          },
+          {
+            "path": "public/samples/electric/wurli/G5-ff.ogg",
+            "bytes": 8422
+          },
+          {
+            "path": "public/samples/electric/wurli/G5-mp.ogg",
+            "bytes": 6582
+          },
+          {
+            "path": "public/samples/electric/wurli/Gs3-ff.ogg",
+            "bytes": 21848
+          },
+          {
+            "path": "public/samples/electric/wurli/Gs3-mp.ogg",
+            "bytes": 13979
+          },
+          {
+            "path": "public/samples/electric/wurli/Gs6-ff.ogg",
+            "bytes": 8713
+          },
+          {
+            "path": "public/samples/electric/wurli/Gs6-mp.ogg",
+            "bytes": 7327
+          },
+          {
+            "path": "public/samples/grand/A1-v10.ogg",
+            "bytes": 64960
+          },
+          {
+            "path": "public/samples/grand/A1-v16.ogg",
+            "bytes": 68124
+          },
+          {
+            "path": "public/samples/grand/A1-v3.ogg",
+            "bytes": 66431
+          },
+          {
+            "path": "public/samples/grand/A2-v10.ogg",
+            "bytes": 69427
+          },
+          {
+            "path": "public/samples/grand/A2-v16.ogg",
+            "bytes": 71448
+          },
+          {
+            "path": "public/samples/grand/A2-v3.ogg",
+            "bytes": 70915
+          },
+          {
+            "path": "public/samples/grand/A3-v10.ogg",
+            "bytes": 59187
+          },
+          {
+            "path": "public/samples/grand/A3-v16.ogg",
+            "bytes": 60698
+          },
+          {
+            "path": "public/samples/grand/A3-v3.ogg",
+            "bytes": 59770
+          },
+          {
+            "path": "public/samples/grand/A4-v10.ogg",
+            "bytes": 58253
+          },
+          {
+            "path": "public/samples/grand/A4-v16.ogg",
+            "bytes": 59124
+          },
+          {
+            "path": "public/samples/grand/A4-v3.ogg",
+            "bytes": 57874
+          },
+          {
+            "path": "public/samples/grand/A5-v10.ogg",
+            "bytes": 44100
+          },
+          {
+            "path": "public/samples/grand/A5-v16.ogg",
+            "bytes": 42691
+          },
+          {
+            "path": "public/samples/grand/A5-v3.ogg",
+            "bytes": 45090
+          },
+          {
+            "path": "public/samples/grand/A6-v10.ogg",
+            "bytes": 43434
+          },
+          {
+            "path": "public/samples/grand/A6-v16.ogg",
+            "bytes": 44800
+          },
+          {
+            "path": "public/samples/grand/A6-v3.ogg",
+            "bytes": 43383
+          },
+          {
+            "path": "public/samples/grand/C2-v10.ogg",
+            "bytes": 70657
+          },
+          {
+            "path": "public/samples/grand/C2-v16.ogg",
+            "bytes": 71466
+          },
+          {
+            "path": "public/samples/grand/C2-v3.ogg",
+            "bytes": 69454
+          },
+          {
+            "path": "public/samples/grand/C3-v10.ogg",
+            "bytes": 68697
+          },
+          {
+            "path": "public/samples/grand/C3-v16.ogg",
+            "bytes": 70726
+          },
+          {
+            "path": "public/samples/grand/C3-v3.ogg",
+            "bytes": 68216
+          },
+          {
+            "path": "public/samples/grand/C4-v10.ogg",
+            "bytes": 60879
+          },
+          {
+            "path": "public/samples/grand/C4-v16.ogg",
+            "bytes": 62025
+          },
+          {
+            "path": "public/samples/grand/C4-v3.ogg",
+            "bytes": 59333
+          },
+          {
+            "path": "public/samples/grand/C5-v10.ogg",
+            "bytes": 55105
+          },
+          {
+            "path": "public/samples/grand/C5-v16.ogg",
+            "bytes": 56930
+          },
+          {
+            "path": "public/samples/grand/C5-v3.ogg",
+            "bytes": 54699
+          },
+          {
+            "path": "public/samples/grand/C6-v10.ogg",
+            "bytes": 49363
+          },
+          {
+            "path": "public/samples/grand/C6-v16.ogg",
+            "bytes": 49031
+          },
+          {
+            "path": "public/samples/grand/C6-v3.ogg",
+            "bytes": 49680
+          },
+          {
+            "path": "public/samples/grand/C7-v10.ogg",
+            "bytes": 44887
+          },
+          {
+            "path": "public/samples/grand/C7-v16.ogg",
+            "bytes": 45334
+          },
+          {
+            "path": "public/samples/grand/C7-v3.ogg",
+            "bytes": 44756
+          },
+          {
+            "path": "public/samples/grand/Ds1-v10.ogg",
+            "bytes": 60214
+          },
+          {
+            "path": "public/samples/grand/Ds1-v16.ogg",
+            "bytes": 58164
+          },
+          {
+            "path": "public/samples/grand/Ds1-v3.ogg",
+            "bytes": 64685
+          },
+          {
+            "path": "public/samples/grand/Ds2-v10.ogg",
+            "bytes": 69051
+          },
+          {
+            "path": "public/samples/grand/Ds2-v16.ogg",
+            "bytes": 68173
+          },
+          {
+            "path": "public/samples/grand/Ds2-v3.ogg",
+            "bytes": 70062
+          },
+          {
+            "path": "public/samples/grand/Ds3-v10.ogg",
+            "bytes": 59124
+          },
+          {
+            "path": "public/samples/grand/Ds3-v16.ogg",
+            "bytes": 60936
+          },
+          {
+            "path": "public/samples/grand/Ds3-v3.ogg",
+            "bytes": 57733
+          },
+          {
+            "path": "public/samples/grand/Ds4-v10.ogg",
+            "bytes": 56859
+          },
+          {
+            "path": "public/samples/grand/Ds4-v16.ogg",
+            "bytes": 57466
+          },
+          {
+            "path": "public/samples/grand/Ds4-v3.ogg",
+            "bytes": 56915
+          },
+          {
+            "path": "public/samples/grand/Ds5-v10.ogg",
+            "bytes": 40129
+          },
+          {
+            "path": "public/samples/grand/Ds5-v16.ogg",
+            "bytes": 41925
+          },
+          {
+            "path": "public/samples/grand/Ds5-v3.ogg",
+            "bytes": 39594
+          },
+          {
+            "path": "public/samples/grand/Ds6-v10.ogg",
+            "bytes": 47875
+          },
+          {
+            "path": "public/samples/grand/Ds6-v16.ogg",
+            "bytes": 47027
+          },
+          {
+            "path": "public/samples/grand/Ds6-v3.ogg",
+            "bytes": 48772
+          },
+          {
+            "path": "public/samples/grand/Ds7-v10.ogg",
+            "bytes": 44055
+          },
+          {
+            "path": "public/samples/grand/Ds7-v16.ogg",
+            "bytes": 46317
+          },
+          {
+            "path": "public/samples/grand/Ds7-v3.ogg",
+            "bytes": 44198
+          },
+          {
+            "path": "public/samples/grand/Fs1-v10.ogg",
+            "bytes": 53985
+          },
+          {
+            "path": "public/samples/grand/Fs1-v16.ogg",
+            "bytes": 53902
+          },
+          {
+            "path": "public/samples/grand/Fs1-v3.ogg",
+            "bytes": 57768
+          },
+          {
+            "path": "public/samples/grand/Fs2-v10.ogg",
+            "bytes": 68100
+          },
+          {
+            "path": "public/samples/grand/Fs2-v16.ogg",
+            "bytes": 69317
+          },
+          {
+            "path": "public/samples/grand/Fs2-v3.ogg",
+            "bytes": 68223
+          },
+          {
+            "path": "public/samples/grand/Fs3-v10.ogg",
+            "bytes": 59449
+          },
+          {
+            "path": "public/samples/grand/Fs3-v16.ogg",
+            "bytes": 62401
+          },
+          {
+            "path": "public/samples/grand/Fs3-v3.ogg",
+            "bytes": 58115
+          },
+          {
+            "path": "public/samples/grand/Fs4-v10.ogg",
+            "bytes": 55030
+          },
+          {
+            "path": "public/samples/grand/Fs4-v16.ogg",
+            "bytes": 55223
+          },
+          {
+            "path": "public/samples/grand/Fs4-v3.ogg",
+            "bytes": 55494
+          },
+          {
+            "path": "public/samples/grand/Fs5-v10.ogg",
+            "bytes": 40517
+          },
+          {
+            "path": "public/samples/grand/Fs5-v16.ogg",
+            "bytes": 42478
+          },
+          {
+            "path": "public/samples/grand/Fs5-v3.ogg",
+            "bytes": 41198
+          },
+          {
+            "path": "public/samples/grand/Fs6-v10.ogg",
+            "bytes": 46689
+          },
+          {
+            "path": "public/samples/grand/Fs6-v16.ogg",
+            "bytes": 45921
+          },
+          {
+            "path": "public/samples/grand/Fs6-v3.ogg",
+            "bytes": 47318
+          },
+          {
+            "path": "public/samples/grand/Fs7-v10.ogg",
+            "bytes": 49513
+          },
+          {
+            "path": "public/samples/grand/Fs7-v16.ogg",
+            "bytes": 50158
+          },
+          {
+            "path": "public/samples/grand/Fs7-v3.ogg",
+            "bytes": 49463
+          },
+          {
+            "path": "public/samples/upright/A1-vH.ogg",
+            "bytes": 34602
+          },
+          {
+            "path": "public/samples/upright/A1-vL.ogg",
+            "bytes": 31058
+          },
+          {
+            "path": "public/samples/upright/A2-vL.ogg",
+            "bytes": 37454
+          },
+          {
+            "path": "public/samples/upright/A3-vH.ogg",
+            "bytes": 38700
+          },
+          {
+            "path": "public/samples/upright/A3-vL.ogg",
+            "bytes": 38070
+          },
+          {
+            "path": "public/samples/upright/A4-vH.ogg",
+            "bytes": 26717
+          },
+          {
+            "path": "public/samples/upright/A4-vL.ogg",
+            "bytes": 19881
+          },
+          {
+            "path": "public/samples/upright/A5-vH.ogg",
+            "bytes": 21416
+          },
+          {
+            "path": "public/samples/upright/A5-vL.ogg",
+            "bytes": 14271
+          },
+          {
+            "path": "public/samples/upright/A6-vH.ogg",
+            "bytes": 13461
+          },
+          {
+            "path": "public/samples/upright/A6-vL.ogg",
+            "bytes": 10125
+          },
+          {
+            "path": "public/samples/upright/B2-vH.ogg",
+            "bytes": 42624
+          },
+          {
+            "path": "public/samples/upright/B3-vH.ogg",
+            "bytes": 41205
+          },
+          {
+            "path": "public/samples/upright/C2-vH.ogg",
+            "bytes": 36260
+          },
+          {
+            "path": "public/samples/upright/C2-vL.ogg",
+            "bytes": 31660
+          },
+          {
+            "path": "public/samples/upright/C3-vH.ogg",
+            "bytes": 41839
+          },
+          {
+            "path": "public/samples/upright/C3-vL.ogg",
+            "bytes": 37777
+          },
+          {
+            "path": "public/samples/upright/C4-vL.ogg",
+            "bytes": 37855
+          },
+          {
+            "path": "public/samples/upright/C5-vH.ogg",
+            "bytes": 28088
+          },
+          {
+            "path": "public/samples/upright/C5-vL.ogg",
+            "bytes": 38052
+          },
+          {
+            "path": "public/samples/upright/C6-vH.ogg",
+            "bytes": 19180
+          },
+          {
+            "path": "public/samples/upright/C6-vL.ogg",
+            "bytes": 18681
+          },
+          {
+            "path": "public/samples/upright/C7-vH.ogg",
+            "bytes": 16314
+          },
+          {
+            "path": "public/samples/upright/C7-vL.ogg",
+            "bytes": 8963
+          },
+          {
+            "path": "public/samples/upright/Ds1-vH.ogg",
+            "bytes": 31793
+          },
+          {
+            "path": "public/samples/upright/Ds1-vL.ogg",
+            "bytes": 28699
+          },
+          {
+            "path": "public/samples/upright/Ds2-vH.ogg",
+            "bytes": 36634
+          },
+          {
+            "path": "public/samples/upright/Ds2-vL.ogg",
+            "bytes": 31601
+          },
+          {
+            "path": "public/samples/upright/Ds3-vH.ogg",
+            "bytes": 40201
+          },
+          {
+            "path": "public/samples/upright/Ds3-vL.ogg",
+            "bytes": 37857
+          },
+          {
+            "path": "public/samples/upright/Ds4-vH.ogg",
+            "bytes": 40315
+          },
+          {
+            "path": "public/samples/upright/Ds4-vL.ogg",
+            "bytes": 30790
+          },
+          {
+            "path": "public/samples/upright/Ds5-vH.ogg",
+            "bytes": 27262
+          },
+          {
+            "path": "public/samples/upright/Ds5-vL.ogg",
+            "bytes": 19506
+          },
+          {
+            "path": "public/samples/upright/Ds6-vH.ogg",
+            "bytes": 16047
+          },
+          {
+            "path": "public/samples/upright/Ds6-vL.ogg",
+            "bytes": 11724
+          },
+          {
+            "path": "public/samples/upright/Ds7-vH.ogg",
+            "bytes": 10312
+          },
+          {
+            "path": "public/samples/upright/Ds7-vL.ogg",
+            "bytes": 10517
+          },
+          {
+            "path": "public/samples/upright/Fs1-vH.ogg",
+            "bytes": 32213
+          },
+          {
+            "path": "public/samples/upright/Fs1-vL.ogg",
+            "bytes": 31528
+          },
+          {
+            "path": "public/samples/upright/Fs2-vH.ogg",
+            "bytes": 39182
+          },
+          {
+            "path": "public/samples/upright/Fs2-vL.ogg",
+            "bytes": 37749
+          },
+          {
+            "path": "public/samples/upright/Fs3-vH.ogg",
+            "bytes": 42073
+          },
+          {
+            "path": "public/samples/upright/Fs3-vL.ogg",
+            "bytes": 37606
+          },
+          {
+            "path": "public/samples/upright/Fs4-vH.ogg",
+            "bytes": 45525
+          },
+          {
+            "path": "public/samples/upright/Fs4-vL.ogg",
+            "bytes": 36559
+          },
+          {
+            "path": "public/samples/upright/Fs5-vH.ogg",
+            "bytes": 18256
+          },
+          {
+            "path": "public/samples/upright/Fs5-vL.ogg",
+            "bytes": 15698
+          },
+          {
+            "path": "public/samples/upright/Fs6-vH.ogg",
+            "bytes": 12960
+          },
+          {
+            "path": "public/samples/upright/Fs6-vL.ogg",
+            "bytes": 12576
+          },
+          {
+            "path": "public/samples/upright/Fs7-vH.ogg",
+            "bytes": 10149
+          },
+          {
+            "path": "public/samples/upright/Fs7-vL.ogg",
+            "bytes": 10063
+          }
+        ],
+        "notes": [
+          "All 170 bundled audio files under public/samples/ (78 Grand, 52 Upright, 15 Rhodes Mk I, 25 Wurlitzer EP200) are verbatim onset-trimmed, faded, and Ogg Vorbis q4 re-encoded cuts from inputs/samples/ with no pitch-shifting, time-stretching, or layering baked into the files.",
+          "Fine tuning offsets from upstream SFZ/Data metadata are applied at runtime via AudioBufferSourceNode.playbackRate for accurate A440 equal temperament.",
+          "Rhodes Mk I is recorded at a single dynamic per note in the pack; velocity dynamics are shaped at runtime via gain and dynamic lowpass filtering.",
+          "Phase 3 connects Organ (2 layers, 6 models, 9 drawbars, percussion, key click, V/C, shared FX chain & Rotary), Piano (2 layers, 6 types), Synth (3 layers, 14 required waveforms across Pure/Sync/Multi/Super/FM-H, filters, 3 envelopes, LFO, voice modes, deterministic Arp/Gate), Layer Effects (6 chains + Rotary + Group/Global/Bypass), and Programs (32 slots, 12 factory programs, 8 auto-storing Live slots, Store/Store As, List View, Undo, Splits/Zones/Crossfades, Scenes I/II, Wheel & Control Pedal morphs, Master Clock, Transpose ±6, Panic) on one shared AudioContext."
         ]
       }
     }
