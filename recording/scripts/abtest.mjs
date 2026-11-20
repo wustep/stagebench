@@ -16,6 +16,7 @@ import path from 'path';
 import { LAUNCH_ARGS, initScript, installDriver } from './lib/page.mjs';
 import { loadShow, argv } from './lib/show.mjs';
 import { runSetup } from './lib/setup.mjs';
+import { previewUrl } from './lib/serve.mjs';
 
 const S = loadShow(argv('show'));
 const m = S.model(argv('model'));
@@ -29,7 +30,7 @@ async function take(steps) {
   const page = await browser.newPage({ viewport: { width: m.viewport.width, height: m.viewport.height } });
   page.setDefaultTimeout(15000);
   await page.addInitScript(initScript);
-  await page.goto(m.url, { waitUntil: 'load', timeout: 60000 });
+  await page.goto(await previewUrl(m), { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(3500);
   const log = await runSetup(page, [...base, ...steps]);
   await page.evaluate(installDriver);

@@ -9,15 +9,16 @@ import { spawnSync } from 'child_process';
 import { LAUNCH_ARGS, initScript, installDriver } from './lib/page.mjs';
 import { loadShow, argv } from './lib/show.mjs';
 import { runSetup } from './lib/setup.mjs';
+import { previewUrl } from './lib/serve.mjs';
 
 const S = loadShow(argv('show'));
 const FF = process.env.FFMPEG || 'ffmpeg';
-for (const m of S.models.filter((x) => !argv('model') || x.id === argv('model'))) {
+for (const m of S.filmable.filter((x) => !argv('model') || x.id === argv('model'))) {
   const browser = await chromium.launch({ headless: true, args: LAUNCH_ARGS });
   const page = await browser.newPage({ viewport: { width: m.viewport.width, height: m.viewport.height } });
   page.setDefaultTimeout(15000);
   await page.addInitScript(initScript);
-  await page.goto(m.url, { waitUntil: 'load', timeout: 60000 });
+  await page.goto(await previewUrl(m), { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(3500);
   await runSetup(page, m.setup);
   await page.evaluate(installDriver);
