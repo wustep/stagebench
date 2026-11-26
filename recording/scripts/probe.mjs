@@ -2,7 +2,8 @@
  * Probe a preview before adding it to models.json. Prints what matters for capture and a suggested
  * fixture entry. Never trust a suggestion blindly: read the audit lines.
  *
- *   node scripts/probe.mjs --model <run-id> [--base https://stagebench.vercel.app/previews] [--stage 3]
+ *   node scripts/probe.mjs --model <run-id> [--base https://stagebench.vercel.app/previews | --base local] [--stage 3]
+ *   (--base local serves this checkout's public/ with python http.server, like shows with previewBase "local")
  *
  * Checks, each with a hard timeout (some previews never go network-idle or stall their main thread):
  *  1. instrument element + keybed (data-note / data-midi, numeric range; a 73-key Stage is E1-E7 = 28-100)
@@ -14,12 +15,16 @@
  */
 import { chromium } from 'playwright';
 import { LAUNCH_ARGS, initScript, installDriver, findInstrument } from './lib/page.mjs';
-import { argv } from './lib/show.mjs';
+import { argv, findPreview } from './lib/show.mjs';
+import { serve } from './lib/serve.mjs';
 
 const id = argv('model');
-const base = (argv('base') || 'https://stagebench.vercel.app/previews').replace(/\/$/, '');
-const url = `${base}/${id}/stage${argv('stage') || 3}/`;
-if (!id) { console.error('usage: node scripts/probe.mjs --model <run-id>'); process.exit(1); }
+if (!id) { console.error('usage: node scripts/probe.mjs --model <run-id> [--base local]'); process.exit(1); }
+const stage = argv('stage') || 3;
+const localRoot = argv('base') === 'local' ? findPreview(id, stage) : null;
+if (argv('base') === 'local' && !localRoot) { console.error(`no public/previews/${id}/stage${stage}/ in this checkout`); process.exit(1); }
+const base = localRoot ? (await serve(localRoot)) + '/previews' : (argv('base') || 'https://stagebench.vercel.app/previews').replace(/\/$/, '');
+const url = `${base}/${id}/stage${stage}/`;
 const browser = await chromium.launch({ headless: true, args: LAUNCH_ARGS });
 const withTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout: ${label}`)), ms))]);
 

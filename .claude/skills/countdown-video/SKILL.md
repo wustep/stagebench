@@ -19,14 +19,16 @@ Start from `recording/shows/etude6-countdown.json` and copy it to `recording/sho
 
 - **Song.** Pick a folder under `recording/songs/`. For a new song, see step 4.
 - **Models and order.**
-  - Build the options from the repo, not from memory: `node -e 'for (const d of require("fs").readdirSync("runs")) { try { const r = require("./runs/"+d+"/run.json"); if (r.evaluation?.score) console.log(d, r.title, r.evaluation.score) } catch {} }'`.
-  - `"order": "countdown"` goes from lowest rank to #1. Ranks and labels come from `runs/<id>/run.json`, so the video always shows the repo's current leaderboard.
+  - Build the options from the repo, not from memory: `node -e 'for (const r of require("./src/data/runs.json")) if (typeof r.score === "number") console.log(r.id, r.title, r.score)'`.
+  - `"order": "countdown"` goes from lowest rank to #1; anything else keeps the listed order (the Alla Turca demo v2 show lists its models by rank by hand, so a rank change can't move a model onto a phrase it wasn't recorded for; `--plan` warns when the list stops counting up). Ranks and labels come from `src/data/runs.json`, one combined leaderboard ranked exactly as the gallery ranks it, computed whenever the show loads. Never write rank numbers into a show, an overlay or a doc.
+  - A model that has no run record or no preview yet becomes a placeholder slot instead of failing; see README "Placeholders".
 - **Length.** Set `startBar`, `barsPerModel` and `last`.
   - Cut on the song's grid (`song.json` → `grid`); one cycle per model is about 7 s for the Étude.
   - Start on strong material (`song.json` → `sections`).
-  - End with #1 on strong material or on the song's real ending (`"last": "to-end"`).
+  - End with #1 on strong material or on the song's real ending (`"last": "to-end"`). Give every model one phrase; to stop on a cadence whose bar also carries the next section's pickup, use `lastBarBeats` (and `finalHold` to let the chord ring).
+  - Keep every turn about equally long on screen. With an intro, `pickupInIntro` plays the first model's idle and pickup under the intro instead of padding its turn. Keep the last turn's chord short: a `finalHold` of about 0.6 s, a `breathe` that ends its picture under 1 s after the strike, then `endCard.crossfade` and `ringOut` (README "Levers"). When the phrases' own tempo leaves turns more than about 0.3 s apart, `cutSlack: 1` lets the plan move a cut a frame off its downbeat to even them out.
   - For Twitter, 45–90 s is the target.
-- **Caption and date.** Set `caption.title`, `caption.subtitle` and `caption.date`. Use today's date unless told otherwise.
+- **Caption and date.** Set `caption.title`, `caption.subtitle` and `caption.date`. Use today's date unless told otherwise. If an intro card already carries the project line and date, keep the caption to the music credit (demo v2: "Rondo alla Turca" / "Wolfgang Amadeus Mozart").
 
 Keep the house style exactly as it is: fonts, sizes, positions, colors, 1920x1080, −14 LUFS, and no ring or "Now playing" tag. Change it only if the user explicitly asks for a style change.
 
@@ -40,10 +42,10 @@ cd recording && node scripts/make.mjs --show shows/<name>.json --plan
 
 `--plan` prints each model's bars and seconds and the total length. Show it to the user before recording anything long.
 
-If a model has no entry in `models.json`, the loader warns. Probe it with `node scripts/probe.mjs --model <id>` and write a fixture:
+If a model has no entry in `models.json`, the loader warns. Probe it with `node scripts/probe.mjs --model <id>` (`--base local` for shows with `"previewBase": "local"`) and write a fixture:
 
-- **Just the grand plus basic reverb.** Piano A only; organ, synth, Piano B, unison and mod effects off. Use only controls the preview ships. Confirm with `scripts/audit.mjs`, and use `scripts/abtest.mjs` to prove a control really changes the sound. Some cycle buttons always report `aria-pressed=true`, so a blind toggle can switch things **on**.
-- **Reverb.** Turn it on only when the probe's tail test shows a real tail. Set it to about 35% dry/wet with a `setValue` step.
+- **Just the grand plus the same reverb.** Piano A only; organ, synth, Piano B, unison and mod effects off (pin them off where the preview ships a switch). Use only controls the preview ships. Confirm with `scripts/audit.mjs`, and use `scripts/abtest.mjs` to prove a control really changes the sound. Some cycle buttons always report `aria-pressed=true`, so a blind toggle can switch things **on**.
+- **Reverb.** Turn it on only when the probe's tail test shows a real tail. Then match it by ear-relevant numbers, not knob value: `scripts/reverb.mjs` measures each model's chord tail against the reference (Opus 5.5's own default, Hall 35%). Pick the reverb type and amount the preview ships that minimize the tail mismatch, and record the numbers in the fixture's `audit` (README "Reverb parity").
 - **Fixed-width layouts.** Use the suggested viewport, which gets a higher DPR instead of upscaling.
 - **Flagged key cost.** If the probe flags a high key cost (a note built per velocity), `quantizeVelocity` may be needed. That changes the input, so **ask the user** first and disclose it.
 - **Record the reasoning.** Put what you found in the fixture's `audit` string.
@@ -71,7 +73,7 @@ Diagnose the cause (see README "Hard-won details"). Don't paper over it in the c
 - the tail has decayed below about −50 dB;
 - the misses and lateness in the report make sense. Notes below a keybed's range are skipped by design; name them.
 
-Also run `node scripts/latency.mjs --show …`. Each model's latency spread should stay under about 20 ms, so first-note alignment holds for the whole turn. Report the leveling nudges (in `output/<show>.report.json`) and the limiter load per model. If the user says a part is too quiet or too loud, adjust the show's `leveling` gently; don't flatten the song. Velocity-sensitive pianos (Opus 5.5) take the most limiting at −14 LUFS.
+Also run `node scripts/latency.mjs --show …`. Each model's latency spread should stay under about 20 ms, so first-note alignment holds for the whole turn. Report the leveling nudges (in `output/<show>.report.json`) and the limiter load per model. If the user says a part is too quiet or too loud, adjust the show's `leveling` gently; don't flatten the song. The report's limiter load is the gain reduction actually applied, at the stereo peak. Wide, decorrelated pianos (GPT-6 Sol) take the most, not the loud velocity-sensitive ones.
 
 You can't listen to the result. Tell the user to watch it with sound before posting.
 
